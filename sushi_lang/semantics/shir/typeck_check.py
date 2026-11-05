@@ -153,11 +153,18 @@ NEEDS: dict[type, Needs] = {
 }
 
 
+def _nothing(_answers: TypeckResults, _node: Any) -> Iterator[str]:
+    yield from ()
+
+
 #: The answers that make a node known to `borrow` where they are fewer than the answers of
 #: `NEEDS`: a call with a callee is known, and an argument with no convention is unknown on
-#: its own (docs/design/ir.md 7.9).
+#: its own. `borrow` reads no answer of a `Match` or a `Loop` itself: the scrutinee and the
+#: condition are unknown on their own (docs/design/ir.md 7.9).
 KNOWN_WITH: dict[type, Needs] = {
     e.Call: _callee,
+    s.Match: _nothing,
+    s.Loop: _nothing,
 }
 
 

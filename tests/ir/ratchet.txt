@@ -1408,6 +1408,7 @@ tests/ir/borrow/methods/test_err_borrow_method_receiver_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_nom_self_receiver_after_move.sushi
 tests/ir/borrow/past_typecheck/test_err_borrow_branch_beside_a_condition_error.sushi
 tests/ir/borrow/past_typecheck/test_err_borrow_inside_a_refused_expression.sushi
+tests/ir/borrow/past_typecheck/test_err_borrow_match_arm_beside_an_arm_error.sushi
 tests/ir/borrow/past_typecheck/test_err_borrow_past_a_type_error.sushi
 tests/ir/borrow/past_typecheck/test_err_borrow_unknown_call_moves_nothing.sushi
 tests/ir/borrow/ranges/test_err_borrow_range_binder.sushi

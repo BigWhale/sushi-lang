@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2509, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+#
+# One arm of the `match` has an error of typecheck. The borrow pass still walks each arm:
+# the other arm moves `s` and then reads it, and that is CE2405.
+
+enum Shape:
+    Dot(i32)
+    Line(i32)
+
+fn take(nom string s) i32:
+    return s.len()
+
+fn main() i32:
+    let string s = "Mostly Harmless {42}"
+    let Shape v = Shape.Line(42)
+    match v:
+        Shape.Dot(x) -> println(x + "!")
+        Shape.Line(_) ->
+            take(nom s)
+            println(s)
+    return 0
