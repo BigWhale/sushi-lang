@@ -1815,7 +1815,15 @@ The rows of `OwnershipResults`:
   so the region ends at the last use, and not at the exit of the scope of the view. A
   change of an owner after the last use and before the end of the scope is legal. A region
   that ends at the scope exit would refuse a correct program. SLIR lowering writes the
-  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6).
+  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6). The
+  writer is `passes/borrow/regions.py`. The pass keeps each `let` with a `REJECT` row at
+  its value, with its owner set and its statement, and it writes the rows when the walk of
+  the body ends with no error. A last use is a statement that uses the view, after which no
+  path uses it again. The pass reads the statements backwards from the end of the block of
+  the view. A use in a loop that does not hold the `let` is a use of the whole loop, because
+  the next round can use the view again. A use in an arm of an `if` or a `match` gives the
+  last uses of that arm, and a use in the condition alone gives the `if` or the `match`
+  itself. A view that no statement uses has its `let` as its last use.
 - The answer of a call of a function or a method with a `peek` return is a view too. Its
   owner set is the owner of each argument at a position of the source row of the call
   (7.3).
@@ -2259,10 +2267,12 @@ the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statemen
 `lower_control.py`, the arm of a `match` in `lower_match.py`, the arms of a struct and a
 tuple in `lower_aggregate.py`, the arms of an array in `lower_arrays.py`, the arms of a
 call and of an interpolation in `lower_calls.py`, a value before its place in
-`lower_values.py` and the facts of a declaration in `lower_signature.py`), the drop
+`lower_values.py`, the view locals and their regions in `lower_views.py` and the facts of a
+declaration in `lower_signature.py`), the drop
 placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
 `tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`,
-`verify_calls.py`, `verify_flow.py` and `verify_rules.py`) and the printer of `--dump-slir`
+`verify_calls.py`, `verify_flow.py`, `verify_regions.py` and `verify_rules.py`) and the
+printer of `--dump-slir`
 (`printer.py`). Every class is a slotted dataclass, and every statement and terminator has
 a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The borrow pass
 gives each body that it finished, and that is not a template check (Q1), to the SLIR stage
@@ -2293,8 +2303,12 @@ the `drop` of a `Drop` implementation; `conversion` also for a
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
 argument, `Match owning` for
-a match on a tuple that owns (8.9), and `ConstRef out of range` for a `ConstRef` whose
-value its type cannot hold (8.5). The dump prints such a function as ONE line in place of
+a match on a tuple that owns (8.9), `view of a temporary` for a borrowed `let` whose owner
+is a temporary (`let Maybe@(string) m = make().get(0)`: the temporary drops at the end of
+the statement, and the view would outlive it), `view into an owning place` for a view that
+a local that owns would take (a `??` over a `??` of a borrowed wrapper, whose `let`
+`borrow` adopts), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
+hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
 progress of each function. The pipeline reports one stop after the analysis: a stop of
 `typecheck`, else of `lift`, else of `borrow`, else an error hole, else a stop of the
@@ -2660,6 +2674,24 @@ each exit of the scope of the local. The
 emitter emits nothing for `BeginBorrow` and `EndBorrow`, as for `StorageLive`. The verifier
 reads them (8.13).
 
+**How lowering places them.** The open regions are a part of the state of a path in the
+drop placement (`drops.py`): a branch restores them with the state of the locals, and the
+paths that meet at a join have the same open regions (else an internal error). After the
+statement of a last use, lowering ends the region (`lower_views.py`). At the top of an arm of
+an `if` or a `match`, after the binders of the arm, lowering ends each region whose last use
+is in the branch (in its condition, its scrutinee or another arm) and not in the arm; the
+zero edge of an `if` with no `else` goes to a block of its own for that end. The exit of a
+scope ends the region of each view local of the scope before its drops, so a `return`, a
+`break`, a `continue` and the error path of a `??` end each region that they cross. A
+view that goes into a TEMPORARY (the answer of a get-out that is no `let`, the payload of a
+`??` over a borrowed wrapper in an argument) is a view local of the statement. Its region
+is over the root local of the place that it reads (the receiver, or the wrapper), and it
+ends with the storage of the temporary: at the end of the statement, at the end of the
+scope of a condition, before the switch, or at the top of each arm of a `match` whose
+scrutinee it is. The view of a get-out of a temporary receiver (`make().get(0)`) has that
+temporary as its owner, and its region ends before the temporary drops. A view of a
+constant has no owner and no region: a constant never changes.
+
 `Builtin` is a call to a per-type emitter family (Q7). The backend expands it with the
 existing emitter, which receives LLVM values for the operands and no AST node.
 
@@ -2713,8 +2745,8 @@ argument: the element of `push` and of `insert` is an `Owned` operand, an index 
 value, and a needle is a `Guaranteed` operand. `first` and `last` hold their index rule in
 the emitter (`0`, and `len - 1`, which the bounds check of an empty List refuses). `get`,
 `first` and `last` answer a view (`answers_view`); over a plain element the destination is
-an ordinary local and the answer is a copy (8.9), and over an owning element lowering stops
-(`slir, owning view answer`) until the view local is built. The name of a static called on a
+an ordinary local and the answer is a copy (8.9), and over an owning element the answer is
+a view (8.2) of the receiver. The name of a static called on a
 List value (`xs.new()`) answers `~` and builds nothing. The `iter()` producer is a stop of
 `borrow`.
 
@@ -3240,14 +3272,20 @@ Runs after lowering, before the backend. It checks:
   `string`. A conversion of another kind and a `Move` operand are refused
 - every statement and terminator carries a `Span` (G9)
 
-**As built.** The verifier is four modules of `semantics/slir/`. `verify.py` holds the
+**As built.** The verifier is five modules of `semantics/slir/`. `verify.py` holds the
 entry (`SlirVerifier.verify`, `verify_function`) and the structure check, statement by
 statement. `verify_calls.py` holds the checks of a call: the conventions of a `Direct`
 callee (`declared_params`), the conventions of a container static (`argument_conventions`),
 the receiver operand of a built-in method, the conventions of a method of a family of
 `RULED_EFFECT_FAMILIES` (`receiver_convention` and `argument_conventions`), and no copy of
 an owning value other than a `string` into an `Owned` argument. `verify_flow.py` holds the dataflow of the moves and the
-drops. `verify_rules.py` holds the names of the rules, which the three others share. The
+drops. `verify_regions.py` holds the rules of a view local and of a borrow region (rules
+`a view local`, `a borrow region` and `no change of an owner in its region`): a dataflow
+gives each block the set of open regions at its top, every path into a block brings the
+same set, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
+an owner counts at its root and at each projection of it. It runs after the structure check
+and before the dataflow of the moves and the drops, which does not read a view local.
+`verify_rules.py` holds the names of the rules, which the four others share. The
 SLIR stage gives the verifier each
 function that the lowering finished, on every compile, before the function meets the next
 stage. A failed rule is the internal error CE0158, at the span of the statement, with the
@@ -3280,11 +3318,11 @@ another `Direct` callee (an extern, a conversion, a function of a library) adds 
 with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
 code already, for that day. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` or a
-`DropIfSet` of a place that is no local. The region rules of `BeginBorrow` and `EndBorrow`
-go into a verifier module of their own.
+`DropIfSet` of a place that is no local.
 A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
-rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`),
-because a correct lowering makes none.
+rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`, and
+`tests/unit/test_slir_verify_regions.py` for the views and the regions), because a correct
+lowering makes none.
 
 This is where most of the 250 backend internal errors go. One gate, one message, one source
 location, asked once.
