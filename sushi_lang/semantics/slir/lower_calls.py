@@ -24,6 +24,7 @@ from sushi_lang.semantics.shir.callee import (
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.slir import constants as k
+from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_copies as copies
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
@@ -47,7 +48,7 @@ def call(low: Lowering, node: e.Call) -> Value:
     if isinstance(resolved.callee, Builtin) and copies.lowers_inline(resolved.callee.method):
         return copies.lower(low, node, resolved.callee)
     target = callee(low, node, resolved)
-    value = CallValue(target, receiver(low, resolved.callee, node.loc)
+    value = CallValue(target, receiver(low, resolved.callee, node)
                       + tuple(argument(low, node, index, arg)
                               for index, arg in enumerate(node.args)))
     if (isinstance(resolved.callee, Builtin) and answers_view(resolved.callee.method)
@@ -60,15 +61,15 @@ def call(low: Lowering, node: e.Call) -> Value:
 
 
 def receiver(low: Lowering, callee: Callee,
-             span: Span) -> tuple[tuple[p.Operand, Convention], ...]:
+             node: e.Call) -> tuple[tuple[p.Operand, Convention], ...]:
     """The receiver of a method call, the first operand: a built-in method with the
     answer of the receiver partition, an extension method with the convention of its
     `self`. Any other callee has none."""
     if isinstance(callee, Builtin):
         return ((low.operand(callee.recv, in_place=True),
-                 _receiver_convention(callee, span)),)
+                 _receiver_convention(callee, node.loc)),)
     if isinstance(callee, Method):
-        return ((low.operand(callee.recv, in_place=callee.receiver.by_address),
+        return ((_by_convention(low, callee.recv, callee.receiver, node.args),
                  callee.receiver),)
     return ()
 
@@ -122,7 +123,16 @@ def argument(low: Lowering, node: e.Call, index: int,
     if convention is None:
         er.raise_internal_error("CE0000", span=arg.value.loc,
                                 detail="an argument with no convention reached SLIR")
-    return low.operand(arg.value, in_place=convention.by_address), convention
+    return _by_convention(low, arg.value, convention, node.args[index + 1:]), convention
+
+
+def _by_convention(low: Lowering, value: e.ShirExpr, convention: Convention,
+                   later: list[e.Arg]) -> p.Operand:
+    """The operand of an argument: by address where it is, else by value, read before
+    each later argument that can call (`settled`)."""
+    if convention.by_address:
+        return low.operand(value, in_place=True)
+    return agg.settled(low, value, low.operand(value), [arg.value for arg in later])
 
 
 def interp(low: Lowering, node: e.Interp) -> Value:
@@ -137,7 +147,9 @@ def interp(low: Lowering, node: e.Interp) -> Value:
             args.append((p.Const(k.text(part)), Convention.GUARANTEED))
             types.append(BuiltinType.STRING)
         else:
-            args.append((low.operand(part), Convention.GUARANTEED))
+            later = [each for each in node.parts[index + 1:] if not isinstance(each, str)]
+            args.append((agg.settled(low, part, low.operand(part), later),
+                         Convention.GUARANTEED))
             types.append(display_type(low, node.shir_id, index, part.loc))
     return CallValue(st.Builtin(Intrinsic("interp"), tuple(types)), tuple(args))
 

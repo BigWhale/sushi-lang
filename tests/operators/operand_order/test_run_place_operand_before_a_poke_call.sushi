@@ -1,0 +1,32 @@
+# A place operand is read before a later operand of the same statement calls a function
+# that writes the place through a `poke`: a binary operator, a call argument, an enum
+# payload and an interpolation all read the old value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+# EXPECT_STDOUT_EXACT: 3\n13\n22 1 32\n32 1\n5\n
+struct Wrap:
+    string out
+    i32 n
+
+enum Two:
+    Pair(i32, i32)
+
+fn bump(poke Wrap w) i32:
+    w.n := w.n + 10
+    return 1
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main() i32:
+    let string base = "ab"
+    let Wrap v = Wrap("{base}e", 2)
+    println(v.n + bump(poke v))
+    println(add(v.n, bump(poke v)))
+    println("{v.n} {bump(poke v)} {v.n}")
+    let Two t = Two.Pair(v.n, bump(poke v))
+    match t:
+        Two.Pair(a, b) -> println("{a} {b}")
+    let i32 x = 5
+    println(x * bump(poke v))
+    return 0

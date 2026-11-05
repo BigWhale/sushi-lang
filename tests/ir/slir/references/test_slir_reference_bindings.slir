@@ -24,17 +24,20 @@ fn main() -> i32 {
     let _20: i32[]                         // sides
     let _21: i32
     let _22: i32
-    let _23: ~
-    let _24: i32
-    let _25: i32                           // n
-    let _26: Holder view
+    let _23: i32
+    let _24: ~
+    let _25: i32
+    let _26: i32                           // n
     let _27: Holder view
-    let _28: string
-    let _29: ~
-    let _30: ~
-    let _31: i32
-    let _32: i32                           // c
+    let _28: i32
+    let _29: i32
+    let _30: Holder view
+    let _31: string
+    let _32: ~
     let _33: ~
+    let _34: i32
+    let _35: i32                           // c
+    let _36: ~
 
   bb0:
     StorageLive(_1)
@@ -103,12 +106,15 @@ fn main() -> i32 {
     BeginBorrow(b4, _17, peek)
     _20 = ref peek ((_17 as Named).1)
     StorageLive(_21)
-    _21 = call builtin array.len(copy _20 @guaranteed)
+    _21 = copy _19
     StorageLive(_22)
-    _22 = copy _19 + copy _21
-    _19 = copy _22 + const 1_i32
+    _22 = call builtin array.len(copy _20 @guaranteed)
+    StorageLive(_23)
+    _23 = copy _21 + copy _22
+    _19 = copy _23 + const 1_i32
     EndBorrow(b4)
     EndBorrow(b3)
+    StorageDead(_23)
     StorageDead(_22)
     StorageDead(_21)
     StorageDead(_20)
@@ -116,57 +122,63 @@ fn main() -> i32 {
     goto -> bb5
 
   bb4:
-    StorageLive(_23)
-    _23 = call builtin println@(string)(const "empty" @guaranteed)
-    StorageDead(_23)
+    StorageLive(_24)
+    _24 = call builtin println@(string)(const "empty" @guaranteed)
+    StorageDead(_24)
     goto -> bb5
 
   bb5:
-    _24 = discriminant(_17)
-    switchInt(copy _24) -> [0: bb6, 1: bb7, otherwise: unreachable]
+    _25 = discriminant(_17)
+    switchInt(copy _25) -> [0: bb6, 1: bb7, otherwise: unreachable]
 
   bb6:
-    StorageLive(_25)
-    _25 = copy ((_17 as Named).0)
     StorageLive(_26)
-    BeginBorrow(b5, _14, peek)
-    _26 = call builtin own.get(copy _14 @guaranteed)
+    _26 = copy ((_17 as Named).0)
     StorageLive(_27)
-    BeginBorrow(b6, _14, peek)
+    BeginBorrow(b5, _14, peek)
     _27 = call builtin own.get(copy _14 @guaranteed)
     StorageLive(_28)
-    _28 = call builtin interp@(i32, string, i32, string, string)(copy (_26.0) @guaranteed, const " " @guaranteed, copy _25 @guaranteed, const " " @guaranteed, copy (_27.1) @guaranteed)
+    _28 = copy (_27.0)
     StorageLive(_29)
-    _29 = call builtin println@(string)(copy _28 @guaranteed)
+    _29 = copy _26
+    StorageLive(_30)
+    BeginBorrow(b6, _14, peek)
+    _30 = call builtin own.get(copy _14 @guaranteed)
+    StorageLive(_31)
+    _31 = call builtin interp@(i32, string, i32, string, string)(copy _28 @guaranteed, const " " @guaranteed, copy _29 @guaranteed, const " " @guaranteed, copy (_30.1) @guaranteed)
+    StorageLive(_32)
+    _32 = call builtin println@(string)(copy _31 @guaranteed)
     EndBorrow(b6)
     EndBorrow(b5)
+    StorageDead(_32)
+    Drop(_31)
+    StorageDead(_31)
+    StorageDead(_30)
     StorageDead(_29)
-    Drop(_28)
     StorageDead(_28)
     StorageDead(_27)
     StorageDead(_26)
-    StorageDead(_25)
     goto -> bb8
 
   bb7:
-    StorageLive(_30)
-    _30 = call builtin println@(string)(const "empty" @guaranteed)
-    StorageDead(_30)
+    StorageLive(_33)
+    _33 = call builtin println@(string)(const "empty" @guaranteed)
+    StorageDead(_33)
     goto -> bb8
 
   bb8:
-    StorageLive(_31)
-    _31 = const 7_i32
-    StorageLive(_32)
-    BeginBorrow(b7, _31, peek)
-    _32 = ref peek _31
-    StorageLive(_33)
-    _33 = call builtin println@(i32)(copy _32 @guaranteed)
+    StorageLive(_34)
+    _34 = const 7_i32
+    StorageLive(_35)
+    BeginBorrow(b7, _34, peek)
+    _35 = ref peek _34
+    StorageLive(_36)
+    _36 = call builtin println@(i32)(copy _35 @guaranteed)
     EndBorrow(b7)
-    StorageDead(_33)
+    StorageDead(_36)
     _0 = const 0_i32
-    StorageDead(_32)
-    StorageDead(_31)
+    StorageDead(_35)
+    StorageDead(_34)
     Drop(_17)
     StorageDead(_17)
     StorageDead(_15)

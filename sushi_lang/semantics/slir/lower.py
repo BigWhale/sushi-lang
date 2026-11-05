@@ -227,6 +227,7 @@ class Lowering:
     found_flags: set[ShirLocalId] = field(default_factory=set)
     found_unknown: set[tuple[ShirId, ShirLocalId]] = field(default_factory=set)
     takes: dict[p.Place, tuple[p.Field, ...]] = field(default_factory=dict)
+    calls: dict[ShirId, bool] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.block = self.blocks[0]
@@ -491,7 +492,8 @@ class Lowering:
     def binary(self, node: e.Binary) -> Value:
         if node.op in ("and", "or"):
             return ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
-        return r.Binary(node.op, self.operand(node.lhs), self.operand(node.rhs))
+        lhs = agg.settled(self, node.lhs, self.operand(node.lhs), (node.rhs,))
+        return r.Binary(node.op, lhs, self.operand(node.rhs))
 
     def unary(self, node: e.Unary) -> Value:
         return r.Unary(node.op, self.operand(node.operand))
@@ -507,8 +509,9 @@ class Lowering:
         if ty is None:
             er.raise_internal_error("CE0000", span=node.loc,
                                     detail="an enum construction with no type reached SLIR")
+        values = [arg.value for arg in node.payload]
         return r.Aggregate(r.AggVariant(ty, node.variant),
-                           tuple(self.operand(arg.value) for arg in node.payload))
+                           agg.in_written_order(self, values, range(len(values))))
 
 _STATEMENTS: dict[type, Callable[..., None]] = {
     s.Assign: Lowering.assign,

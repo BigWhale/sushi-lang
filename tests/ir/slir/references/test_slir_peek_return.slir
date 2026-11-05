@@ -34,61 +34,65 @@ fn longer(_1: string @guaranteed, _2: string @guaranteed) -> string {
 fn head(_1: i32[] @guaranteed, _2: i32 @guaranteed) -> Result@(i32[], Short) {
     let _0: Result@(i32[], Short) view
     let _3: i32
-    let _4: bool
-    let _5: Short
-    let _6: i32
+    let _4: i32
+    let _5: bool
+    let _6: Short
     let _7: i32
-    let _8: u32
+    let _8: i32
     let _9: u32
-    let _10: bool
-    let _11: u32
-    let _12: bool
+    let _10: u32
+    let _11: bool
+    let _12: u32
     let _13: bool
-    let _14: i32[]
+    let _14: bool
+    let _15: i32[]
 
   bb0:
     StorageLive(_3)
-    _3 = call builtin array.len(copy _1 @guaranteed)
+    _3 = copy _2
     StorageLive(_4)
-    _4 = copy _2 > copy _3
+    _4 = call builtin array.len(copy _1 @guaranteed)
+    StorageLive(_5)
+    _5 = copy _3 > copy _4
+    StorageDead(_4)
     StorageDead(_3)
-    switchInt(copy _4) -> [0: bb2, otherwise: bb1]
+    switchInt(copy _5) -> [0: bb2, otherwise: bb1]
 
   bb1:
-    StorageDead(_4)
-    StorageLive(_5)
-    _5 = Short::Missing
-    _0 = Result::Err(move _5)
     StorageDead(_5)
+    StorageLive(_6)
+    _6 = Short::Missing
+    _0 = Result::Err(move _6)
+    StorageDead(_6)
     return
 
   bb2:
-    StorageDead(_4)
+    StorageDead(_5)
     goto -> bb3
 
   bb3:
-    StorageLive(_6)
-    _6 = copy _2
     StorageLive(_7)
-    _7 = len(_1)
-    _8 = copy _6 as u32
+    _7 = copy _2
+    StorageLive(_8)
+    _8 = len(_1)
     _9 = copy _7 as u32
-    _10 = copy _8 <= copy _9
-    _11 = copy _6 as u32
-    _12 = const 0_u32 <= copy _11
-    _13 = copy _10 & copy _12
-    switchInt(copy _13) -> [0: bb4, otherwise: bb5]
+    _10 = copy _8 as u32
+    _11 = copy _9 <= copy _10
+    _12 = copy _7 as u32
+    _13 = const 0_u32 <= copy _12
+    _14 = copy _11 & copy _13
+    switchInt(copy _14) -> [0: bb4, otherwise: bb5]
 
   bb4:
-    trap RE2028(const 0_i32, copy _6, copy _7)
+    trap RE2028(const 0_i32, copy _7, copy _8)
 
   bb5:
-    StorageLive(_14)
-    _14 = slice(_1, const 0_i32, copy _6)
-    _0 = Result::Ok(copy _14)
-    StorageDead(_14)
+    StorageLive(_15)
+    _15 = slice(_1, const 0_i32, copy _7)
+    _0 = Result::Ok(copy _15)
+    StorageDead(_15)
+    StorageDead(_8)
     StorageDead(_7)
-    StorageDead(_6)
     return
 }
 

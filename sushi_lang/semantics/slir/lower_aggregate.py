@@ -71,39 +71,55 @@ def _instance(low: Lowering, node: e.StructInit | e.TupleInit) -> Type:
 
 def in_written_order(low: Lowering, values: Sequence[e.ShirExpr],
                       order: Sequence[int]) -> tuple[p.Operand, ...]:
-    """The operand of each value, evaluated in `order`, in the declaration order. A place
-    of a plain value that a later value can change is copied into a temporary first. A place
-    of an owning value (the borrowed value of a repeat run) stays where it is: a temporary
-    would drop a copy that it does not own."""
+    """The operand of each value, evaluated in `order`, in the declaration order (`settled`)."""
     operands: dict[int, p.Operand] = {}
     for at, index in enumerate(order):
         value = values[index]
-        operand = low.operand(value)
-        if (isinstance(operand, p.Copy) and not low.owns(low.type_of(value))
-                and any(_calls(values[later]) for later in order[at + 1:])):
-            operand = p.Copy(p.Local(low.temporary(r.Use(operand), low.type_of(value),
-                                                   value.loc)))
-        operands[index] = operand
+        operands[index] = settled(low, value, low.operand(value),
+                                  [values[later] for later in order[at + 1:]])
     return tuple(operands[index] for index in range(len(values)))
 
 
-def _calls(expr: e.ShirExpr) -> bool:
+def settled(low: Lowering, value: e.ShirExpr, operand: p.Operand,
+            later: Sequence[e.ShirExpr]) -> p.Operand:
+    """`operand`, or its copy in a temporary when it reads a place of a plain value and a
+    later value of the statement can call a function: the call can change the place through
+    a `poke`, or move its root, before the reader of the operand runs. A place of an owning
+    value (the borrowed value of a repeat run) stays where it is: a temporary would drop a
+    copy that it does not own."""
+    if (isinstance(operand, p.Copy) and isinstance(value, (e.LocalRef, e.Field, e.Index))
+            and not low.owns(low.type_of(value)) and any(_calls(low, each) for each in later)):
+        return p.Copy(p.Local(low.temporary(r.Use(operand), low.type_of(value), value.loc)))
+    return operand
+
+
+def _calls(low: Lowering, expr: e.ShirExpr) -> bool:
     """Whether a value can call a function, which can change a place through a `poke`. A
-    literal, a name of a constant, a place, an operator and a construction over such values
-    call none."""
+    literal, a name of a constant, a place, an element read, an operator and a construction
+    over such values call none. The answer of each node is kept (`Lowering.calls`), so a
+    deep nest of operators is read one time."""
+    known = low.calls.get(expr.shir_id)
+    if known is None:
+        known = low.calls[expr.shir_id] = _reads_a_call(low, expr)
+    return known
+
+
+def _reads_a_call(low: Lowering, expr: e.ShirExpr) -> bool:
     if isinstance(expr, (e.Lit, e.ConstRef, e.LocalRef, e.StorageRef)):
         return False
     if isinstance(expr, e.Field):
-        return _calls(cast(e.ShirExpr, walk_place(expr, Step.MEMBER).node))
+        return _calls(low, cast(e.ShirExpr, walk_place(expr, Step.MEMBER).node))
+    if isinstance(expr, e.Index):
+        return _calls(low, expr.base) or _calls(low, expr.index)
     if isinstance(expr, (e.Unary, e.Cast)):
-        return _calls(expr.operand)
+        return _calls(low, expr.operand)
     if isinstance(expr, e.Binary):
-        return _calls(expr.lhs) or _calls(expr.rhs)
+        return _calls(low, expr.lhs) or _calls(low, expr.rhs)
     if isinstance(expr, e.TupleInit):
-        return any(_calls(part) for part in expr.parts)
+        return any(_calls(low, part) for part in expr.parts)
     if isinstance(expr, (e.StructInit, e.EnumInit)):
         args = expr.fields if isinstance(expr, e.StructInit) else expr.payload
-        return any(_calls(arg.value) for arg in args)
+        return any(_calls(low, arg.value) for arg in args)
     return True
 
 

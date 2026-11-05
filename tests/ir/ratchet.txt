@@ -2747,6 +2747,8 @@ tests/operators/logical_operands/test_err_not_integer_operand.sushi
 tests/operators/logical_operands/test_err_not_string_operand.sushi
 tests/operators/logical_operands/test_err_or_float_operand.sushi
 tests/operators/logical_operands/test_err_xor_struct_operand.sushi
+tests/operators/operand_order/test_run_place_operand_before_a_nom_call.sushi
+tests/operators/operand_order/test_run_place_operand_before_a_poke_call.sushi
 tests/operators/operator_precedence/test_combined_operators.sushi
 tests/operators/operator_precedence/test_operator_precedence.sushi
 tests/operators/ord_derived/test_enum_ord_relations.sushi
