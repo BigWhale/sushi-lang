@@ -34,7 +34,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import LocalId
-from sushi_lang.semantics.shir.nodes import ShirNode
+from sushi_lang.semantics.shir.nodes import Hole, ShirNode
 from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
@@ -44,8 +44,7 @@ Needs: TypeAlias = Callable[[TypeckResults, Any], Iterator[str]]
 
 
 def _call(answers: TypeckResults, call: e.Call) -> Iterator[str]:
-    if answers.callee_of(call.shir_id) is None:
-        yield "callee"
+    yield from _callee(answers, call)
     for position in range(len(call.args)):
         if answers.convention_of(call.shir_id, position) is None:
             yield f"convention of argument {position}"
@@ -53,6 +52,11 @@ def _call(answers: TypeckResults, call: e.Call) -> Iterator[str]:
         for position in range(len(call.args)):
             if answers.display_type_of(call.shir_id, position) is None:
                 yield f"display type of argument {position}"
+
+
+def _callee(answers: TypeckResults, call: e.Call) -> Iterator[str]:
+    if answers.callee_of(call.shir_id) is None:
+        yield "callee"
 
 
 def _instance(answers: TypeckResults,
@@ -149,21 +153,46 @@ NEEDS: dict[type, Needs] = {
 }
 
 
+#: The answers that make a node known to `borrow` where they are fewer than the answers of
+#: `NEEDS`: a call with a callee is known, and an argument with no convention is unknown on
+#: its own (docs/design/ir.md 7.9).
+KNOWN_WITH: dict[type, Needs] = {
+    e.Call: _callee,
+}
+
+
 def missing_answers(body: ShirBody, answers: TypeckResults) -> list[MissingAnswer]:
     """Each answer that `body` needs and that `answers` does not hold: the locals first,
     the parameters before the others, then the nodes in the order of the walk."""
     gaps = [MissingAnswer("type", name, loc) for local, name, loc in _locals(body)
             if answers.local_type(local) is None]
     for _path, value in walk(body.block, "block"):
-        if not isinstance(value, ShirNode):
-            continue
-        node = type(value).__name__
-        if isinstance(value, e.ExprNode) and answers.type_of(value.shir_id) is None:
-            gaps.append(MissingAnswer("type", node, value.loc))
-        needs = NEEDS.get(type(value))
-        if needs is not None:
-            gaps.extend(MissingAnswer(answer, node, value.loc) for answer in needs(answers, value))
+        if isinstance(value, ShirNode):
+            node = type(value).__name__
+            gaps.extend(MissingAnswer(answer, node, value.loc)
+                        for answer in _node_gaps(answers, value))
     return gaps
+
+
+def _node_gaps(answers: TypeckResults, value: ShirNode,
+               table: dict[type, Needs] = NEEDS) -> Iterator[str]:
+    """Each answer that the node `value` needs by `table` and that `answers` does not hold,
+    its type first."""
+    if isinstance(value, e.ExprNode) and answers.type_of(value.shir_id) is None:
+        yield "type"
+    needs = table.get(type(value))
+    if needs is not None:
+        yield from needs(answers, value)
+
+
+def misses_an_answer(answers: TypeckResults, value: ShirNode) -> bool:
+    """Whether the node `value` is unknown to `borrow` in a body with an error of typecheck
+    (docs/design/ir.md 7.9): an error hole, or a node with no type or with no answer of
+    `NEEDS` (of `KNOWN_WITH` where it has a row)."""
+    if isinstance(value, Hole):
+        return True
+    table = KNOWN_WITH if type(value) in KNOWN_WITH else NEEDS
+    return next(_node_gaps(answers, value, table), None) is not None
 
 
 def _locals(body: ShirBody) -> Iterator[tuple[LocalId, str, Optional[Span]]]:

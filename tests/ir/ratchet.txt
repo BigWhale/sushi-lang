@@ -1344,6 +1344,10 @@ tests/ir/borrow/methods/test_borrow_string_method_reaches_slir.sushi
 tests/ir/borrow/methods/test_err_borrow_method_argument_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_method_receiver_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_nom_self_receiver_after_move.sushi
+tests/ir/borrow/past_typecheck/test_err_borrow_branch_beside_a_condition_error.sushi
+tests/ir/borrow/past_typecheck/test_err_borrow_inside_a_refused_expression.sushi
+tests/ir/borrow/past_typecheck/test_err_borrow_past_a_type_error.sushi
+tests/ir/borrow/past_typecheck/test_err_borrow_unknown_call_moves_nothing.sushi
 tests/ir/borrow/ranges/test_err_borrow_range_binder.sushi
 tests/ir/borrow/regions/test_borrow_view_regions.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_a_poke_of_a_constant.sushi
@@ -1952,6 +1956,7 @@ tests/memory/entry_allocas/test_array_reverse_in_loop.sushi
 tests/memory/entry_allocas/test_nested_foreach_frame.sushi
 tests/memory/field_borrow/test_borrow_member_nested.sushi
 tests/memory/field_borrow/test_borrow_member_refparam.sushi
+tests/memory/field_borrow/test_err_borrow_member_invalid.sushi
 tests/memory/generic_drop/test_err_generic_drop_foreign_unit.sushi
 tests/memory/generic_drop/test_err_generic_drop_partially_concrete.sushi
 tests/memory/let_borrow/test_err_borrow_live_owner_moved.sushi

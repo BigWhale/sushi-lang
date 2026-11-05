@@ -247,7 +247,10 @@ class SemanticAnalyzer:
         AST, and lowering makes the SHIR body of each declaration. The three SHIR passes
         walk that body, and each gives the next stage each body that it finished with no
         error: `typecheck` gives it to `lift`, `lift` gives it to `borrow`, and `borrow`
-        gives it to the SLIR stage. A stop of a stage ends the work on its body, and the
+        gives it to the SLIR stage. A body whose walk in `typecheck` reported an error goes
+        to `lift` and `borrow` too, for the diagnostics of `borrow`, and never to the SLIR
+        stage, which lowers nothing while the program has an error (docs/design/ir.md 7.9).
+        A stop of a stage ends the work on its body, and the
         next stage does not get it. `lift` stops at a `Lambda` until the closures group.
         `effects` runs on the AST before the loop, because `borrow` reads its summary. A
         stop of a stage stops the pipeline after the analysis with the stop code CE0155
@@ -827,7 +830,8 @@ class SemanticAnalyzer:
         result goes to `self.shir`, and the body half of `typecheck` walks it; `typecheck`
         gives each body that it finished with no error to `lift`, `lift` gives each body
         that it finished to `borrow`, and `borrow` gives each body that it finished to the
-        SLIR stage, which writes `self.slir`. The reporter of the unit tells lowering whether
+        SLIR stage, which writes `self.slir` while the program has no error. A body whose
+        walk in `typecheck` reported an error goes to `lift` and `borrow` too. The reporter of the unit tells lowering whether
         scope reported an error: in such a unit a hole does not stop the compile under the
         strict variable.
         """
@@ -866,7 +870,8 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
-        slir = SlirStage(self.shir, self.slir, stops=self.stops, unit=unit.name)
+        slir = SlirStage(self.shir, self.slir, stops=self.stops, unit=unit.name,
+                         failed=lambda: self.reporter.has_errors or reporter.has_errors)
         borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir, stops=self.stops,
                                next_stage=slir.lower_body,
                                destroy_effects=self.destroy_effects, namespaces=namespaces)

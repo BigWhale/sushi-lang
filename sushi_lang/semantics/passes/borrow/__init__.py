@@ -2,7 +2,9 @@
 body; the sibling modules hold the rules.
 
 The lift pass gives the pass each body that typecheck and lift finished with no error,
-with its `TypeckResults` (`check_body`). The DECLARATION half reads the declaration of the
+with its `TypeckResults` (`check_body`), and each body whose walk in typecheck reported an
+error. In such a body a node with no answer is UNKNOWN (`reads.unknown`): it has no arm, and
+the pass writes no row of the body. The DECLARATION half reads the declaration of the
 body: the mode of each parameter, the receiver, a borrowed return. The BODY half walks the
 SHIR body through one table of arms keyed on the SHIR class (`arms.py`), and writes each
 answer as a row of the `OwnershipResults` of the body. The state of the walk is keyed by
@@ -119,18 +121,23 @@ class BorrowChecker:
         # that a `let` made, with its owners and its statement (`regions.py`).
         self.statement_at: list[tuple[ShirBlock, int]] = []
         self.views: Dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]] = {}
+        # True when the walk of the body in typecheck reported an error.
+        self.typecheck_failed = False
 
     def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
-                   filename: Optional[str]) -> None:
-        """Walk the SHIR body of `decl`, which typecheck and lift finished with no error.
+                   filename: Optional[str], typecheck_failed: bool = False) -> None:
+        """Walk the SHIR body of `decl`, which lift finished with no error.
 
         `tables` are the tables that the typecheck pass read the body in. A stop ends the
         walk: the pass records it with the file of the body. A walk with no stop and with
         no error checks the table of the body, and gives the body, with the tables that
         typecheck read it in, to the next stage, the SLIR lowering. A template check never
-        goes to SLIR (docs/design/ir.md 4.3).
+        goes to SLIR (docs/design/ir.md 4.3). A body whose walk in typecheck reported an
+        error (`typecheck_failed`) gives only its diagnostics: it writes no row, and it
+        never goes to SLIR (docs/design/ir.md 7.9).
         """
         self._enter(decl, body, tables)
+        self.typecheck_failed = typecheck_failed
         offered = sum(self.reporter.errors_offered.values())
         has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"
         # The check copy of a generic free function gives its parameters no span: the note
@@ -150,7 +157,7 @@ class BorrowChecker:
             return
         finally:
             self._leave()
-        if sum(self.reporter.errors_offered.values()) != offered:
+        if sum(self.reporter.errors_offered.values()) != offered or typecheck_failed:
             return
         ownership = self.shir.ownership_table_of(body)
         for local in sorted(self.moved_locals & self.kept_at_an_exit):
@@ -188,6 +195,7 @@ class BorrowChecker:
         self.locals = {}
         self.source = None
         self.borrow_state = {}
+        self.typecheck_failed = False
 
     def answers(self) -> TypeckResults:
         """The `TypeckResults` of the body that the pass walks."""

@@ -250,6 +250,14 @@ def _targets(targets: Sequence[s.DestructureTarget]) -> list[LocalId | s.Place]:
     return found
 
 
+def declare_binders(checker: 'BorrowChecker', node: s.Destructure) -> None:
+    """Declare each binder of a destructure that has a type, and walk nothing: the
+    destructure is unknown in a body with an error of typecheck (docs/design/ir.md 7.9)."""
+    for target in _targets(node.targets):
+        if not isinstance(target, s.Place) and checker.local_type(target) is not None:
+            _declare_binder(checker, target)
+
+
 def _declare_binder(checker: 'BorrowChecker', local: LocalId) -> None:
     shir_local = checker.locals.get(local)
     checker.declare(BorrowState(name=checker.name_of(local), local=local,

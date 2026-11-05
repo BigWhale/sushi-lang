@@ -36,6 +36,8 @@ from sushi_lang.semantics.method_effects import answers_view
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin
+from sushi_lang.semantics.shir.nodes import ShirNode
+from sushi_lang.semantics.shir.typeck_check import misses_an_answer
 from sushi_lang.semantics.typesys import Type
 from .state import BorrowState
 
@@ -125,10 +127,11 @@ def chain_call_boundary(expr: object) -> Optional[Span]:
     crosses it cannot reach the storage it appears to write. Deliberately inverted --
     "a Name is fine" rather than a list of boundary kinds -- so a new expression kind
     is rejected, never silently writable. The boundary's span is the second location
-    of the CE2429 diagnostic.
+    of the CE2429 diagnostic. A constant is storage too: typecheck refuses a write of it
+    (CE2096), also in a body that goes on to this pass with that error.
     """
     end = walk_place(expr, Step.MEMBER | Step.INDEX).node
-    if end is None or isinstance(end, (Name, e.LocalRef, e.StorageRef)):
+    if end is None or isinstance(end, (Name, e.LocalRef, e.StorageRef, e.ConstRef)):
         return None
     return end.loc
 
@@ -217,6 +220,13 @@ def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> boo
         enum_type = checker.tables.enums.by_name.get(expr.receiver.id)
     get_variant = getattr(enum_type, "get_variant", None)
     return get_variant is not None and get_variant(expr.member) is not None
+
+
+def unknown(checker: 'BorrowChecker', node: object) -> bool:
+    """Whether `node` is unknown: an error hole, or a node with no answer that it needs, in
+    a body whose walk in typecheck reported an error (docs/design/ir.md 7.9)."""
+    return (checker.typecheck_failed and isinstance(node, ShirNode)
+            and misses_an_answer(checker.answers(), node))
 
 
 def read_type(checker: 'BorrowChecker', node: object) -> Optional[Type]:

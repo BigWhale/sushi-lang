@@ -90,10 +90,10 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
             "CE0000", span=node.loc,
             detail=f"the typecheck pass gave the borrow pass a call with the callee "
                    f"{type(callee).__name__}, and it stops at that call first")
-    if any(arg.bloom for arg in node.args):
+    if any(arg.bloom for arg in node.args) and not checker.typecheck_failed:
         arms.stop_at(checker, node)
-    conventions = [_convention_of(checker, node, position)
-                   for position in range(len(node.args))]
+    conventions = [None if arg.bloom else _convention_of(checker, node, position)
+                   for position, arg in enumerate(node.args)]
     unchanged = unchanged_borrowed_roots(checker, node, conventions)
     changes_receiver = (isinstance(callee, Method)
                         and check_method_receiver(checker, node, callee))
@@ -291,7 +291,7 @@ def _place_of(value: e.ShirExpr) -> Optional[tuple]:
     return (walked.local, *(step.name for step in reversed(walked.path)))
 
 
-def _written_borrow(arg: e.Arg, convention: Convention) -> Optional[BorrowMode]:
+def _written_borrow(arg: e.Arg, convention: Optional[Convention]) -> Optional[BorrowMode]:
     """The mode of the borrow that an argument takes for the statement, or None when it
     takes none: its written `peek` or `poke` marker, else a by-address convention. A marked
     argument of `print` and `println` has the `Guaranteed` convention and borrows as it is
@@ -301,9 +301,13 @@ def _written_borrow(arg: e.Arg, convention: Convention) -> Optional[BorrowMode]:
     return BY_ADDRESS.get(convention)
 
 
-def _convention_of(checker: 'BorrowChecker', node: e.Call, position: int) -> Convention:
+def _convention_of(checker: 'BorrowChecker', node: e.Call,
+                   position: int) -> Optional[Convention]:
+    """The convention of an argument. In a body with an error of typecheck, an argument with
+    no convention is unknown (None), and so is a bloom argument, which typecheck refused: it
+    borrows as its marker is written, and it takes no convention (docs/design/ir.md 7.9)."""
     convention = checker.answers().convention_of(node.shir_id, position)
-    if convention is None:
+    if convention is None and not checker.typecheck_failed:
         er.raise_internal_error(
             "CE0000", span=node.loc,
             detail=f"the typecheck pass gave the argument {position + 1} of a call no "
@@ -312,7 +316,7 @@ def _convention_of(checker: 'BorrowChecker', node: e.Call, position: int) -> Con
 
 
 def apply_convention(checker: 'BorrowChecker', value: e.ShirExpr,
-                     convention: Convention) -> None:
+                     convention: Optional[Convention]) -> None:
     """Apply the convention of ONE argument to its value.
 
     An `Owned` argument is a consuming use. A `Guaranteed` argument is the implicit
@@ -326,7 +330,7 @@ def apply_convention(checker: 'BorrowChecker', value: e.ShirExpr,
 
 
 def unchanged_borrowed_roots(checker: 'BorrowChecker', node: e.Call,
-                             conventions: Sequence[Convention]) -> frozenset:
+                             conventions: Sequence[Optional[Convention]]) -> frozenset:
     """The roots of a call's borrowed arguments that no change has invalidated yet.
 
     Taken at the call's ENTRY, before its arguments are read, so that
@@ -340,7 +344,7 @@ def unchanged_borrowed_roots(checker: 'BorrowChecker', node: e.Call,
 
 
 def reject_borrow_read_by_the_change(checker: 'BorrowChecker', node: e.Call,
-                                     conventions: Sequence[Convention],
+                                     conventions: Sequence[Optional[Convention]],
                                      unchanged: frozenset) -> None:
     """CE2412: a borrowed argument is read DURING the call that changes its owner.
 
@@ -369,10 +373,11 @@ def _arg_root(checker: 'BorrowChecker',
     return local, checker.borrow_state.get(local)
 
 
-def _borrowed_args(node: e.Call, conventions: Sequence[Convention]) -> list[e.ShirExpr]:
+def _borrowed_args(node: e.Call,
+                   conventions: Sequence[Optional[Convention]]) -> list[e.ShirExpr]:
     """The values that a call reads without taking them and without a written `poke`."""
     return [arg.value for arg, convention in zip(node.args, conventions, strict=True)
-            if convention.read_only
+            if convention is not None and convention.read_only
             and arg.marker is not Convention.INOUT]
 
 

@@ -108,23 +108,26 @@ RETURN_SLOT = LocalId(0)
 
 @dataclass(slots=True)
 class SlirStage:
-    """The SLIR stage of one unit: it lowers each body that the borrow pass finished."""
+    """The SLIR stage of one unit: it lowers each body that the borrow pass finished, while
+    the program has no error (`failed`)."""
     shir: LoweredProgram
     slir: SlirProgram
     stops: Stops
     unit: str
+    failed: Callable[[], bool]
     verifier: SlirVerifier = field(default_factory=SlirVerifier)
 
     def lower_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str]) -> None:
         """Lower the SHIR body of `decl` and record the outcome. An initializer body has no
-        outcome.
+        outcome, and neither has a body of a program that has an error (docs/design/ir.md
+        7.9).
 
         A stop ends the lowering of the body: the stage records it with the file of the
         body. The verifier checks a function that the lowering finished (ir.md 8.13), and
         the program keeps it for the emitter.
         """
-        if isinstance(body.origin, Initializer):
+        if isinstance(body.origin, Initializer) or self.failed():
             return
         name = self.shir.decls.name_of(body.fn_id)
         drops = drop_type_names(tables.perk_impls)

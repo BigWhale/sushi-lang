@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2005, CE2405, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+#
+# The condition of the `if` is no bool, but each node of the `if` has an answer of
+# typecheck. So the borrow pass walks the `if`: the branch may move `s`, and each use of
+# `s` after it is CE2405.
+
+fn take(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let string s = "Mostly Harmless {42}"
+    if (42):
+        take(nom s)
+    take(nom s)
+    println(s)
+    return 0

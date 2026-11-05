@@ -19,10 +19,12 @@ from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import Hole
+from sushi_lang.semantics.shir.walk import parts
 
 from . import calls as ca
 from . import expressions as ex
 from . import statements as st
+from .reads import unknown
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -37,8 +39,19 @@ def stop_at(_checker: BorrowChecker, node: Any) -> NoReturn:
 
 
 def check(checker: BorrowChecker, node: Any) -> None:
-    """Check one statement or one expression through its arm."""
-    dispatch.arm_of(ARMS, node, STAGE)(checker, node)
+    """Check one statement or one expression through its arm. An unknown node of a body with
+    an error of typecheck has no arm (docs/design/ir.md 7.9): an unknown expression reads
+    each expression that it holds, and an unknown statement declares its binders."""
+    arm = dispatch.arm_of(ARMS, node, STAGE)
+    if unknown(checker, node):
+        if isinstance(node, s.Destructure):
+            st.declare_binders(checker, node)
+        elif isinstance(node, e.ExprNode):
+            for part in parts(node):
+                if isinstance(part, (e.ExprNode, Hole)) and not isinstance(part, e.GlobalRef):
+                    check(checker, part)
+        return
+    arm(checker, node)
 
 
 ARMS: dict[type, Callable[..., Any]] = {

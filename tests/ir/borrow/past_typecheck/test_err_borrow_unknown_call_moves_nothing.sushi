@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2008
+#
+# The call of a method that `string` does not have has no answer of typecheck: no callee
+# and no convention of an argument. The borrow pass reads its receiver and its argument,
+# and it moves nothing, so the use of `s` after the call gives no CE2405.
+
+fn main() i32:
+    let string s = "Mostly Harmless {42}"
+    let string t = "forty-two"
+    let i32 n = t.nope(nom s)
+    println(s)
+    return n

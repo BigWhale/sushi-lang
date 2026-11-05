@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Iterator
 
-from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 
 _PACKAGE = __name__.rpartition(".")[0] + "."
 
@@ -47,3 +47,19 @@ def walk(value: object, path: str) -> Iterator[tuple[str, object]]:
             part = getattr(value, each.name)
             if _holds_nodes(part):
                 stack.append((part, f"{path}.{each.name}"))
+
+
+def parts(value: object) -> Iterator[ShirNode]:
+    """Each node right under the node `value`: the walk of its fields, which stops at each
+    node that it meets and does not go into it."""
+    stack: list[object] = [getattr(value, each.name)
+                           for each in reversed(dataclasses.fields(value))]  # type: ignore[arg-type]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, ShirNode):
+            yield item
+        elif isinstance(item, (list, tuple)):
+            stack.extend(reversed(item))
+        elif _holds_nodes(item):
+            stack.extend(getattr(item, each.name)
+                         for each in reversed(dataclasses.fields(item)))  # type: ignore[arg-type]

@@ -29,7 +29,7 @@ from .diagnostics import (
     no_clone_reason,
     refuses_clone,
 )
-from .reads import borrow_owner, read_type, view_receiver
+from .reads import borrow_owner, read_type, unknown, view_receiver
 from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed
 
@@ -109,10 +109,13 @@ def decide(checker: 'BorrowChecker', node: e.ShirExpr, provenance: Provenance,
     row of the `OwnershipResults` of the body. The one writer of the row.
 
     A discovery round of a loop decides and writes nothing: the round after it decides
-    from the facts of the fixed point.
+    from the facts of the fixed point, and so does a body with an error of typecheck. An
+    unknown value is adopted: it moves nothing and is no error (docs/design/ir.md 7.9).
     """
+    if unknown(checker, node):
+        return Ownership.ADOPT
     decision = classify(provenance, type_class)
-    if not checker.discovery_rounds:
+    if not checker.discovery_rounds and not checker.typecheck_failed:
         checker.table().record_ownership(node.shir_id, decision)
     return decision
 

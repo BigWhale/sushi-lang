@@ -293,9 +293,11 @@ class TypeValidator:
         the body whose arms miss a value. A walk that ends with no stop and with no error
         in its body is checked for completeness, and its body goes to the next stage, the
         lift pass, with the tables that the body was read in. A node that has an error has
-        no answer, so a body with an error is not checked. `offered` is the count of the
-        errors before the header of a function or a method, so that a body whose header has
-        an error (an unknown parameter type) does not go on either.
+        no answer, so a body with an error is not checked: it goes to the lift pass marked
+        `typecheck_failed` when its header and its path faults have no error
+        (docs/design/ir.md 7.9). `offered` is the count of the errors before the header of
+        a function or a method, so that a body whose header has an error (an unknown
+        parameter type) does not go on.
         The answer is the body when the walk reached its end, and None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
@@ -317,7 +319,9 @@ class TypeValidator:
             offered = self.errors_offered()
         try:
             check_params(self, body)
+            header_failed = self.errors_offered() != offered
             check_block(self, body.block)
+            walk_failed = self.errors_offered() != offered or self.refused_before
         except StageStop as stop:
             stop.filename = filename
             self.stops.stopped(stop)
@@ -328,9 +332,15 @@ class TypeValidator:
             self.body_locals = {}
             self.refused_locals = set()
             self.uncovered_matches = set()
+        walked = self.errors_offered()
         if path_faults is not None:
             path_faults(body, uncovered)
-        if self.errors_offered() != offered or self.refused_before:
+        if walk_failed:
+            if not header_failed and self.errors_offered() == walked:
+                self.next_stage(decl, body, tables=self.tables, filename=filename,
+                                typecheck_failed=True)
+            return body
+        if self.errors_offered() != offered:
             return body
         check_answers(body, answers, self.shir.decls)
         self.next_stage(decl, body, tables=self.tables, filename=filename)

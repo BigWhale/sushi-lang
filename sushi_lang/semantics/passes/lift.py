@@ -4,7 +4,7 @@
 for each `Lambda` of a body are rows of the `LiftResults` of the body. A `Lambda` stops the
 walk of its body with the stop code CE0155 (`lift, Lambda`) until the closures group. A
 body that the pass ends with no stop has its table checked (`check_lift`), and goes on to
-the borrow pass.
+the borrow pass, also a body whose walk in typecheck reported an error.
 
 `LambdaLifter` is the lift pass of the AST pipeline, which turns each lambda literal into
 a top-level function and an environment. No stage runs it; the closures group takes what
@@ -48,12 +48,13 @@ class LiftPass:
         self.next_stage = next_stage
 
     def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
-                   filename: Optional[str]) -> None:
-        """Lift the SHIR body of `decl`, which the typecheck pass finished with no error.
+                   filename: Optional[str], typecheck_failed: bool = False) -> None:
+        """Lift the SHIR body of `decl`, which the typecheck pass finished with no stop.
 
         A stop ends the walk: the pass records it with the file of the body, and the body
         does not go to the borrow pass. A walk with no stop checks the table of the body
-        and gives the body, with the tables that typecheck read it in, to the borrow pass.
+        and gives the body, with the tables that typecheck read it in, to the borrow pass,
+        with `typecheck_failed` when the walk of typecheck reported an error.
         """
         try:
             for _path, value in walk(body.block, "block"):
@@ -64,6 +65,10 @@ class LiftPass:
             self.stops.lift_stopped(stop)
             return
         check_lift(body, self.shir.lift_table_of(body), self.shir.decls)
+        if typecheck_failed:
+            self.next_stage(decl, body, tables=tables, filename=filename,
+                            typecheck_failed=True)
+            return
         self.next_stage(decl, body, tables=tables, filename=filename)
 
 

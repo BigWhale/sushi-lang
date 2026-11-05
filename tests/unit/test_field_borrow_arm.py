@@ -71,6 +71,7 @@ class _Types:
 class _Checker:
     """The stand-in of the pass: no state, and a type for each local."""
     types = _Types()
+    typecheck_failed = False
 
     def __init__(self) -> None:
         self.borrow_state: dict = {}
