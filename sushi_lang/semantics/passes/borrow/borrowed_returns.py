@@ -25,7 +25,7 @@ from sushi_lang.semantics.shir.body import Instance, ShirBody
 from sushi_lang.semantics.shir.callee import Method
 
 from . import arms
-from .diagnostics import spelled
+from .diagnostics import read_spelled, spelled
 from .reads import borrow_owner, names_an_owner, read_type
 
 if TYPE_CHECKING:
@@ -235,7 +235,7 @@ def _emit_not_a_view(checker: 'BorrowChecker', returned: BodyReturn, value: e.Sh
                      reason: str) -> None:
     sources = ", ".join(f"'{source}'" for source in returned.sources) or "nothing"
     checker.err.emit_with(er.ERR.CE2443, value.loc,
-                          value=spelled(checker, value), reason=reason) \
+                          value=read_spelled(checker, value), reason=reason) \
         .note_at(f"the answer is declared a borrow of {sources} here", returned.record.span) \
         .help(f"return a view of {sources}, or drop `peek` and return an owned value") \
         .emit()

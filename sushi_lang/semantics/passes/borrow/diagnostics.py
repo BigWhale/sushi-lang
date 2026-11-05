@@ -332,8 +332,8 @@ def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
 def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
                          use_of_copy: Optional[CopyUse] = None) -> None:
     """Report CE2411 for a read through a live owner (`r??` over a borrowed `r`), with the
-    read spelled as the user wrote it."""
-    text = spelled(checker, expr)
+    read spelled as the user wrote it, with a temporary in its short form (`read_spelled`)."""
+    text = read_spelled(checker, expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
     owner = borrow_owner(checker, expr)
     state = checker.borrow_state.get(owner) if owner is not None else None
@@ -390,6 +390,41 @@ NO_TEXT = "<expression>"
 def spelled(checker: 'BorrowChecker', node) -> str:
     """The source text of `node`, as the user wrote it (`semantics/source_text.py`)."""
     return source_text(checker.source, node.loc) or NO_TEXT
+
+
+def read_spelled(checker: 'BorrowChecker', expr: e.ShirExpr) -> str:
+    """The text of a read through an owner: its source text, where a root that makes a new
+    value takes its short form (`head(...)`, `[...]`, `from([...])`, `new()`). The root is
+    at the end of the chain of fields, elements, method receivers and `??` operands."""
+    root = expr
+    while True:
+        if isinstance(root, (e.Field, e.Index, e.Slice)):
+            root = root.base
+        elif isinstance(root, e.Try):
+            root = root.inner
+        elif isinstance(root, e.Call) and isinstance(root.target, e.Dotted):
+            root = root.target.recv
+        else:
+            break
+    short = _short_temporary(checker, root)
+    if short is None:
+        return spelled(checker, expr)
+    rest = source_text(checker.source, Span(root.loc.end_line, root.loc.end_col,
+                                            expr.loc.end_line, expr.loc.end_col))
+    return short + (rest or "")
+
+
+def _short_temporary(checker: 'BorrowChecker', root: e.ShirExpr) -> Optional[str]:
+    """The short form of a root that makes a new value, or None for any other root."""
+    if isinstance(root, e.ArrayInit):
+        if isinstance(root.kind, e.Fixed):
+            return "[...]"
+        return "new()" if root.kind.new else "from([...])"
+    if isinstance(root, e.Call) and isinstance(root.target, e.Named):
+        name = source_text(checker.source, root.target.ref.loc)
+        if name is not None and name.isidentifier():
+            return f"{name}({'...' if root.args else ''})"
+    return None
 
 
 def temporary_spelled(checker: 'BorrowChecker', place: e.ShirExpr) -> str:
