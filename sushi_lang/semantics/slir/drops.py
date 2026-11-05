@@ -31,7 +31,7 @@ at a join have the same open regions.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from typing import Callable, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -42,6 +42,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.slir.ids import BorrowId, LocalId
+from sushi_lang.semantics.slir.verify_regions import changes
 from sushi_lang.semantics.typesys import BorrowMode
 
 _LIVE, _MOVED, _UNKNOWN = "live", "moved", "unknown"
@@ -49,18 +50,22 @@ _LIVE, _MOVED, _UNKNOWN = "live", "moved", "unknown"
 
 @dataclass(slots=True)
 class _Scope:
-    """A block, or a statement and its temporaries; the locals in declaration order."""
+    """A block, or a statement and its temporaries; the locals in declaration order, and the
+    SHIR statement of a statement scope."""
     statement: bool
     locals: list[LocalId] = field(default_factory=list)
+    at: Optional[ShirId] = None
 
 
 @dataclass(frozen=True, slots=True)
 class OpenRegion:
     """The open borrow region of a view local: one `BorrowId` for each owner, and the
-    statements of its last uses (none for a temporary, whose storage ends its region)."""
+    statements of its last uses (none for a temporary, whose storage ends its region), and
+    the root of each owner."""
     view: LocalId
     ids: tuple[BorrowId, ...]
     until: frozenset[ShirId]
+    owners: tuple[p.Place, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,9 +123,10 @@ class DropPlacement:
         """A block."""
         self._scopes.append(_Scope(statement=False))
 
-    def open_statement(self) -> None:
-        """A statement: its temporaries die at its end (L12)."""
-        self._scopes.append(_Scope(statement=True))
+    def open_statement(self, at: Optional[ShirId] = None) -> None:
+        """A statement, the SHIR statement `at` or a part of the statement that holds it: its
+        temporaries die at its end (L12)."""
+        self._scopes.append(_Scope(statement=True, at=at))
 
     def declare(self, local: LocalId, owning: bool) -> None:
         """A local of the newest block. It holds its value: it is live."""
@@ -278,7 +284,8 @@ class DropPlacement:
         """The region of `view`: one `BeginBorrow` for each owner."""
         ids = tuple(BorrowId(self._borrows + at) for at in range(len(owners)))
         self._borrows += len(owners)
-        self._open.append(OpenRegion(view, ids, until))
+        self._open.append(OpenRegion(view, ids, until, tuple(p.root_of(owner)
+                                                              for owner in owners)))
         return [st.BeginBorrow(ident, owner, BorrowMode.PEEK, span)
                 for ident, owner in zip(ids, owners, strict=True)]
 
@@ -292,6 +299,19 @@ class DropPlacement:
         ended = [region for region in self._open if ends(region)]
         self._open = [region for region in self._open if not ends(region)]
         return [st.EndBorrow(ident, span) for region in reversed(ended) for ident in region.ids]
+
+    def end_before_change(self, stmt: st.SlirStatement) -> list[st.SlirStatement]:
+        """The end of each region whose last use is the SHIR statement that lowering is in,
+        before `stmt` when `stmt` changes an owner of it and does not read its view: the last
+        use is evaluated, and a later part of the statement makes the change (ir.md 8.6)."""
+        at = next((scope.at for scope in reversed(self._scopes) if scope.at is not None), None)
+        if at is None or not self._open:
+            return []
+        changed = {p.root_of(place) for place, _ in changes(stmt)}
+        read = _read_locals(stmt)
+        return self.end_regions(lambda region: at in region.until and region.view not in read
+                                and any(owner in changed for owner in region.owners),
+                                stmt.span)
 
     # -- exits ---------------------------------------------------------------------------
 
@@ -338,6 +358,21 @@ class DropPlacement:
                     statements.append(st.StorageDead(flag, span))
                 statements.append(st.StorageDead(local, span))
         return statements
+
+
+def _read_locals(stmt: st.SlirStatement) -> set[LocalId]:
+    """The root local of each operand that `stmt` reads."""
+    if isinstance(stmt, st.Assign):
+        operands = list(r.operands_of(stmt.rvalue))
+    elif isinstance(stmt, st.Call):
+        operands = [operand for operand, _ in stmt.args]
+        if isinstance(stmt.callee, st.Indirect):
+            operands.append(stmt.callee.operand)
+    else:
+        return set()
+    roots = {p.root_of(part.place if isinstance(part, (p.Copy, p.Move)) else part)
+             for part in operands if not isinstance(part, p.Const)}
+    return {root.id for root in roots if isinstance(root, p.Local)}
 
 
 def _set(flag: LocalId, value: bool, span: Span) -> st.Assign:

@@ -10,8 +10,8 @@ only, so no import cycle exists at run time.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Optional, Sequence, TypeAlias
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Callable, Optional, Sequence, TypeAlias, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
@@ -416,13 +416,32 @@ def short_circuit(low: Lowering, place: p.Place, value: ShortCircuit) -> None:
     right, join = low.new_block(), low.new_block()
     skip, other = (join, right) if value.op == "and" else (right, join)
     low.jump(tm.SwitchInt(p.Copy(place), ((0, skip.id),), other.id, span))
-    among, at_branch = low.placement.in_scope(), low.placement.state()
+    among, at_branch, switch = low.placement.in_scope(), low.placement.state(), low.block
     low.block = right
     low.placement.open_statement()
     low.write(place, low.value(value.rhs), span)
     low.emit(low.placement.flush())
     low.emit(low.placement.close_scope(span))
-    meet(low, join, [(None, at_branch), (low.block, low.placement.state())], among, span)
+    meet(low, join, [_skipped(low, switch, join, at_branch, span),
+                     (low.block, low.placement.state())], among, span)
+
+
+def _skipped(low: Lowering, switch: Block, join: Block, state: FlowState,
+             span: Span) -> Arrival:
+    """The edge that skips the right operand. A region that the right operand ended before
+    a change of its owner (ir.md 8.6) ends on this edge too, in a block of its own."""
+    ended = [region for region in state.regions if region not in low.placement.open_regions()]
+    if not ended:
+        return (None, state)
+    bridge = low.new_block()
+    bridge.statements += [st.EndBorrow(ident, span) for region in reversed(ended)
+                          for ident in region.ids]
+    bridge.terminator = tm.Goto(join.id, span)
+    test = cast(tm.SwitchInt, switch.terminator)
+    switch.terminator = replace(test, targets=tuple(
+        (case, bridge.id if target == join.id else target) for case, target in test.targets),
+        otherwise=bridge.id if test.otherwise == join.id else test.otherwise)
+    return (bridge, replace(state, regions=low.placement.open_regions()))
 
 
 def try_(low: Lowering, node: e.Try) -> Value:

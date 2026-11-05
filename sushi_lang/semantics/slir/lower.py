@@ -290,7 +290,8 @@ class Lowering:
     # -- statements ----------------------------------------------------------------------
 
     def emit(self, statements: list[st.SlirStatement]) -> None:
-        self.block.statements.extend(statements)
+        for statement in statements:
+            self.block.statements += [*self.placement.end_before_change(statement), statement]
 
     @property
     def alive(self) -> bool:
@@ -331,7 +332,7 @@ class Lowering:
         arm = _STATEMENTS.get(type(stmt))
         if arm is None:
             dispatch.stop(STAGE, stmt)
-        self.placement.open_statement()
+        self.placement.open_statement(stmt.shir_id)
         arm(self, stmt)
         if self.alive:
             self.emit(views.after(self, stmt))

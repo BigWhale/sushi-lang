@@ -1,0 +1,53 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ab!\nc? d\nab1\nab1\ntrue 3\ntrue 4\nsome\n"
+#
+# A view whose last use is the new value of a write of its owner: the region ends after
+# the new value is read, before the drop of the old part. The same for a clone of a view
+# beside a `poke` of its owner, and for a `poke` in the right operand of `and` and `or`.
+
+struct Inner:
+    string label
+
+struct Outer:
+    string name
+    Inner inner
+
+fn put(string v, poke string[] dst) ~:
+    dst.fill(v)
+
+fn bump(poke string[] xs) bool:
+    xs.push("x")
+    return true
+
+fn main() i32:
+    let string base = "a"
+    let Outer o = Outer("{base}b", Inner("c"))
+    let string v = o.name
+    o.name := v.concat("!")
+    println(o.name)
+    let string w = o.inner.label
+    o.inner.label := w.concat("?")
+    let string[] a = from(["{base}b1", "d"])
+    let string e = a[1]
+    a[1] := e.concat("")
+    println("{o.inner.label} {a[1]}")
+    let string first = a[0]
+    put(first.clone(), poke a)
+    println(a[1])
+    let string head = a[0]
+    a.fill(head.clone())
+    println(a[1])
+    let string one = a[0]
+    let bool ok = one.len() > 0 and bump(poke a)
+    println("{ok} {a.len()}")
+    let string two = a[0]
+    let bool none = two.len() == 0 or bump(poke a)
+    println("{none} {a.len()}")
+    let Maybe@(string) m = Maybe.Some("{base}m")
+    match m:
+        Maybe.Some(s) -> m := Maybe.Some(s.concat("!"))
+        Maybe.None -> println("none")
+    if (m.is_some()):
+        println("some")
+    return 0

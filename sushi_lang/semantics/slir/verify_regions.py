@@ -81,13 +81,15 @@ def _owners_kept(stmt: st.SlirStatement, open_: _Open, fail: Fail) -> None:
     owners = set(open_.values())
     if not owners:
         return
-    for place, what in _changes(stmt):
+    for place, what in changes(stmt):
         if p.root_of(place) in owners:
             fail(REGION_OWNER, f"{what} {show(place)} while a region over it is open",
                  stmt.span)
 
 
-def _changes(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
+def changes(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
+    """Each place that `stmt` changes, and how: the one rule of a change of an owner, which
+    drop placement reads too (`DropPlacement.end_before_change`)."""
     if isinstance(stmt, (st.Drop, st.DropIfSet)):
         yield stmt.place, "drops"
     if isinstance(stmt, st.Assign):
