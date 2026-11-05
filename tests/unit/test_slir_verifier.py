@@ -26,7 +26,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
-from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
+from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.verify import (
     CONVENTIONS, DeclaredParams, declared_params, verify_function,
 )
@@ -617,16 +617,6 @@ def _not_checked(function: SlirFunction) -> None:
     assert caught.value.code == "CE0000"
     assert "not checked yet" in caught.value.params["detail"]
     assert caught.value.span == BAD
-
-
-def test_a_begin_borrow_is_not_checked_yet():
-    begin = st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.PEEK, BAD)
-    _not_checked(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Const(k.Int(1, I32)))),
-                                                begin)))
-
-
-def test_an_end_borrow_is_not_checked_yet():
-    _not_checked(_function([BLANK], _block(0, _ret(), st.EndBorrow(BorrowId(0), BAD))))
 
 
 @pytest.mark.parametrize("projection", [

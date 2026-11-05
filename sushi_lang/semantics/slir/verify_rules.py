@@ -1,8 +1,8 @@
 """The names of the rules of the SLIR verifier (docs/design/ir.md 8.13).
 
 A failed rule is the internal error CE0158, and the diagnostic names the rule by one of
-these texts. The structure check (`verify.py`), the call check (`verify_calls.py`) and the
-dataflow (`verify_flow.py`) share them.
+these texts. The structure check (`verify.py`), the call check (`verify_calls.py`), the
+dataflow (`verify_flow.py`) and the region check (`verify_regions.py`) share them.
 """
 from __future__ import annotations
 
@@ -30,6 +30,9 @@ STRUCT_VALUE = "a struct value"
 ARRAY_VALUE = "an array value"
 LENGTH_SLICE = "a length and a slice"
 VIEW = "a view"
+VIEW_LOCAL = "a view local"
+REGION = "a borrow region"
+REGION_OWNER = "no change of an owner in its region"
 ELEMENT_MOVE = "no move of an element"
 TRAP = "registered trap"
 SPANS = "spans"

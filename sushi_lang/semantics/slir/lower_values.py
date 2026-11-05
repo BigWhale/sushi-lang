@@ -1,7 +1,7 @@
 """SHIR to SLIR: a value before lowering knows the place that takes it (docs/design/ir.md 8.9).
 
-An arm of a value answers an rvalue, a call, or a short circuit; the store of the value
-into its place makes the statement (`Lowering.write`).
+An arm of a value answers an rvalue, a call, a short circuit or a view; the store of the
+value into its place makes the statement (`Lowering.write`).
 """
 from __future__ import annotations
 
@@ -33,4 +33,13 @@ class ShortCircuit:
     span: Span
 
 
-Value: TypeAlias = r.Rvalue | CallValue | ShortCircuit
+@dataclass(frozen=True, slots=True)
+class ViewValue:
+    """A borrowed view, before lowering knows the place that takes it (ir.md 8.2): a `Copy`
+    of a place that an owner keeps, or a call whose answer is a view. The place that takes it
+    is a view local, in a region over each place of `owners`."""
+    value: r.Use | CallValue
+    owners: tuple[p.Place, ...]
+
+
+Value: TypeAlias = r.Rvalue | CallValue | ShortCircuit | ViewValue

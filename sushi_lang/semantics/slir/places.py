@@ -74,6 +74,13 @@ class Const:
 Operand: TypeAlias = Copy | Move | Const
 
 
+def root_of(place: Place) -> Local | Global:
+    """The local or the `var` that holds `place`."""
+    while isinstance(place, (Field, Index, Downcast, Deref)):
+        place = place.base
+    return place
+
+
 def locals_read(place: Place) -> tuple[LocalId, ...]:
     """The locals that a read of `place` reads: its root, and the local of each index."""
     if isinstance(place, Local):

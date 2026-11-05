@@ -17,19 +17,20 @@ struct or a tuple (an rvalue or a constant) with each field of its type, each pa
 type of its payload value or of its field, an array (an rvalue or a constant) whose parts
 fit its runs and its element type, a `Len` of an array or a string, a `Slice` of an array
 with two `i32` bounds, a view (a local that a `Slice` writes) that nothing else writes,
-moves or drops, no `Move` of an element, the conventions of a `Direct` callee, a
+moves or drops, a typed place for each `BeginBorrow`, no `Move` of an element, the
+conventions of a `Direct` callee, a
 receiver operand for a call of a built-in method, no copy of an owning value
 other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
 one operand of the type that each printf conversion of its text takes. The type of a place
 also gives its root local, so a `Move` of a projection is a `Move` of its root.
 
-Then the dataflow of `verify_flow.py` checks the moves and the drops of each local on
-each path. The checks of a call are in `verify_calls.py`, and the names of the rules in
-`verify_rules.py`.
+Then `verify_regions.py` checks the view locals and the borrow regions, and the dataflow of
+`verify_flow.py` checks the moves and the drops of each local on each path. A view local
+owns nothing, so the rule of the drops does not read it. The checks of a call are in
+`verify_calls.py`, and the names of the rules in `verify_rules.py`.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
-the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, and a `Drop` or a `DropIfSet`
-of a place that is no local. A projection of a `Global` is typed from the type that the
+the internal error CE0000: a `Drop` or a `DropIfSet` of a place that is no local. A projection of a `Global` is typed from the type that the
 `Global` carries.
 """
 from __future__ import annotations
@@ -57,6 +58,7 @@ from sushi_lang.semantics.slir.verify_calls import (
     DeclaredLookup, DeclaredParams as DeclaredParams, check_call, declared_params,
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
+from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
@@ -99,6 +101,7 @@ def verify_function(function: SlirFunction, *, drops: frozenset[str],
     """CE0158 at the first rule of ir.md 8.13 that `function` breaks."""
     check = Check(function, drops, declared, filename)
     check.structure()
+    check_regions(function, check.fail)
     Flow(check).run()
 
 
@@ -158,7 +161,7 @@ class Check:
             if isinstance(local.ty, UnknownType):
                 self.fail(TYPED_LOCALS, f"_{index} has the unresolved type "
                                         f"{display_type(local.ty)}", local.loc)
-            if owns_resource(local.ty, self.drops):
+            if owns_resource(local.ty, self.drops) and not local.view:
                 self.owning.add(local.id)
         for param, convention in function.params:
             if not self.has_local(param):
@@ -489,7 +492,8 @@ class Check:
                                  f"_{flag.index}", stmt.span)
 
     def borrow_region(self, stmt: st.BeginBorrow | st.EndBorrow) -> None:
-        self.not_checked(f"the borrow region {stmt.id.index}", stmt.span)
+        if isinstance(stmt, st.BeginBorrow):
+            self.place(stmt.place, stmt.span)
 
     def storage(self, stmt: st.StorageLive | st.StorageDead) -> None:
         if not self.has_local(stmt.local):

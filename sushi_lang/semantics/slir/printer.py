@@ -11,7 +11,8 @@ The rules of the text are L1 to L17 of the migration plan, and the golden
 - A `unit <name>` line, then each function, with one blank line before each. A function
   is a header `fn <name>(<param>: <type> @<convention>, ...) -> <type> {`, one
   `let _N: <type>` line for the return slot and for each local that is not a parameter,
-  then each block, and `}`. A local with a source name adds `// <name>` at column 43.
+  then each block, and `}`. A view local adds `view` after its type, and a local with a
+  source name adds `// <name>` at column 43.
 - A block is `  bbN:`, then its statements and its terminator at four spaces, with one
   blank line before it.
 - A function whose lowering stopped is one line: `fn <name>: stopped (slir, <construct>)`.
@@ -221,7 +222,7 @@ PRINTERS: dict[type, Render] = {
 
 
 def _local_line(local: SlirLocal) -> str:
-    text = f"    let {_local(local.id)}: {_type(local.ty)}"
+    text = f"    let {_local(local.id)}: {_type(local.ty)}{' view' if local.view else ''}"
     if local.name is None:
         return text
     return f"{text}{' ' * max(NAME_COLUMN - len(text), 2)}// {local.name}"

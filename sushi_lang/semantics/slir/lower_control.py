@@ -25,11 +25,12 @@ from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Conversion
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.loop_kind import CountedRange, While
-from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
+from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
@@ -59,13 +60,15 @@ class LoopFrame:
 
 
 def arm(low: Lowering, block: Block, body: ShirBlock, binds: Sequence[Binds] = (),
-        span: Optional[Span] = None) -> list[Arrival]:
+        span: Optional[Span] = None, branch: Optional[ShirNode] = None) -> list[Arrival]:
     """The statements of `body` in a scope of their own, from `block` on, after the binders
-    of a match arm. The answer is the edge into the join when the path reaches the end of
-    `body`."""
+    of a match arm and the end of each region that the arm of `branch` ends at its top. The
+    answer is the edge into the join when the path reaches the end of `body`."""
     low.block = block
     low.placement.open_scope()
     _bind(low, block, binds, span or body.loc)
+    if branch is not None:
+        views.enter_arm(low, branch, body)
     for stmt in body.statements:
         low.statement(stmt)
     if not low.alive:
@@ -168,17 +171,21 @@ def if_(low: Lowering, stmt: s.If) -> None:
     8.9). The blocks: `then`, `else`, then the join (L5)."""
     cond, local = condition(low, stmt.cond)
     then, other = low.new_block(), low.new_block()
-    join = low.new_block() if stmt.otherwise is None and local is not None else None
+    edge = stmt.otherwise is None and (local is not None or views.ends_at_arm(low, stmt, None))
+    join = low.new_block() if edge else None
     low.jump(tm.SwitchInt(cond, ((0, other.id),), then.id, stmt.loc))
     targets(local, (then, other), stmt.cond.loc)
     among, at_branch = low.placement.in_scope(), low.placement.state()
-    arrivals = arm(low, then, stmt.then)
+    arrivals = arm(low, then, stmt.then, branch=stmt)
     if stmt.otherwise is None:
-        zero: Arrival = (None, at_branch) if join is None else (other, at_branch)
+        low.placement.restore(at_branch)
+        low.block = other
+        views.enter_arm(low, stmt, None)
+        zero: Arrival = (None, at_branch) if join is None else (other, low.placement.state())
         meet(low, other if join is None else join, [*arrivals, zero], among, stmt.loc)
         return
     low.placement.restore(at_branch)
-    arrivals += arm(low, other, stmt.otherwise)
+    arrivals += arm(low, other, stmt.otherwise, branch=stmt)
     if arrivals:
         meet(low, low.new_block(), arrivals, among, stmt.loc)
 
@@ -420,8 +427,9 @@ def try_(low: Lowering, node: e.Try) -> Value:
     no other value, an `Err` block that builds the `Err` into `_0`, leaves every scope
     and returns, and the `Ok` block, where the payload moves into the place that takes
     the value; each store moves the temporary. A `??` that calls a declared conversion
-    stops (`slir, conversion`), and a `??` over an owning wrapper that the body only reads
-    stops (`slir, borrowed try`)."""
+    stops (`slir, conversion`). A `??` over a borrowed owning wrapper (a `reject` row at its
+    operand) takes nothing: it switches on the wrapper where it is, the `Err` block copies the
+    error, which is plain, and the payload is a view of the wrapper (ir.md 8.9)."""
     facts = low.typeck.try_facts_of(node.shir_id)
     choice = low.typeck.conversion_of(node.shir_id)
     if isinstance(choice, Conversion):
@@ -430,23 +438,22 @@ def try_(low: Lowering, node: e.Try) -> Value:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail="a ?? with no facts reached SLIR")
     ty = low.type_of(node.inner)
-    value = low.value(node.inner)
-    if low.owns(ty) and isinstance(value, r.Use) and isinstance(value.operand, p.Copy):
-        raise StageStop(STAGE, "borrowed try", node.loc)
     (ok_tag, ok), (err_tag, err) = _arms(ty, facts.success_tag, node.loc)
-    temp = low.temporary(value, ty, node.inner.loc)
+    wrapper, borrowed = views.wrapper(low, node.inner)
+    take = p.Copy if borrowed else p.Move
     tag = low.new_local(BuiltinType.I32, None, None)
-    low.emit([st.Assign(p.Local(tag), r.Discriminant(p.Local(temp)), node.loc)])
+    low.emit([st.Assign(p.Local(tag), r.Discriminant(wrapper), node.loc)])
     ok_block, err_block = low.new_block(), low.new_block()
     targets = tuple(sorted([(ok_tag, ok_block.id), (err_tag, err_block.id)]))
     low.jump(tm.SwitchInt(p.Copy(p.Local(tag)), targets, None, node.loc))
     at_switch = low.placement.state()
     low.block = err_block
-    payload = p.Move(p.Field(p.Downcast(p.Local(temp), err), 0))
+    payload = take(p.Field(p.Downcast(wrapper, err), 0))
     low.finish(r.Aggregate(r.AggVariant(facts.returns, err), (payload,)), node.loc)
     low.placement.restore(at_switch)
     low.block = ok_block
-    return r.Use(p.Move(p.Field(p.Downcast(p.Local(temp), ok), 0)))
+    value = r.Use(take(p.Field(p.Downcast(wrapper, ok), 0)))
+    return views.view_of(value, value.operand) if borrowed else value
 
 
 def _arms(ty: Type, success: int, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:

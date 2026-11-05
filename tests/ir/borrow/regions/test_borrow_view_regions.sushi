@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "9\ntrue\ntrue\ntrue\n0\ntrue\ntrue\n0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_borrow_view_regions.shir
+#
+# A `let` of a borrowed value is a view, and `borrow` writes its region: the owner set and
+# the last use on each path. The region ends at the last use, not at the end of the scope.
+# A use in a branch ends the region in that branch. A use in a loop ends the region after
+# the loop. A change of the owner after the region is legal.
+
+fn measure(string s) i32:
+    let string v = s
+    return v.len()
+
+fn pick(bool first) i32:
+    let List@(string) xs = List.new()
+    xs.push("a{1}")
+    let Maybe@(string) m = xs.get(0)
+    if (first):
+        println(m.is_some())
+    else:
+        xs.push("b{2}")
+    let Maybe@(string) l = xs.last()
+    let i32 i = 0
+    while (i < 2):
+        println(l.is_some())
+        i := i + 1
+    xs.clear()
+    return xs.len()
+
+fn main() i32:
+    println(measure("Mostly {42}"))
+    println(pick(true))
+    println(pick(false))
+    return 0

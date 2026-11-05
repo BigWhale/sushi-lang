@@ -19,11 +19,18 @@ state decides the drop: a live local gets `Drop`, a moved local nothing, an unkn
 and at each rebind, and `false` after each move; the write of `false` waits in `_pending`
 until lowering flushes it at the end of the statement or before a jump (L13).
 Gate: `tests/unit/test_slir_drop_placement_is_one.py` (no other module builds a `Drop`).
+
+The path state holds the open borrow regions too (ir.md 8.6): each view local whose region
+is open, with the `BorrowId` of each owner and the statements of its last uses. An exit
+ends the region of each view local of the scopes that it leaves, before the drops: so a
+`return`, a `break`, a `continue` and the error path of a `??` end each region that they
+cross, and the end of the storage of a temporary view ends its region. The paths that meet
+at a join have the same open regions.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Callable, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -32,7 +39,9 @@ from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
-from sushi_lang.semantics.slir.ids import LocalId
+from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.slir.ids import BorrowId, LocalId
+from sushi_lang.semantics.typesys import BorrowMode
 
 _LIVE, _MOVED, _UNKNOWN = "live", "moved", "unknown"
 
@@ -45,10 +54,21 @@ class _Scope:
 
 
 @dataclass(frozen=True, slots=True)
+class OpenRegion:
+    """The open borrow region of a view local: one `BorrowId` for each owner, and the
+    statements of its last uses (none for a temporary, whose storage ends its region)."""
+    view: LocalId
+    ids: tuple[BorrowId, ...]
+    until: frozenset[ShirId]
+
+
+@dataclass(frozen=True, slots=True)
 class FlowState:
-    """The state of the locals on one path: the moved ones and the unknown ones."""
+    """The state of the locals on one path: the moved ones and the unknown ones, and the
+    open borrow regions."""
     moved: frozenset[LocalId]
     unknown: frozenset[LocalId]
+    regions: tuple[OpenRegion, ...] = ()
 
     def of(self, local: LocalId) -> str:
         if local in self.moved:
@@ -75,6 +95,8 @@ class DropPlacement:
     _owned_params: list[LocalId] = field(default_factory=list)
     _borrowed: set[LocalId] = field(default_factory=set)
     _never_moved: set[LocalId] = field(default_factory=set)
+    _open: list[OpenRegion] = field(default_factory=list)
+    _borrows: int = 0
 
     def parameter(self, local: LocalId, convention: Convention, owning: bool) -> None:
         """A parameter: an `Owned` one is an owning local of the function (L15)."""
@@ -192,12 +214,13 @@ class DropPlacement:
 
     def state(self) -> FlowState:
         """The state of the locals on the path that lowering is on."""
-        return FlowState(frozenset(self._moved), frozenset(self._unknown))
+        return FlowState(frozenset(self._moved), frozenset(self._unknown), tuple(self._open))
 
     def restore(self, state: FlowState) -> None:
         """Go on along another path, from a state that `state` took."""
         self._moved = set(state.moved)
         self._unknown = set(state.unknown)
+        self._open = list(state.regions)
         self._pending.clear()
 
     def in_scope(self) -> tuple[LocalId, ...]:
@@ -212,6 +235,9 @@ class DropPlacement:
         and that has no flag; it keeps the state of the first path, and lowering must not
         use the output of a walk that met one."""
         self.restore(states[0])
+        if any(state.regions != states[0].regions for state in states):
+            er.raise_internal_error("CE0000", detail="two paths meet with other open borrow "
+                                                     "regions")
         lacking = []
         for local in among:
             if len({state.of(local) for state in states}) == 1:
@@ -231,6 +257,28 @@ class DropPlacement:
                                     detail=f"the unknown local _{local.index} has no drop flag")
         self._moved.discard(local)
         self._unknown.add(local)
+
+    # -- borrow regions (ir.md 8.6) ------------------------------------------------------
+
+    def begin_region(self, view: LocalId, owners: Sequence[p.Place], until: frozenset[ShirId],
+                     span: Span) -> list[st.SlirStatement]:
+        """The region of `view`: one `BeginBorrow` for each owner."""
+        ids = tuple(BorrowId(self._borrows + at) for at in range(len(owners)))
+        self._borrows += len(owners)
+        self._open.append(OpenRegion(view, ids, until))
+        return [st.BeginBorrow(ident, owner, BorrowMode.PEEK, span)
+                for ident, owner in zip(ids, owners, strict=True)]
+
+    def open_regions(self) -> tuple[OpenRegion, ...]:
+        return tuple(self._open)
+
+    def end_regions(self, ends: Callable[[OpenRegion], bool],
+                    span: Span) -> list[st.SlirStatement]:
+        """An `EndBorrow` for each owner of each open region that `ends` names, the newest
+        region first."""
+        ended = [region for region in self._open if ends(region)]
+        self._open = [region for region in self._open if not ends(region)]
+        return [st.EndBorrow(ident, span) for region in reversed(ended) for ident in region.ids]
 
     # -- exits ---------------------------------------------------------------------------
 
@@ -264,10 +312,11 @@ class DropPlacement:
         return statements
 
     def _exit(self, scopes: list[_Scope], span: Span) -> list[st.SlirStatement]:
-        """The exit of the scopes `scopes`: each local, the newest declaration first, gets
-        its drop by its state, then the `StorageDead` of its flag, then its own (rules 1 to
-        4)."""
-        statements: list[st.SlirStatement] = []
+        """The exit of the scopes `scopes`: the end of the region of each view local of
+        them, then each local, the newest declaration first, gets its drop by its state, then
+        the `StorageDead` of its flag, then its own (rules 1 to 4)."""
+        leaving = {local for scope in scopes for local in scope.locals}
+        statements = self.end_regions(lambda region: region.view in leaving, span)
         for scope in reversed(scopes):
             for local in reversed(scope.locals):
                 statements.extend(self._drop(local, span))

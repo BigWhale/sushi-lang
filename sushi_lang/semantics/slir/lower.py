@@ -16,7 +16,8 @@ The lowering handles the parameters, a `let`, a rebind, a call statement, a `ret
 `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
 of an array of plain elements, a field read and write, an element read and write with its
-bounds check, a slice, a destructure, a call, an interpolation, a `??` and `expect`. The
+bounds check, a slice, a destructure, a call, an interpolation, a `??` and `expect`, and
+a borrowed view in a view local with its region (`lower_views.py`). The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
 a `move` row gives `Move`; an `adopt` row gives
 `Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
@@ -39,10 +40,10 @@ body is lowered again with what the walks found, until a walk finds nothing new.
 
 The construct of a stop is the SHIR class of the node, or one of these names: `generic
 instance`, `conversion` and `perk method` for the body of a monomorphized generic instance,
-of a conversion and of a perk method; `borrowed view` for a `reject` row, `borrowed rebind`
-for a rebind of a borrowed parameter that owns, `borrowed try` for a `??` over an owning
-wrapper that the body only reads, `conversion` also for a `??` that calls a declared
-conversion, `library function` for a function, a method or a static whose declaring unit
+of a conversion and of a perk method; `borrowed rebind`
+for a rebind of a borrowed parameter that owns, `view of a temporary` for a borrowed `let`
+whose owner is a temporary, `view into an owning place` for a view that a local that owns
+would take, `conversion` also for a `??` that calls a declared conversion, `library function` for a function, a method or a static whose declaring unit
 the typecheck row does not name, `bloom` for a bloom argument, the stops of
 `lower_aggregate.py` (`StructInit owning`, `TupleInit owning`, `owning temporary`,
 `owning field write`, `StructInit reference field`), and `ConstRef out of range` for a name
@@ -78,6 +79,7 @@ from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_match
+from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -89,7 +91,7 @@ from sushi_lang.semantics.slir.function import (
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
-from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value
+from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value, ViewValue
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit
@@ -227,23 +229,24 @@ class Lowering:
 
     # -- locals --------------------------------------------------------------------------
 
-    def new_local(self, ty: Type, name: Optional[str], loc: Optional[Span]) -> LocalId:
+    def new_local(self, ty: Type, name: Optional[str], loc: Optional[Span],
+                  view: bool = False) -> LocalId:
         """The next SLIR local (L4): ids in the order that lowering makes the locals."""
         ident = LocalId(len(self.locals))
-        self.locals.append(SlirLocal(ident, ty, name, loc))
+        self.locals.append(SlirLocal(ident, ty, name, loc, view))
         return ident
 
     def owns(self, ty: Type) -> bool:
         return owns_resource(ty, self.drops)
 
-    def bind(self, local: ShirLocalId, span: Span) -> tuple[LocalId, Type]:
+    def bind(self, local: ShirLocalId, span: Span, view: bool = False) -> tuple[LocalId, Type]:
         """The SLIR local of a parameter or of a `let`, with its type."""
         ty = self.typeck.local_type(local)
         if ty is None:
             er.raise_internal_error("CE0000", span=span, detail="a local with no type reached SLIR")
         shir_local = self.shir_locals.get(local)
         ident = self.new_local(ty, None if shir_local is None else shir_local.name,
-                               None if shir_local is None else shir_local.loc)
+                               None if shir_local is None else shir_local.loc, view)
         self.ids[local] = ident
         self.shir_of[ident] = local
         return ident, ty
@@ -328,6 +331,7 @@ class Lowering:
         self.placement.open_statement()
         arm(self, stmt)
         if self.alive:
+            self.emit(views.after(self, stmt))
             self.emit(self.placement.flush())
             self.emit(self.placement.close_scope(stmt.loc))
             if self.declared is not None:
@@ -346,7 +350,10 @@ class Lowering:
             return
         if not isinstance(target, e.LocalRef):
             dispatch.stop(STAGE, target)
-        if stmt.is_init:
+        if stmt.is_init and self.answers.ownership.ownership_of(
+                stmt.value.shir_id) is Ownership.REJECT:
+            views.let_view(self, stmt, target)
+        elif stmt.is_init:
             value = self.value(stmt.value)
             ident, ty = self.bind(target.local, stmt.loc)
             self.give_flag(ident)
@@ -419,6 +426,10 @@ class Lowering:
         if isinstance(value, ShortCircuit):
             ctl.short_circuit(self, place, value)
             return
+        if isinstance(value, ViewValue):
+            if not (isinstance(place, p.Local) and self.locals[place.id.index].view):
+                raise StageStop(STAGE, "view into an owning place", span)
+            value = value.value
         if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
         else:
@@ -427,10 +438,14 @@ class Lowering:
             self.placement.move(_root(moved), span)
 
     def temporary(self, value: Value, ty: Type, span: Span) -> LocalId:
-        """A new temporary of the statement that holds `value`."""
-        ident = self.new_local(ty, None, None)
-        self.placement.temporary(ident, self.owns(ty))
+        """A new temporary of the statement that holds `value`. A view goes into a view
+        local, in a region over its owners that ends with the storage of the temporary."""
+        view = isinstance(value, ViewValue)
+        ident = self.new_local(ty, None, None, view)
+        self.placement.temporary(ident, self.owns(ty) and not view)
         self.emit([st.StorageLive(ident, span)])
+        if isinstance(value, ViewValue):
+            self.emit(self.placement.begin_region(ident, value.owners, frozenset(), span))
         self.write(p.Local(ident), value, span)
         return ident
 
@@ -450,7 +465,8 @@ class Lowering:
         `var` is a view, which owns nothing: it gets no temporary."""
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
-            raise StageStop(STAGE, "borrowed view", expr.loc)
+            er.raise_internal_error("CE0000", span=expr.loc,
+                                    detail="a reject row out of a borrowed let reached SLIR")
         if isinstance(expr, (e.LocalRef, e.StorageRef)) or (
                 isinstance(expr, (e.Field, e.Index, e.Slice)) and row is not Ownership.MOVE):
             place = agg.place_of(self, expr)

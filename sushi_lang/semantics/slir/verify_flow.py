@@ -116,6 +116,10 @@ class Flow:
         elif isinstance(stmt, (st.StorageLive, st.StorageDead)):
             self.storage(configs, stmt.local, span,
                          "starts" if isinstance(stmt, st.StorageLive) else "ends")
+        elif isinstance(stmt, st.BeginBorrow):
+            self.read(configs, stmt.place, span)
+        elif isinstance(stmt, st.EndBorrow):
+            pass
         else:
             er.raise_internal_error("CE0000", span=span,
                                     detail=f"the dataflow of the SLIR verifier has no row for "

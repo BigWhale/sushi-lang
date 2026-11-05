@@ -210,7 +210,8 @@ def _one_switch(low: Lowering, stmt: s.Match, arms: list[list[_Path]], scrutinee
     arrivals: list[Arrival] = []
     for case, paths, (binds, block) in zip(stmt.arms, arms, entries, strict=True):
         low.placement.restore(at_switch)
-        arrivals += arm(low, block, case.body, _binds(paths, binds), case.pattern.loc)
+        arrivals += arm(low, block, case.body, _binds(paths, binds), case.pattern.loc,
+                        branch=stmt)
     return arrivals
 
 
@@ -226,7 +227,7 @@ def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
         if catch is not None:
             low.placement.restore(at_switch)
             return arrivals + arm(low, entry, case.body, [(None, catch.binds)],
-                                  case.pattern.loc)
+                                  case.pattern.loc, branch=stmt)
         counts = [[2 if isinstance(test.pattern, pt.IntRange) else 1 for test in path.tests]
                   for path in paths]
         steps = [entry, *(low.new_block() for _ in range(sum(map(sum, counts)) - 1))]
@@ -245,7 +246,8 @@ def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
             missed.terminator = tm.Trap(
                 "RE2023", (p.Const(k.text(_spell(low, case.pattern))),), stmt.loc)
         low.placement.restore(at_switch)
-        arrivals += arm(low, body, case.body, _binds(paths, binds), case.pattern.loc)
+        arrivals += arm(low, body, case.body, _binds(paths, binds), case.pattern.loc,
+                        branch=stmt)
         entry = missed
     return arrivals
 

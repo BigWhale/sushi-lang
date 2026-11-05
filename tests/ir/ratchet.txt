@@ -1345,6 +1345,7 @@ tests/ir/borrow/methods/test_err_borrow_method_argument_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_method_receiver_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_nom_self_receiver_after_move.sushi
 tests/ir/borrow/ranges/test_err_borrow_range_binder.sushi
+tests/ir/borrow/regions/test_borrow_view_regions.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_a_poke_of_a_constant.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_an_unknown_name.sushi
 tests/ir/borrow/straight/test_err_borrow_guaranteed_args.sushi
@@ -1492,6 +1493,7 @@ tests/ir/slir/tuples/test_slir_tuple_construction.sushi
 tests/ir/slir/tuples/test_slir_tuple_destructure.sushi
 tests/ir/slir/tuples/test_slir_tuple_match.sushi
 tests/ir/slir/var/test_slir_var_places.sushi
+tests/ir/slir/views/test_slir_view_regions.sushi
 tests/ir/spine/arg_count/test_err_spine_arg_count.sushi
 tests/ir/spine/compare/test_spine_compare.sushi
 tests/ir/spine/greet/test_spine_greet.sushi

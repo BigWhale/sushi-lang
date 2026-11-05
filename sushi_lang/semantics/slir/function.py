@@ -25,11 +25,14 @@ STAGE = "slir"
 
 @dataclass(frozen=True, slots=True)
 class SlirLocal:
-    """`name` is the source name of the local, for a diagnostic; None for a temporary."""
+    """`name` is the source name of the local, for a diagnostic; None for a temporary.
+    `view` marks a borrowed view: a `Copy` writes it, and it never drops or moves (ir.md
+    8.2)."""
     id: LocalId
     ty: Type
     name: Optional[str]
     loc: Optional[Span]
+    view: bool = False
 
 
 @dataclass(frozen=True, slots=True)

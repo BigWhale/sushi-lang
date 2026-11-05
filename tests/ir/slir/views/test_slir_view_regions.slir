@@ -1,0 +1,129 @@
+unit test_slir_view_regions
+
+fn read(_1: Result@(string, StdError) @guaranteed) -> Result@(i32, StdError) {
+    let _0: Result@(i32, StdError)
+    let _2: i32
+    let _3: string view                    // s
+    let _4: i32
+
+  bb0:
+    _2 = discriminant(_1)
+    switchInt(copy _2) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_3)
+    BeginBorrow(b0, _1, peek)
+    _3 = copy ((_1 as Ok).0)
+    StorageLive(_4)
+    _4 = call builtin string.len(copy _3 @guaranteed)
+    _0 = Result::Ok(move _4)
+    EndBorrow(b0)
+    StorageDead(_4)
+    StorageDead(_3)
+    return
+
+  bb2:
+    _0 = Result::Err(copy ((_1 as Err).0))
+    return
+}
+
+fn make() -> Result@(string, StdError) {
+    let _0: Result@(string, StdError)
+    let _1: string
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin interp@(string, i32)(const "Mostly " @guaranteed, const 42_i32 @guaranteed)
+    _0 = Result::Ok(move _1)
+    StorageDead(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: List@(string)                  // xs
+    let _2: string
+    let _3: ~
+    let _4: Maybe@(string) view
+    let _5: bool
+    let _6: ~
+    let _7: Maybe@(string) view            // m
+    let _8: bool
+    let _9: string
+    let _10: ~
+    let _11: Result@(string, StdError)     // r
+    let _12: Result@(i32, StdError)
+    let _13: i32
+    let _14: i32
+    let _15: ~
+    let _16: i32
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin List.new()
+    StorageLive(_2)
+    _2 = call builtin interp@(string, i32)(const "a" @guaranteed, const 1_i32 @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin list.push(copy _1 @inout, move _2 @owned)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageLive(_4)
+    BeginBorrow(b0, _1, peek)
+    _4 = call builtin list.get(copy _1 @guaranteed, const 0_i32 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin maybe.is_some(copy _4 @guaranteed)
+    StorageLive(_6)
+    _6 = call builtin println@(bool)(copy _5 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageDead(_4)
+    StorageLive(_7)
+    BeginBorrow(b1, _1, peek)
+    _7 = call builtin list.first(copy _1 @guaranteed)
+    StorageLive(_8)
+    _8 = call builtin maybe.is_some(copy _7 @guaranteed)
+    switchInt(copy _8) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_8)
+    EndBorrow(b1)
+    StorageLive(_9)
+    _9 = call builtin interp@(string, i32)(const "b" @guaranteed, const 2_i32 @guaranteed)
+    StorageLive(_10)
+    _10 = call builtin list.push(copy _1 @inout, move _9 @owned)
+    StorageDead(_10)
+    StorageDead(_9)
+    goto -> bb3
+
+  bb2:
+    StorageDead(_8)
+    EndBorrow(b1)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_11)
+    _11 = call @make()
+    StorageLive(_12)
+    _12 = call @read(copy _11 @guaranteed)
+    StorageLive(_13)
+    _13 = neg const 1_i32
+    StorageLive(_14)
+    _14 = call builtin result.realise(copy _12 @guaranteed, copy _13 @guaranteed)
+    StorageLive(_15)
+    _15 = call builtin println@(i32)(copy _14 @guaranteed)
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageDead(_12)
+    StorageLive(_16)
+    _16 = call builtin list.len(copy _1 @guaranteed)
+    _0 = copy _16 - const 2_i32
+    StorageDead(_16)
+    Drop(_11)
+    StorageDead(_11)
+    StorageDead(_7)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

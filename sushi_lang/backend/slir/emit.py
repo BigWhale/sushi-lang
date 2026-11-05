@@ -5,7 +5,8 @@ or a `poke` parameter: its local IS the incoming address (docs/design/ir.md 8.3)
 parameter is stored into its slot at the entry. `_0` is the return slot, and `return`
 loads it. Each SLIR block is one LLVM block, in the order of the function. A statement
 class or a terminator class that the emitter does not handle yet stops the compile
-(`emit, <class>`). `StorageLive` and `StorageDead` emit nothing. A drop goes through the
+(`emit, <class>`). `StorageLive`, `StorageDead`, `BeginBorrow` and `EndBorrow` emit
+nothing. A drop goes through the
 one destroy seam of the backend.
 """
 from __future__ import annotations
@@ -123,7 +124,7 @@ def _name(local: SlirLocal) -> str:
 
 def _statement(state: FunctionState, statement: st.SlirStatement) -> None:
     """`StorageLive` and `StorageDead` emit nothing: the emitter keeps every local in one
-    slot for the whole function."""
+    slot for the whole function. A borrow region is a fact for the verifier alone."""
     if isinstance(statement, st.Assign):
         value = rvalue_value(state, statement.rvalue)
         state.builder.store(value, place_address(state, statement.place))
@@ -133,7 +134,8 @@ def _statement(state: FunctionState, statement: st.SlirStatement) -> None:
         _drop(state, statement.place)
     elif isinstance(statement, st.DropIfSet):
         _drop_if_set(state, statement)
-    elif not isinstance(statement, (st.StorageLive, st.StorageDead)):
+    elif not isinstance(statement, (st.StorageLive, st.StorageDead, st.BeginBorrow,
+                                    st.EndBorrow)):
         state.stop(statement)
 
 

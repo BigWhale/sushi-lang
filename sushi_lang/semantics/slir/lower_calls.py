@@ -1,7 +1,8 @@
 """SHIR to SLIR: the arms of a call and of an interpolation (docs/design/ir.md 8.3, 8.9).
 
 A call is ONE `Call` of its callee: the receiver of a method first, then each argument with
-the convention of its typecheck row. Each arm is a free function that takes the `Lowering`
+the convention of its typecheck row. A get-out whose answer owns (`answers_view`) answers a
+view of its receiver (`lower_views.py`). Each arm is a free function that takes the `Lowering`
 of `lower.py` first; the tables of `lower.py` name them. This module reads `lower.py` for
 its types only.
 """
@@ -22,6 +23,7 @@ from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_control as ctl
+from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
@@ -43,9 +45,13 @@ def call(low: Lowering, node: e.Call) -> Value:
     if isinstance(resolved.callee, Builtin) and ctl.lowers_as_assert(resolved.callee.method):
         return ctl.expect(low, node, resolved.callee)
     target = callee(low, node, resolved)
-    return CallValue(target, receiver(low, resolved.callee, node.loc)
-                     + tuple(argument(low, node, index, arg)
-                             for index, arg in enumerate(node.args)))
+    value = CallValue(target, receiver(low, resolved.callee, node.loc)
+                      + tuple(argument(low, node, index, arg)
+                              for index, arg in enumerate(node.args)))
+    if (isinstance(resolved.callee, Builtin) and answers_view(resolved.callee.method)
+            and low.owns(low.type_of(node))):
+        return views.view_of(value, value.args[0][0])
+    return value
 
 
 def receiver(low: Lowering, callee: Callee,
@@ -71,8 +77,7 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     built-in container as the intrinsic of its written name (`f64.from_bits`, `List.new`),
     with the type of each argument; a built-in method by
     its family and its name, with no types: the receiver is the first operand of the
-    call (`receiver_convention`). A get-out whose answer owns is a view (`answers_view`),
-    and its view local is not built yet: it stops."""
+    call (`receiver_convention`)."""
     callee = resolved.callee
     if isinstance(callee, Free):
         if resolved.unit is None:
@@ -99,8 +104,6 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         return st.Builtin(Intrinsic(f"{type_name}.{callee.method.name}"),
                           tuple(low.type_of(arg.value) for arg in node.args))
     if isinstance(callee, Builtin):
-        if answers_view(callee.method) and low.owns(low.type_of(node)):
-            raise StageStop(STAGE, "owning view answer", node.loc)
         return st.Builtin(callee.method, ())
     raise StageStop(STAGE, type(callee).__name__, node.loc)
 
