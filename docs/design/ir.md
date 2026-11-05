@@ -107,7 +107,11 @@ lowering of a `Take`, of a destructure of an owning value, and of a `nom` binder
 two or more disjoint parts of one root in one block). Amended on 2026-11-05 by group B8.2:
 7.9, 8.2, 8.6 and 8.9 (a reference `let` has a region row to its last use, as a binder
 of a pattern; a `Ref` of a constant reads a hidden local) and 8.13 (the `Ref` of an
-address local comes before each use, and a region is open at each use).
+address local comes before each use, and a region is open at each use). Amended on
+2026-11-05 by group B8.3 (the `peek` return): 7.9 (a `REJECT` row at the operand of a `??`
+over the answer of a call with a `peek` return; `ADOPT` on a view gives `Copy`; the dump
+prints the source row), 8.2 and 8.13 (the `_0` of a `peek` return is a view local, written
+one time on each path to a `return`).
 
 ## The decisions, in one place
 
@@ -1832,7 +1836,9 @@ The rows of `OwnershipResults`:
     element (CE2411), so with no error it copies plain elements alone;
   - the operand of a `Try` that reads through a borrowed owning wrapper. The wrapper can be
     read directly, or through an `or_err`. With an `or_err`, the `REJECT` row is on the
-    receiver of the `or_err` (8.3).
+    receiver of the `or_err` (8.3). The answer of a call with a `peek` return is a
+    borrowed wrapper too, so the operand of a `Try` over it (at any depth of `??`) has a
+    `REJECT` row.
 
   SLIR lowering gives a borrowed view a `Copy` of its place into a VIEW local (8.2). A view
   local owns nothing: no drop, no move and no `Owned` argument. The copy is shallow. It is
@@ -1840,6 +1846,9 @@ The rows of `OwnershipResults`:
   that the AST backend makes. A `REJECT` row at any other position of a body that `borrow`
   ended with no error is the internal error CE0157 of the completeness check. `ADOPT` never
   gives `Copy` of a fresh value: a fresh owning temporary would then be dropped twice.
+  `ADOPT` on a value that is a VIEW (the answer of a call with a `peek` return, the
+  payload of a `??` that reads through) gives `Copy` of its view temporary: a view local
+  owns nothing, so it never moves.
   (Ruled provisionally 2026-10-21. Ruling R-AS of 2026-11-04 confirms the mapping and gives
   a borrowed view its view local.) The key is the `shir_id`
   of the consumed node. A capture has no node in the body, so its
@@ -2271,7 +2280,9 @@ on a `cond_moved : [_5]` line after the `locals` line; the borrow regions on a
 `iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator
 call; `in_place: true` or `in_place: false` after the body of a `Loop`; and
 `symbol: "<symbol>"` and `env: [(adopt _4, Copy), ...]` after the fields of a `Lambda`,
-each capture with its `Ownership` and its mode. With no row, the text does not change: a
+each capture with its `Ownership` and its mode. The source row of `typecheck` prints as
+`borrows: [0, -1]` after the arguments of a call with a `peek` return. With no row, the
+text does not change: a
 body that `borrow` did not reach prints no answer of it, and a body that `borrow` stopped in
 prints the rows that the walk wrote before the stop.
 
@@ -2395,6 +2406,13 @@ type: `let _5: string view` (and the source name after it, `// s`). The other op
 `Ref` into a pointer local and a `Deref` at each read, gives the same answer with one more
 indirection at each read, and the value of a `string` or a `T[]` crosses by value in every
 other position.
+
+**The `_0` of a `peek` return.** A function or a method with a `peek` return whose answer
+owns gives its return slot `view`: `_0` holds a view of a source (8.9), and the callee
+never drops it. It is the one view local that more than one statement writes: it is
+written one time on each path to a `return`, by a `Copy` of a place, by the aggregate of
+the `Ok` or the `Err` of a `peek T | E`, or by a call whose answer is a view. A `peek`
+return of a plain type gives an ordinary `_0`: the answer is a plain copy.
 
 **An address local.** A reference binding points INTO a place: `let poke T x = <place>`,
 `let peek T x = <place>`, a `peek` or `poke` binder of a pattern, and `Own(poke x)`. Its
@@ -3484,9 +3502,12 @@ Runs after lowering, before the backend. It checks:
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
   every path
 - `_0` holds a value on every path to a `return`
-- a `peek` return: a `Copy` of an owning value into `_0` only when the declaration of the
-  function returns `peek`, and then no `Drop` of `_0` in the function. This is the one
-  owning place that a view can be copied into
+- a `peek` return: a `Copy` of an owning value other than a `string` into `_0`, as the
+  value or as a part of an aggregate, only when `_0` is a view local, that is, when the
+  declaration of the function returns `peek`; and then no `Drop` of `_0` in the function.
+  This is the one owning place that a view can be copied into. A `string` is the carve-out
+  of the `Owned` argument: a string bound directly from a literal gets `ADOPT` and owns no
+  heap (7.9)
 - every `BeginBorrow` has exactly one matching `EndBorrow` on every path
 - a borrow region: no `Move`, no `Drop`, no write and no `Inout` argument of the place of
   an owner while a region over it is open. A change of the owner after the `EndBorrow` is
@@ -3524,7 +3545,9 @@ Runs after lowering, before the backend. It checks:
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
-- a view local (8.2): a `Copy` writes it, and nothing writes it again. A view local of an
+- a view local (8.2): a `Copy` writes it, and nothing writes it again. The `_0` of a
+  `peek` return is the exception: it is written one time on each path to a `return` (the
+  rule of the written return slot). A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
   operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it
 - an address local (8.2): ONE `Ref` writes it, and a `Ref` writes a local, never a part of
