@@ -104,7 +104,10 @@ marked field take, a `nom` binder with CE2432 and CE2433, a destructure of an ow
 and the CE2411 of each owning place of a rebind form over a borrowed value), 8.9 (the
 lowering of a `Take`, of a destructure of an owning value, and of a `nom` binder), 8.10
 (rule 3: the drop of a temporary on an arm that takes nothing) and 8.13 (one take moves
-two or more disjoint parts of one root in one block).
+two or more disjoint parts of one root in one block). Amended on 2026-11-05 by group B8.2:
+7.9, 8.2, 8.6 and 8.9 (a reference `let` has a region row to its last use, as a binder
+of a pattern; a `Ref` of a constant reads a hidden local) and 8.13 (the `Ref` of an
+address local comes before each use, and a region is open at each use).
 
 ## The decisions, in one place
 
@@ -1890,9 +1893,11 @@ The rows of `OwnershipResults`:
   a bare binder of an owning payload has: its owners are the owners of the scrutinee, and
   its last uses are read in the statements of its arm. It freezes its owners to its last
   use whatever the type of its payload, as on `main` (a change of the scrutinee after the
-  last use in the arm is legal). The address local of a reference `let` has NO region row:
-  its place is frozen for the whole life of the local, so SLIR lowering writes its region
-  from the scope of the local (8.6), and the `regions` line of the dump does not show it.
+  last use in the arm is legal). The address local of a reference `let` has a region row
+  too: its owner is the root of its place, and its last uses are read after the `let`, as
+  the last uses of a view of a `let` are. So a change of the owner after the last use of the
+  reference and before the end of its scope is legal, as on `main`. A reference into a
+  constant has no owner: its row has an empty owner set.
 
 `LiftResults` holds the symbol (a string) and the environment layout (`Capture(local,
 moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
@@ -2044,10 +2049,7 @@ the gate only for a name that SHIR keeps as no `ConstRef`: a top-level function 
 namespace. A take of a constant is a consuming use (CE2436, `consume.reject_move_of_storage`).
 In an initializer body, the constant evaluator makes each value, so the provenance of each
 consuming use there is FRESH: the `Return` adopts its value, and `const string ALIAS =
-GREETING` is no take of `GREETING`. `typecheck` does not type a reference `let` yet, and
-stops there first; the group of the let-borrows (B8) makes the binding reach this arm. A
-reference `let` with an error of `typecheck` goes to `borrow`, and `borrow` stops at it: `let
-i32 y = poke STEP` is CE2002 alone.
+GREETING` is no take of `GREETING`.
 
 When the walk of a body ends with no stop and with no error, `check_ownership` runs, and
 the body goes to the SLIR lowering (8.2). The SLIR stage takes no initializer body
@@ -2402,9 +2404,9 @@ emitter gives it the address of the place as its storage. Its type is the type o
 place, as the type of the local of an `InGuaranteed` or an `Inout` parameter is. This is
 the rule of a `peek` or `poke` parameter (8.3): one rule for a parameter and a reference
 local. An address local never drops and never moves (8.10, rule 8), and its place stands in
-a region (8.6): to its last use for a binder of a pattern (7.9), and for the whole life of
-the local for a reference `let`. `SlirLocal` has no field for it: the address locals of a
-function are the locals that a `Ref` writes (`address_locals`, `semantics/slir/function.py`),
+a region (8.6), to the last uses of its region row (7.9). `SlirLocal` has no field for it:
+the address locals of a function are the locals that a `Ref` writes (`address_locals`,
+`semantics/slir/function.py`),
 and drop placement, the verifier and the emitter read that one function. The emitter gives
 an address local an entry-block slot of a pointer, the `Ref` stores the address of its
 place there, and each use reads the address from the slot.
@@ -2864,9 +2866,9 @@ the SLIR statement that makes that change, and not after the statement. A region
 end at the exit of the scope of the view: an owner can change after the last use and
 before the end of the scope. The
 `BeginBorrow` of the region of an address local (8.2) has the mode of its `Ref`. The
-region of a binder of a pattern is its region row, as the region of a view. The region of a
-reference `let` is the one exception: its place is frozen for the whole life of the local,
-so its `EndBorrow` comes at each exit of the scope of the local. The
+region of a binder of a pattern and of a reference `let` is its region row, as the region
+of a view, over the root of the place of its `Ref`. A `Ref` of a constant reads a hidden
+local of the block that holds the value, and its region is over that local. The
 emitter emits nothing for `BeginBorrow` and `EndBorrow`, as for `StorageLive`. The verifier
 reads them (8.13).
 
@@ -3128,7 +3130,7 @@ backstop of the checker, as on the AST backend.
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
 | `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. The `Maybe` place is read first (`wrapper`: a get-out receiver goes into a view temporary), then `e`, before the switch; a named `e` goes into a temporary of the statement, so the `None` path moves the temporary and the `Some` path drops it at the end of the statement. When the `Maybe` is a get-out of a temporary container, the `let` of the payload keeps the container in a hidden owner local of the block: the walk to it crosses each `??`, each get-out and each read-through `or_err`. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
-| a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the place with the same mode. The `EndBorrow` comes at each exit of the scope of the local, because the place is frozen for the whole life of the local |
+| a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the root of the place with the same mode, to the last uses of its region row (7.9). A constant is first copied into a hidden local of the block that drops nothing, and the `Ref` reads that local |
 | a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`; for the pointee of an `Own(...)`, `Deref(Field(place, 0))`), in a region over the root of that place, with the mode of the `Ref`, to the last uses of its region row (7.9) |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
 | a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9). One rule serves this answer and the view answer of a container call: the owner set has two sources |
@@ -3528,8 +3530,8 @@ Runs after lowering, before the backend. It checks:
 - an address local (8.2): ONE `Ref` writes it, and a `Ref` writes a local, never a part of
   one. It is never the place of a `Drop` or a `DropIfSet` as a whole and never `Move`d, at
   its root or at a part; the write of an owning part drops the old part through the
-  address (8.10, rule 6). Its place stands in a region (8.6). The verifier does not check
-  yet that the `Ref` comes before the first use, nor the extent of that region
+  address (8.10, rule 6). Its `Ref` comes before each use of it on every path, and at
+  each use a region over the root of the place of its `Ref` is open (8.6)
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
