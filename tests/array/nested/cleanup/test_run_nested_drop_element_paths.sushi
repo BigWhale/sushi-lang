@@ -1,10 +1,10 @@
 # a `Drop` element at depth runs `drop()` once per element on every cleanup path:
 # scope exit, a rebind, an element overwrite at both depths, `clear`, `truncate`,
 # `pop` discarded and bound. The order inside one array is the flat array's order, and a
-# discarded `pop` result lives to the scope exit, as on a flat array.
+# discarded `pop` result drops at the end of its statement, as every temporary does.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "flat 2\ndrop a\ndrop b\nscope 2\ndrop c\ndrop d\ndrop e\nrebind\ndrop f\ndrop g\noverwrite row\ndrop h\noverwrite cell\ndrop j\nclear\ndrop k\ntruncate\ndrop m\npop discarded\npop bound\nbound p\nend\ndrop n\ndrop p\ndrop o\ndrop r\ndrop l\ndrop q\ndrop i\n"
+# EXPECT_STDOUT_EXACT: "flat 2\ndrop a\ndrop b\nscope 2\ndrop c\ndrop d\ndrop e\nrebind\ndrop f\ndrop g\noverwrite row\ndrop h\noverwrite cell\ndrop j\nclear\ndrop k\ntruncate\ndrop m\npop discarded\ndrop o\npop bound\nbound p\nend\ndrop n\ndrop p\ndrop r\ndrop l\ndrop q\ndrop i\n"
 struct Tok:
     string name
 
