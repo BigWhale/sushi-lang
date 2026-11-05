@@ -9,8 +9,9 @@ ShirBody TONE (Initializer)
 ShirBody read
   params : []
   locals : [_0 "r": i32]
+  regions : [_0: {} until #5]
   block  :
-    Match(ConstRef(@TONE), [Arm(Variant(@Shade, "Dim", [(_0, Ref(Peek))]), [Return(LocalRef(_0))]), Arm(Variant(@Shade, "Bright", [Wildcard]), [Return(Lit(0))])], consumes: false)
+    Match(ConstRef(@TONE), [Arm(Variant(@Shade, "Dim", [(_0, Ref(Peek))]), [Return(adopt LocalRef(_0))]), Arm(Variant(@Shade, "Bright", [Wildcard]), [Return(adopt Lit(0))])], consumes: false)
 
 ShirBody write
   params : []

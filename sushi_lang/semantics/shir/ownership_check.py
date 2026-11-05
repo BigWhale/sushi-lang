@@ -5,7 +5,8 @@ A consuming use is a value in a position that takes it over (`ConsumingUse`,
 answers of `typecheck`:
 
 - the value of an `Assign` (a `let`, a rebind, a write of a field or an element) and the
-  value of a `Destructure`;
+  value of a `Destructure`. The value of a reference `let` is a `Borrow` of its place, and
+  no consuming use: the local points into the place;
 - the value of a `Return`;
 - an argument of a `Call` whose convention is `Owned`, and a bloom argument;
 - each field of a `StructInit`, each payload of an `EnumInit`, each part of a
@@ -74,7 +75,8 @@ Consumed: TypeAlias = Callable[[Any, TypeckResults, OwnershipResults], Iterator[
 
 def _value(node: s.Assign | s.Destructure | s.Return, _typeck: TypeckResults,
            _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
-    yield node.value
+    if not isinstance(node.value, e.Borrow):
+        yield node.value
 
 
 def _call(node: e.Call, typeck: TypeckResults,

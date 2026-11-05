@@ -1,10 +1,4 @@
-"""Type compatibility checking for type validation.
-
-Port templates: `validate_assignment_compatibility` call
-`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
-today. Group B8 (the reference `let`) ports them to SHIR inputs before a SHIR pass calls
-them.
-"""
+"""Type compatibility checking for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -12,43 +6,11 @@ from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode, IteratorType
-from sushi_lang.semantics.ast import Expr, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from .inference import infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
-
-
-def validate_assignment_compatibility(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> None:
-    """Validate the value, then that its type matches the declared one (CE2002)."""
-    if declared_type is None:
-        return  # Can't validate without declared type
-
-    validator.validate_expression(value_expr)
-    reject_incompatible_assignment(validator, declared_type, value_expr,
-                                   declared_span, value_span)
-
-
-def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> bool:
-    """CE2002 alone: the value has been validated already.
-
-    Split from the validation because a caller can have a better code for the SAME
-    binding and still owes the value its own diagnostics -- an unhandled `Result` is
-    CE2505, and the call that produced it may hold a wrong argument the reader needs
-    to see (#535). Answers whether a diagnostic refused the binding.
-    """
-    if declared_type is None:
-        return False
-
-    if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayNew):
-        return False
-    if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayFrom):
-        value_type = infer_dynamic_array_from_type(validator, value_expr, expected_type=declared_type)
-    else:
-        value_type = validator.infer_expression_type(value_expr)
-    return reject_mismatch(validator, value_type, declared_type, value_span, declared_span)
 
 
 def reject_unhandled_result(validator: 'TypeValidator', got: Optional[Type], expected: Type,
@@ -109,7 +71,6 @@ def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Compare two resolved types (no GenericTypeRef or UnknownType resolution)."""
-    from sushi_lang.semantics.typesys import DynamicArrayType
 
     if actual == expected:
         return True

@@ -29,6 +29,7 @@ reaches, a `return`, a `break` and a `continue` are exits of the blocks that the
 """
 
 from __future__ import annotations
+from functools import partial
 from typing import TYPE_CHECKING, Callable, Optional, Sequence
 
 from sushi_lang.internals import errors as er
@@ -43,12 +44,12 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.loop_kind import CountedRange
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.paths import terminates
+from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import ReferenceType
 
 from . import arms
 from .bindings import (
-    bare_binders, declare_bare_binders, declare_references, own_references,
-    release_binding_borrow)
+    bare_binders, declare_bare_binders, reference_binders, release_binding_borrow)
 from .pattern_takes import (
     declare_taken_binders, owns_scrutinee, reject_partial_take, reject_take_from_a_borrow,
     taken_binders)
@@ -67,6 +68,7 @@ from .flow import (
     snapshot_flow,
 )
 from .reads import borrow_owner, read_type
+from .references import check_let_reference, declare_reference_binders
 from .regions import note_part_view, note_view
 from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed, reject_readonly_write
@@ -75,19 +77,23 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
 
     from . import BorrowChecker
+    from .state import Owner
 
 
 def check_block(checker: 'BorrowChecker', block: ShirBlock,
-                declared: Sequence[LocalId] = ()) -> None:
+                declared: Sequence[LocalId] = (),
+                frozen: Sequence[tuple[Owner, Owner]] = ()) -> None:
     """Check a block, releasing the `let`-borrows it opened on the way out. `declared` are
     the locals of the block that come before its statements: the `nom` binders of an arm.
+    `frozen` are the owners that the binders of an arm froze, which the end of the arm
+    releases.
 
     A statement of an unrolled `expand` copy that ends every path, with more statements
     after it, leaves the rest of the block on no path (ir.md 7.2): the group of the
     unrolled copies checks such a block, and the walk of the body stops there.
     """
     copies = checker.body.copies if checker.body is not None else None
-    checker._scope_binding_borrows.append([])
+    checker._scope_binding_borrows.append(list(frozen))
     checker.block_locals.append(list(declared))
     checker.statement_at.append((block, 0))
     try:
@@ -122,10 +128,12 @@ def check_assign(checker: 'BorrowChecker', node: s.Assign) -> None:
 
 
 def _check_let(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> None:
-    """`let T x = v`: declare the local, then give it the provenance of its value."""
-    if isinstance(node.value, e.Borrow):
-        # `let poke T x = <place>` (#409): a borrow binding, not a value.
-        arms.stop_at(checker, node)
+    """`let T x = v`: declare the local, then give it the provenance of its value. A
+    reference `let` points into its place (`references.py`)."""
+    shir_local = checker.locals.get(local)
+    if shir_local is not None and isinstance(shir_local.declared, ReferenceType):
+        check_let_reference(checker, node, local)
+        return
     ty = checker.local_type(local)
     state = BorrowState(name=checker.name_of(local), local=local, var_type=ty,
                         declared_at_span=node.loc,
@@ -371,12 +379,16 @@ def check_assert(checker: 'BorrowChecker', node: s.Assert) -> None:
     restore_flow(checker, FlowFacts.join([entry, snapshot_flow(checker)]))
 
 
-def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | None],
-                         enter: Optional[Callable[[int], Sequence[LocalId]]] = None) -> None:
+def join_exclusive_paths(
+        checker: 'BorrowChecker', blocks: Sequence[ShirBlock | None],
+        enter: Optional[Callable[[int], tuple[Sequence[LocalId],
+                                              Sequence[tuple[Owner, Owner]]]]] = None,
+) -> None:
     """Check exclusive blocks, each from the state before them; the paths that reach the
     code after them JOIN. `None` is a path that skips every block. `enter` runs at the
     start of each path, with the index of its block: an arm of a match declares its
-    binders there, and answers the binders that are locals of its block.
+    binders there, and answers the binders that are locals of its block and the owners
+    that its binders froze.
 
     A local is moved after the join when it is moved on ANY path, and moved on every path
     when it is moved on each one. Only the paths that reach the code after the blocks
@@ -390,8 +402,8 @@ def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | 
         if block is None:
             paths.append(entry)
             continue
-        declared = enter(index) if enter is not None else ()
-        check_block(checker, block, declared)
+        declared, frozen = enter(index) if enter is not None else ((), ())
+        check_block(checker, block, declared, frozen)
         if not terminates(block, leaves_round=True):
             paths.append(snapshot_flow(checker))
     restore_flow(checker, FlowFacts.join(paths))
@@ -409,15 +421,15 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     """A match reads its scrutinee, and `match nom r:` takes it over, a consuming use. The
     arms are exclusive paths, and they join as the blocks of an `if` do. The arms cover
     each value (the typecheck pass), so no path skips them. Each arm declares its binders
-    before its body: the bare binders, the reference binders of its `Own(...)` patterns,
-    and the `nom` binders, which take their payload out of a scrutinee that the match owns
-    (`pattern_takes.py`). A match with a `peek` or `poke` binder of another kind stops the
-    walk: a later group checks it. A tuple literal that owns, as the scrutinee, builds no
-    tuple, and each part is a root of its own."""
+    before its body: the bare binders, the `peek` and `poke` binders (`references.py`), and
+    the `nom` binders, which take their payload out of a scrutinee that the match owns
+    (`pattern_takes.py`). The owners that the binders of an arm freeze are released at the
+    end of the arm. A tuple literal that owns, as the scrutinee, builds no tuple, and each
+    part is a root of its own."""
     binders = [bare_binders(arm.pattern) for arm in node.arms]
     if any(found is None for found in binders):
         arms.stop_at(checker, node)
-    references = [own_references(arm.pattern) for arm in node.arms]
+    references = [reference_binders(arm.pattern) for arm in node.arms]
     roots = in_place_roots(checker, node)
     for root in roots or (node.scrutinee,):
         arms.check(checker, root)
@@ -427,16 +439,19 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
               for arm in node.arms for local, root in _binder_roots(node, arm.pattern, roots)}
     clear_borrows(checker)
 
-    def enter(index: int) -> Sequence[LocalId]:
+    def enter(index: int) -> tuple[Sequence[LocalId], Sequence[tuple[Owner, Owner]]]:
         arm = node.arms[index]
         for root, item in _positions(node, arm.pattern, roots):
             reject_partial_take(checker, item, read_type(checker, root))
             if not owns_scrutinee(checker, node, root):
                 for local in taken_binders(item):
                     reject_take_from_a_borrow(checker, local, root)
-        declare_bare_binders(checker, binders[index] or (), owners, arm.body)
-        declare_references(checker, references[index], owners, arm.body)
-        return declare_taken_binders(checker, taken_binders(arm.pattern))
+        frame: list[tuple[Owner, Owner]] = []
+        declare_bare_binders(checker, binders[index] or (), owners, arm.body, frame)
+        declare_reference_binders(checker, node, references[index],
+                                  dict(_binder_roots(node, arm.pattern, roots)), arm.body,
+                                  frame)
+        return declare_taken_binders(checker, taken_binders(arm.pattern)), frame
     join_exclusive_paths(checker, [arm.body for arm in node.arms], enter=enter)
 
 
@@ -487,9 +502,9 @@ def _binder_roots(node: s.Match, pattern: p.ShirPattern, roots: tuple[e.ShirExpr
 
 def _arm_binders(pattern: p.ShirPattern | p.PatBinding, at: Optional[Span]
                    ) -> list[LocalId]:
-    """The bare binders and the `Own(...)` reference binders of a pattern."""
+    """The bare binders and the reference binders of a pattern."""
     return ([local for local, _at in bare_binders(pattern, at) or ()]
-            + [local for local, _mode, _at in own_references(pattern, at)])
+            + [local for local, _mode, _at in reference_binders(pattern)])
 
 
 def _view_owners_of(checker: 'BorrowChecker', node: s.Match, root: e.ShirExpr) -> tuple:
@@ -499,13 +514,16 @@ def _view_owners_of(checker: 'BorrowChecker', node: s.Match, root: e.ShirExpr) -
 
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
-    """`while (cond)`: the condition is read once, at the entry, then the body is checked
-    to its fixed point. A counted loop reads the bounds of its range once, at the entry,
+    """`while (cond)`: the condition is read at the entry, then the body is checked to its
+    fixed point, and each view that the condition reads is read again at the back edge: a
+    change of its owner in the body is CE2412 there. A counted loop reads the bounds of its range once, at the entry,
     and its binder is a read-only view, as a bare binder of a match is. A loop over any
     other iterable stops the walk: the iterators group checks it."""
     source = node.source
+    again: Optional[Callable[[], None]] = None
     if isinstance(source, s.Cond):
         arms.check(checker, source.cond)
+        again = partial(_read_views_again, checker, source.cond)
     elif isinstance(checker.answers().loop_kind_of(node.shir_id), CountedRange) \
             and isinstance(source.iterable, e.Range):
         arms.check(checker, source.iterable.start)
@@ -517,16 +535,28 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     else:
         arms.stop_at(checker, node)
     clear_borrows(checker)
-    check_loop_body(checker, node.body)
+    check_loop_body(checker, node.body, again)
 
 
-def check_loop_body(checker: 'BorrowChecker', body: ShirBlock) -> None:
+def _read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
+    """The condition of a `while` loop at the back edge: each local that it reads is a use
+    again, so a view whose owner the body changed is CE2412, one time for each view."""
+    seen: set[LocalId] = set()
+    for _path, value in walk(cond, ""):
+        if isinstance(value, e.LocalRef) and value.local not in seen:
+            seen.add(value.local)
+            reject_a_use_after_the_change(checker, value.local, value.loc)
+
+
+def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
+                    again: Optional[Callable[[], None]] = None) -> None:
     """Check a loop body to a fixed point, so that the back edge is honoured.
 
     The first round discovers the facts that come round the back edge: it reports no
     error, writes no row and records no exit. The second round starts from the entry
     joined with that back edge, and reports. The code after the loop sees the fixed point
     (the condition is false) joined with each `break` path of the second round (#993).
+    `again` reads the condition of the loop at the back edge of the second round.
     """
     entry = snapshot_flow(checker)
     suppressed = checker.err.suppressed
@@ -539,7 +569,10 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock) -> None:
         checker.err.suppressed = suppressed
     fixed_point = entry if first_back is None else entry | first_back
     restore_flow(checker, fixed_point)
-    _back, breaks = _check_round(checker, body)
+    back, breaks = _check_round(checker, body)
+    if again is not None and back is not None:
+        restore_flow(checker, back)
+        again()
     restore_flow(checker, fixed_point if breaks is None else fixed_point | breaks)
 
 

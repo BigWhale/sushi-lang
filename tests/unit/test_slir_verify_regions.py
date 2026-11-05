@@ -168,3 +168,64 @@ def test_a_view_local_that_no_copy_writes_is_refused():
 
 def test_a_view_local_that_two_statements_write_is_refused():
     _refused(_viewed(_set(2, r.Use(_copy(1)), BAD)), VIEW)
+
+
+# -- the uses of an address local (ir.md 8.2, 8.13) -------------------------------------
+
+ADDRESS = "an address local"
+
+
+def _ref(local: int, owner: int, span=SPAN) -> st.Assign:
+    return _set(local, r.Ref(_local(owner), BorrowMode.PEEK), span)
+
+
+def _read(local: int, span=SPAN) -> st.Assign:
+    """`_4 = copy _local`: a use of the local."""
+    return _set(4, r.Use(_copy(local)), span)
+
+
+def _referenced(*blocks: SlirBlock) -> SlirFunction:
+    """`_1` holds an `i32`, `_2` is a bool, `_3` is an address local of `_1`, `_4` reads."""
+    return _function([BLANK, I32, BOOL, I32, I32], set(), *blocks)
+
+
+def _one_of(value: int) -> st.Assign:
+    return _set(1, r.Use(p.Const(k.Int(value, I32))))
+
+
+def test_an_address_local_used_in_its_region_on_each_path_passes():
+    _passes(_referenced(
+        _block(0, _switch(2, 2, 1), _live(1), _one_of(1), _live(2),
+               _set(2, r.Use(p.Const(k.Bool(True)))), _live(3), _live(4), _begin(0, 1),
+               _ref(3, 1)),
+        _block(1, _goto(3), _read(3)),
+        _block(2, _goto(3), _read(3)),
+        _block(3, _ret(), _end(0), _dead(4), _dead(3), _dead(2), _dead(1), _blank())))
+
+
+def test_a_use_of_an_address_local_before_its_ref_on_one_path_is_refused():
+    """The `Ref` stands on one arm of the switch, and the join reads the local."""
+    _refused(_referenced(
+        _block(0, _switch(2, 2, 1), _live(1), _one_of(1), _live(2),
+               _set(2, r.Use(p.Const(k.Bool(True)))), _live(3), _live(4), _begin(0, 1)),
+        _block(1, _goto(3), _ref(3, 1)),
+        _block(2, _goto(3)),
+        _block(3, _ret(), _read(3, BAD), _end(0), _dead(4), _dead(3), _dead(2), _dead(1),
+               _blank())), ADDRESS)
+
+
+def test_a_use_of_an_address_local_after_the_end_of_its_region_is_refused():
+    _refused(_referenced(
+        _block(0, _ret(), _live(1), _one_of(1), _live(3), _live(4), _begin(0, 1), _ref(3, 1),
+               _read(3), _end(0), _read(3, BAD), _dead(4), _dead(3), _dead(1), _blank())),
+        ADDRESS)
+
+
+def test_a_use_of_an_address_local_in_a_region_over_another_owner_is_refused():
+    _refused(_referenced(
+        _block(0, _ret(), _live(1), _one_of(1), _live(2),
+               _set(2, r.Use(p.Const(k.Bool(True)))), _live(3), _live(4), _begin(0, 2),
+               _ref(3, 1), _read(3, BAD), _end(0), _dead(4), _dead(3), _dead(2), _dead(1),
+               _blank())),
+        ADDRESS)
+

@@ -3,7 +3,10 @@
 A view local (8.2) is written by one statement: a `Copy` of a place, or a call whose answer
 is a view. It is never the place of a `Drop` or a `DropIfSet`, never `Move`d and never the
 operand of an `Owned` argument, at its root or at a projection of it. One `Ref` writes an
-address local (8.2), and it is never dropped as a whole and never moved.
+address local (8.2), and it is never dropped as a whole and never moved. The `Ref` comes
+before each use of the address local on every path (a dataflow: a block knows the address
+locals that each path into it wrote), and at each use a region over the root of the place of
+the `Ref` is open.
 
 A borrow region is a `BeginBorrow` of an owner and the `EndBorrow` of its id. A dataflow over
 the CFG gives each block the set of open regions at its top: every path into a block brings
@@ -44,14 +47,16 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
     if views:
         _view_locals(function, views, fail)
     addresses = address_locals(function)
+    refs: dict[LocalId, p.Place] = {}
     if addresses:
-        _address_locals(function, addresses, fail)
+        refs = _address_locals(function, addresses, fail)
+        _written_before_use(function, addresses, fail)
     blocks = {block.id: block for block in function.blocks}
     at_top: dict[BlockId, _Open] = {function.entry: {}}
     work = [function.entry]
     while work:
         block = blocks[work.pop()]
-        open_ = _through(block, dict(at_top[block.id]), fail)
+        open_ = _through(block, dict(at_top[block.id]), fail, refs)
         if isinstance(block.terminator, tm.Return) and open_:
             fail(REGION, f"the regions {_names(open_)} are open at the return",
                  block.terminator.span)
@@ -66,8 +71,10 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
                      block.terminator.span)
 
 
-def _through(block: SlirBlock, open_: _Open, fail: Fail) -> _Open:
+def _through(block: SlirBlock, open_: _Open, fail: Fail,
+             refs: dict[LocalId, p.Place]) -> _Open:
     for stmt in block.statements:
+        _address_in_region(stmt, open_, refs, fail)
         if isinstance(stmt, st.BeginBorrow):
             if stmt.id in open_:
                 fail(REGION, f"the region b{stmt.id.index} begins again while it is open",
@@ -78,7 +85,75 @@ def _through(block: SlirBlock, open_: _Open, fail: Fail) -> _Open:
                 fail(REGION, f"the region b{stmt.id.index} ends, and it is not open", stmt.span)
         else:
             _owners_kept(stmt, open_, fail)
+    _address_in_region(block.terminator, open_, refs, fail)
     return open_
+
+
+def _address_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,
+                       refs: dict[LocalId, p.Place], fail: Fail) -> None:
+    """At each use of an address local, a region over the root of its `Ref` place is open."""
+    if not refs:
+        return
+    held = set(open_.values())
+    for local in _uses(node):
+        root = refs.get(local)
+        if root is not None and root not in held:
+            fail(ADDRESS_LOCAL, f"_{local.index} is used while no region over "
+                                f"{show(root)} is open", _span(node))
+
+
+def _written_before_use(function: SlirFunction, addresses: frozenset[LocalId],
+                        fail: Fail) -> None:
+    """The `Ref` of each address local comes before each use of it, on every path: a block
+    knows the address locals that each path into it wrote (the meet is the intersection)."""
+    blocks = {block.id: block for block in function.blocks}
+    at_top: dict[BlockId, frozenset[LocalId]] = {function.entry: frozenset()}
+    work = [function.entry]
+    while work:
+        block = blocks[work.pop()]
+        written = set(at_top[block.id])
+        for stmt in [*block.statements, block.terminator]:
+            for local in _uses(stmt):
+                if local in addresses and local not in written:
+                    fail(ADDRESS_LOCAL, f"_{local.index} is used before its Ref on a path",
+                         _span(stmt))
+            if isinstance(stmt, st.Assign) and isinstance(stmt.rvalue, r.Ref) \
+                    and isinstance(stmt.place, p.Local):
+                written.add(stmt.place.id)
+        for target in successors(block.terminator):
+            known = at_top.get(target)
+            meet = frozenset(written) if known is None else known & written
+            if meet != known:
+                at_top[target] = meet
+                work.append(target)
+
+
+def _uses(node: st.SlirStatement | tm.SlirTerminator) -> Iterator[LocalId]:
+    """The locals that `node` reads or writes as a value. The write of a `Ref` and the
+    storage and region markers are no use."""
+    parts: list[p.Operand | p.Place] = []
+    if isinstance(node, st.Assign):
+        parts += list(r.operands_of(node.rvalue))
+        if not isinstance(node.rvalue, r.Ref):
+            parts.append(node.place)
+    elif isinstance(node, st.Call):
+        parts += [node.dest, *(operand for operand, _ in node.args)]
+        if isinstance(node.callee, st.Indirect):
+            parts.append(node.callee.operand)
+    elif isinstance(node, (st.Drop, st.DropIfSet)):
+        parts.append(node.place)
+    elif isinstance(node, tm.SwitchInt):
+        parts.append(node.operand)
+    elif isinstance(node, tm.Trap):
+        parts += list(node.args)
+    for part in parts:
+        place = part.place if isinstance(part, (p.Copy, p.Move)) else part
+        if isinstance(place, (p.Local, p.Global, p.Field, p.Index, p.Downcast, p.Deref)):
+            yield from p.locals_read(place)
+
+
+def _span(node: st.SlirStatement | tm.SlirTerminator) -> Optional[Span]:
+    return getattr(node, "span", None)
 
 
 def _owners_kept(stmt: st.SlirStatement, open_: _Open, fail: Fail) -> None:
@@ -130,11 +205,12 @@ def _view_locals(function: SlirFunction, views: set[LocalId], fail: Fail) -> Non
 
 
 def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
-                    fail: Fail) -> None:
+                    fail: Fail) -> dict[LocalId, p.Place]:
     """One `Ref` writes each address local, and it writes the local itself, not a part of
     it. The local is never dropped as a whole and never moved, at its root or at a part:
-    a write of an owning part drops the old part through the address (rule 6)."""
-    refs: set[LocalId] = set()
+    a write of an owning part drops the old part through the address (rule 6). Answers the
+    root of the place of the `Ref` of each address local."""
+    refs: dict[LocalId, p.Place] = {}
     for block in function.blocks:
         for stmt in block.statements:
             if isinstance(stmt, st.Assign) and isinstance(stmt.rvalue, r.Ref):
@@ -144,7 +220,7 @@ def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
                 if stmt.place.id in refs:
                     fail(ADDRESS_LOCAL, f"{show(stmt.place)} is written by two Refs",
                          stmt.span)
-                refs.add(stmt.place.id)
+                refs[stmt.place.id] = p.root_of(stmt.rvalue.place)
             for place, what in _spends(stmt):
                 local = p.root_of(place)
                 whole = what == "drops" and isinstance(place, p.Local)
@@ -152,6 +228,7 @@ def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
                         whole or what == "moves"):
                     fail(ADDRESS_LOCAL, f"{what} the address local {show(place)}, which owns "
                                         f"nothing", stmt.span)
+    return refs
 
 
 def _written(stmt: st.SlirStatement) -> Optional[p.Local]:

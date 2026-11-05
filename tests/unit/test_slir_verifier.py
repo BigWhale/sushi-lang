@@ -27,7 +27,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
-from sushi_lang.semantics.slir.ids import BlockId, LocalId
+from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import (
     CONVENTIONS, DeclaredParams, declared_params, verify_function,
 )
@@ -1202,13 +1202,17 @@ def test_a_drop_of_a_field_of_a_view_is_refused():
 # -- the address local (ir.md 8.2, 8.13) ------------------------------------------------
 
 def _poke_writes_field(*extra: st.SlirStatement) -> SlirFunction:
-    """`_3 = ref poke _1` over the owned `Named` `_1`, then a write of the owning field of
-    `_3` through the address (rule 6), then `extra`, then the drop of `_1`."""
+    """`_3 = ref poke _1` over the owned `Named` `_1`, in the region `b0` over `_1`, then a
+    write of the owning field of `_3` through the address (rule 6), then `extra`, then the
+    end of the region and the drop of `_1`."""
     return _function([BLANK, NAMED, STRING, NAMED, STRING], _block(
-        0, _ret(), *_named(1), _live(3), _set(3, r.Ref(_local(1), BorrowMode.POKE)),
+        0, _ret(), *_named(1), _live(3),
+        st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.POKE, SPAN),
+        _set(3, r.Ref(_local(1), BorrowMode.POKE)),
         _live(4), _text(4), st.Drop(p.Field(_local(3), 0), SPAN),
         st.Assign(p.Field(_local(3), 0), r.Use(_move(4)), SPAN), _dead(4), *extra,
-        _dead(3), _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank())))))
+        st.EndBorrow(BorrowId(0), SPAN), _dead(3), _drop(1), _dead(1),
+        _set(0, r.Use(p.Const(k.Blank())))))
 
 
 def test_an_address_local_that_writes_an_owning_part_through_its_address_passes():

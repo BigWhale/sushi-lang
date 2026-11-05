@@ -358,7 +358,9 @@ class Lowering:
             return
         if not isinstance(target, e.LocalRef):
             dispatch.stop(STAGE, target)
-        if stmt.is_init and self.answers.ownership.ownership_of(
+        if stmt.is_init and isinstance(stmt.value, e.Borrow):
+            views.let_reference(self, stmt, target)
+        elif stmt.is_init and self.answers.ownership.ownership_of(
                 stmt.value.shir_id) is Ownership.REJECT:
             views.let_view(self, stmt, target)
         elif stmt.is_init:

@@ -4,31 +4,22 @@ A literal arm binds no name. A `Variant` and a `Tuple` bind the local of each ba
 `PatBinding` in them (`bare_binders`), and each arm declares its binders as read-only views
 of the payload or of the part (`declare_bare_binders`, docs/design/ir.md 7.9); a binder of a
 payload that owns is a borrowed view of the scrutinee, with a borrow region. A `peek` or
-`poke` binder of the pointee of an `Own(...)` is a reference to it (`declare_references`).
-A `nom` binder takes its payload (`pattern_takes.py`). The registration of any other `poke`
-or `peek` binder reads the AST still: a later group ports it.
+`poke` binder is a reference into its payload, its part or the pointee of an `Own(...)`
+(`reference_binders`; `references.py` declares it). A `nom` binder takes its payload
+(`pattern_takes.py`).
 """
 
 from __future__ import annotations
-from enum import Enum, auto
 from typing import Iterable, Optional, TYPE_CHECKING
 
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import (
-    DotCall, Expr, LiteralPattern, MethodCall, Name, OrPattern, Pattern,
-    RangePattern, RefBinding, TuplePattern,
-)
-from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
+from sushi_lang.semantics.ast import DotCall, Expr, MethodCall
 from sushi_lang.semantics.ownership import TypeClass
-from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir.stmts import Bare, Ref
-from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type
+from sushi_lang.semantics.typesys import BorrowMode, Type
 
-from .diagnostics import spelled
 from .reads import borrow_owner, names_kept_storage
-from sushi_lang.semantics.param_modes import borrow_mode
 from .regions import note_binder
 from .state import BorrowState, record_owners
 
@@ -54,20 +45,19 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
                  at: Optional[Span] = None) -> Optional[list[tuple[LocalId, Span]]]:
     """The bare binders of a pattern, each with the span of the variant name or of the tuple
     pattern that holds it, in the written order. An `Own(...)` binds the binders of its
-    pointee, with the span of the pattern that holds the `Own`, and a `peek` or `poke`
-    binder of the pointee is a reference (`own_references`), and a `nom` binder takes its
-    payload (`pattern_takes.py`). None when the pattern holds a form of a later group: any
-    other `poke` or `peek` binder.
+    pointee, with the span of the pattern that holds the `Own`. A `peek` or `poke` binder is
+    a reference (`reference_binders`), and a `nom` binder takes its payload
+    (`pattern_takes.py`). None for a binder at the top of a pattern, which no arm writes.
 
     The alternatives of `|` bind one local for each name (CE2126), so the first alternative
-    gives the binders, and each alternative must hold no form of a later group.
+    gives the binders.
     """
     if isinstance(pattern, (p.Wildcard, p.Literal, p.IntRange)):
         return []
     if isinstance(pattern, p.PatBinding):
-        if isinstance(pattern.by, p.Nom):
+        if not isinstance(pattern.by, Bare):
             return []
-        if not isinstance(pattern.by, Bare) or at is None:
+        if at is None:
             return None
         return [(pattern.local, at)]
     if isinstance(pattern, (p.Variant, p.Tuple)):
@@ -81,8 +71,6 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
             found.extend(inner)
         return found
     if isinstance(pattern, p.Own):
-        if isinstance(pattern.inner, p.PatBinding) and isinstance(pattern.inner.by, Ref):
-            return []
         return bare_binders(pattern.inner, at)
     if isinstance(pattern, p.Or):
         alternatives = [bare_binders(item, at) for item in pattern.alternatives]
@@ -94,13 +82,15 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
 
 def declare_bare_binders(checker: 'BorrowChecker', binders: Iterable[tuple[LocalId, Span]],
                          owners: Optional[dict[LocalId, tuple[Owner, ...]]] = None,
-                         body: Optional[ShirBlock] = None) -> None:
+                         body: Optional[ShirBlock] = None,
+                         frame: Optional[list[tuple[Owner, Owner]]] = None) -> None:
     """Declare each binder of an arm as a read-only view of its payload (CE2414).
 
     The note of CE2414 points at the name of the variant or at the tuple pattern that binds
     it, as on `main`. A binder of a payload that owns views the storage of its root: it
     freezes the `owners` of the binder while it lives (CE2412), and it has a borrow region
-    over the statements of `body`, the arm (docs/design/ir.md 7.9).
+    over the statements of `body`, the arm (docs/design/ir.md 7.9). `frame` holds the
+    owners that the end of the arm releases.
     """
     for local, at in binders:
         ty = checker.local_type(local)
@@ -109,47 +99,27 @@ def declare_bare_binders(checker: 'BorrowChecker', binders: Iterable[tuple[Local
         checker.declare(state)
         if body is not None and checker.types.type_class(ty) is TypeClass.MOVE:
             record_owners(checker.borrow_state, state, (owners or {}).get(local, ()), at,
-                          checker._scope_binding_borrows[-1])
+                          checker._scope_binding_borrows[-1] if frame is None else frame)
             note_binder(checker, state, body)
 
 
-def own_references(pattern: p.ShirPattern | p.PatBinding, at: Optional[Span] = None
-                   ) -> list[tuple[LocalId, BorrowMode, Span]]:
-    """Each `peek` or `poke` binder of the pointee of an `Own(...)` in a pattern, with its
-    mode and the span of `poke x`, in the written order. The first alternative of `|` gives
-    them (CE2126)."""
+def reference_binders(pattern: p.ShirPattern | p.PatBinding
+                      ) -> list[tuple[LocalId, BorrowMode, Optional[Span]]]:
+    """Each `peek` or `poke` binder of a pattern, with its mode and the span of `poke x` of
+    an `Own(poke x)` (None for any other binder), in the written order. The first
+    alternative of `|` gives them (CE2126)."""
+    if isinstance(pattern, p.PatBinding):
+        return ([(pattern.local, pattern.by.mode, pattern.by.loc)]
+                if isinstance(pattern.by, Ref) else [])
     if isinstance(pattern, p.Own):
-        inner = pattern.inner
-        if isinstance(inner, p.PatBinding):
-            return ([(inner.local, inner.by.mode, inner.by.loc or at or pattern.loc)]
-                    if isinstance(inner.by, Ref) else [])
-        return own_references(inner, at)
+        return reference_binders(pattern.inner)
     if isinstance(pattern, p.Variant):
-        return [ref for item in pattern.items for ref in own_references(item,
-                                                                       pattern.variant_loc)]
+        return [ref for item in pattern.items for ref in reference_binders(item)]
     if isinstance(pattern, p.Tuple):
-        return [ref for item in pattern.elements for ref in own_references(item, pattern.loc)]
+        return [ref for item in pattern.elements for ref in reference_binders(item)]
     if isinstance(pattern, p.Or):
-        return own_references(pattern.alternatives[0], at)
+        return reference_binders(pattern.alternatives[0])
     return []
-
-
-def declare_references(checker: 'BorrowChecker',
-                       references: Iterable[tuple[LocalId, BorrowMode, Span]],
-                       owners: dict[LocalId, tuple[Owner, ...]], body: ShirBlock) -> None:
-    """Declare each reference binder of an arm: a `peek` or `poke` reference to the pointee
-    of an `Own(...)`, which keeps its reference type, so a write through a `peek` one is
-    CE2408. It freezes the `owners` of the scrutinee to its last use in the arm (CE2412),
-    whatever the type of the pointee, and it has a borrow region over the arm `body`."""
-    for local, mode, at in references:
-        ty = checker.local_type(local)
-        state = BorrowState(name=checker.name_of(local), local=local,
-                            var_type=ReferenceType(ty, mode) if ty is not None else None,
-                            is_borrow_param=True, declared_at_span=at, bound_at_span=at)
-        checker.declare(state)
-        record_owners(checker.borrow_state, state, owners.get(local, ()), at,
-                      checker._scope_binding_borrows[-1])
-        note_binder(checker, state, body)
 
 
 def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:
@@ -192,20 +162,11 @@ class BindingScope:
             release_binding_borrow(self.checker.borrow_state.get(owner), binding)
         return None
 
-    def frozen_bindings(self) -> frozenset:
-        """The names of the bindings this scope has frozen an owner for."""
-        return frozenset(binding for _owner, binding in self._frozen)
-
     def register(self, state: BorrowState) -> None:
         """Install a binding, saving whatever entry it shadows."""
         if state.name not in self._displaced:
             self._displaced[state.name] = self.checker.borrow_state.get(state.name)
         self.checker.borrow_state[state.name] = state
-
-    def bind_value(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
-        """Bind an element or payload BY VALUE -- a read-only view (CE2414)."""
-        self.register(BorrowState(name=name, var_type=ty,
-                                  is_borrowed_binding=True, bound_at_span=span))
 
     def bind_item(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
         """Bind the item a `next()` protocol iterator answered: the iteration OWNS it.
@@ -218,20 +179,6 @@ class BindingScope:
         run-time drop flag.
         """
         self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))
-
-    def bind_ref(self, name: str, ty: Optional[Type], marker: str,
-                 span: Optional[Span], owner: Optional[Expr],
-                 declared_at: Optional[Span] = None) -> None:
-        """Bind BY REFERENCE (#300), and freeze the owner it points into."""
-        # The state carries the full `ReferenceType`, which wires every rule in by
-        # construction. NOT `is_borrowed_binding` -- that would put a `poke` binding in
-        # the CE2414 row and reject the write the marker exists to allow.
-        state = BorrowState(name=name, var_type=ReferenceType(ty, borrow_mode(marker)),
-                            bound_at_span=span,
-                            declared_at_span=declared_at or span)
-        self.register(state)
-        if owner is not None:
-            self.freeze_owner(state, owner, span, poke_span=declared_at or span)
 
     def bind_iterator(self, iterable: Expr) -> Optional[BorrowState]:
         """Freeze the container a `foreach` walks, for the whole loop (#956).
@@ -280,220 +227,11 @@ class BindingScope:
         owner_state = self.checker.borrow_state.get(owner) if owner else None
         if owner is None or owner_state is None:
             return
-        if _pokes_through_a_peek(state, owner_state):
-            _reject_poke_through_peek(self.checker, owner, owner_state,
-                                      poke_span or span)
+        from .references import pokes_through_a_peek, reject_poke_through_peek
+        if pokes_through_a_peek(state, owner_state):
+            reject_poke_through_peek(self.checker, owner_state, poke_span or span)
             return
         # An item of a lent iterator views its owners' storage, not the iterator (#1259).
         from .iterators import owners_through
         record_owners(self.checker.borrow_state, state,
                       owners_through(self.checker, owner), span, self._frozen)
-
-
-def _own_payload_receiver(expr: Expr) -> Optional[Expr]:
-    """`o.get()` on an Own binds the PAYLOAD; the place it is a place of is `o`."""
-    from sushi_lang.semantics.ast import DotCall, MethodCall
-    if isinstance(expr, (MethodCall, DotCall)) and expr.method == "get" and not expr.args:
-        return expr.receiver
-    return None
-
-
-def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
-    """`let poke T x = <place>` / `let peek T x = <place>`: a checked borrow binding (#409).
-
-    Block-scoped like a `let`-borrow and a REFERENCE like a `poke` pattern binding: the
-    state carries the full `ReferenceType`, so the write gates answer by construction (a
-    write through a `peek` binding is CE2408, consuming the binding is CE2411), and the
-    owner is frozen while the binding lives (CE2412's machinery, released at block exit).
-    Two rules are this binding's own: one `poke` binding of an owner at a time (CE2403),
-    and a `peek` beside a live `poke`, or the reverse, is CE2407 -- the same two codes an
-    argument list answers, at the binding instead of the statement.
-    """
-    from .expressions import check_expr
-    from .writes import check_owner_not_borrowed, reject_readonly_write
-
-    check_expr(checker, stmt.value)
-    is_poke = stmt.ty.is_poke()
-    place = _own_payload_receiver(stmt.value) or stmt.value
-    owner = borrow_owner(checker, place)
-    state = BorrowState(name=stmt.name, var_type=stmt.ty, bound_at_span=stmt.loc,
-                        declared_at_span=stmt.loc)
-    checker.borrow_state[stmt.name] = state
-
-    owner_state = checker.borrow_state.get(owner) if owner else None
-    if owner is None or owner_state is None:
-        # A constant (a `peek` binds it, #713; a `poke` was CE2400 upstream) or a
-        # temporary (CE2404 upstream): no local owns it, so nothing is frozen.
-        return
-
-    if is_poke:
-        if _pokes_through_a_peek(state, owner_state):
-            _reject_poke_through_peek(checker, owner, owner_state, stmt.loc)
-            return
-        if reject_readonly_write(checker, owner, stmt.loc, "take a `poke` binding",
-                                 receiver=place):
-            return
-
-    if reject_a_second_writer(checker, owner, owner_state, is_poke, stmt.loc):
-        return
-
-    if is_poke:
-        # A writer invalidates every value binding read out of the owner, exactly as
-        # `f(poke x)` does (#242).
-        check_owner_not_borrowed(checker, owner, stmt.loc, "take `poke`", place=place)
-
-    record_owners(checker.borrow_state, state, (owner,), stmt.loc,
-                  checker._scope_binding_borrows[-1])
-
-
-def reject_a_second_writer(checker: 'BorrowChecker', owner: str, owner_state: BorrowState,
-                           is_poke: bool, span: Optional[Span],
-                           siblings: frozenset = frozenset()) -> bool:
-    """Report a reference binding beside a live one that excludes it; True when reported.
-
-    The same table as `acquire_borrow`: `poke` beside `poke` is CE2403, a mix is CE2407,
-    and two `peek` bindings share. `siblings` are the bindings of the same pattern, which
-    point into disjoint payload slots.
-    """
-    for bound_name, bound_span in list(owner_state.binding_borrows):
-        bound = checker.borrow_state.get(bound_name)
-        if bound_name in siblings or bound is None \
-                or not isinstance(bound.var_type, ReferenceType):
-            continue
-        if bound.var_type.is_poke():
-            code = er.ERR.CE2403 if is_poke else er.ERR.CE2407
-        elif is_poke:
-            code = er.ERR.CE2407
-        else:
-            continue
-        diag = checker.err.emit_with(code, span, name=owner)
-        if bound_span is not None:
-            diag.note_at(f"'{bound_name}' binds it here", bound_span)
-        diag.emit()
-        return True
-    return False
-
-
-def _pokes_through_a_peek(state: BorrowState, owner_state: BorrowState) -> bool:
-    """Would this `poke` binding write the caller's container through a `peek`?"""
-    return (isinstance(state.var_type, ReferenceType) and state.var_type.is_poke()
-            and isinstance(owner_state.var_type, ReferenceType)
-            and owner_state.var_type.is_peek())
-
-
-def _reject_poke_through_peek(checker: 'BorrowChecker', owner: str,
-                              owner_state: BorrowState, span: Optional[Span]) -> None:
-    """Report CE2408 for a `poke` element binding out of a read-only borrow."""
-    diag = checker.err.emit_with(er.ERR.CE2408, span, name=owner)
-    if owner_state.declared_at_span is not None:
-        diag.note_at(f"'{owner}' is declared here as a read-only borrow",
-                     owner_state.declared_at_span)
-    diag.help("a `poke` element binding would write the caller's container through a "
-              "read-only borrow; declare the parameter `poke` if the elements must be "
-              "written, or drop the marker and bind the element by value")
-    diag.emit()
-
-
-class ScrutineeKind(Enum):
-    """What a payload binding reads through, which decides what it may do."""
-
-    BORROWED = auto()       # a match that only borrows its scrutinee
-    OWNED = auto()          # a match that owns it: a temporary, or `match nom r:`
-
-
-def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
-                              pattern: object,
-                              scrutinee_type: Optional[Type] = None,
-                              scrutinee: Optional[Expr] = None,
-                              owns_scrutinee: bool = False) -> None:
-    """Register the bindings of a pattern that reads `scrutinee`, WITH their types."""
-    kind = ScrutineeKind.OWNED if owns_scrutinee else ScrutineeKind.BORROWED
-    _register_item(checker, scope, pattern, scrutinee_type, scrutinee, kind, None)
-
-
-def _sub_items(checker: 'BorrowChecker', item: object,
-               ty: Optional[Type]) -> list[tuple[object, Optional[Type]]]:
-    """The positions directly inside an enum or a tuple pattern, each with its type."""
-    if isinstance(item, Pattern):
-        types = checker.types.variant_payload_types(ty, item.variant_name)
-        items = item.bindings
-    elif isinstance(item, TuplePattern):
-        types = checker.types.tuple_element_types(ty)
-        items = item.elements
-    else:
-        return []
-    return [(sub, types[index] if index < len(types) else None)
-            for index, sub in enumerate(items)]
-
-
-def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
-                   ty: Optional[Type], scrutinee: Optional[Expr], kind: ScrutineeKind,
-                   span: Optional[Span]) -> None:
-    """Register one pattern position, read through a scrutinee of `kind`.
-
-    `span` is the span of the pattern that holds the position, for a bare name.
-    """
-    match item:
-        case "_" | LiteralPattern() | RangePattern():
-            pass                      # a discard, a literal and a range bind nothing
-        case str():
-            scope.bind_value(item, ty, span)
-        case RefBinding():
-            # `Variant(poke x)` (#300): a REFERENCE into the scrutinee's storage. The
-            # scrutinee is frozen for the arm -- rebinding it would change the variant tag
-            # under the pointer.
-            _bind_payload_ref(checker, scope, item.name, ty, item.mode, item.loc or span,
-                              scrutinee, kind)
-        case Pattern() | TuplePattern():
-            inner_span = (item.variant_name_span or item.loc
-                          if isinstance(item, Pattern) else item.loc)
-            for sub, sub_type in _sub_items(checker, item, ty):
-                _register_item(checker, scope, sub, sub_type, scrutinee, kind, inner_span)
-        case OrPattern():
-            # Each alternative binds the same names with the same types and modes
-            # (CE2126), so the first one registers them for the arm.
-            _register_item(checker, scope, item.alternatives[0], ty, scrutinee, kind,
-                           item.loc or span)
-
-
-def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
-                      ty: Optional[Type], marker: str, span: Optional[Span],
-                      scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
-    """Bind a reference into a matched payload, rejecting a scrutinee with no storage.
-
-    Under a borrowed match the scrutinee must be a PLACE, the places a `let peek` /
-    `let poke` takes (#788): the pointer aims into its storage, and the owner, the
-    root of the place, is frozen for the arm. A temporary the match owns is parked in
-    a slot for the whole statement (ruling R11), so it needs no place.
-    """
-    if kind is ScrutineeKind.BORROWED and scrutinee is not None \
-            and not _is_a_place(scrutinee):
-        scope.bind_ref(name, ty, marker, span, owner=None, declared_at=span)
-        checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, scrutinee))
-        return
-    owner = scrutinee if kind is ScrutineeKind.BORROWED or isinstance(scrutinee, Name) \
-        else None
-    if owner is not None and reject_a_second_reference(
-            checker, owner, marker, span, siblings=scope.frozen_bindings()):
-        owner = None
-    scope.bind_ref(name, ty, marker, span, owner=owner, declared_at=span)
-
-
-def reject_a_second_reference(checker: 'BorrowChecker', place: Expr, marker: str,
-                              span: Optional[Span],
-                              siblings: frozenset = frozenset()) -> bool:
-    """Report a new reference into `place` that a live reference of its root excludes.
-
-    A pattern binding and a `foreach` item both ask this before they bind (#1027).
-    """
-    root = borrow_owner(checker, place)
-    owner_state = checker.borrow_state.get(root) if root else None
-    if owner_state is None:
-        return False
-    return reject_a_second_writer(checker, root, owner_state, marker != READ_ONLY_MODE,
-                                  span, siblings=siblings)
-
-
-def _is_a_place(expr: Expr) -> bool:
-    """Is `expr` a name, or a member or index chain off one?"""
-    return walk_place(expr, Step.MEMBER | Step.INDEX).name is not None

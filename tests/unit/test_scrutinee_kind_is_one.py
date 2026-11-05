@@ -1,29 +1,24 @@
-"""A payload binding reads its scrutinee through ONE `ScrutineeKind` (#783).
+"""A reference binder reads its scrutinee through ONE decision (#783).
 
 `_bind_payload_ref` took two booleans, `require_named_scrutinee` and `owns_scrutinee`,
-for three behaviours; the fourth combination had no meaning and nothing refused it.
-The enum names them; the third, the pointee of an `Own(...)`, went to the SHIR pass (B5),
-and this gate keeps the pair from coming back.
+for three behaviours; the fourth combination had no meaning and nothing refused it. On
+SHIR the decision is one predicate, `pattern_takes.owns_scrutinee`, which the `nom` binders
+read too, and the reference binders ask it in `references.declare_reference_binders`. This
+gate keeps a flag pair from coming back.
 """
 from __future__ import annotations
 
 import inspect
 
-from sushi_lang.semantics.passes.borrow import bindings
+from sushi_lang.semantics.passes.borrow import bindings, references
 
 
-def test_the_kind_names_two_behaviours():
-    assert [k.name for k in bindings.ScrutineeKind] == ["BORROWED", "OWNED"]
+def test_the_reference_binders_ask_the_one_predicate():
+    assert "owns_scrutinee(" in inspect.getsource(references.declare_reference_binders)
 
 
-def test_the_payload_reference_takes_the_kind_and_no_flag():
-    params = inspect.signature(bindings._bind_payload_ref).parameters
-    assert "kind" in params
-    assert "require_named_scrutinee" not in params
-    assert "owns_scrutinee" not in params
-
-
-def test_no_flag_pair_survives_in_the_module():
-    source = inspect.getsource(bindings)
-    assert "require_named_scrutinee" not in source
-    assert "inside_own" not in source
+def test_no_flag_pair_survives_in_the_modules():
+    for module in (bindings, references):
+        source = inspect.getsource(module)
+        assert "require_named_scrutinee" not in source
+        assert "inside_own" not in source

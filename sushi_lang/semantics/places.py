@@ -113,6 +113,13 @@ def walk_place(expr: Any, steps: Step, *,
         node = inner
 
 
+def is_get_call(node: Any) -> bool:
+    """Whether the SHIR `node` is a `get()` call with no argument: in a place, the payload of
+    an `Own@(T)`, which a reference may point into (#409). The caller asks the type."""
+    return (isinstance(node, e.Call) and isinstance(node.target, e.Dotted)
+            and node.target.name == "get" and not node.args)
+
+
 def _ast_step(node: Optional[Expr]) -> Optional[tuple[Step, Expr]]:
     """The adapter of the AST: the kind of the step at `node` and the node it goes to."""
     match node:

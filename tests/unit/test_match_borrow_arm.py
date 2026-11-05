@@ -3,9 +3,9 @@
 A literal arm binds no name: `_`, a literal, a range, and an `Or` of them. A `Variant`
 and a `Tuple` bind the local of each bare `PatBinding` in them, with the span of the
 variant name or of the tuple pattern that holds it. A `nom` binder is no bare binder: the
-arm takes its payload (`pattern_takes.taken_binders`). A `poke` or `peek` binder of a
-variant payload or of a tuple part is the pattern of a later group: a match with one stops
-the walk with `borrow, Match`. The tests run
+arm takes its payload (`pattern_takes.taken_binders`). A `poke` or `peek` binder is no bare
+binder either: it is a reference (`bindings.reference_binders`). A binder at the top of a
+pattern, which no arm writes, stops the walk with `borrow, Match`. The tests run
 the arm over SHIR built by hand, with a stand-in for the pass; they do not run the
 compiler.
 """
@@ -16,7 +16,7 @@ import pytest
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import arms, statements
-from sushi_lang.semantics.passes.borrow.bindings import bare_binders
+from sushi_lang.semantics.passes.borrow.bindings import bare_binders, reference_binders
 from sushi_lang.semantics.passes.borrow.pattern_takes import taken_binders
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
@@ -90,13 +90,22 @@ def test_a_tuple_binds_each_bare_part_at_the_tuple_pattern() -> None:
                                     (LocalId(3), INNER)]
 
 
-@pytest.mark.parametrize("pattern", [
-    _variant(s.Ref(BorrowMode.POKE)),
-    _variant(s.Ref(BorrowMode.PEEK)),
-    p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Bare())),
-], ids=["poke", "peek", "own"])
-def test_a_pattern_of_a_later_group_has_no_bare_binders(pattern: p.ShirPattern) -> None:
-    assert bare_binders(pattern) is None
+def test_a_binder_at_the_top_of_a_pattern_has_no_bare_binders() -> None:
+    assert bare_binders(p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Bare()))) is None
+
+
+@pytest.mark.parametrize("mode", [BorrowMode.POKE, BorrowMode.PEEK], ids=["poke", "peek"])
+def test_a_reference_binder_is_no_bare_binder(mode: BorrowMode) -> None:
+    pattern = _variant(items=[p.PatBinding(LocalId(1), s.Bare()),
+                              p.PatBinding(LocalId(2), s.Ref(mode)),
+                              p.Tuple(ShirId(45), INNER, [p.PatBinding(LocalId(3), s.Ref(mode))])])
+    assert bare_binders(pattern) == [(LocalId(1), NAME)]
+    assert reference_binders(pattern) == [(LocalId(2), mode, None), (LocalId(3), mode, None)]
+
+
+def test_the_reference_binder_of_an_own_keeps_the_span_of_its_marker() -> None:
+    own = p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Ref(BorrowMode.POKE, INNER)))
+    assert reference_binders(_variant(items=[own])) == [(LocalId(2), BorrowMode.POKE, INNER)]
 
 
 @pytest.mark.parametrize("pattern, taken", [
@@ -115,11 +124,11 @@ def test_the_table_checks_a_match() -> None:
     assert arms.ARMS[s.Match] is statements.check_match
 
 
-def test_a_match_with_a_binder_of_a_later_group_stops_with_borrow_match() -> None:
+def test_a_match_with_a_binder_at_the_top_of_a_pattern_stops_with_borrow_match() -> None:
     """The stop comes before the arm reads the pass, so the stand-in is never read."""
     scrutinee = e.LocalRef(ShirId(2), SPAN, LocalId(0))
     node = s.Match(ShirId(1), SPAN, scrutinee,
-                   [_arm(_variant(s.Ref(BorrowMode.POKE))),
+                   [_arm(p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Bare()))),
                     _arm(p.Wildcard(ShirId(20), SPAN))], False)
     with pytest.raises(StageStop) as caught:
         statements.check_match(object(), node)  # type: ignore[arg-type]

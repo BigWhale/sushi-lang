@@ -13,8 +13,8 @@ reports nothing more. A fixed literal of another size than the declared `T[N]` o
 or a constant is CE2011. An `Assign` of a `Field` is a field write, and an `Assign` of an
 `Index` an element write: the value is checked at the type of the field or the element. A
 write into a field or an element of a constant is CE2096, and a write into a byte of a
-string is CE2113. An `Assign` of any other place, and a reference `let`, are not typed
-yet. An expression statement drops its
+string is CE2113. An `Assign` of any other place is not typed yet. A reference `let`
+gives its local the type of its place, and refuses a value that is no place (CE2404). An expression statement drops its
 value, and a dropped `Result` of a value is CW2001. A `Return` of a body with a channel
 spells `Result.Ok(...)` or `Result.Err(...)` (CE2030), checked at the `Result` of the
 channel (CE2031, CE2039). A `Return` of a bare body checks its value at the declared return
@@ -42,7 +42,7 @@ on after it, and the body does not go on to the next stage.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -64,6 +64,8 @@ from sushi_lang.semantics.passes.types.utils import (
 from sushi_lang.semantics.passes.types.visit.arrays import reject_wrong_size
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.passes.types.visit.ranges import check_range_iterable
+from sushi_lang.semantics.ownership import is_own_type
+from sushi_lang.semantics.places import Step, is_get_call, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody
@@ -130,7 +132,8 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
     local = validator.body_locals[target.local]
     declared = None if local.declared is None else validator.written_type(local.declared)
     if isinstance(declared, ReferenceType):
-        visit.stop_at(validator, node)
+        _check_let_reference(validator, node, target, declared)
+        return
     answers = validator.body_answers()
     if declared is None:
         if local.name is not None:
@@ -155,6 +158,59 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
             or _reject_literal_size(validator, node.value, ty, node.value.loc)
             or reject_mismatch(validator, got, ty, node.value.loc, local.declared_loc)):
         validator.refused_locals.add(local.id)
+
+
+def _check_let_reference(validator: TypeValidator, node: s.Assign, target: e.LocalRef,
+                         declared: ReferenceType) -> None:
+    """`let peek T x = <place>` and `let poke T x = <place>` (#409): the local has the type
+    of its place (ir.md 8.2), and the value is a `Borrow` of the place, checked at `T`. A
+    value that is no place (a call, a literal, a slice) is CE2404. What the mode may do to
+    the place (a constant, the owner) is the rule of `borrow`."""
+    local = validator.body_locals[target.local]
+    refused = validate_type_name(validator, declared.referenced_type, local.declared_loc)
+    ty = resolve_variable_type(validator, declared.referenced_type, local.declared_loc)
+    validator.body_answers().record_local(local.id, ty)
+    visit.check_expr(validator, target)
+    value = node.value
+    if not isinstance(value, e.Borrow) or not _names_a_place(value.place):
+        _reject_no_place(validator, value, declared, local.name)
+        return
+    got = visit.check_expr(validator, value, ty)
+    if refused or got is None:
+        return
+    if not _reaches_storage(validator, value.place):
+        _reject_no_place(validator, value, declared, local.name)
+        return
+    reject_mismatch(validator, deref_type(got), ty, value.loc, local.declared_loc)
+
+
+def _reject_no_place(validator: TypeValidator, value: e.ShirExpr, declared: ReferenceType,
+                     name: Optional[str]) -> None:
+    """CE2404: the value of a reference `let` names no storage."""
+    er.emit_with(validator.reporter, er.ERR.CE2404, value.loc, expr=name) \
+        .help(f"a `let {declared.mutability.value}` binds a PLACE: a local, a field, an "
+              f"element, or an Own's payload (`o.get()`); bind a call result by value, with "
+              f"`let T {name} = ...`") \
+        .emit()
+
+
+def _names_a_place(expr: e.ShirExpr) -> bool:
+    """Whether `expr` is written as a place: a name, or a field, an element or a `get()`
+    chain off one. A slice is a new descriptor and no place (docs/design/slices.md)."""
+    if isinstance(expr, e.Slice):
+        return False
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL, crosses_call=is_get_call)
+    return isinstance(walked.node, (e.LocalRef, e.StorageRef, e.ConstRef, e.GlobalRef))
+
+
+def _reaches_storage(validator: TypeValidator, expr: e.ShirExpr) -> bool:
+    """Whether each `get()` of the place `expr` reads the payload of an `Own@(T)`: a heap
+    cell that the `Own` keeps. A `get()` of any other type answers a temporary."""
+    answers = validator.body_answers()
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL, crosses_call=is_get_call)
+    return all(is_own_type(deref_type(answers.type_of(step.target.recv.shir_id)))
+               for step in walked.path
+               if isinstance(step, e.Call) and isinstance(step.target, e.Dotted))
 
 
 def _reject_literal_size(validator: TypeValidator, value: e.ShirExpr, declared: Type,

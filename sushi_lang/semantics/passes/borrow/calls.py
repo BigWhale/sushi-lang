@@ -57,9 +57,11 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     and the pass decides its `Ownership`. A callee that destroys its `poke` parameter
     destroys the caller's value (#168). The `nom` marker is compared against the declared
     mode by the typecheck pass (CE2427). A built-in method reads its receiver first. A
-    family that has no arm yet stops the walk. The receiver of an extension method has the
-    convention of its `self` (`check_method_receiver`): it is read after the call's entry,
-    so a `poke self` change is a change of this call. A `poke self` receiver changes its
+    family that has no arm yet stops the walk. The receiver of an extension method is read
+    before the arguments, and it takes the borrow of the convention of its `self` after the
+    borrows of the arguments (`check_method_receiver`), so a receiver beside a `poke` of its
+    owner is the second borrow (CE2407 at the receiver, as on `main`); a `poke self` change
+    is a change of this call. A `poke self` receiver changes its
     owner, and a `nom self` receiver is taken, after the arguments, as an `Owned` argument
     is. The typecheck pass stops at every other
     callee, so one in this pass is an internal error.
@@ -79,8 +81,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     conventions = [None if arg.bloom else _convention_of(checker, node, position)
                    for position, arg in enumerate(node.args)]
     unchanged = unchanged_borrowed_roots(checker, node, conventions)
-    changes_receiver = (isinstance(callee, Method)
-                        and check_method_receiver(checker, node, callee))
+    if isinstance(callee, Method):
+        arms.check(checker, callee.recv)
     modes = [_written_borrow(arg, convention)
              for arg, convention in zip(node.args, conventions, strict=True)]
     for arg, mode in zip(node.args, modes, strict=True):
@@ -88,6 +90,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
             arms.check(checker, arg.value)
         else:
             check_borrow(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
+    changes_receiver = (isinstance(callee, Method)
+                        and check_method_receiver(checker, node, callee))
     for arg, convention, mode in zip(node.args, conventions, modes, strict=True):
         if mode is None and convention is Convention.OWNED and arg.marker is Convention.OWNED:
             consume_marked(checker, arg.value)
@@ -107,16 +111,15 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
 
 
 def check_method_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> bool:
-    """The receiver of an extension method, by the convention of its `self` (ir.md 8.3).
-
-    The receiver is read first: a use after a move is CE2405. A plain `self` is the shared
+    """The borrow of the receiver of an extension method, by the convention of its `self`
+    (ir.md 8.3), after the borrows of the arguments. `check_call` read the receiver before
+    the arguments: a use after a move is CE2405 there. A plain `self` is the shared
     borrow of an unmarked argument, and a `peek self` a `peek` of its owner, for the
     statement. A `poke self` writes its receiver (`_write_receiver`). A `nom self`
     receiver is taken after the arguments (`take_receiver`). True when the call changes
     the owner of its receiver: a `poke self` that the pass did not refuse.
     """
     receiver = callee.recv
-    arms.check(checker, receiver)
     if callee.receiver is Convention.GUARANTEED:
         register_implicit_borrow(checker, receiver)
     elif callee.receiver is Convention.IN_GUARANTEED:

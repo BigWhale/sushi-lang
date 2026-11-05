@@ -47,7 +47,8 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     `poke` is CE2400 at the name of the constant, bare or behind an alias. A stdlib
     constant has no record and no storage, so both modes are CE2400
     (`reject_borrow_of_constant`). A `var` is storage with an address: a borrow of it or
-    of its field is counted on its state (`storage_state`). A call result, a literal and a
+    of its field is counted on its state (`storage_state`), and a `poke` of it changes it
+    for each `let`-borrow of it. A call result, a literal and a
     construction are temporaries and have no address, and nor does a field of one: CE2404.
     An element has no stable address either, because a growth of its array can move it:
     CE2404. A slice is a view of its array (`_borrow_slice`). A root that a later group
@@ -63,7 +64,10 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     if isinstance(root, LATER_ROOTS):
         arms.stop_at(checker, root)
     if isinstance(root, e.StorageRef):
-        acquire_borrow(checker, storage_state(checker, root), span, is_poke=is_poke)
+        state = storage_state(checker, root)
+        if is_poke:
+            check_owner_not_borrowed(checker, state.local, span, "take `poke`", place=place)
+        acquire_borrow(checker, state, span, is_poke=is_poke)
         return
     if not isinstance(root, e.LocalRef):
         checker.err.emit(er.ERR.CE2404, span, expr=temporary_spelled(checker, place))

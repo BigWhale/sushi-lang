@@ -1,6 +1,5 @@
 """Statement validation for type validation."""
 from __future__ import annotations
-from dataclasses import dataclass
 from itertools import count
 from typing import TYPE_CHECKING, Optional
 
@@ -8,116 +7,17 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Foreach, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
+from sushi_lang.semantics.ast import Foreach, DotCall, MethodCall, Name, RangeExpr
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
-from sushi_lang.semantics.ownership import is_own_type
-from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
-from .compatibility import validate_assignment_compatibility, types_compatible
+from .compatibility import types_compatible
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
     from sushi_lang.semantics.ast import Expand
-
-
-@dataclass(frozen=True)
-class PlaceRoot:
-    """The name a place roots in, and the unit that name is written in.
-
-    Two facts from one walk. `unit` is None for a bare root, which the asking unit's own
-    scope holds; behind a `use ... as` alias it is the unit the alias names, because an
-    alias puts nothing into the asking unit's flat scope (#712).
-    """
-
-    name: Name
-    unit: Optional[str] = None
-
-
-def place_root(validator: 'TypeValidator', expr) -> Optional[PlaceRoot]:
-    """The root of a PLACE, or None when `expr` names no storage.
-
-    A `let poke` / `let peek` binds a pointer, so its initializer must have an address a
-    frame keeps: a bare name, a member or index chain off one, or an `Own@(T).get()` on
-    one (the payload's heap cell). A call result, a `??`, a literal or a constructor is a
-    temporary, and binding a pointer into one is CE2404 -- the rule a `poke self` call
-    answers to as well.
-
-    A chain behind an alias roots in the DECLARATION the alias holds, so the walk stops
-    one step above the alias: a namespace is storage of no kind, and walking into it
-    answered with the alias name itself, which the pass then typed as a variable (#712).
-    """
-    def owns_payload(call) -> bool:
-        return (call.method == "get" and not call.args
-                and is_own_type(validator.infer_expression_type(call.receiver)))
-
-    if isinstance(expr, IndexAccess) and expr.is_slice:
-        # A slice is a new descriptor and not storage (docs/design/slices.md).
-        return None
-
-    walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL,
-                        crosses_call=owns_payload,
-                        stop=lambda member: _alias_origin(validator, member))
-    if walked.stop is not None:
-        member = walked.node
-        assert isinstance(member, MemberAccess)
-        return PlaceRoot(Name(id=member.member, loc=member.loc), walked.stop)
-    return PlaceRoot(walked.name) if walked.name is not None else None
-
-
-def _alias_origin(validator: 'TypeValidator', expr: MemberAccess) -> Optional[str]:
-    """The unit `<alias>.<member>` names, or None when the receiver is a value."""
-    binding = validator.resolve_namespaced(expr.receiver, expr.member)
-    return None if binding is None else binding.provider.origin
-
-
-def _root_sig(validator: 'TypeValidator', root: PlaceRoot):
-    """The constant record this root reaches, read in the scope it is WRITTEN in."""
-    if root.unit is None:
-        return validator.const_sig(root.name.id)
-    return validator.const_table.lookup(root.name.id, root.unit)
-
-
-def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
-    """`let poke T x = <place>` / `let peek T x = <place>`: a checked borrow binding (#409).
-
-    The declared type is the reference, the initializer is the place it points into, and
-    the binding is recorded with its full `ReferenceType` so that every later reader -- the
-    borrow pass's write gates, the backend's dereference -- answers by construction. The
-    owner's freeze, the one-`poke` rule and the consuming-use refusal are the borrow
-    pass's; here the place is checked to be storage the binding's MODE may use, and a
-    `poke` of a constant is refused (CE2400) where a `peek` of one reads it (#713).
-    """
-    from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
-    from sushi_lang.semantics.typesys import ReferenceType
-    from .resolution import resolve_variable_type
-    from .propagation import propagate_types_to_value
-
-    mode = "poke" if stmt.ty.is_poke() else "peek"
-    root = place_root(validator, stmt.value)
-    if root is None:
-        er.emit_with(validator.reporter, er.ERR.CE2404, stmt.value.loc, expr=stmt.name) \
-            .help(f"a `let {mode}` binds a PLACE: a local, a field, an element, or an "
-                  f"Own's payload (`o.get()`); bind a call result by value, with "
-                  f"`let T {stmt.name} = ...`") \
-            .emit()
-        return
-    name = root.name
-    if name.id not in validator.variable_types:
-        if reject_borrow_of_constant(validator.err, name.id,
-                                     _root_sig(validator, root), name.loc, mode=mode):
-            return
-
-    referent = resolve_variable_type(validator, stmt.ty.referenced_type, stmt.type_span)
-    ref_type = ReferenceType(referenced_type=referent, mutability=stmt.ty.mutability)
-    stmt.ty = ref_type
-    validator.variable_types[stmt.name] = ref_type
-
-    propagate_types_to_value(validator, stmt.value, referent)
-    validate_assignment_compatibility(validator, referent, stmt.value, stmt.type_span,
-                                      stmt.value.loc)
 
 
 def reject_unspelled_result(validator: 'TypeValidator', value) -> None:

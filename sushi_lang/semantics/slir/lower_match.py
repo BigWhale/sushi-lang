@@ -90,13 +90,14 @@ def _taken(paths: list[_Path]) -> set[LocalId]:
 
 
 def _scrutinee(low: Lowering, expr: e.ShirExpr, *, place: bool) -> p.Operand:
-    """The operand that each test reads. A place (a local, a field, an element) is read
-    where it is, and so is a constant when no test needs a place. A new value, a constant of
+    """The operand that each test reads. A place (a local, a field, an element, a part of
+    a `var` when a test needs a place) is read where it is, so a `poke` binder writes it,
+    and so is a constant when no test needs a place. A new value, a constant of
     an enum, and a local that the match takes (`match nom r:`), go into a temporary of the
     match statement, which drops it at its end."""
     value: Value
     if isinstance(expr, (e.LocalRef, e.Field, e.Index, e.Lit, e.ConstRef)):
-        operand = low.operand(expr)
+        operand = low.operand(expr, in_place=place)
         if isinstance(operand, p.Copy) or (isinstance(operand, p.Const) and not place):
             return operand
         value = r.Use(operand)
@@ -219,12 +220,14 @@ def _switch_case(test: _Test) -> int:
 
 def _bind_blocks(low: Lowering, stmt: s.Match, paths: list[_Path]) -> list[Block]:
     """A block for each path of an arm when two or more paths write a binder: each one
-    writes the binders of its path and goes to the body. A view local has one write, so
-    two paths that write a binder of an owning payload stop (`Match owning alternatives`)."""
+    writes the binders of its path and goes to the body. A view local and an address local
+    have one write each, so two paths that write a binder of an owning payload or a `peek`
+    or `poke` binder stop (`Match owning alternatives`)."""
     if len(paths) < 2 or not any(path.binds for path in paths):
         return []
-    if any(low.owns(low.typeck.local_type(local) or BuiltinType.BLANK)
-           for path in paths for local, _ in path.binds):
+    if any(isinstance(value, r.Ref) or low.owns(low.typeck.local_type(local)
+                                                 or BuiltinType.BLANK)
+           for path in paths for local, value in path.binds):
         dispatch.stop(STAGE, stmt, state="owning alternatives")
     return [low.new_block() for _ in paths]
 

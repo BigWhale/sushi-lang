@@ -9,8 +9,9 @@ ShirBody K (Initializer)
 ShirBody local
   params : [(_0 "n": i32, Guaranteed)]
   locals : [_1 "m": i32]
+  regions : [_1: {} until #8]
   block  :
-    Match(TupleInit([ConstRef(@K), LocalRef(_0)]), [Arm(Tuple([Wildcard, (_1, Ref(Poke))]), [Return(LocalRef(_1))])], consumes: false)
+    Match(TupleInit([adopt ConstRef(@K), adopt LocalRef(_0)]), [Arm(Tuple([Wildcard, (_1, Ref(Poke))]), [Return(adopt LocalRef(_1))])], consumes: false)
 
 ShirBody constant
   params : [(_0 "n": i32, Guaranteed)]

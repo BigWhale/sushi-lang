@@ -22,7 +22,7 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.method_effects import answers_view
 from sushi_lang.semantics.ownership import Ownership
-from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.places import Step, is_get_call, walk_place
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
@@ -167,6 +167,47 @@ def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref,
         statements += low.placement.begin_region(
             ident, [p.root_of(value.place)], frozenset(region.until), span, value.mode)
     return statements + [st.Assign(p.Local(ident), value, span)]
+
+
+def let_reference(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
+    """`let peek T x = <place>` / `let poke T x = <place>` (ir.md 8.9): an address local of
+    the block, written with the `Ref` of its place, in a region over the root of the place
+    with the mode of the `Ref`, to the last uses of the region row of `borrow`."""
+    borrow = stmt.value
+    region = low.answers.ownership.region_of(target.local)
+    if not isinstance(borrow, e.Borrow) or region is None:
+        er.raise_internal_error("CE0000", span=stmt.loc,
+                                detail="a reference let with no borrow region reached SLIR")
+    place = reference_place(low, borrow.place)
+    ident, _ = low.bind(target.local, stmt.loc)
+    low.placement.address(ident)
+    low.emit([st.StorageLive(ident, stmt.loc)])
+    low.emit(low.placement.begin_region(ident, [p.root_of(place)], frozenset(region.until),
+                                        stmt.loc, borrow.mode))
+    low.emit([st.Assign(p.Local(ident), r.Ref(place, borrow.mode), stmt.loc)])
+
+
+def reference_place(low: Lowering, expr: e.ShirExpr) -> p.Place:
+    """The place that a reference points into: a local or a `var`, a field or an element of
+    one, the pointee of an `Own` (`o.get()`, `Deref(Field(place, 0))`), or a part of a
+    constant, whose value a hidden local of the block holds (ir.md 8.9)."""
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL, crosses_call=is_get_call)
+    root = walked.node
+    place: p.Place
+    if isinstance(root, (e.LocalRef, e.StorageRef)):
+        place = agg.place_of(low, root)
+    elif isinstance(root, e.ConstRef):
+        place = p.Local(low.temporary(r.Use(p.Const(low.constant(root))), low.type_of(root),
+                                      root.loc, held=True))
+    else:
+        er.raise_internal_error("CE0000", span=expr.loc,
+                                detail="a reference into no place reached SLIR")
+    for step in reversed(walked.path):
+        if isinstance(step, e.Call):
+            place = p.Deref(p.Field(place, 0))
+        else:
+            place = agg.project(low, place, [step])
+    return place
 
 
 def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:

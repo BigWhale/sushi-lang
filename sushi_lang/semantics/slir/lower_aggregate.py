@@ -127,6 +127,12 @@ def place_of(low: Lowering,
                                       held=base.shir_id == low.holder))
     else:
         er.raise_internal_error("CE0000", span=expr.loc, detail="a field of no value")
+    return project(low, place, steps)
+
+
+def project(low: Lowering, place: p.Place,
+            steps: Sequence[e.Field | e.Index | e.Slice]) -> p.Place:
+    """The place of the field, element and slice `steps` off `place`, from the root out."""
     for step in steps:
         if isinstance(step, e.Index):
             place = arrays.element(low, place, step)
