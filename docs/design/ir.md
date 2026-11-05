@@ -867,8 +867,9 @@ field, in the declaration order. A struct is never variadic: a bloom argument (`
 is [CE0120](../error-catalog.md#ce0120) at the argument, and the fields are then not checked,
 as on a method call. Two parts of the old output stay different: the caret covers the value
 (`xs`) and not `xs...`, as on a function call, because an `Arg` keeps no span of the spread;
-and the `borrow` pass does not walk a body with an error of `typecheck`, so the CE2411 that
-the old pipeline adds for the moved `xs` does not come. A positional construction with a wrong count is
+and the refused construction has no instance, so it is unknown to `borrow` (7.9): `borrow`
+reads `xs` and does not take it, and the CE2405 that the old pipeline adds at a later use of
+`xs` does not come. A positional construction with a wrong count is
 [CE2027](../error-catalog.md#ce2027) at `decl_loc`, and a field that does not fit is
 CE2028, or CE2083 in a named construction, at the field. A named construction with
 `names` is [CE2080](../error-catalog.md#ce2080) (a name that the struct does not
@@ -1259,7 +1260,8 @@ error, CE0155. The error hole of a name with no declaration, of a jump outside a
 a `self` in a static is the error of a pass before `typecheck` (`REPORTED_BEFORE`,
 `visit/results.py`): when that error is reported, the hole has no answer and the walk of the
 body goes on, so the later faults of the body are reported too (a CE2002 after a CE1001);
-the body does not go on to `lift` and `borrow`. The error hole of a named argument is
+the body goes on to `lift` and `borrow` as a body with an error (7.9), and the hole is unknown
+there. The error hole of a named argument is
 [CE6104](../error-catalog.md#ce6104) at the hole, with its `named`, and the hole of a name
 that a namespace does not hold is [CE2008](../error-catalog.md#ce2008) at the call, with
 the closest name of the namespace as a help (`reject_unknown_namespace_call`). When that
@@ -1491,7 +1493,8 @@ because the arm that the author adds decides its path (#886): the statement afte
 dead, and it gives the body no CE0107. So the dead-statement rule gives the predicate the set
 of these matches of the body (`uncovered`), and a match of the set does not end the path. The
 fall-off rule and `borrow` give no set: the fall-off rule takes the match as one that ends the
-path, and a body with an error does not get to `borrow`. The two path rules read no type:
+path, and `borrow`, which walks a body with an error too (7.9), joins the arms that the match
+has. The two path rules read no type:
 `typecheck` runs them on the SHIR body after a walk that ends with no stop, on a template as
 it is written and not on a copy of it, and it reads every block of the body.
 
@@ -1710,9 +1713,9 @@ no answer, and the walk goes on: a `??` in a bare body (CE0131 of `collect`), a 
 method whose declaration `collect` refused, a construction of a name whose second
 declaration `collect` refused (CE1005, CE0006), an error hole of `REPORTED_BEFORE` (7.4), a `match` whose scrutinee has an error
 (7.8), and a name of a constant whose initializer has an error (7.3). A body with the flag
-gets no completeness check (`check_answers`) and does not go on to `lift` and `borrow`. The
-flag is a state of the walk of one body, not a row of `TypeckResults`: no later stage reads
-it.
+gets no completeness check (`check_answers`). It goes on to `lift` and `borrow` as a body with
+an error of `typecheck` (see "A body with an error of `typecheck`" below). The flag is a
+state of the walk of one body, not a row of `TypeckResults`: no later stage reads it.
 
 `OwnershipResults` is the second typed side table, and it obeys the four rules of 7.3:
 
@@ -1874,10 +1877,47 @@ or a method (the type of a parameter, the return type, the channel) is an error 
 body for `typecheck`, so such a body does not go to `lift` either: a parameter with an
 unknown type would reach SLIR as a local with no type. In the same way, `typecheck` checks
 the path faults of a function or a method (CE0140 and CE0107) before it gives the body to
-`lift`, so a body with one of them meets no later stage. A stop of a pass ends the walk of
+`lift`, so a body with one of them meets no later stage. A body whose walk in `typecheck`
+reported an error goes on, as the next paragraph tells. A stop of a pass ends the walk of
 its body, and the next pass does not get the body. The body of a template check is read
 in the overlay of its check, and an error of `borrow` there refuses the template as an
 error of `typecheck` does.
+
+**A body with an error of `typecheck` (ruling R-AR).** `typecheck` gives `lift` a body whose
+walk reported an error, or set the flag `refused_before`, when its header and its path
+faults have no error. It marks the body `typecheck_failed`, and `lift` gives it to `borrow`
+with the mark. `borrow` walks such a body with one more rule: a node with no answer is
+UNKNOWN. An error hole is unknown, and so is a node that misses an answer that the
+completeness check asks for: an expression with no type, a `Loop` with no kind, a `Match`
+with no type of its scrutinee, a `Destructure` with no element type, and the other rows of
+`NEEDS`. A `Call` with a callee is known: an argument of it with no convention is unknown on
+its own (`misses_an_answer` and `KNOWN_WITH`, `shir/typeck_check.py`). An unknown node has
+no arm:
+
+- an unknown expression is a read of each expression that it holds (`walk.parts`), each
+  through its own arm. A function name that it holds reads nothing. The expression itself
+  borrows nothing and moves nothing;
+- an unknown statement is not walked. The `let` form of an unknown `Destructure` declares
+  each binder that has a type, so a later statement can name it;
+- an unknown argument borrows its place as its `peek` or `poke` marker is written, and it
+  takes no convention. A bloom argument (`xs...`) is unknown too: in such a body
+  `typecheck` refused it;
+- at a consuming use, an unknown value gets `ADOPT` (`consume.decide`): it moves no local and
+  it is no error.
+
+A check that the arm of a known node makes on the SHAPE of an unknown part still runs:
+CE2404 for a `poke` of a field of a temporary, and CE2437 for a `let` of a slice of a
+temporary. A write of a constant is a known statement too: its error is CE2096 of
+`typecheck`, and the write gate takes the constant as storage, so it gives no CE2429
+(`reads.chain_call_boundary`). So `borrow` gives the diagnostic of each statement and each expression that has
+its answers, also in the statement of the error of `typecheck`, and never a diagnostic that
+reads an answer that `typecheck` did not give. What `borrow` assumes in an unknown part: no
+local moves there, and no view starts there. So a use of a name after an unknown call that
+names it with `nom` gives no CE2405. A local with no type is PLAIN for `classify()`, so a use
+of it never moves it. A stop of `borrow` ends the walk of such a body too; the pipeline
+never reports it, because the program has an error. The pass writes no row of such a body,
+as in the discovery round of a loop: the `OwnershipResults` of the body stay empty, the pass
+does not check them, and the body never goes to the SLIR lowering.
 
 **`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`). Until the
 closures group, a `Lambda` stops the walk of its body with the stop code (`lift, Lambda`),
@@ -1948,12 +1988,16 @@ In an initializer body, the constant evaluator makes each value, so the provenan
 consuming use there is FRESH: the `Return` adopts its value, and `const string ALIAS =
 GREETING` is no take of `GREETING`. `typecheck` does not type a reference `let` yet, and
 stops there first; the group of the let-borrows (B8) makes the binding reach this arm. A
-body with an error of `typecheck` does not reach the arm either: `let i32 y = poke STEP` is
-CE2002 alone.
+reference `let` with an error of `typecheck` goes to `borrow`, and `borrow` stops at it: `let
+i32 y = poke STEP` is CE2002 alone.
 
 When the walk of a body ends with no stop and with no error, `check_ownership` runs, and
 the body goes to the SLIR lowering (8.2). The SLIR stage takes no initializer body
-(8.2). The pipeline reports the first stop of
+(8.2), and it lowers no body while the program has an error: the program reporter or the
+reporter of the unit holds one (`SlirStage.failed`). So no body with an error of
+`typecheck` or of `borrow` reaches the SLIR lowering, and neither does a body of a program
+whose declaration has an error (CE2416 of an enum payload): the program gets no internal
+error of the verifier after its real error. The pipeline reports the first stop of
 `typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
 hole, then the first stop of the SLIR lowering; with no stop, the backend emits each body from
 its SLIR (8.2).
