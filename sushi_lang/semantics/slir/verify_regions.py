@@ -4,7 +4,8 @@ A view local (8.2) is written by one statement: a `Copy` of a place, or a call w
 is a view. The `_0` of a function with a `peek` return is a view local too, and it is written
 one time on each path to a `return` (the dataflow of `verify_flow.py`). A view local is never
 the place of a `Drop` or a `DropIfSet`, never `Move`d and never the operand of an `Owned`
-argument, at its root or at a projection of it. One `Ref` writes an
+argument, at its root or at a projection of it. At each read of a view local, the regions
+that begin right before its write are open. One `Ref` writes an
 address local (8.2), and it is never dropped as a whole and never moved. The `Ref` comes
 before each use of the address local on every path (a dataflow: a block knows the address
 locals that each path into it wrote), and at each use a region over the root of the place of
@@ -47,8 +48,10 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
     """CE0158, through `fail`, at the first view-local rule or region rule that `function`
     breaks."""
     views = {local.id for local in function.locals if local.view}
+    regions: dict[LocalId, frozenset[BorrowId]] = {}
     if views:
         _view_locals(function, views, fail)
+        regions = _regions_of_views(function, views)
     addresses = address_locals(function)
     refs: dict[LocalId, p.Place] = {}
     if addresses:
@@ -59,7 +62,7 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
     work = [function.entry]
     while work:
         block = blocks[work.pop()]
-        open_ = _through(block, dict(at_top[block.id]), fail, refs)
+        open_ = _through(block, dict(at_top[block.id]), fail, refs, regions)
         if isinstance(block.terminator, tm.Return) and open_:
             fail(REGION, f"the regions {_names(open_)} are open at the return",
                  block.terminator.span)
@@ -74,10 +77,11 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
                      block.terminator.span)
 
 
-def _through(block: SlirBlock, open_: _Open, fail: Fail,
-             refs: dict[LocalId, p.Place]) -> _Open:
+def _through(block: SlirBlock, open_: _Open, fail: Fail, refs: dict[LocalId, p.Place],
+             regions: dict[LocalId, frozenset[BorrowId]]) -> _Open:
     for stmt in block.statements:
         _address_in_region(stmt, open_, refs, fail)
+        _view_in_region(stmt, open_, regions, fail)
         if isinstance(stmt, st.BeginBorrow):
             if stmt.id in open_:
                 fail(REGION, f"the region b{stmt.id.index} begins again while it is open",
@@ -89,7 +93,37 @@ def _through(block: SlirBlock, open_: _Open, fail: Fail,
         else:
             _owners_kept(stmt, open_, fail)
     _address_in_region(block.terminator, open_, refs, fail)
+    _view_in_region(block.terminator, open_, regions, fail)
     return open_
+
+
+def _regions_of_views(function: SlirFunction,
+                      views: set[LocalId]) -> dict[LocalId, frozenset[BorrowId]]:
+    """The regions of each view local: the `BeginBorrow`s right before the statement that
+    writes it (`DropPlacement.begin_region`). A view with no such region reads a value that
+    no local owns, and the rule does not apply to it."""
+    regions: dict[LocalId, frozenset[BorrowId]] = {}
+    for block in function.blocks:
+        run: list[BorrowId] = []
+        for stmt in block.statements:
+            if isinstance(stmt, st.BeginBorrow):
+                run.append(stmt.id)
+                continue
+            target = _written(stmt)
+            if run and target is not None and target.id in views and target.id.index != 0:
+                regions[target.id] = frozenset(run)
+            run = []
+    return regions
+
+
+def _view_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,
+                    regions: dict[LocalId, frozenset[BorrowId]], fail: Fail) -> None:
+    """At each read of a view local, each region over its owners is open."""
+    for local in _uses(node):
+        closed = regions.get(local, frozenset()) - open_.keys()
+        if closed:
+            fail(VIEW_LOCAL, f"_{local.index} is read while its regions {_names(closed)} "
+                             f"are closed", _span(node))
 
 
 def _address_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,
@@ -270,5 +304,5 @@ def _spends(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
                     if isinstance(operand, p.Copy) and convention is Convention.OWNED)
 
 
-def _names(open_: _Open) -> str:
+def _names(open_: _Open | frozenset[BorrowId]) -> str:
     return "{" + ", ".join(f"b{ident.index}" for ident in sorted(open_)) + "}"

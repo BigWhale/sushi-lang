@@ -170,6 +170,53 @@ def test_a_view_local_that_two_statements_write_is_refused():
     _refused(_viewed(_set(2, r.Use(_copy(1)), BAD)), VIEW)
 
 
+# -- the read of a view local in its region (ir.md 8.13) -------------------------------
+
+READ = {"unit$read": DeclaredParams((GUARANTEED,))}
+
+
+def _read_view(view: int = 2, span=SPAN) -> st.Call:
+    """`_4 = read(copy _view)`: a read of the view local."""
+    return st.Call(_local(4), st.Direct("unit$read", "read"),
+                   ((_copy(view), GUARANTEED),), span)
+
+
+def test_a_read_of_a_view_local_in_a_later_block_of_its_region_passes():
+    _passes(_function(
+        [BLANK, STRING, STRING, BLANK, BLANK], {2},
+        _block(0, _goto(1), _live(1), _text(1), _live(2), _begin(0, 1),
+               _set(2, r.Use(_copy(1)))),
+        _block(1, _ret(), _read_view(), _end(0), _dead(2), _drop(1), _dead(1), _blank())),
+        READ)
+
+
+def test_a_read_of_a_view_local_with_no_region_passes():
+    """A view of a value that no local owns (a constant) has no region."""
+    _passes(_function(
+        [BLANK, STRING, STRING, BLANK, BLANK], {2},
+        _block(0, _ret(), _live(1), _text(1), _live(2), _set(2, r.Use(_copy(1))),
+               _read_view(), _dead(2), _drop(1), _dead(1), _blank())),
+        READ)
+
+
+def test_a_read_of_a_view_local_after_the_end_of_its_region_is_refused():
+    _refused(_function(
+        [BLANK, STRING, STRING, BLANK, BLANK], {2},
+        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1),
+               _set(2, r.Use(_copy(1))), _read_view(), _end(0), _read_view(span=BAD),
+               _dead(2), _drop(1), _dead(1), _blank())),
+        VIEW, declared=READ)
+
+
+def test_a_read_of_a_view_local_after_the_end_of_one_of_its_regions_is_refused():
+    _refused(_function(
+        [BLANK, STRING, STRING, STRING, BLANK], {3},
+        _block(0, _ret(), _live(1), _text(1), _live(2), _text(2), _live(3), _begin(0, 1),
+               _begin(1, 2), _set(3, r.Use(_copy(1))), _end(1), _read_view(3, BAD),
+               _end(0), _dead(3), _drop(2), _dead(2), _drop(1), _dead(1), _blank())),
+        VIEW, declared=READ)
+
+
 # -- the uses of an address local (ir.md 8.2, 8.13) -------------------------------------
 
 ADDRESS = "an address local"
