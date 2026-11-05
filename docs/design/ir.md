@@ -1937,7 +1937,7 @@ The rows of `OwnershipResults`:
 moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
 
 **What a consuming use is.** A consuming use is a value in a position that takes it over
-(`ConsumingUse`, `semantics/ownership.py`). SHIR shows the position, and the rule reads the
+(the closed set of `ownership-conventions.md` 3.1). SHIR shows the position, and the rule reads the
 node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership_check.py`):
 
 - the value of an `Assign` (a `let`, a rebind, a write of a field or an element) and the

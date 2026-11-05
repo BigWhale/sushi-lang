@@ -23,16 +23,11 @@ from sushi_lang.semantics.typesys import (
 
 
 class ConsumingUse(Enum):
-    """Every position that takes ownership of a value. A CLOSED set."""
+    """The consuming position that the closure emitter names. The closed set of the
+    positions is docs/design/ownership-conventions.md 3.1; the `borrow` pass finds each one
+    from its SHIR node (`consuming_uses`, `semantics/shir/ownership_check.py`)."""
 
-    STRUCT_FIELD = "struct_field"        # S(field: <source>)
-    ENUM_PAYLOAD = "enum_payload"        # E.Variant(<source>), incl. Result.Ok / Maybe.Some
     CAPTURE = "capture"                  # a lambda's captured environment slot
-    MATCH_SCRUTINEE = "match_scrutinee"  # match nom <source>: -- ruling R11
-    RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25,
-                                         # and the operand of `e as T` (a conversion takes
-                                         # it as `nom self`, an identity cast moves it)
-    TRY = "try"                          # r?? -- the unwrap spends a wrapper the writer owns (#548)
 
 
 class Provenance(Enum):

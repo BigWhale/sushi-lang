@@ -1,7 +1,7 @@
 """The completeness check of `OwnershipResults` (docs/design/ir.md 7.9, 8.10, ruling S6).
 
-A consuming use is a value in a position that takes it over (`ConsumingUse`,
-`semantics/ownership.py`). SHIR shows the position, so the rule reads the node and the
+A consuming use is a value in a position that takes it over (the closed set of
+docs/design/ownership-conventions.md 3.1). SHIR shows the position, so the rule reads the node and the
 answers of `typecheck`:
 
 - the value of an `Assign` (a `let`, a rebind, a write of a field or an element) and the

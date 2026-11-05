@@ -276,19 +276,6 @@ WHITELIST += (
      "of a field"),
 )
 
-# The members of ConsumingUse that no code names since the backend `consume` went: the
-# closed set of consuming positions that docs/design/ir.md 7.9 and
-# ownership-conventions.md 3.1 define, and tests/unit/test_ownership_table.py pins. Each
-# one is kept for the group whose owning type brings the position back with its row.
-_CONSUMING_POSITIONS = {
-    "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "Task 75",
-}
-WHITELIST += tuple(
-    (_SEMANTICS + "ownership.py", member,
-     f"kept for {group}: a consuming position of the closed set ConsumingUse "
-     "(tests/unit/test_ownership_table.py)")
-    for member, group in _CONSUMING_POSITIONS.items())
-
 RATCHET: tuple[tuple[str, str, str], ...] = ()
 
 # -- the scan of `tests/unit/` ---------------------------------------------------------

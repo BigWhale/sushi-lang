@@ -1,7 +1,7 @@
 """The ownership decision at a consuming use, and the provenance it is taken from.
 
-A consuming use is a value in a position that takes it over (`ConsumingUse`,
-`semantics/ownership.py`; the positions of SHIR are `consuming_uses` in
+A consuming use is a value in a position that takes it over (the closed set of
+docs/design/ownership-conventions.md 3.1; the positions of SHIR are `consuming_uses` in
 `semantics/shir/ownership_check.py`). The pass decides its `Ownership` ONE time, with
 `classify()`, and writes the answer as a row of the `OwnershipResults` of the body
 (`decide`, docs/design/ir.md 7.9). A `let` BINDS: it takes the decision too, and a borrow

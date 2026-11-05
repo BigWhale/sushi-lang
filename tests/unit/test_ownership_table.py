@@ -260,8 +260,8 @@ def test_is_get_out_container():
                       mutability=BorrowMode.PEEK))
 
 
-def test_consuming_use_set_is_the_documented_six():
-    """The closed set. A seventh position must be declared here before it can exist."""
-    assert {u.name for u in ConsumingUse} == {
-        "STRUCT_FIELD", "ENUM_PAYLOAD", "CAPTURE", "MATCH_SCRUTINEE", "RECEIVER", "TRY",
-    }
+def test_consuming_use_set_is_the_one_that_code_names():
+    """The members that code names. The closed set of the positions is the table of
+    `semantics/shir/ownership_check.py`, which `test_ownership_results_are_complete.py`
+    pins."""
+    assert {u.name for u in ConsumingUse} == {"CAPTURE"}
