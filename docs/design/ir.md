@@ -118,7 +118,8 @@ string family, which takes its receiver `Inout`), 8.13 (the `Drop` of the old va
 rebind through a `poke` address local; a `Guaranteed` parameter that owns holds the value of
 the caller until a write). Amended on 2026-11-06 by ruling R-AW (the shapes of generics,
 closures and iterators, ruled before they are built): 8.2 and 8.13 (the home, the symbol and
-the order of the body of a generic instance; no template check body reaches SLIR).
+the order of the body of a generic instance; no template check body reaches SLIR); 8.4, 8.7,
+8.9 and 8.13 (the closure value, its environment and its glue, and the capture place).
 
 ## The decisions, in one place
 
@@ -2866,8 +2867,10 @@ disappears, and so does CE0129, the internal error that guarded it.
 `Downcast` exists because a `match` arm and a `??` both read an enum payload, and reading
 one is valid only under a known variant. The worked example in 8.11 is what found it.
 
-ONE lowering makes a `Deref`: the pointee of an `Own(...)` pattern is the place
-`Deref(Field(place, 0))`, the pointer field of the `Own@(T)` read through (8.9). A
+TWO lowerings make a `Deref`. The pointee of an `Own(...)` pattern is the place
+`Deref(Field(place, 0))`, the pointer field of the `Own@(T)` read through (8.9). A capture in
+the body of a lifted lambda is the place `Field(Deref(_1), k)`, the environment read through
+(8.7, 8.9); that lowering is not built yet. A
 by-address parameter (8.3) and an address local (8.2) are read and written as ordinary
 locals, and the emitter knows that their storage is an address.
 
@@ -3203,6 +3206,19 @@ A closure and an iterator have one layout, four words. `AggKind` keeps them apar
 the backend reads the SEMANTIC type and never the layout to know which one it has
 (`iteration.md`, ruling 10).
 
+**A closure value.** The kind of a closure is `AggClosure(ty)`, and `ty` is the function
+type of the value. The first part is the constant `FnRef` of the lifted function (8.5), and
+one part follows for each capture, in slot order (8.9). The emitter allocates ONE heap block
+for the environment, with a checked `malloc`, stores each part after the first into it in
+slot order, and fills the four words `{fn_ptr, env_ptr, drop_ptr, clone_ptr}`. `drop_fn`
+and `clone_fn` are the lifecycle pair of the environment struct type (`backend/lifecycle.py`,
+the seam "Clone/destroy pair per type kind"): one `linkonce_odr` pair for each layout. SLIR
+writes no glue. A closure with no capture has a null `env_ptr` and glue that does nothing.
+The destroy of a closure value is an ordinary `Drop(place)`, which reaches that pair through
+the one destroy seam. The lifted function reads a capture through the place
+`Field(Deref(_1), k)` (8.9). This shape is not built yet: no lowering makes an `AggClosure`,
+and the emitter has no arm for it.
+
 ### 8.8 Terminators
 
 Five, because a call is not one of them (R3):
@@ -3282,7 +3298,7 @@ backstop of the checker, as on the AST backend.
 | an iterator producer or a lazy adapter | an `Aggregate(Iterator, ...)` of the source's three functions and its state; the state is a local when the iterator is lent and stays in the function, and a heap block otherwise (`OwnershipResults`) |
 | `Range` as a value | an owned iterator over the range formula |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
-| `Lambda` | one `SlirFunction` cut from the body, and an `Aggregate(Closure, [FnRef, env...])` built from `LiftResults` (Q8); each captured operand is `Copy` or `Move` by `OwnershipResults` |
+| `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(Deref(_1), k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by `OwnershipResults`. A lambda with no capture has the `FnRef` alone. This is not built yet: `typecheck` stops at a `Lambda` (`typecheck, Lambda`) |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
 | `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range. An owning element in a `let` is a view local (8.2) in a region over the array; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) it is a `Copy` of the place |
 | the concat peephole: a rebind `s := s.concat(x)` of a local whose old value the function holds, where the receiver of `concat` is the local itself | `Call(Builtin(string.concat_in_place), [(copy s @inout), (x @guaranteed)])` into a `~` temporary, and NO `Drop` of the old value: the emitter grows the buffer of `s` in place when `s` owns it, and copies it when `s` does not (`string_append`). The argument is evaluated first, and the call reads `s` after it: when the argument rebinds `s` through a `poke`, the append reads the new value of `s`. The local must hold a value of its own on the straight line: a live local, an `Inout` parameter or a `poke` address local. A local whose state is unknown or moved (a `Guaranteed` parameter before its first rebind) takes the general path (rule 6 of 8.10), and so does a local over which a borrow region is open at the rebind, and a field or an element target (`semantics/slir/lower_rebind.py`) |
@@ -3692,6 +3708,11 @@ Runs after lowering, before the backend. It checks:
   statement of the block writes the local (8.10, rules 6 and 8). Its `Ref` comes before
   each use of it on every path, and at each use a region over the root of the place of its
   `Ref` is open (8.6)
+- a capture place: in the body of a lifted lambda, the place `Field(Deref(_1), k)` of a
+  capture is never moved out of and never written, because a caller can call the closure
+  two times or more. Each part of an `AggClosure` after its `FnRef` is a `Copy` or a `Move`
+  of a local: lowering takes it from the `Ownership` row of the capture (7.9). This rule is
+  not built yet
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
