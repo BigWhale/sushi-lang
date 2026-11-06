@@ -2949,12 +2949,12 @@ disappears, and so does CE0129, the internal error that guarded it.
 `Downcast` exists because a `match` arm and a `??` both read an enum payload, and reading
 one is valid only under a known variant. The worked example in 8.11 is what found it.
 
-TWO lowerings make a `Deref`. The pointee of an `Own(...)` pattern is the place
-`Deref(Field(place, 0))`, the pointer field of the `Own@(T)` read through (8.9). A capture in
-the body of a lifted lambda is the place `Field(Deref(_1), k)`, the environment read through
-(8.7, 8.9); that lowering is not built yet. A
+ONE lowering makes a `Deref`: the pointee of an `Own(...)` pattern is the place
+`Deref(Field(place, 0))`, the pointer field of the `Own@(T)` read through (8.9). A
 by-address parameter (8.3) and an address local (8.2) are read and written as ordinary
-locals, and the emitter knows that their storage is an address.
+locals, and the emitter knows that their storage is an address. So a capture in the body of
+a lifted lambda is the place `Field(_1, k)`: the environment `_1` is an `InGuaranteed`
+parameter (8.7, 8.9), and that lowering is not built yet.
 
 `Index` is a place, and its operand is an `i32`. An element never moves: a `Move` of a
 place that holds an `Index` is refused (8.13), because the array would be left PARTIALLY
@@ -3347,7 +3347,7 @@ the seam "Clone/destroy pair per type kind"): one `linkonce_odr` pair for each l
 writes no glue. A closure with no capture has a null `env_ptr` and glue that does nothing.
 The destroy of a closure value is an ordinary `Drop(place)`, which reaches that pair through
 the one destroy seam. The lifted function reads a capture through the place
-`Field(Deref(_1), k)` (8.9). This shape is not built yet: no lowering makes an `AggClosure`,
+`Field(_1, k)` (8.9). This shape is not built yet: no lowering makes an `AggClosure`,
 and the emitter has no arm for it.
 
 **An iterator value.** The kind of an iterator producer or a lazy adapter is
@@ -3446,7 +3446,7 @@ backstop of the checker, as on the AST backend.
 | an iterator producer or a lazy adapter | ONE `Aggregate(AggIterator(ty, source, heap))` (8.7) into a fresh owning local: `source` is the row of the producer or the adapter, and `heap` is the heap decision of `OwnershipResults` for the `shir_id` of the call. The emitter of the row builds the state and supplies the three functions. This is not built yet |
 | `Range` as a value | an owned iterator: an `AggIterator` of the range row, with its bounds as parts and `heap: true`. This is not built yet: `typecheck` stops at it (`typecheck, Range`) |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
-| `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(Deref(_1), k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by the `Ownership` row of the capture (7.9). A lambda with no capture has the `FnRef` alone. This is not built yet: `typecheck` stops at a `Lambda` (`typecheck, Lambda`) |
+| `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(_1, k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by the `Ownership` row of the capture (7.9). A lambda with no capture has the `FnRef` alone. This is not built yet: `typecheck` stops at a `Lambda` (`typecheck, Lambda`) |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
 | `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range. An owning element in a `let` is a view local (8.2) in a region over the array; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) it is a `Copy` of the place |
 | the concat peephole: a rebind `s := s.concat(x)` of a local whose old value the function holds, where the receiver of `concat` is the local itself | `Call(Builtin(string.concat_in_place), [(copy s @inout), (x @guaranteed)])` into a `~` temporary, and NO `Drop` of the old value: the emitter grows the buffer of `s` in place when `s` owns it, and copies it when `s` does not (`string_append`). The argument is evaluated first, and the call reads `s` after it: when the argument rebinds `s` through a `poke`, the append reads the new value of `s`. The local must hold a value of its own on the straight line: a live local, an `Inout` parameter or a `poke` address local. A local whose state is unknown or moved (a `Guaranteed` parameter before its first rebind) takes the general path (rule 6 of 8.10), and so does a local over which a borrow region is open at the rebind, and a field or an element target (`semantics/slir/lower_rebind.py`) |
@@ -3869,8 +3869,8 @@ Runs after lowering, before the backend. It checks:
   `BeginBorrow` and the write of its view changes nothing. A view local that no
   `BeginBorrow` names reads a value that no local owns, and has no region. A region has one
   view: two `BeginBorrow`s of one region that name two different views, and a `BeginBorrow`
-  whose view is no view local of the function, are CE0158 of this check (rule `a view
-  local`)
+  whose view is no view local of the function, are CE0158 of this check (the rule `a view
+  local`, `VIEW_LOCAL` of `verify_rules.py`, which `verify_regions.py` reports)
 - an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
   are counted, and a `Ref` writes a local, never a part of one. The count on each path is
   not built yet: today the check refuses a second `Ref` of an address local anywhere in the
@@ -3881,7 +3881,7 @@ Runs after lowering, before the backend. It checks:
   statement of the block writes the local (8.10, rules 6 and 8). Its `Ref` comes before
   each use of it on every path, and at each use a region over the root of the place of its
   `Ref` is open (8.6)
-- a capture place: in the body of a lifted lambda, the place `Field(Deref(_1), k)` of a
+- a capture place: in the body of a lifted lambda, the place `Field(_1, k)` of a
   capture is never moved out of and never written, because a caller can call the closure
   two times or more. Each part of an `AggClosure` after its `FnRef` is a `Copy` or a `Move`
   of a local: lowering takes it from the `Ownership` row of the capture (7.9). This rule is
@@ -3898,10 +3898,12 @@ Runs after lowering, before the backend. It checks:
   `string`. A conversion of another kind and a `Move` operand are refused
 - a drop flag: the flag of a `DropIfSet` is a `bool` local, and each local has one flag
   only: every `DropIfSet` of a local names the same flag
-- no template check body: no function comes from a body with the origin `TemplateCheck`
-  (Q1, 4.3). The SLIR stage refuses such a body before the verifier runs, with the internal
-  error CE0000 (`lower_function`, `semantics/slir/lower.py`)
 - every statement and terminator carries a `Span` (G9)
+
+One more rule holds before the verifier runs, and it is a rule of the SLIR stage, not of
+the verifier: no function comes from a body with the origin `TemplateCheck` (Q1, 4.3). The
+stage refuses such a body with the internal error CE0000 (`lower_function`,
+`semantics/slir/lower.py`).
 
 **As built.** The verifier is six modules of `semantics/slir/`. `verify.py` holds the
 entry (`SlirVerifier.verify`, `verify_function`) and the structure check, statement by
