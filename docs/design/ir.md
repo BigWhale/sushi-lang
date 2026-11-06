@@ -130,7 +130,8 @@ function type, and the emitter passes the environment first); 7.3, 7.6, 8.2, 8.3
 is a `Method` callee, and its body lowers as the body of `drop`); 8.2, 8.9 and 8.13 (a
 view local and an address local have one write on each path, so an alternative binds an
 owning payload or a reference); 7.3 and 7.9 (a late request is a row of `typecheck`, and
-the copy fixpoint reads it).
+the copy fixpoint reads it); 8.6 and 8.13 (a `BeginBorrow` names its view, and the
+view-region check reads the view from the statement).
 
 ## The decisions, in one place
 
@@ -3039,7 +3040,7 @@ Assign(Place, Rvalue)
 Call(dest: Place, callee: SlirCallee, args: [(Operand, Convention)])   # R3: a STATEMENT
 Drop(Place)                          # RAII, unconditional
 DropIfSet(Place, flag: LocalId)      # the conditional move, with a REAL bool local
-BeginBorrow(id: BorrowId, Place, mode: BorrowMode)
+BeginBorrow(id: BorrowId, Place, mode: BorrowMode, view: LocalId | None)
 EndBorrow(id: BorrowId)
 StorageLive(LocalId)
 StorageDead(LocalId)
@@ -3073,7 +3074,13 @@ per owner, under one region.
 
 **Where the statements of a region stand.** The region row of `OwnershipResults` (7.9)
 decides them, and lowering derives nothing. At the statement that writes the view, lowering
-writes one `BeginBorrow` for each owner of the set, with the mode `peek`. It writes one
+writes one `BeginBorrow` for each owner of the set, with the mode `peek`. Each `BeginBorrow`
+names the view local that its region lends to (`view`), and lowering writes it where it
+opens the region. A region with no view local, for example the region of a `peek` or `poke`
+argument, has no view (`None`). The printer writes the view as a fourth part,
+`BeginBorrow(b3, _2, peek, for _7)`; a region with no view keeps three parts,
+`BeginBorrow(b3, _2, peek)`. This field is not built yet: `BeginBorrow` has three fields, and
+the verifier finds the view of a region by its position (8.13). Lowering writes one
 `EndBorrow` for each of them after the statement of the last use of the view on each path,
 and at each exit that the region crosses: a `return`, a `break` or a `continue` out of the
 region, and the error path of a `Try`. When a later part of the statement of the last use
@@ -3852,14 +3859,21 @@ Runs after lowering, before the backend. It checks:
   two times: the check counts the writes on each path with the flow state that it has, and
   two paths that each wrote it one time can meet (the binder of an alternative, 8.9). The
   `_0` of a `peek` return is written one time on each path to a `return` (the rule of the
-  written return slot). A view local with one write on each path has the regions that stand
-  before each of its writes. The count on each path is not built yet: today the check
+  written return slot). A view local with one write on each path has the regions that name
+  it on each path. The count on each path is not built yet: today the check
   refuses a second write of a view local anywhere in the function. A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
   operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it.
-  The regions of a view local are the `BeginBorrow`s that stand right before the statement
-  that writes it, in the same block: lowering emits them there. A view local with no such
-  `BeginBorrow` reads a value that no local owns, and has no region
+  The regions of a view local are the `BeginBorrow`s that name it (`view`, 8.6): the check
+  reads the view from the statement, never from its position, so a statement between a
+  `BeginBorrow` and the write of its view changes nothing. A view local that no
+  `BeginBorrow` names reads a value that no local owns, and has no region. A region has one
+  view: two `BeginBorrow`s of one region that name two different views, and a `BeginBorrow`
+  whose view is no view local of the function, are CE0158 of this check (rule `a view
+  local`). This rule is not built yet: today the regions of a view local are the
+  `BeginBorrow`s that stand right before the statement that writes it, in the same block,
+  so the check does not read a view whose `BeginBorrow` has another statement before the
+  write
 - an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
   are counted, and a `Ref` writes a local, never a part of one. The count on each path is
   not built yet: today the check refuses a second `Ref` of an address local anywhere in the
