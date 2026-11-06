@@ -155,11 +155,7 @@ def _local(place: p.Place) -> p.LocalId:
 def _binder(low: Lowering, local: ShirLocalId, read: p.Copy | p.Move, span: Span) -> None:
     """A new local of the block, written with its element. An owning one takes the
     element with the `Move` of its part, and its flag follows its write."""
-    ident, ty = low.bind(local, span)
-    owning = low.owns(ty)
-    if owning:
-        low.give_flag(ident)
-    low.placement.declare(ident, owning)
+    ident = low.declare_binder(local, span)
     low.emit([st.StorageLive(ident, span), st.Assign(p.Local(ident), r.Use(read), span)])
     low.emit(low.placement.flag_declared(ident, span))
 

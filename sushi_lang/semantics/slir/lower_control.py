@@ -127,11 +127,7 @@ def _takes(value: r.Rvalue) -> bool:
 def _bind_taken(low: Lowering, local: ShirLocalId, value: r.Use,
                 span: Span) -> list[st.SlirStatement]:
     """A `nom` binder: an owning local of the arm, with its flag after its write."""
-    ident, ty = low.bind(local, span)
-    owning = low.owns(ty)
-    if owning:
-        low.give_flag(ident)
-    low.placement.declare(ident, owning)
+    ident = low.declare_binder(local, span)
     return [st.StorageLive(ident, span), st.Assign(p.Local(ident), value, span),
             *low.placement.flag_declared(ident, span)]
 

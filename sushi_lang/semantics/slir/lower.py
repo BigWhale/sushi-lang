@@ -265,6 +265,16 @@ class Lowering:
         if self.shir_of[ident] in self.learned.flags:
             self.placement.flag(ident, self.new_local(BuiltinType.BOOL, None, None))
 
+    def declare_binder(self, local: ShirLocalId, span: Span) -> LocalId:
+        """A new local of the block for `local`, with its drop flag when a walk found that it
+        needs one and its drop when it owns. The caller writes it."""
+        ident, ty = self.bind(local, span)
+        owning = self.owns(ty)
+        if owning:
+            self.give_flag(ident)
+        self.placement.declare(ident, owning)
+        return ident
+
     def local_of(self, local: ShirLocalId, span: Span) -> LocalId:
         ident = self.ids.get(local)
         if ident is None:
@@ -367,9 +377,7 @@ class Lowering:
             views.let_view(self, stmt, target)
         elif stmt.is_init:
             value = self.value(stmt.value)
-            ident, ty = self.bind(target.local, stmt.loc)
-            self.give_flag(ident)
-            self.placement.declare(ident, self.owns(ty))
+            ident = self.declare_binder(target.local, stmt.loc)
             self.emit([st.StorageLive(ident, stmt.loc)])
             self.write(p.Local(ident), value, stmt.loc)
             self.declared = ident
