@@ -127,7 +127,9 @@ is the `Ownership` row of the capture alone, and `LiftResults` holds the capture
 slot order); 7.6, 8.6 and 8.13 (the `Indirect` call takes its conventions from the
 function type, and the emitter passes the environment first); 7.3, 7.6, 8.2, 8.3 and 8.6
 (a contract call is an intrinsic over the one contract seam; a perk implementation method
-is a `Method` callee, and its body lowers as the body of `drop`).
+is a `Method` callee, and its body lowers as the body of `drop`); 8.2, 8.9 and 8.13 (a
+view local and an address local have one write on each path, so an alternative binds an
+owning payload or a reference).
 
 ## The decisions, in one place
 
@@ -2503,8 +2505,10 @@ SlirBlock
 `locals[0]` is always the return slot, written `_0`.
 
 **A view local.** A local with `view` holds a borrowed VIEW: a shallow copy of a value that
-an owner keeps. Lowering writes it with a `Copy` of the place that it views, and nothing
-writes it again. Four sources make a view local: a `REJECT` row at a position of a borrowed
+an owner keeps. Lowering writes it with a `Copy` of the place that it views, ONE time on
+each path, and nothing writes it again on that path: a binder of an alternative of a
+pattern is written one time on each path of its arm (8.9). Four sources make a view local:
+a `REJECT` row at a position of a borrowed
 view (7.9), a bare binder over an owning payload (8.9), the answer of a call that is a view
 (7.9), and the answer of a call of a function with a `peek` return (8.9). A binder of the
 `let` form of a `Destructure` that borrows (7.9, 8.9) is a view local too. The local that a
@@ -2524,15 +2528,17 @@ other position.
 
 **The `_0` of a `peek` return.** A function or a method with a `peek` return whose answer
 owns gives its return slot `view`: `_0` holds a view of a source (8.9), and the callee
-never drops it. It is the one view local that more than one statement writes: it is
-written one time on each path to a `return`, by a `Copy` of a place, by the aggregate of
+never drops it. More than one statement writes it, one time on each path to a `return`,
+by a `Copy` of a place, by the aggregate of
 the `Ok` or the `Err` of a `peek T | E`, or by a call whose answer is a view. A `peek`
 return of a plain type gives an ordinary `_0`: the answer is a plain copy.
 
 **An address local.** A reference binding points INTO a place: `let poke T x = <place>`,
 `let peek T x = <place>`, a `peek` or `poke` binder of a pattern, and `Own(poke x)`. Its
-local is an ADDRESS local. Its one write is `Ref(place, mode)` (8.7), before its first use,
-and every later use reads and writes it as an ordinary local (`copy _5`, `_5 = ...`): the
+local is an ADDRESS local. Its one write on each path is `Ref(place, mode)` (8.7), before
+its first use (a `peek` or `poke` binder of an alternative is written one time on each path
+of its arm, 8.9), and every later use reads and writes it as an ordinary local (`copy _5`,
+`_5 = ...`): the
 emitter gives it the address of the place as its storage. Its type is the type of the
 place, as the type of the local of an `InGuaranteed` or an `Inout` parameter is. This is
 the rule of a `peek` or `poke` parameter (8.3): one rule for a parameter and a reference
@@ -2642,7 +2648,8 @@ the `drop` of a `Drop` implementation; `conversion` also for a
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
 argument, `Match owning alternatives` for an arm with two or more paths that write a
-binder of an owning payload (a view local has one write, 8.13), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
+binder of an owning payload or a `peek` or `poke` binder (the shape of 8.9, not built
+yet), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
 progress of each function. The pipeline reports one stop after the analysis: a stop of
@@ -3480,10 +3487,17 @@ and its `nom` binders last, so no binder reads a part of the root after the take
 `nom` binder of a plain payload is a `Copy`. An arm that takes nothing out of a temporary
 that another arm takes drops that temporary at its end, after the exit of its scope
 (`drop_on_path`), so the arms that reach the join leave it moved; an arm that leaves by a
-`return`, a `break` or a `continue` drops it by its state. A view local has ONE write, and
-an owning local of a binder has one too, so an arm whose two or more paths write a binder of
-an owning payload stops (`Match owning alternatives`). With one path, the block of the body
-writes the binders first. With two or more paths that write a binder, each path ends in a
+`return`, a `break` or a `continue` drops it by its state. A view local, an address local
+and the owning local of a `nom` binder have ONE write on each path (8.13). So in an arm whose
+two or more paths write a binder of an owning payload, or a `peek` or `poke` binder, each
+path writes the binder one time, in the block of that path, and the paths join at the arm
+body, which is lowered one time. The region row of the binder (7.9) has the same root, the
+scrutinee, on each path: each path writes the `BeginBorrow` of each owner of the region, with
+ONE id for the region on every path, before its write, so the paths that meet at the arm
+body bring the same open regions (8.6). A `nom` binder in an alternative takes the variant
+whole on its path, as a plain arm does. This is not built yet: such an arm stops (`Match
+owning alternatives`). With one path, the block of the body writes the binders first.
+With two or more paths that write a binder, each path ends in a
 block of its own that writes the binders of that path and goes to the body. Each arm body is
 a scope of its own, and each arm starts from the state of the locals after the scrutinee.
 The arms that reach their end meet at the join, as the blocks of an `If` do. The first test
@@ -3812,16 +3826,23 @@ Runs after lowering, before the backend. It checks:
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
-- a view local (8.2): a `Copy` writes it, and nothing writes it again. The `_0` of a
-  `peek` return is the exception: it is written one time on each path to a `return` (the
-  rule of the written return slot). A view local of an
+- a view local (8.2): a `Copy` writes it, ONE time on each path, and no path writes it
+  two times: the check counts the writes on each path with the flow state that it has, and
+  two paths that each wrote it one time can meet (the binder of an alternative, 8.9). The
+  `_0` of a `peek` return is written one time on each path to a `return` (the rule of the
+  written return slot). A view local with one write on each path has the regions that stand
+  before each of its writes. The count on each path is not built yet: today the check
+  refuses a second write of a view local anywhere in the function. A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
   operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it.
   The regions of a view local are the `BeginBorrow`s that stand right before the statement
   that writes it, in the same block: lowering emits them there. A view local with no such
   `BeginBorrow` reads a value that no local owns, and has no region
-- an address local (8.2): ONE `Ref` writes it, and a `Ref` writes a local, never a part of
-  one. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its root or
+- an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
+  are counted, and a `Ref` writes a local, never a part of one. The count on each path is
+  not built yet: today the check refuses a second `Ref` of an address local anywhere in the
+  function. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its
+  root or
   at a part; the write of an owning part drops the old part through the address (8.10,
   rule 6). It is the place of a `Drop` as a whole only at a rebind through it: the next
   statement of the block writes the local (8.10, rules 6 and 8). Its `Ref` comes before
