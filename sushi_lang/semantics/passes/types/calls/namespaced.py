@@ -15,7 +15,6 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import Type
-from ..externals import validate_external_call_args
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Call, DotCall, MemberAccess
@@ -30,13 +29,6 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         for arg in node.args:
             validator.validate_expression(arg)
         _reject_unknown_member(validator, node.receiver, node.method, node.loc)
-        return
-
-    producer = binding.provider.namespace_kind
-
-    if producer == "extern":
-        validator._resolve_external_call(node)
-        validate_external_call_args(validator, node)
         return
 
     if binding.kind == "generic function":

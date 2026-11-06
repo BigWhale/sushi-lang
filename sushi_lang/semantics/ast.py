@@ -963,12 +963,9 @@ class Call(Node):
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
-    # An extern variadic call's promoted argument types (CE5005 checks them).
-    variadic_arg_types: Optional[List] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_self_mode: Optional[str] = None  # "peek"/"poke"; see MethodCall
-    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
     inferred_return_type: Optional["Type"] = None  # Return type inferred by the typecheck pass
     namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
@@ -1005,8 +1002,6 @@ class MethodCall(Node):
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
-    variadic_arg_types: Optional[List] = None  # an extern variadic call's promoted arg types
     # The SOLVED method-level type arguments of a method-generic extension call
     # (`name@(U)`); the backend composes them into the callee symbol.
     callee_method_type_args: Optional[Tuple] = None
@@ -1040,7 +1035,6 @@ class DotCall(Node):
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
-    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
     # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
     # kind of producer answered, the unit or module it named, and the declared name.
     # The back end resolves through the origin, so a shadowed name reaches the right
@@ -1054,8 +1048,6 @@ class DotCall(Node):
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
-    # An extern variadic call's promoted argument types (CE5005 checks them).
-    variadic_arg_types: Optional[List] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
     # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
     # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a

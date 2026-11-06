@@ -114,7 +114,7 @@ def _recv() -> e.LocalRef:
     (lambda d: c.BuiltinStatic(BuiltinType.F64, c.BuiltinMethod("float_bits", "from_bits", nom_self=False)),
      'BuiltinStatic(f64, "from_bits")'),
     (lambda d: c.Conversion(d.refer("to_app")), "Conversion(@to_app)"),
-    (lambda d: c.Extern(d.refer("abs")), "Extern(@abs)"),
+    (lambda d: c.Extern(d.refer("libc.abs"), "abs"), 'Extern(@libc.abs, "abs")'),
     (lambda d: c.Stdlib(d.refer("m.sqrt"), "math"), "Stdlib(<math>, @m.sqrt)"),
     (lambda d: c.Intrinsic("print"), 'Intrinsic("print")'),
     (lambda d: c.Indirect(_recv()), "Indirect(LocalRef(_0))"),

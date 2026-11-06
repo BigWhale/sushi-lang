@@ -143,7 +143,7 @@ class SlirStage:
             self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
             return
         self.verifier.verify(function, funcs=tables.funcs, extensions=tables.extensions,
-                             drops=drops, filename=filename)
+                             externals=tables.externals, drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
 
 

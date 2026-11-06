@@ -11,7 +11,8 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   so the call answers it also when an argument does not fit, or when the function is
   private to another unit: a later fault of the value, such as an unhandled `Result`, is a
   fault of its own. A name that is a function of a registry stdlib module, bare or behind
-  an alias, is a call of that function (`Stdlib`, `calls/user_defined.py`).
+  an alias, is a call of that function (`Stdlib`, `calls/user_defined.py`). A C function
+  behind the alias of its `unsafe external` block is an `Extern` (`visit/extern_calls.py`).
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
 - `Dotted` is a method call. The receiver is typed first, and the ladder of the call
@@ -37,8 +38,8 @@ the channel of the method, or its bare return value.
 A plain type is a primitive, or a struct or an enum that is no instance of a generic type
 and whose name the unit did not lose. Every other target, and a call that another group
 types (a generic function, a function of a stdlib module other than `<math>` and
-`<time>`, a C function, a variadic function, a method
-or a static of a type that is not plain, a method or a static with a method-level type
+`<time>`, a C function that `visit/extern_calls.py` does not type, a variadic function, a
+method or a static of a type that is not plain, a method or a static with a method-level type
 parameter, a perk method), stops the walk of its body. A call of a function or a method
 with a `peek` return has the source row of the call (`record_call_sources`).
 
@@ -66,6 +67,7 @@ from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, resu
 from sushi_lang.semantics.method_effects import (
     ARRAY_FAMILY, CLONE_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY,
     PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+from sushi_lang.semantics.passes.collect.externals import ExternalSig
 from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
@@ -93,6 +95,7 @@ from sushi_lang.semantics.passes.types.visibility import (
     type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.container_statics import (
     check_container_static, container_static_base)
+from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_call
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.passes.types.visit.hashmap_methods import check_hashmap_method
 from sushi_lang.semantics.passes.types.visit.list_methods import check_list_method
@@ -147,6 +150,8 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
         return check_stdlib_call(validator, node, ref, sig)
     if sig is None:
         return None
+    if isinstance(sig, ExternalSig):
+        return check_extern_call(validator, node, ref, sig)
     if reject_private_call(validator, "function", sig, ref.loc):
         return call_yield(validator, sig.ret_type, sig.err_type)
     if any(p.is_variadic or p.is_pack or p.ty is None for p in sig.params):
@@ -520,12 +525,12 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
 
 
 def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
-                           name: str) -> FuncSig | StdlibFunction:
+                           name: str) -> FuncSig | StdlibFunction | ExternalSig:
     """The function that `alias.name` names: what the namespace holds under the name, a
-    function of a unit or of a registry stdlib module."""
+    function of a unit or of a registry stdlib module, or a C function of an `unsafe
+    external` block."""
     binding = validator.namespaces.lookup(alias, name)
-    if (binding is None or binding.kind != "function"
-            or binding.provider.namespace_kind == "extern"):
+    if binding is None or binding.kind not in ("function", "extern"):
         visit.stop_at(validator, node)
     return binding.record
 

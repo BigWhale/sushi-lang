@@ -64,6 +64,15 @@ class ExternalTable:
         """Look up a C global variable by namespace and Sushi-visible name."""
         return self.variables.get(ns, {}).get(name)
 
+    def by_link_name(self, link_name: str, name: str) -> Optional[ExternalSig]:
+        """The C function whose link name and name these are: the `Direct` callee of a
+        call of it in SLIR (docs/design/ir.md 8.6)."""
+        for decls in self.by_namespace.values():
+            sig = decls.get(name)
+            if sig is not None and sig.link_name == link_name:
+                return sig
+        return None
+
     def add(self, sig: ExternalSig) -> None:
         self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
 

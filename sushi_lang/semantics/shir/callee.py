@@ -69,7 +69,10 @@ class Conversion:
 
 @dataclass(frozen=True, slots=True)
 class Extern:
+    """A C function of an `unsafe external` block (`libc.snprintf`): its written name,
+    and its link name."""
     decl: DeclId
+    symbol: str
 
 
 @dataclass(frozen=True, slots=True)

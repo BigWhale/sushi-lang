@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.param_modes import Convention, declared_modes, receiver_mode
+from sushi_lang.semantics.param_modes import (
+    Convention, declared_modes, mode_of_type, receiver_mode)
 from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_MODES
 from sushi_lang.semantics.method_effects import (
@@ -37,6 +38,7 @@ from sushi_lang.semantics.typesys import BuiltinType, owns_resource
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.collect.externals import ExternalTable
     from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
     from sushi_lang.semantics.slir.verify import Check
 
@@ -54,13 +56,16 @@ DeclaredLookup: TypeAlias = Callable[[st.Direct], Optional[DeclaredParams]]
 
 
 def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
-                    callee: st.Direct) -> Optional[DeclaredParams]:
+                    callee: st.Direct, *,
+                    externals: Optional[ExternalTable] = None) -> Optional[DeclaredParams]:
     """The declared parameters of the function that `callee` names. A free function is the
     function of its name in the unit whose symbol is the symbol of the callee. A method or
     a static has the written name `<type>.<method>`: it is the extension of that name whose
     symbol is the symbol of the callee, and an instance method has its receiver first. A
     function of a registry stdlib module is the row of its module, and each of its
-    parameters borrows."""
+    parameters borrows. A C function is the declaration of `externals` whose link name is
+    the symbol of the callee: each parameter has the convention of its declared mode, and a
+    variadic one has `var_arg`."""
     if callee.module is not None:
         arity = stdlib_arity(callee.module, callee.name)
         return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
@@ -78,6 +83,10 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
         sig = own.get(callee.name)
         if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
             return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
+    extern = None if externals is None else externals.by_link_name(callee.symbol, callee.name)
+    if extern is not None:
+        return DeclaredParams(tuple(mode_of_type(ty).convention for ty in extern.param_types),
+                              var_arg=extern.is_variadic)
     return None
 
 

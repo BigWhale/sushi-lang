@@ -66,6 +66,11 @@ class FunctionState:
             self.fault(f"_{local.index} has no storage")
         return address
 
+    def call(self, callee: ir.Value, args: list[ir.Value]) -> ir.Value:
+        """The one `call` instruction of the emitter, for a function of the build and for a
+        C function alike."""
+        return self.builder.call(callee, args)
+
     def block(self, block: BlockId) -> ir.Block:
         found = self.blocks.get(block)
         if found is None:

@@ -17,6 +17,7 @@ from sushi_lang.internals.errors.registry import REGISTRY, Category, ErrorMessag
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.generics.name_mangling import method_symbol
+from sushi_lang.semantics.passes.collect.externals import ExternalSig, ExternalTable
 from sushi_lang.semantics.passes.collect.functions import (
     ExtensionMethod, ExtensionTable, FuncSig, FunctionTable, Param,
 )
@@ -33,7 +34,7 @@ from sushi_lang.semantics.slir.verify import (
 )
 from sushi_lang.semantics.typesys import (
     ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
-    PointerType, StructType, Type, UnknownType,
+    PointerType, ReferenceType, StructType, Type, UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -839,6 +840,49 @@ def test_a_stdlib_call_with_an_owned_argument_is_refused():
     with pytest.raises(InternalCompilerError) as caught:
         verify_function(function, drops=frozenset(), declared=lambda c: declared_params(
             FunctionTable(), ExtensionTable(), c))
+    assert caught.value.code == "CE0158"
+    assert caught.value.params["rule"] == CONVENTIONS
+    assert caught.value.span == BAD
+
+
+def _snprintf() -> ExternalTable:
+    """`libc.snprintf(poke u8[] buf, i64 n, string fmt, ...) i32 = "snprintf"`."""
+    externals = ExternalTable()
+    externals.add(ExternalSig(
+        "snprintf", "snprintf", (ReferenceType(DynamicArrayType(U8), BorrowMode.POKE), I64,
+                                 STRING), I32, "libc", is_variadic=True))
+    return externals
+
+
+def test_the_declared_parameters_of_a_c_function_are_its_modes_with_var_arg():
+    """A `Direct` callee with no module is the C function of the external table whose
+    link name is its symbol and whose name is its name (ir.md 8.13)."""
+    funcs, extensions, externals = FunctionTable(), ExtensionTable(), _snprintf()
+    assert declared_params(funcs, extensions, st.Direct("snprintf", "snprintf"),
+                           externals=externals) \
+        == DeclaredParams((Convention.INOUT, GUARANTEED, GUARANTEED), var_arg=True)
+    assert declared_params(funcs, extensions, st.Direct("snprintf", "printf"),
+                           externals=externals) is None
+    assert declared_params(funcs, extensions, st.Direct("sprintf", "snprintf"),
+                           externals=externals) is None
+    assert declared_params(funcs, extensions, st.Direct("snprintf", "snprintf")) is None
+
+
+def test_a_c_function_call_with_a_wrong_convention_in_its_declared_prefix_is_refused():
+    """The tail of a `var_arg` extern declares no parameter, but its declared prefix
+    keeps the rule: a `poke u8[]` buffer given `@guaranteed` is refused."""
+    buffer = DynamicArrayType(U8)
+    call = st.Call(_local(2), st.Direct("snprintf", "snprintf"),
+                   ((_copy(1), GUARANTEED), (p.Const(k.Int(8, I64)), GUARANTEED),
+                    (p.Const(k.Str(b"%d")), GUARANTEED), (p.Const(k.Int(5, I32)), GUARANTEED)),
+                   BAD)
+    function = _function([BLANK, buffer, I32],
+                         _block(0, _ret(), _live(2), call, _dead(2),
+                                _set(0, r.Use(p.Const(k.Blank())))),
+                         params=((1, Convention.INOUT),))
+    with pytest.raises(InternalCompilerError) as caught:
+        verify_function(function, drops=frozenset(), declared=lambda c: declared_params(
+            FunctionTable(), ExtensionTable(), c, externals=_snprintf()))
     assert caught.value.code == "CE0158"
     assert caught.value.params["rule"] == CONVENTIONS
     assert caught.value.span == BAD

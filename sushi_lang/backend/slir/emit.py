@@ -19,6 +19,7 @@ from llvmlite import ir
 from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.slir.externs import emit_extern
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
 from sushi_lang.backend.slir.state import FunctionState
@@ -180,12 +181,18 @@ def _call(state: FunctionState, statement: st.Call) -> None:
 
 def _direct(state: FunctionState, statement: st.Call) -> None:
     """A value for an `Owned` or a `Guaranteed` argument, the address of the place for an
-    `InGuaranteed` or an `Inout` one. The argument types must agree with the callee."""
+    `InGuaranteed` or an `Inout` one. The argument types must agree with the callee. A C
+    function, which the external table holds under its link name and its name, crosses
+    the C boundary (`externs.py`)."""
     direct = statement.callee
     if not isinstance(direct, st.Direct):
         state.fault(f"the row of a direct call got a {type(direct).__name__} callee")
     if direct.module is not None:
         _stdlib(state, statement, direct)
+        return
+    extern = state.codegen.external_table.by_link_name(direct.symbol, direct.name)
+    if extern is not None:
+        emit_extern(state, statement, direct, extern)
         return
     llvm_fn = state.codegen.module.globals.get(direct.symbol)
     if not isinstance(llvm_fn, ir.Function):
@@ -195,7 +202,7 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
     if [arg.type for arg in args] != [param.type for param in llvm_fn.args]:
         state.fault(f"the call of '{direct.symbol}' does not agree with its "
                     f"declaration {llvm_fn.function_type}")
-    value = state.builder.call(llvm_fn, args)
+    value = state.call(llvm_fn, args)
     state.builder.store(value, place_address(state, statement.dest))
 
 

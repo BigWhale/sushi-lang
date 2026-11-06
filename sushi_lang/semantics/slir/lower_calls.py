@@ -20,7 +20,7 @@ from sushi_lang.semantics.method_effects import answers_view, receiver_conventio
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
-    Builtin, BuiltinStatic, Callee, Free, Intrinsic, Method, Static, Stdlib)
+    Builtin, BuiltinStatic, Callee, Extern, Free, Intrinsic, Method, Static, Stdlib)
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.slir import constants as k
@@ -78,7 +78,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     """A free function by its symbol and its source name; an extension method and a
     static by their symbol and their written name `<type>.<method>`; a function of a
     registry stdlib module by the symbol of its generated function, its name and its
-    module (`stdlib_symbol`, at the type of its arguments); an intrinsic with
+    module (`stdlib_symbol`, at the type of its arguments); a C function by its link name
+    and its name, with no module; an intrinsic with
     the display type of each argument (L7); a static of a primitive type name or of a
     built-in container as the intrinsic of its written name (`f64.from_bits`, `List.new`),
     with the type of each argument; a built-in method by
@@ -102,6 +103,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         name = low.decls.name_of(callee.decl).rpartition(".")[2]
         types = [low.type_of(arg.value) for arg in node.args]
         return st.Direct(stdlib_symbol(callee.module, name, types), name, callee.module)
+    if isinstance(callee, Extern):
+        return st.Direct(callee.symbol, low.decls.name_of(callee.decl).rpartition(".")[2])
     if isinstance(callee, Intrinsic):
         return st.Builtin(callee, tuple(display_type(low, node.shir_id, index, node.loc)
                                         for index in range(len(node.args))))

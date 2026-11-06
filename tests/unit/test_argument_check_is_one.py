@@ -54,7 +54,7 @@ _CALLERS = (
     "calls/user_defined.py",
     "calls/enums.py",
     "calls/structs.py",
-    "externals.py",
+    "visit/extern_calls.py",
 )
 
 

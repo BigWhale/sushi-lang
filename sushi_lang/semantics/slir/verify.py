@@ -78,6 +78,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.collect.externals import ExternalTable
     from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
 
 
@@ -90,15 +91,16 @@ TRAP_OPERAND_TYPES: dict[str, Type] = {"%d": BuiltinType.I32, "%.*s": BuiltinTyp
 @dataclass(slots=True)
 class SlirVerifier:
     """The pipeline entry of the verifier: the SLIR stage of a unit gives it each function
-    that the lowering finished. The declared parameters come from the function table and
-    the extension table, at each call, so a generic instance that a later body declares is
-    found too."""
+    that the lowering finished. The declared parameters come from the function table, the
+    extension table and the external table, at each call, so a generic instance that a
+    later body declares is found too."""
 
     def verify(self, function: SlirFunction, *, funcs: FunctionTable,
-               extensions: ExtensionTable, drops: frozenset[str],
-               filename: Optional[str]) -> None:
+               extensions: ExtensionTable, externals: ExternalTable,
+               drops: frozenset[str], filename: Optional[str]) -> None:
         verify_function(function, drops=drops,
-                        declared=partial(declared_params, funcs, extensions),
+                        declared=partial(declared_params, funcs, extensions,
+                                         externals=externals),
                         filename=filename)
 
 

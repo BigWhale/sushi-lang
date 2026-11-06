@@ -217,8 +217,6 @@ WHITELIST += (
      _family("C3", "a range as an Iterator@(i32) value")),
     (_BACKEND + "runtime/iterators.py", "emit_new_iterator",
      _family("C3", "Iterator.new over a next() type")),
-    (_BACKEND + "runtime/strings.py", "emit_to_cstr",
-     _family("D4", "the i8* string argument")),
     (_BACKEND + "runtime/strings.py", "emit_cstr_to_owned_fat_pointer",
      _family("D5", "the string that an extern returns")),
     (_BACKEND + "types/display.py", "emit_value_to_str",
@@ -250,8 +248,6 @@ _FACTS = (
     ("walks_in_place", "passes/borrow/iterators.py", "C3",
      "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py reads its "
      "writer"),
-    ("variadic_arg_types", _TYPES_PASS + "externals.py", "D5",
-     "the promoted types of a C vararg call"),
     ("callee_method_type_args", _TYPES_PASS + "calls/methods.py", "C1",
      "the method type arguments of an extension call"),
     ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "C1 and C3",

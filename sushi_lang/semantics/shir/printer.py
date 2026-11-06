@@ -379,7 +379,7 @@ PRINTERS: dict[type, Render] = {
     c.Builtin: lambda pr, n: _node("Builtin", pr.show(n.recv), pr.show(n.method)),
     c.BuiltinStatic: lambda pr, n: _node("BuiltinStatic", _type(n.ty), pr.show(n.method)),
     c.Conversion: lambda pr, n: _node("Conversion", pr.decl(n.decl)),
-    c.Extern: lambda pr, n: _node("Extern", pr.decl(n.decl)),
+    c.Extern: lambda pr, n: _node("Extern", pr.decl(n.decl), quoted(n.symbol)),
     c.Stdlib: lambda pr, n: _node("Stdlib", f"<{n.module}>", pr.decl(n.decl)),
     c.Intrinsic: lambda _pr, n: _node("Intrinsic", quoted(n.name)),
     c.Indirect: lambda pr, n: _node("Indirect", pr.show(n.value)),

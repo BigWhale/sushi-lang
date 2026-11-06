@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.conversions import Conversion
-    from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
     from sushi_lang.semantics.passes.types.constants import InitializerFacts
@@ -411,14 +410,6 @@ class TypeValidator:
         """What `<namespace>.<name>` denotes. The ONE reader, for every kind."""
         ns = self.namespace_of(receiver)
         return None if ns is None else self.namespaces.lookup(ns, name)
-
-    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
-        """Resolve a DotCall to a foreign function signature, if applicable."""
-        binding = self.resolve_namespaced(node.receiver, node.method)
-        if binding is None or binding.kind != "extern":
-            return None
-        node.external_ref = (binding.provider.origin, node.method)
-        return binding.record
 
     def _validate_function(self, func: FuncDef) -> None:
         """The pass's surface for the `lift` pass (#756).

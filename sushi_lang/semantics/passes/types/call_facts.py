@@ -44,7 +44,7 @@ class TypecheckCallFacts:
 
     def namespace_kind(self, alias: str, name: str) -> Optional[str]:
         binding = self.validator.namespaces.lookup(alias, name)
-        if binding is None or binding.kind != "function":
+        if binding is None or binding.kind not in ("function", "extern"):
             return None
         return binding.provider.namespace_kind
 

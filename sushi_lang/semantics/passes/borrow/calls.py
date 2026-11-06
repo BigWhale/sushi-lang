@@ -23,7 +23,7 @@ from sushi_lang.semantics.param_modes import (
 )
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import (
-    Builtin, BuiltinStatic, Free, Intrinsic, Method, Static, Stdlib)
+    Builtin, BuiltinStatic, Extern, Free, Intrinsic, Method, Static, Stdlib)
 
 from . import arms
 from .borrows import (
@@ -43,10 +43,11 @@ if TYPE_CHECKING:
 
 
 def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
-    """A call of a free function, of a function of a registry stdlib module, of a static
-    of a primitive type name or of `print`/`println`, with the convention of each argument
-    from the `TypeckResults` row of the call (docs/design/ir.md 8.3). A stdlib function
-    borrows each argument, so the call reads them; `string.from_bytes` takes its array.
+    """A call of a free function, of a function of a registry stdlib module, of a C
+    function, of a static of a primitive type name or of `print`/`println`, with the
+    convention of each argument from the `TypeckResults` row of the call (docs/design/ir.md
+    8.3). A stdlib function borrows each argument, so the call reads them; a C function
+    reads each argument, and writes a `poke` one; `string.from_bytes` takes its array.
 
     Each argument is read first: a `peek` or a `poke` argument borrows its place there, as
     the marker is written, so a borrow and a consuming use of one value in one call
@@ -71,7 +72,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     writes_receiver = False
     if isinstance(callee, Builtin):
         writes_receiver = _check_builtin_receiver(checker, node, callee)
-    elif not isinstance(callee, (Free, Intrinsic, Method, Static, Stdlib, BuiltinStatic)):
+    elif not isinstance(callee, (Free, Intrinsic, Method, Static, Stdlib, Extern,
+                                 BuiltinStatic)):
         er.raise_internal_error(
             "CE0000", span=node.loc,
             detail=f"the typecheck pass gave the borrow pass a call with the callee "

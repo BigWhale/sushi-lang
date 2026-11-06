@@ -1,0 +1,10 @@
+unit test_err_typeck_extern_argument
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i64, _1 "m": i64]
+  block  :
+    Assign(LocalRef(_0), Call(Extern(@c.strlen, "strlen"), [Lit(42)]), is_init: true)
+    Assign(LocalRef(_1), Call(Extern(@c.strlen, "strlen"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", Binary(+, LocalRef(_0), LocalRef(_1)), ""]), Guaranteed)]))
+    Return(Lit(0))

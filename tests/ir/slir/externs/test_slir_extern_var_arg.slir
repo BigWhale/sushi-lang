@@ -1,0 +1,39 @@
+unit test_slir_extern_var_arg
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: u8[]                           // buf
+    let _2: i32                            // got
+    let _3: ~
+    let _4: i32
+    let _5: string
+    let _6: string
+    let _7: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = [const 0_u8; const 16_i32]
+    StorageLive(_2)
+    _2 = call @snprintf(copy _1 @inout, const 16_i64 @guaranteed, const "%d %s" @guaranteed, const 12_i32 @guaranteed, const "ok" @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin array.truncate(copy _1 @inout, copy _2 @guaranteed)
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = copy _2
+    StorageLive(_5)
+    _5 = call builtin string.from_bytes@(u8[])(move _1 @owned)
+    StorageLive(_6)
+    _6 = call builtin interp@(i32, string, string)(copy _4 @guaranteed, const ": " @guaranteed, copy _5 @guaranteed)
+    StorageLive(_7)
+    _7 = call builtin println@(string)(copy _6 @guaranteed)
+    StorageDead(_7)
+    Drop(_6)
+    StorageDead(_6)
+    Drop(_5)
+    StorageDead(_5)
+    StorageDead(_4)
+    _0 = const 0_i32
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}

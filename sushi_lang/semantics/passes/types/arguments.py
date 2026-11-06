@@ -15,7 +15,7 @@ mode (CE2427), and each argument that fits gets its convention, a row of the
 `TypeckResults` of the body. A construction has no declared modes and gives none.
 
 What legitimately differs between the callers is a four-tuple -- the callee's display
-name, the parameter types, the arity code and the mismatch code -- plus four policy
+name, the parameter types, the arity code and the mismatch code -- plus five policy
 questions, each a keyword:
 
   ``minimum_arity``  a variadic callee's FIXED prefix. More arguments than parameters is
@@ -27,6 +27,7 @@ questions, each a keyword:
                      declared type, and the help names the others.
   ``field_names``    per parameter, the field that it fills, for a mismatch code whose
                      text names the field (a struct construction: CE2028, CE2083).
+  ``compares_nom``   False for a C function, whose `nom` marker is inert (no CE2427).
 
 The codes travel IN, so this module spells neither the arity code nor the mismatch code.
 That is what lets the enum constructor read the same check with CE2049/CE2050, which name
@@ -82,6 +83,7 @@ def check_arguments(
     stop_on_arity: bool = False,
     also_accepts: Sequence[Sequence[Type]] = (),
     field_names: Sequence[str] = (),
+    compares_nom: bool = True,
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
@@ -90,7 +92,8 @@ def check_arguments(
     reported at the argument itself.
 
     The answer is the arity alone, for the callers that stop there. A caller that wants
-    every fault reported ignores it.
+    every fault reported ignores it. `compares_nom` False gives no CE2427: a C function
+    takes nothing from Sushi, so its `nom` marker is inert.
     """
     arity_ok = (len(args) >= len(params) if minimum_arity
                 else len(args) == len(params))
@@ -110,7 +113,8 @@ def check_arguments(
                               mismatch_code=mismatch_code, others=others, field=field)
         if declared is not None and index <= len(declared.modes):
             mode = declared.modes[index - 1]
-            if reject_nom_marker(validator, arg, mode, declared.names[index - 1]):
+            if compares_nom and reject_nom_marker(validator, arg, mode,
+                                                  declared.names[index - 1]):
                 fits = False
             if fits:
                 validator.body_answers().record_convention(declared.call, index - 1,
@@ -123,6 +127,14 @@ def check_arguments(
         if not reject_misplaced_spread(validator, extra):
             visit.check_expr(validator, extra.value)
     return arity_ok
+
+
+def record_reads(validator: 'TypeValidator', call: ShirId, indexes: Sequence[int]) -> None:
+    """Give each argument at `indexes`, which no declared parameter takes (the variadic
+    tail of a C function), the convention of a read."""
+    answers = validator.body_answers()
+    for index in indexes:
+        answers.record_convention(call, index, ParamMode.BORROW.convention)
 
 
 def record_conventions(validator: 'TypeValidator', declared: Parameters,

@@ -1,9 +1,5 @@
-"""Semantic validation for FFI `unsafe external` blocks.
-
-Port templates: `validate_external_call_args` call `TypeValidator.validate_expression`,
-and that API is deleted. No pass reaches them today. Group D5 (externs) ports them to
-SHIR inputs before a SHIR pass calls them.
-"""
+"""Semantic validation for FFI `unsafe external` blocks. The call of a C function is
+`passes/types/visit/extern_calls.py`."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 
@@ -12,17 +8,15 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.ffi_boundary import (
-    is_c_abi_param, is_c_abi_scalar, is_c_abi_type as _is_c_abi_type, is_c_abi_variable,
+    is_c_abi_param, is_c_abi_type as _is_c_abi_type, is_c_abi_variable,
     nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
-from .arguments import check_arguments
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
-    from . import TypeValidator
 
 
 def validate_external_signatures(reporter: Reporter, program: 'Program') -> None:
@@ -273,37 +267,6 @@ def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
     for ty, span in sites:
         if ty is not None and contains_foreign_ptr(ty):
             er.emit(reporter, er.ERR.CE5009, span)
-
-
-def validate_external_call_args(validator: 'TypeValidator', node) -> None:
-    """Validate argument count and types for a resolved foreign call."""
-    sig = validator.external_table.lookup(node.external_ref[0], node.external_ref[1])
-    if sig is None:
-        for arg in node.args:
-            validator.validate_expression(arg)
-        return
-    expected = sig.param_types
-    is_variadic = getattr(sig, "is_variadic", False)
-    fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
-    # The check walks each fixed argument against its declared type, so a
-    # `Maybe.None` takes the parameter's `Maybe@(ptr)` (#1085).
-    if not check_arguments(validator, fq_name, expected, node.args, node.loc,
-                           mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                           minimum_arity=is_variadic, stop_on_arity=True):
-        for arg in node.args:
-            validator.validate_expression(arg)
-        return
-    # Trailing variadic args: each must be C-ABI representable (CE5005).
-    # Record the inferred types so the backend can apply C promotion.
-    if is_variadic:
-        variadic_types = []
-        for arg in node.args[len(expected):]:
-            got_ty = validator.validate_expression(arg)
-            variadic_types.append(got_ty)
-            if got_ty is not None and not is_c_abi_scalar(got_ty):
-                er.emit(validator.reporter, er.ERR.CE5005, arg.loc,
-                        type=display_type(got_ty), name=fq_name)
-        node.variadic_arg_types = variadic_types
 
 
 def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:
