@@ -1,0 +1,14 @@
+# to_bytes bound by let, as a temporary and passed nom.
+#
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 104\n3\n"
+# EXPECT_NO_LEAKS
+
+fn size(nom u8[] b) i32:
+    return b.len()
+
+fn main() i32:
+    let u8[] b = "hi".to_bytes()
+    println("{b.len()} {b[0]}")
+    println(size(nom "abc".to_bytes()))
+    return 0

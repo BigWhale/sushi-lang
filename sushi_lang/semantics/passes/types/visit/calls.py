@@ -117,9 +117,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 
 
-STRING_ARRAY_STOP = "string array"
-
-
 def check_call(validator: TypeValidator, node: e.Call,
                expected: Optional[Type]) -> Optional[Type]:
     target = node.target
@@ -391,8 +388,7 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
     """A string method takes the arguments of its row and yields the type of its row.
 
     A wrong count is CE2009 and skips the argument types; a wrong argument type is
-    CE2006 at the argument. The call yields its type after either fault. A method that
-    answers a dynamic array stops the walk, as the array values are not typed yet.
+    CE2006 at the argument. The call yields its type after either fault.
     """
     from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
     spec = METHOD_SPECS.get(name)
@@ -403,8 +399,6 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
                                  er.ERR.CE2006, callee_name=spec.name,
                                  also_accepts=spec.also_accepts)
     yielded = string_method_return_type(validator, name)
-    if isinstance(yielded, DynamicArrayType):
-        dispatch.stop_at_family(visit.STAGE, node, STRING_ARRAY_STOP)
     return yielded
 
 
