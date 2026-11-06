@@ -124,7 +124,8 @@ the order of the body of a generic instance; no template check body reaches SLIR
 iterator never leaves); 8.6, 8.9 and 8.13 (the `HashMapCursor` walk is the `Protocol`
 shape with the step `cursor_next` of the `hashmap` family); 7.9 and 8.9 (the capture mode
 is the `Ownership` row of the capture alone, and `LiftResults` holds the captured locals in
-slot order).
+slot order); 7.6, 8.6 and 8.13 (the `Indirect` call takes its conventions from the
+function type, and the emitter passes the environment first).
 
 ## The decisions, in one place
 
@@ -1644,6 +1645,11 @@ self` is `InGuaranteed`, `poke self` is `Inout`, `nom self` is `Owned`). It is a
 the callee row and not a row of `TypeckResults`, as `BuiltinMethod.nom_self` is (8.3). A
 `Static` has no receiver.
 
+An `Indirect` callee takes the conventions of its arguments from the parameter modes of the
+function type of `value` (`CalleeKind.INDIRECT` of `param_modes.py`), and `typecheck`
+writes them as convention rows, as for a `Free` callee (8.6). This is not built yet: the
+walk stops at a call of a function value (`typecheck, Call(fn value)`).
+
 The emitter reads the answer: one row of `CALL_EMITTERS` (`backend/slir/emit.py`) for
 each callee kind, and no decision at emit time.
 
@@ -2982,7 +2988,7 @@ StorageDead(LocalId)
 SlirCallee = Direct(symbol: str, name: str, module: Optional[str])  # free fn, method, extern,
                                                          # conversion, stdlib function
            | Builtin(method: BuiltinName, types: [Type])     # an emitter family (Q7)
-           | Indirect(Operand)                           # a closure's fn_ptr
+           | Indirect(Operand)                           # a function value: a closure
 
 BuiltinName = BuiltinMethod                              # a row of METHOD_TYPE_REGISTRY (7.6)
             | Intrinsic(name: str)                       # `println`, `print`, `interp`, `eq`,
@@ -3168,6 +3174,23 @@ conventions of their rows. A `Static` has no receiver. The printer writes the ca
 that the declaration round declared for the symbol (`emit_extension_method_decl`): the
 receiver of a `peek self` and a `poke self` method crosses by address, and every other
 receiver by value, as the convention says.
+
+An `Indirect(value)` callee of SHIR, a call of a function value, lowers to
+`Indirect(Operand)`. The operand is the closure value: a `Copy` of its place, or a temporary
+of the statement. The convention of each argument comes from the parameter modes of its
+`FunctionType`, because the modes are part of the type: `typecheck` reads them through
+`semantics/param_modes.py` (`CalleeKind.INDIRECT`) and writes the convention row of each
+argument, as for a free call (7.3). The emitter loads `fn_ptr` and `env_ptr` from the value,
+and passes the environment first, then each argument by its convention. SLIR does not see
+the layout: the emitter reads the semantic type of the operand (8.7). The verifier checks
+each `Convention` against the `FunctionType` of the operand (8.13). A named function as a
+value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no environment (8.7), and
+`materialize_function_ref` (`backend/runtime/closures.py`) becomes the emitter of that
+case. A generic function as a value names the instance that its position gives (7.3). The
+`Indirect` call of an `IteratorValue` walk has an iterator value as its operand (8.9). This
+is not built yet: `typecheck` stops at a call of a function value (`typecheck, Call(fn
+value)`) and at a function value (`typecheck, GlobalRef`), and the emitter stops at
+`Indirect` (`emit, Indirect`).
 
 ### 8.7 Rvalues
 
@@ -3713,8 +3736,10 @@ Runs after lowering, before the backend. It checks:
   `Maybe` method, they are the answer of `receiver_convention` for the receiver and the
   mode of the row of the method for each argument: `map_err` and `or_err` take the
   receiver `Owned`, the error value of `or_err` is `Owned`, and the function of `map_err`
-  is `Guaranteed`. For the `concat_in_place` row of the string family (8.3, 8.9), the
-  receiver is `Inout` and the one argument is `Guaranteed`. For the `cursor_next` row of the
+  is `Guaranteed`. For an `Indirect` callee, they are the parameter modes of the
+  `FunctionType` of the operand (8.6); this part is not built yet. For the
+  `concat_in_place` row of the string family (8.3, 8.9), the receiver is `Inout` and the
+  one argument is `Guaranteed`. For the `cursor_next` row of the
   `hashmap` family (8.6, 8.9), the map is `InGuaranteed` and the cursor is `Inout`; this
   part is not built yet
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
