@@ -119,7 +119,9 @@ rebind through a `poke` address local; a `Guaranteed` parameter that owns holds 
 the caller until a write). Amended on 2026-11-06 by ruling R-AW (the shapes of generics,
 closures and iterators, ruled before they are built): 8.2 and 8.13 (the home, the symbol and
 the order of the body of a generic instance; no template check body reaches SLIR); 8.4, 8.7,
-8.9 and 8.13 (the closure value, its environment and its glue, and the capture place).
+8.9 and 8.13 (the closure value, its environment and its glue, and the capture place); 8.7,
+8.9, 8.12 and 8.13 (the iterator value `AggIterator(ty, source, heap)`, and a stack-state
+iterator never leaves).
 
 ## The decisions, in one place
 
@@ -3219,6 +3221,23 @@ the one destroy seam. The lifted function reads a capture through the place
 `Field(Deref(_1), k)` (8.9). This shape is not built yet: no lowering makes an `AggClosure`,
 and the emitter has no arm for it.
 
+**An iterator value.** The kind of an iterator producer or a lazy adapter is
+`AggIterator(ty, source, heap)`. `ty` is the `Iterator@(T)` of the value. `source` names one
+row of a CLOSED table of the producers and the adapters: a contiguous cursor, each view of a
+`HashMap`, a range, `Iterator.new`, and each lazy adapter. Its parts are the operands that
+the row reads (the source place, the bounds, the inner iterator, the function of an
+adapter). `heap` is the answer of `OwnershipResults` (7.9), and the kind carries it, so the
+emitter decides nothing: a LENT iterator that no `peek` return takes out of the function has
+its state on the stack (`heap: false`), and an OWNED iterator, or a LENT iterator that
+leaves through a `peek` return, has its state in a heap block (`heap: true`). The emitter of
+the row builds the state and supplies `next_fn`, `drop_fn` and `clone_fn`. The producers of
+`backend/runtime/iterators.py` (`iterator_value`, `emit_cursor_iterator`, `emit_next`) and
+the adapters of `backend/runtime/iterator_adapters.py` are that table, over operands (Q7):
+SLIR writes no glue. The `peek` return of a lent iterator (4.4, `borrow-model.md` S10h)
+moves the WHOLE chain to the heap: each adapter of the chain reads the same `heap` answer.
+The drop of an iterator value is a `Drop(place)` that calls its `drop_fn` (8.10, rule 7).
+This shape is not built yet: `AggIterator` holds only `ty`, and no lowering makes it.
+
 ### 8.8 Terminators
 
 Five, because a call is not one of them (R3):
@@ -3294,9 +3313,9 @@ backstop of the checker, as on the AST backend.
 | `Loop`, kind `Cursor` | `Len` into a local, then the `CountedRange` shape |
 | `Loop`, kind `HashMapCursor` | the one probe walk, over the counted `data[0..count)` range |
 | `Loop`, kind `Protocol` | the iterator in a hidden owning local (or an `Inout` place, for a walk in place); each round calls `next()`, `Discriminant`, `SwitchInt` |
-| `Loop`, kind `IteratorValue` | the same shape, with an `Indirect` call through `next_fn` |
-| an iterator producer or a lazy adapter | an `Aggregate(Iterator, ...)` of the source's three functions and its state; the state is a local when the iterator is lent and stays in the function, and a heap block otherwise (`OwnershipResults`) |
-| `Range` as a value | an owned iterator over the range formula |
+| `Loop`, kind `IteratorValue` | the same shape: each round an `Indirect` call whose operand is the iterator value. The emitter reads the semantic type of the operand, an `Iterator@(T)`, and calls its `next_fn` with its state (`emit_next`). This is not built yet: the walk of an iterator stops before SLIR (`typecheck, Loop` or `borrow, Loop`) |
+| an iterator producer or a lazy adapter | ONE `Aggregate(AggIterator(ty, source, heap))` (8.7) into a fresh owning local: `source` is the row of the producer or the adapter, and `heap` is the heap decision of `OwnershipResults` for the `shir_id` of the call. The emitter of the row builds the state and supplies the three functions. This is not built yet |
+| `Range` as a value | an owned iterator: an `AggIterator` of the range row, with its bounds as parts and `heap: true`. This is not built yet: `typecheck` stops at it (`typecheck, Range`) |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
 | `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(Deref(_1), k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by `OwnershipResults`. A lambda with no capture has the `FnRef` alone. This is not built yet: `typecheck` stops at a `Lambda` (`typecheck, Lambda`) |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
@@ -3600,15 +3619,18 @@ That is the design in one screen.
 | mode resolution at emit time (13 `param_modes` imports) | one `Convention` on the call |
 | 34 semantic type inferences at emit time | every local is typed |
 | borrow-region derivation | `BeginBorrow` / `EndBorrow` |
-| iterator state placement read from two stamps | the state local or heap block, written at lowering |
+| iterator state placement read from two stamps | the `heap` field of `AggIterator`, written at lowering |
 
 The backend has none of the concerns of the left column: each one went with the AST body
 emitter.
 
 The borrow-region row comes from the region row of `OwnershipResults` (7.9): `borrow`
 decides the owner set and the last use of each view, and SLIR lowering writes the
-`BeginBorrow` and the `EndBorrow` statements from that row (8.6). The iterator-state row is
-not built: SLIR lowering places no state local and no heap block for an iterator.
+`BeginBorrow` and the `EndBorrow` statements from that row (8.6). The iterator-state row
+comes from the heap decision of `OwnershipResults` (7.9): SLIR lowering writes it into the
+`heap` field of `AggIterator` (8.7), and the emitter of the row of the source builds the
+state on the stack or in a heap block. This row is not built yet: no lowering makes an
+`AggIterator`.
 
 What is NOT in this table: the 2,809 lines of monomorphization. Ruling Q1 leaves them
 where they are. Also not in the table: the per-type emitter families. Ruling Q7 keeps them.
@@ -3713,6 +3735,9 @@ Runs after lowering, before the backend. It checks:
   two times or more. Each part of an `AggClosure` after its `FnRef` is a `Copy` or a `Move`
   of a local: lowering takes it from the `Ownership` row of the capture (7.9). This rule is
   not built yet
+- a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
+  `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
+  the operand of an `Owned` argument (8.7). This rule is not built yet
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
