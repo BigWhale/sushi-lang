@@ -86,4 +86,4 @@ def check_list_method(validator: TypeValidator, node: e.Call, receiver: Type, na
         lambda element: _check_arguments(validator, node, element, name))
 
 
-_LIST = ContainerArm("CE0083", "List", ListMethodInferrer, parse_list_types)
+_LIST = ContainerArm(er.ERR.CE0083.code, "List", ListMethodInferrer, parse_list_types)

@@ -42,5 +42,5 @@ def check_own_method(validator: TypeValidator, node: e.Call, receiver: Type, nam
                                   check_arguments)
 
 
-_OWN = ContainerArm("CE0080", "Own", OwnMethodInferrer,
+_OWN = ContainerArm(er.ERR.CE0080.code, "Own", OwnMethodInferrer,
                     lambda receiver, _validator: own_payload_type(receiver))

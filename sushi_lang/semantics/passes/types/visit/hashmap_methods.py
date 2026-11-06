@@ -56,4 +56,4 @@ def _key_and_value(receiver: StructType,
     return None if key is None or value is None else (key, value)
 
 
-_HASHMAP = ContainerArm("CE0085", "HashMap", HashMapMethodInferrer, _key_and_value)
+_HASHMAP = ContainerArm(er.ERR.CE0085.code, "HashMap", HashMapMethodInferrer, _key_and_value)
