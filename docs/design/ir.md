@@ -121,7 +121,8 @@ closures and iterators, ruled before they are built): 8.2 and 8.13 (the home, th
 the order of the body of a generic instance; no template check body reaches SLIR); 8.4, 8.7,
 8.9 and 8.13 (the closure value, its environment and its glue, and the capture place); 8.7,
 8.9, 8.12 and 8.13 (the iterator value `AggIterator(ty, source, heap)`, and a stack-state
-iterator never leaves).
+iterator never leaves); 8.6, 8.9 and 8.13 (the `HashMapCursor` walk is the `Protocol`
+shape with the step `cursor_next` of the `hashmap` family).
 
 ## The decisions, in one place
 
@@ -3106,6 +3107,18 @@ drops each entry and keeps no buckets, and `rehash` moves each entry into new bu
 `HashMap.new` goes to the static row of the table. The producers `keys`, `values`,
 `entries` and `pairs` are a stop of `borrow`.
 
+One row of the `hashmap` family is the step of a `HashMapCursor` walk (8.9):
+`cursor_next`. Only SLIR lowering makes it, and no program can name it: it is no method of
+`METHOD_TYPE_REGISTRY`, like `concat_in_place` of the string family (8.3). It reads
+the map (`InGuaranteed`) and writes the cursor (`Inout`), a hidden `i32` slot index. It
+goes from the cursor to the next slot that holds an entry, writes the index after that slot
+into the cursor, and answers `Some` of the item of the view (the key, the value, the entry
+or the pair), or `None` after the last slot. Its emitter keeps the one probe loop
+(`backend/generics/hashmap/probe.py`) and the one counted walk
+(`backend/generics/container_walk.py`), as a `linkonce_odr` function that LLVM inlines.
+So SLIR does not see the bucket array, its state per slot or its layout (Q7, the door).
+This row is not built yet.
+
 The `own` family takes the ADDRESS of its receiver too. Its rows are `OWN_EMITTERS`
 (`backend/generics/own.py`). `get` loads the payload out of the heap block, a shallow copy
 that SLIR holds in a view local of the `Own` when the payload owns (`answers_view`).
@@ -3311,7 +3324,7 @@ backstop of the checker, as on the AST backend.
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit, or for a `Continue` the next round: the header of a `While`, the step of a `CountedRange` |
 | `Loop`, kind `CountedRange` | in the scope of the loop statement: each bound one time, the start first, into an `i32` local (a constant stays a constant), the count `end - start` into a local (plus one when inclusive), and a counter local at 0. The header compares `counter < count` into a `bool` local and switches; a count below one walks nothing, so the count needs no clamp. The body writes the binder first: `start + counter`, or with `.rev()` `last - counter`, where `last` is `end` (less one, into a local, when exclusive). The step block adds one to the counter and goes to the header; the end of the body and a `Continue` go to the step. Two constant bounds take the count and the first value of `plan_range` (`semantics/ranges.py`) as constants. The zero edge goes to a block of its own as for a `While`. The blocks are made in the order header, body, step, the zero block, exit |
 | `Loop`, kind `Cursor` | `Len` into a local, then the `CountedRange` shape |
-| `Loop`, kind `HashMapCursor` | the one probe walk, over the counted `data[0..count)` range |
+| `Loop`, kind `HashMapCursor` | the `Protocol` shape with a built-in step: a hidden cursor local (an `i32` slot index, `0` at the entry), and each round a `Call` of `Builtin(hashmap cursor_next)` (8.6) with the map `InGuaranteed` and the cursor `Inout`, into a `Maybe@(peek item)` local; then `Discriminant` and `SwitchInt`. The `Some` block writes the item into a view local (8.2), in a region over the map (7.9), so a change of the map in the body is CE2412, as for a `Cursor`. The walk has the block shape of the other walks, and it has no bucket layout and no second CFG. This is not built yet: the walk stops before SLIR (`typecheck, Loop` or `borrow, Loop`) |
 | `Loop`, kind `Protocol` | the iterator in a hidden owning local (or an `Inout` place, for a walk in place); each round calls `next()`, `Discriminant`, `SwitchInt` |
 | `Loop`, kind `IteratorValue` | the same shape: each round an `Indirect` call whose operand is the iterator value. The emitter reads the semantic type of the operand, an `Iterator@(T)`, and calls its `next_fn` with its state (`emit_next`). This is not built yet: the walk of an iterator stops before SLIR (`typecheck, Loop` or `borrow, Loop`) |
 | an iterator producer or a lazy adapter | ONE `Aggregate(AggIterator(ty, source, heap))` (8.7) into a fresh owning local: `source` is the row of the producer or the adapter, and `heap` is the heap decision of `OwnershipResults` for the `shir_id` of the call. The emitter of the row builds the state and supplies the three functions. This is not built yet |
@@ -3690,7 +3703,9 @@ Runs after lowering, before the backend. It checks:
   mode of the row of the method for each argument: `map_err` and `or_err` take the
   receiver `Owned`, the error value of `or_err` is `Owned`, and the function of `map_err`
   is `Guaranteed`. For the `concat_in_place` row of the string family (8.3, 8.9), the
-  receiver is `Inout` and the one argument is `Guaranteed`
+  receiver is `Inout` and the one argument is `Guaranteed`. For the `cursor_next` row of the
+  `hashmap` family (8.6, 8.9), the map is `InGuaranteed` and the cursor is `Inout`; this
+  part is not built yet
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
