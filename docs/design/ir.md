@@ -116,7 +116,9 @@ one time on each path to a `return`). Amended on 2026-11-05 by group B9 (the reb
 owning place): 8.3, 8.9 and 8.13 (the concat peephole is the `concat_in_place` row of the
 string family, which takes its receiver `Inout`), 8.13 (the `Drop` of the old value at a
 rebind through a `poke` address local; a `Guaranteed` parameter that owns holds the value of
-the caller until a write).
+the caller until a write). Amended on 2026-11-06 by ruling R-AW (the shapes of generics,
+closures and iterators, ruled before they are built): 8.2 and 8.13 (the home, the symbol and
+the order of the body of a generic instance; no template check body reaches SLIR).
 
 ## The decisions, in one place
 
@@ -2540,6 +2542,32 @@ receiver is `_1`, with the convention of its `self` (8.3), its declared paramete
 after it, and a static has no receiver. Its symbol is `extension_decl_symbol` (8.6), and
 its name is the written name `<type>.<method>`.
 
+**The body of a generic instance.** An instance is one body (Q1). It comes from
+`monomorphize`, from a late request of `typecheck` (7.3), or from the copy fixpoint (Q2).
+SLIR lowers it as it lowers each other body: one time, at the end of the stage chain of its
+copy (`SlirStage.lower_body`). So an instance that the fixpoint cuts lowers after the
+per-unit loop, in the order of the fixpoint. No stage keeps an instance body back to lower
+it later. The function goes into the module of its declaring unit: the unit that declares
+the template (`home_unit`, which `declaring_unit` reads). Its symbol is `function_symbol`
+of the instance name and that unit. So the identity of an instance is its unit, its name
+and its type arguments, and the instances of two units are two symbols. The row of the
+instance in the function table (`funcs.by_unit`) is written when the copy is placed
+(`generics/synthesis.py`), before any caller lowers: the `Direct` callee of a caller and the
+verifier find it (8.13). The printer and the emitter list the instances of a module by
+symbol: the copies of a unit are in the order of their names (Q2), never in the order of
+the fixpoint. Three more rules apply:
+
+- a lambda in an instance body is cut one time for each instance, and the symbol of its
+  function has the symbol of the instance as its prefix;
+- a copy that a pass refused, and a copy of a template that a pass refused, never lower;
+- an `Expand` never reaches SLIR: `monomorphize/unroll.py` unrolls it in an instance (4.5).
+
+The lowering of an instance body is not built yet: such a body stops with `generic
+instance` (`symbol_of`, `semantics/slir/lower_signature.py`), so the rule of a lambda and
+the rule of a refused copy have no code yet. The dump lists the copies of a unit by name
+already (`LoweredUnit.copies`). The order of the emitter is not built yet: it defines the
+functions of a unit in the order of the AST of the unit.
+
 **The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
 receiver is `_1` with the convention `Inout`, its symbol is the perk symbol of
 `extension_symbol` (`semantics/generics/name_mangling.py`), and it has a `Direct` row in
@@ -3673,6 +3701,9 @@ Runs after lowering, before the backend. It checks:
   `string`. A conversion of another kind and a `Move` operand are refused
 - a drop flag: the flag of a `DropIfSet` is a `bool` local, and each local has one flag
   only: every `DropIfSet` of a local names the same flag
+- no template check body: no function comes from a body with the origin `TemplateCheck`
+  (Q1, 4.3). The SLIR stage refuses such a body before the verifier runs, with the internal
+  error CE0000 (`lower_function`, `semantics/slir/lower.py`)
 - every statement and terminator carries a `Span` (G9)
 
 **As built.** The verifier is six modules of `semantics/slir/`. `verify.py` holds the
