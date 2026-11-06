@@ -1085,9 +1085,7 @@ from yielding that type. The `string` family has its arm too. A string method ha
 arguments of its row in `METHOD_SPECS` (a wrong count is
 [CE2009](../error-catalog.md#ce2009) from the arity row of the family, and a wrong argument
 type is [CE2006](../error-catalog.md#ce2006) from the one argument check), and the call
-yields the return type of its row. A wrong count skips the argument types. A method whose
-row answers a dynamic array (`split`, `to_bytes`) stops the walk with `typecheck,
-Call(method string array)`. The `result` and `maybe` families have their arms too. `is_ok`,
+yields the return type of its row. A wrong count skips the argument types. The `result` and `maybe` families have their arms too. `is_ok`,
 `is_err`, `is_some` and `is_none` yield a `bool`, `realise` and `expect` yield the payload
 `T`, and `err` yields a `Maybe@(E)`. A wrong count is [CE2009](../error-catalog.md#ce2009)
 from the arity row of the family, and it skips the argument types. The one argument check

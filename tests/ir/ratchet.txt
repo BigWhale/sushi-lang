@@ -1366,6 +1366,7 @@ tests/ffi/errno/test_ffi_own_errno_wins.sushi
 tests/ffi/extern_behind_alias/test_err_extern_tail_struct.sushi
 tests/ffi/extern_behind_alias/test_extern_snprintf_into_poke_bytes.sushi
 tests/ffi/extern_behind_alias/test_extern_to_fixed_places.sushi
+tests/ffi/extern_behind_alias/test_extern_two_string_arguments.sushi
 tests/ffi/extern_calls/test_ffi_printf_variadic_runtime.sushi
 tests/ffi/extern_calls/test_ffi_string_arg_not_consumed.sushi
 tests/ffi/extern_calls/test_ffi_strlen_runtime.sushi

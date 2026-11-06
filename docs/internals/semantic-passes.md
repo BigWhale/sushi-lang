@@ -1140,11 +1140,11 @@ All paths are under `semantics/passes/`.
 The type predicates (`is_numeric_type`, `is_integer_type`, `is_float_type` and the others)
 are in `semantics/type_predicates.py`.
 
-**FFI call-site resolution.** `TypeValidator._resolve_external_call` asks the namespace
-table (`resolve_namespaced`) for the name behind the dot. When the binding is an extern,
-it stamps `external_ref = (provider origin, name)` on the node for the backend and gives
-back the `ExternalSig`. The call yields the raw C type, with no Result around it, so `??`
-on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
+**FFI call-site resolution.** The `typecheck` pass types the call of an extern behind the
+alias of its block in `passes/types/visit/extern_calls.py`. It asks the namespace table
+(`resolve_namespaced`) for the name behind the dot, and the SHIR `Extern` callee carries
+the link name of the C function. The call yields the raw C type, with no Result around it,
+so `??` on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
 
 ### Error types, `??` and conversions
 
