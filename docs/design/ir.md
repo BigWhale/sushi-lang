@@ -129,7 +129,8 @@ function type, and the emitter passes the environment first); 7.3, 7.6, 8.2, 8.3
 (a contract call is an intrinsic over the one contract seam; a perk implementation method
 is a `Method` callee, and its body lowers as the body of `drop`); 8.2, 8.9 and 8.13 (a
 view local and an address local have one write on each path, so an alternative binds an
-owning payload or a reference).
+owning payload or a reference); 7.3 and 7.9 (a late request is a row of `typecheck`, and
+the copy fixpoint reads it).
 
 ## The decisions, in one place
 
@@ -1214,6 +1215,23 @@ reference of the target answers the function type of the row, with the `Result` 
 row as its channel. Only `<math>` and `<time>` are typed: a call of a function of any
 other registry module stops the walk (`Call(stdlib)`).
 
+**A late instance.** The `instantiate` and `monomorphize` passes collect the instances that
+the early passes can see. An instance that they do not collect is cut later, at the request
+of `typecheck`, and the copy fixpoint (Q2) places it. Each late request is a row that
+`typecheck` writes on SHIR: the callee row of the call (`ResolvedCall`, with its type
+arguments and its declaring unit), or the type row of a `GlobalRef` that names a generic
+function as a value, which names the instance that its position gives. The fixpoint reads
+that row and cuts the instance. No pass reads an AST stamp for it. The identity of a late
+copy keys on its unit, its name and its type arguments, as the identity of each instance
+does (8.2). A late copy of a perk implementation for a generic struct or enum target comes
+from a miss hook on the perk-implementation table, on the model of `ArrayPerkCopies`
+(`semantics/generics/array_perk_copies.py`): a hook of a table, and no shape of the IR.
+`typecheck` keeps the path of `infer_lambda_type` that writes no stamp (`stamp=False`,
+`passes/types/visit/helpers.py`). This is not built yet: the SHIR walk stops at a call of a
+generic function (`Call(generic)`) and at a function value (`GlobalRef`), the late request
+reads the AST call (`_request_late_instance`, `passes/types/calls/generics.py`), and the
+perk-implementation table has a miss hook for an array target alone (`on_array_miss`).
+
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
@@ -1811,6 +1829,10 @@ later statements are reported, and the body does not go on to the next stage.
 
 A template check body runs the same three SHIR passes, at opaque type arguments, and stops
 there: it never lowers to SLIR (4.3).
+
+The copy fixpoint (Q2) reads each late request of `typecheck` from its rows: the callee row
+of a call, or the type row of a `GlobalRef` (7.3). It reads no AST stamp. This is not built
+yet.
 
 `typecheck` keeps one flag for the body that it walks, `refused_before`. A node whose error a
 pass before `typecheck` reported, or whose answer that error takes away, sets the flag, gets
