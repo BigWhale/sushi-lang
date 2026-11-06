@@ -24,6 +24,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.slir import lower_aggregate as agg
+from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -168,16 +169,8 @@ def _rebind(low: Lowering, place: p.Place, read: p.Copy | p.Move, span: Span) ->
     if not isinstance(read, p.Move):
         low.write(place, r.Use(read), span)
         return
-    if isinstance(place, p.Local):
-        ident = place.id
-        low.emit(low.placement.drop_old_value(ident, span))
-        low.emit([st.Assign(place, r.Use(read), span)])
-        low.emit(low.placement.flag_stored(ident, span))
-        return
-    if not isinstance(place, (p.Field, p.Index)):
-        er.raise_internal_error("CE0000", span=span, detail="a part write of no part")
-    low.emit(low.placement.drop_part(place, span))
-    low.emit([st.Assign(place, r.Use(read), span)])
+    rebinds.store_over(low, place, lambda: low.emit([st.Assign(place, r.Use(read), span)]),
+                       span)
 
 
 def _views(low: Lowering, stmt: s.Destructure, targets: list[_Target]) -> None:

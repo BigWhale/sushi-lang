@@ -11,9 +11,10 @@ call of `string.concat_in_place` and no drop (8.9). A `var` is a `Global` place,
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.method_effects import CONCAT_IN_PLACE, STRING_FAMILY
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
@@ -47,9 +48,23 @@ def rebind(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
         ty = low.type_of(stmt.value)
         temp = p.Local(low.temporary(value, ty, stmt.value.loc))
         value = r.Use(p.Move(temp) if low.owns(ty) else p.Copy(temp))
-    low.emit(low.placement.drop_old_value(ident, stmt.loc))
-    low.write(p.Local(ident), value, stmt.loc)
-    low.emit(low.placement.flag_stored(ident, stmt.loc))
+    store_over(low, p.Local(ident), lambda: low.write(p.Local(ident), value, stmt.loc),
+               stmt.loc)
+
+
+def store_over(low: Lowering, place: p.Place, store: Callable[[], None], span: Span) -> None:
+    """Rule 6: drop the old value of `place`, then `store` the new one. A local drops a
+    value that it holds and is live again (its flag), a field or an element drops its old
+    part, which always holds a value."""
+    if isinstance(place, p.Local):
+        low.emit(low.placement.drop_old_value(place.id, span))
+        store()
+        low.emit(low.placement.flag_stored(place.id, span))
+        return
+    if not isinstance(place, (p.Field, p.Index)):
+        er.raise_internal_error("CE0000", span=span, detail="a part write of no part")
+    low.emit(low.placement.drop_part(place, span))
+    store()
 
 
 def concat_in_place(low: Lowering, stmt: s.Assign, target: e.LocalRef,

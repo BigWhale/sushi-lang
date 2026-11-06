@@ -203,8 +203,7 @@ def part_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> None
     place = place_of(low, target)
     if not isinstance(place, (p.Field, p.Index)):
         er.raise_internal_error("CE0000", span=stmt.loc, detail="a part write of no part")
-    low.emit(low.placement.drop_part(place, stmt.loc))
-    low.write(place, value, stmt.loc)
+    rebinds.store_over(low, place, lambda: low.write(place, value, stmt.loc), stmt.loc)
 
 
 def destructure(low: Lowering, stmt: s.Destructure) -> None:
