@@ -393,16 +393,8 @@ class DropPlacement:
 
 def _read_locals(stmt: st.SlirStatement) -> set[LocalId]:
     """The root local of each operand that `stmt` reads."""
-    if isinstance(stmt, st.Assign):
-        operands = list(r.operands_of(stmt.rvalue))
-    elif isinstance(stmt, st.Call):
-        operands = [operand for operand, _ in stmt.args]
-        if isinstance(stmt.callee, st.Indirect):
-            operands.append(stmt.callee.operand)
-    else:
-        return set()
     roots = {p.root_of(part.place if isinstance(part, (p.Copy, p.Move)) else part)
-             for part in operands if not isinstance(part, p.Const)}
+             for part in st.operands_of(stmt) if not isinstance(part, p.Const)}
     return {root.id for root in roots if isinstance(root, p.Local)}
 
 

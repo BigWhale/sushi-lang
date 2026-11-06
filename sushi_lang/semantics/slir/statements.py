@@ -18,6 +18,7 @@ from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir.ids import BorrowId, LocalId
 from sushi_lang.semantics.slir.places import Operand, Place
 from sushi_lang.semantics.slir.rvalues import Rvalue
+from sushi_lang.semantics.slir.rvalues import operands_of as rvalue_operands
 from sushi_lang.semantics.typesys import BorrowMode, Type
 
 BuiltinName: TypeAlias = BuiltinMethod | Intrinsic
@@ -108,3 +109,15 @@ class StorageDead:
 SlirStatement: TypeAlias = (
     Assign | Call | Drop | DropIfSet | BeginBorrow | EndBorrow | StorageLive | StorageDead
 )
+
+
+def operands_of(stmt: SlirStatement) -> tuple[Operand | Place, ...]:
+    """The operands and the places that `stmt` reads as values, in order: the rvalue of an
+    `Assign`, and the arguments and the indirect callee of a `Call`. Any other statement
+    reads none."""
+    if isinstance(stmt, Assign):
+        return rvalue_operands(stmt.rvalue)
+    if isinstance(stmt, Call):
+        callee = (stmt.callee.operand,) if isinstance(stmt.callee, Indirect) else ()
+        return (*(operand for operand, _ in stmt.args), *callee)
+    return ()

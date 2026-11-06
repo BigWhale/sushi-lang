@@ -169,14 +169,12 @@ def _uses(node: st.SlirStatement | tm.SlirTerminator) -> Iterator[LocalId]:
     """The locals that `node` reads or writes as a value. The write of a `Ref` and the
     storage and region markers are no use."""
     parts: list[p.Operand | p.Place] = []
-    if isinstance(node, st.Assign):
-        parts += list(r.operands_of(node.rvalue))
-        if not isinstance(node.rvalue, r.Ref):
-            parts.append(node.place)
+    if isinstance(node, (st.Assign, st.Call)):
+        parts += st.operands_of(node)
+    if isinstance(node, st.Assign) and not isinstance(node.rvalue, r.Ref):
+        parts.append(node.place)
     elif isinstance(node, st.Call):
-        parts += [node.dest, *(operand for operand, _ in node.args)]
-        if isinstance(node.callee, st.Indirect):
-            parts.append(node.callee.operand)
+        parts.append(node.dest)
     elif isinstance(node, (st.Drop, st.DropIfSet)):
         parts.append(node.place)
     elif isinstance(node, tm.SwitchInt):
@@ -207,19 +205,14 @@ def _owners_kept(stmt: st.SlirStatement, open_: _Open, fail: Fail) -> None:
 def changes(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
     """Each place that `stmt` changes, and how: the one rule of a change of an owner, which
     drop placement reads too (`DropPlacement.end_before_change`)."""
-    if isinstance(stmt, (st.Drop, st.DropIfSet)):
-        yield stmt.place, "drops"
-    if isinstance(stmt, st.Assign):
-        yield stmt.place, "writes"
-        yield from ((part.place, "moves") for part in r.operands_of(stmt.rvalue)
-                    if isinstance(part, p.Move))
+    yield from _drops_and_moves(stmt)
+    target = _written_place(stmt)
+    if target is not None:
+        yield target, "writes"
     if isinstance(stmt, st.Call):
-        yield stmt.dest, "writes"
-        for operand, convention in stmt.args:
-            if isinstance(operand, p.Move):
-                yield operand.place, "moves"
-            elif isinstance(operand, p.Copy) and convention is Convention.INOUT:
-                yield operand.place, "gives to an inout argument"
+        yield from ((operand.place, "gives to an inout argument")
+                    for operand, convention in stmt.args
+                    if isinstance(operand, p.Copy) and convention is Convention.INOUT)
 
 
 def _copied(value: r.Rvalue, slot: bool) -> bool:
@@ -285,19 +278,25 @@ def _writes(statements: Sequence[st.SlirStatement], place: p.Local) -> bool:
                and not isinstance(stmt.rvalue, r.Ref) for stmt in statements)
 
 
+def _written_place(stmt: st.SlirStatement) -> Optional[p.Place]:
+    return (stmt.place if isinstance(stmt, st.Assign)
+            else stmt.dest if isinstance(stmt, st.Call) else None)
+
+
 def _written(stmt: st.SlirStatement) -> Optional[p.Local]:
-    place = (stmt.place if isinstance(stmt, st.Assign)
-             else stmt.dest if isinstance(stmt, st.Call) else None)
+    place = _written_place(stmt)
     return place if isinstance(place, p.Local) else None
 
 
-def _spends(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
+def _drops_and_moves(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
     if isinstance(stmt, (st.Drop, st.DropIfSet)):
         yield stmt.place, "drops"
-    operands = (r.operands_of(stmt.rvalue) if isinstance(stmt, st.Assign)
-                else tuple(operand for operand, _ in stmt.args) if isinstance(stmt, st.Call)
-                else ())
-    yield from ((part.place, "moves") for part in operands if isinstance(part, p.Move))
+    yield from ((part.place, "moves") for part in st.operands_of(stmt)
+                if isinstance(part, p.Move))
+
+
+def _spends(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
+    yield from _drops_and_moves(stmt)
     if isinstance(stmt, st.Call):
         yield from ((operand.place, "gives to an owned argument")
                     for operand, convention in stmt.args
