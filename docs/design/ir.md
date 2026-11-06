@@ -3079,8 +3079,7 @@ names the view local that its region lends to (`view`), and lowering writes it w
 opens the region. A region with no view local, for example the region of a `peek` or `poke`
 argument, has no view (`None`). The printer writes the view as a fourth part,
 `BeginBorrow(b3, _2, peek, for _7)`; a region with no view keeps three parts,
-`BeginBorrow(b3, _2, peek)`. This field is not built yet: `BeginBorrow` has three fields, and
-the verifier finds the view of a region by its position (8.13). Lowering writes one
+`BeginBorrow(b3, _2, peek)`. Lowering writes one
 `EndBorrow` for each of them after the statement of the last use of the view on each path,
 and at each exit that the region crosses: a `return`, a `break` or a `continue` out of the
 region, and the error path of a `Try`. When a later part of the statement of the last use
@@ -3090,7 +3089,8 @@ reads the view), the `EndBorrow` comes right after the evaluation of the last us
 the SLIR statement that makes that change, and not after the statement. A region does not
 end at the exit of the scope of the view: an owner can change after the last use and
 before the end of the scope. The
-`BeginBorrow` of the region of an address local (8.2) has the mode of its `Ref`. The
+`BeginBorrow` of the region of an address local (8.2) has the mode of its `Ref`, and no
+view: an address local is no view local. The
 region of a binder of a pattern and of a reference `let` is its region row, as the region
 of a view, over the root of the place of its `Ref`. A `Ref` of a constant reads a hidden
 local of the block that holds the value, and its region is over that local. The
@@ -3870,10 +3870,7 @@ Runs after lowering, before the backend. It checks:
   `BeginBorrow` names reads a value that no local owns, and has no region. A region has one
   view: two `BeginBorrow`s of one region that name two different views, and a `BeginBorrow`
   whose view is no view local of the function, are CE0158 of this check (rule `a view
-  local`). This rule is not built yet: today the regions of a view local are the
-  `BeginBorrow`s that stand right before the statement that writes it, in the same block,
-  so the check does not read a view whose `BeginBorrow` has another statement before the
-  write
+  local`)
 - an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
   are counted, and a `Ref` writes a local, never a part of one. The count on each path is
   not built yet: today the check refuses a second `Ref` of an address local anywhere in the
