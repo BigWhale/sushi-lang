@@ -131,7 +131,11 @@ is a `Method` callee, and its body lowers as the body of `drop`); 8.2, 8.9 and 8
 view local and an address local have one write on each path, so an alternative binds an
 owning payload or a reference); 7.3 and 7.9 (a late request is a row of `typecheck`, and
 the copy fixpoint reads it); 8.6 and 8.13 (a `BeginBorrow` names its view, and the
-view-region check reads the view from the statement).
+view-region check reads the view from the statement). Amended on 2026-11-06 by group X2:
+7.3, 7.6, 7.9, 8.6, 8.9 and 8.13 (an `Extern` callee carries the link name of its C
+function; it lowers to a `Direct` callee with no module, whose row the verifier finds in
+the external table; the emitter makes the C copy of a `string` argument at the call and
+frees it after the call, so no SLIR local holds it).
 
 ## The decisions, in one place
 
@@ -1246,7 +1250,7 @@ are `Call(<kind>)`: `method` (a method that no built-in family claims and that n
 extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension or perk method), `stdlib method` (a `public extend`
 or perk method of a bundled Sushi-source stdlib unit), `static` (a user static),
 `builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a function of a registry stdlib
-module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function, also behind an alias, and `errno`), `alias` (a function of a
+module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function that `typecheck` does not type yet, 7.6, and `errno`), `alias` (a function of a
 user unit behind a `use ... as` alias), `function` (a user function), `generic` (a generic
 function, or written type arguments), `fn value` (a call through a function value) and
 `builtin` (`print`, `println`). There is no
@@ -1622,7 +1626,7 @@ Callee = Free(decl: DeclId)
        | Builtin(recv: Expr, method: BuiltinMethod)
        | BuiltinStatic(ty: Type, method: BuiltinMethod)   # List.new, f64.from_bits, string.from_bytes
        | Conversion(decl: DeclId)                # `e as B`, and `??` across two error types
-       | Extern(decl: DeclId)
+       | Extern(decl: DeclId, symbol: str)    # a C function: libc.snprintf
        | Stdlib(decl: DeclId, module: str)      # a function of a registry stdlib module
        | Intrinsic(name: str)
        | Indirect(value: Expr)                   # a closure or a fn-typed local
@@ -1653,6 +1657,21 @@ a member of a `<math>` family (`abs`, `min`, `max`, `divmod`). `decl` names the 
 name, bare or behind an alias, and `module` is the `use` path of the module (`math`). It is
 the `CalleeKind.STDLIB` of `param_modes.py`: a registry row declares no mode, so each
 argument is a borrow (`Guaranteed`). The row of a `Stdlib` callee has no declaring unit.
+
+An `Extern` callee is a C function of an `unsafe external` block, which a call names behind
+the alias of its block (`libc.snprintf`). `decl` names the written name, and `symbol` is
+the link name of the declaration (`ExternalSig.link_name`). It is the
+`CalleeKind.FFI_EXTERN` of `param_modes.py`: a declared parameter has the convention of its
+declared mode (a `poke u8[]` is `Inout`), and each value of the variadic tail of a
+`var_arg` extern is `Guaranteed`, as each argument of a `Stdlib` callee is. A `nom` marker
+on an argument is not compared with the mode: C takes nothing from Sushi. A value in the
+tail is a number, a `bool` or a `string`; a value that C cannot hold as itself is
+[CE5005](../error-catalog.md#ce5005) at the argument. The call yields the declared return
+type, with no channel, and the row carries the declaring unit of the block. `typecheck`
+types an extern whose declared parameters are numbers, `string` and byte buffers (`u8[]`,
+bare, `peek` or `poke`), and whose return is a number or `~`. The call of any other extern
+(a `ptr`, a nullable pointer, a `string` return) stops at `Call(extern)`, and so does a
+`ptr` value in the tail.
 
 `BuiltinMethod` names a row of `METHOD_TYPE_REGISTRY`, so the iterator adapters, `or_err`,
 `map_err`, the container methods and the string methods are one variant. The row of a
@@ -2119,9 +2138,11 @@ that changes it"; `Owned` takes the receiver after the arguments, a consuming us
 names the method in [CE2435](../error-catalog.md#ce2435), with the help of
 [CE2411](../error-catalog.md#ce2411) to copy. A `Stdlib` callee is a call of its
 arguments, and each is `Guaranteed`, a read. A `BuiltinStatic` callee is a call of its
-arguments with the convention of each row: `string.from_bytes` consumes its array. The
-typecheck pass records only the callees
-`Free`, `Stdlib`, `Intrinsic`, `Builtin`, `BuiltinStatic`, `Method` and `Static`, so a call with another
+arguments with the convention of each row: `string.from_bytes` consumes its array. An
+`Extern` callee is a call of its arguments with the convention of each declared mode: a
+`poke u8[]` is the exclusive borrow of its place for the statement, and each other argument
+is a read. The typecheck pass records only the callees
+`Free`, `Stdlib`, `Extern`, `Intrinsic`, `Builtin`, `BuiltinStatic`, `Method` and `Static`, so a call with another
 callee in this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is keyed
 by `LocalId`, because a hidden local has no source name, and a diagnostic names a local by
 the name of its `ShirLocal`. The pass decides the `Ownership` of each consuming use ONE
@@ -3244,6 +3265,21 @@ row and call it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures
 operand yet: the row of another module keeps its AST arguments, until the C-string argument
 is ported with `emit_cstr_arg` at the call site.
 
+An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name)`: `symbol` is the
+link name, `name` is the name of the function with no alias, and it has no module. The
+printer writes the call as `call @snprintf(copy _1 @inout, const 32_i64 @guaranteed, ...)`.
+The declaration round declares each C function of the external table in each module, with
+`var_arg` for a variadic one (`declare_user_externs`). The emitter finds the declaration of a
+`Direct` callee with no module in the external table by its link name and its name
+(`ExternalTable.by_link_name`), and it marshals each operand at the C boundary
+(`backend/slir/externs.py`): a `string` crosses as a NUL-terminated copy that
+`emit_cstr_arg` makes (`backend/expressions/calls/utils.py`, the one C-string seam), and the
+emitter frees each copy right after the call; a byte buffer crosses as the pointer to its
+first byte, read from the descriptor at its address (`Inout`, `InGuaranteed`) or from its
+value (`Guaranteed`); a value of the variadic tail gets the C promotion (a narrow integer and
+a `bool` to `i32`, an `f32` to `f64`). A C function that answers `~` writes `~` into the
+place of the call.
+
 A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
 `symbol` is `method_symbol` of the type of the receiver (the type row of `recv` with no
@@ -3464,7 +3500,7 @@ backstop of the checker, as on the AST backend.
 | `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`) |
 | `Take` | with a `move` row (on the `Take`, or on the `Field` of a `nom` argument): the operand is the `Move` of `Field(local, index)`, and the `Drop(Field(local, i))` of each other owning field of the receiver stands right before the statement that consumes the operand (the call or the store, 8.10 rule 3), after every other operand of that statement: an exit before it (the error path of a `Try` in a later argument) finds the local whole and drops it whole. Two or more takes of one local in one statement (`f(nom w.a, nom w.b)`, `Pair(nom w.a, nom w.b)`) are one take: the local moves one time, and a field drops only when no take of the statement moves it. The `Move` spends the whole local (8.13): it gets no drop, so `drop()` does not run (`borrow-model.md` §10c; `semantics/slir/lower_takes.py`). A `Take` with any other row is its place |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
-| a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The C-string marshalling becomes visible IR, still one lowering site, and `run()` stays the one exception |
+| a `string` argument to an `i8*` callee | a `Guaranteed` operand of the call. The emitter makes the C copy at the call (`emit_cstr_arg`) and frees it right after the call (8.6): the copy lives for the call alone, so no SLIR local holds it and no drop of 8.10 reads it. `run()` stays the one exception |
 
 A condition (of an `If` or a `While`) is evaluated in a scope of its own, whose
 temporaries die before the `SwitchInt`. A condition that is no local and no constant goes
@@ -3948,12 +3984,13 @@ extension table instead: the record of that method whose `method_symbol` is the 
 the callee, with the convention of its `self` first for an instance method
 (`declared_params`, `verify_calls.py`). A `Direct` callee with a module finds its row in the
 signature tables of the stdlib registry: each argument is `Guaranteed`, and the count is the
-arity of its row (`stdlib_arity`). A `Direct` callee with no row there is CE0158. Today a
-free function, a method or a static of the build and a function of a registry stdlib
-module have a row: the first emitter of
-another `Direct` callee (an extern, a conversion, a function of a library) adds its row,
-with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
-code already, for that day. The verifier does not check a shape that no lowering makes yet,
+arity of its row (`stdlib_arity`). A `Direct` callee with no module whose link name and
+name are a declaration of the external table (`ExternalTable.by_link_name`) is a C
+function: each declared parameter has the convention of its declared mode, and a
+variadic extern has `var_arg`, so the rule compares its declared prefix alone. A `Direct`
+callee with no row is CE0158. Today a free function, a method or a static of the build, a
+function of a registry stdlib module and a C function have a row: the first emitter of
+another `Direct` callee (a conversion, a function of a library) adds its row. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
 place that is no local and no element of a local, and a `DropIfSet` of a place that is no
 local.
