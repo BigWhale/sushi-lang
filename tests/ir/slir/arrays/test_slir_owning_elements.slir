@@ -61,7 +61,7 @@ fn main() -> i32 {
     StorageDead(_9)
     StorageDead(_8)
     StorageLive(_12)
-    BeginBorrow(b0, _7, peek)
+    BeginBorrow(b0, _7, peek, for _12)
     _12 = copy (_7[const 0_i32])
     StorageLive(_13)
     _13 = clone(copy _12)

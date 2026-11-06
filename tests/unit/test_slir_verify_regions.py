@@ -38,8 +38,10 @@ def _function(types: list[Type], views: set[int], *blocks: SlirBlock,
                         locals_, blocks, BlockId(0))
 
 
-def _begin(region: int, owner: int, span=SPAN) -> st.BeginBorrow:
-    return st.BeginBorrow(BorrowId(region), _local(owner), BorrowMode.PEEK, span)
+def _begin(region: int, owner: int, view: Optional[int] = None,
+           span=SPAN) -> st.BeginBorrow:
+    return st.BeginBorrow(BorrowId(region), _local(owner), BorrowMode.PEEK,
+                          None if view is None else LocalId(view), span)
 
 
 def _end(region: int, span=SPAN) -> st.EndBorrow:
@@ -60,7 +62,7 @@ def _viewed(*middle: object, after: tuple[object, ...] = (),
     statements `middle` stand in the region, and `after` after its end."""
     return _function(
         types or [BLANK, STRING, STRING, BLANK], {2},
-        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1),
+        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1, 2),
                _set(2, r.Use(_copy(1))), *middle, _end(0), _dead(2), *after, _drop(1),
                _dead(1), _blank()))
 
@@ -80,7 +82,7 @@ def test_a_change_of_the_owner_after_the_end_of_its_region_passes():
 def test_a_region_that_ends_on_each_arm_of_a_switch_passes():
     _passes(_function(
         [BLANK, BOOL, STRING, STRING], {3},
-        _block(0, _switch(1, 2, 1), _live(2), _text(2), _live(3), _begin(0, 2),
+        _block(0, _switch(1, 2, 1), _live(2), _text(2), _live(3), _begin(0, 2, 3),
                _set(3, r.Use(_copy(2)))),
         _block(1, _goto(3), _end(0)),
         _block(2, _goto(3), _end(0)),
@@ -91,8 +93,8 @@ def test_a_region_that_ends_on_each_arm_of_a_switch_passes():
 def test_a_region_over_two_owners_passes():
     _passes(_function(
         [BLANK, STRING, STRING, STRING], {3},
-        _block(0, _ret(), _live(1), _text(1), _live(2), _text(2), _live(3), _begin(0, 1),
-               _begin(1, 2), _set(3, r.Use(_copy(1))), _end(0), _end(1), _dead(3),
+        _block(0, _ret(), _live(1), _text(1), _live(2), _text(2), _live(3), _begin(0, 1, 3),
+               _begin(1, 2, 3), _set(3, r.Use(_copy(1))), _end(0), _end(1), _dead(3),
                _drop(2), _dead(2), _drop(1), _dead(1), _blank())))
 
 
@@ -112,7 +114,7 @@ def test_a_region_open_at_the_return_is_refused():
 def test_a_region_that_ends_on_one_path_alone_is_refused():
     _refused(_function(
         [BLANK, BOOL, STRING, STRING], {3},
-        _block(0, _switch(1, 2, 1), _live(2), _text(2), _live(3), _begin(0, 2),
+        _block(0, _switch(1, 2, 1), _live(2), _text(2), _live(3), _begin(0, 2, 3),
                _set(3, r.Use(_copy(2)))),
         _block(1, _goto(3), _end(0)),
         _block(2, _goto(3, BAD)),
@@ -121,7 +123,7 @@ def test_a_region_that_ends_on_one_path_alone_is_refused():
 
 
 def test_a_region_that_begins_two_times_on_one_path_is_refused():
-    _refused(_viewed(_begin(0, 1, BAD)), REGION)
+    _refused(_viewed(_begin(0, 1, 2, BAD)), REGION)
 
 
 # -- no change of an owner in its region -------------------------------------------------
@@ -184,7 +186,7 @@ def _read_view(view: int = 2, span=SPAN) -> st.Call:
 def test_a_read_of_a_view_local_in_a_later_block_of_its_region_passes():
     _passes(_function(
         [BLANK, STRING, STRING, BLANK, BLANK], {2},
-        _block(0, _goto(1), _live(1), _text(1), _live(2), _begin(0, 1),
+        _block(0, _goto(1), _live(1), _text(1), _live(2), _begin(0, 1, 2),
                _set(2, r.Use(_copy(1)))),
         _block(1, _ret(), _read_view(), _end(0), _dead(2), _drop(1), _dead(1), _blank())),
         READ)
@@ -202,7 +204,7 @@ def test_a_read_of_a_view_local_with_no_region_passes():
 def test_a_read_of_a_view_local_after_the_end_of_its_region_is_refused():
     _refused(_function(
         [BLANK, STRING, STRING, BLANK, BLANK], {2},
-        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1),
+        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1, 2),
                _set(2, r.Use(_copy(1))), _read_view(), _end(0), _read_view(span=BAD),
                _dead(2), _drop(1), _dead(1), _blank())),
         VIEW, declared=READ)
@@ -211,10 +213,49 @@ def test_a_read_of_a_view_local_after_the_end_of_its_region_is_refused():
 def test_a_read_of_a_view_local_after_the_end_of_one_of_its_regions_is_refused():
     _refused(_function(
         [BLANK, STRING, STRING, STRING, BLANK], {3},
-        _block(0, _ret(), _live(1), _text(1), _live(2), _text(2), _live(3), _begin(0, 1),
-               _begin(1, 2), _set(3, r.Use(_copy(1))), _end(1), _read_view(3, BAD),
+        _block(0, _ret(), _live(1), _text(1), _live(2), _text(2), _live(3), _begin(0, 1, 3),
+               _begin(1, 2, 3), _set(3, r.Use(_copy(1))), _end(1), _read_view(3, BAD),
                _end(0), _dead(3), _drop(2), _dead(2), _drop(1), _dead(1), _blank())),
         VIEW, declared=READ)
+
+
+# -- a region names its view (ir.md 8.6, 8.13) -------------------------------------------
+
+
+def _apart(*after: object) -> SlirFunction:
+    """`b0` over `_1` names the view `_2`, and the `StorageLive` of `_2` stands between the
+    `BeginBorrow` and the write of `_2`: the statements `after` follow the write."""
+    return _function(
+        [BLANK, STRING, STRING, BLANK, BLANK], {2},
+        _block(0, _ret(), _live(1), _text(1), _begin(0, 1, 2), _live(2),
+               _set(2, r.Use(_copy(1))), *after, _dead(2), _drop(1), _dead(1), _blank()))
+
+
+def test_a_read_of_a_view_local_in_a_region_that_names_it_passes():
+    _passes(_apart(_read_view(), _end(0)), READ)
+
+
+def test_a_read_of_a_view_local_after_the_end_of_a_region_that_names_it_is_refused():
+    """The region is the one that names the view, not the one right before its write."""
+    _refused(_apart(_read_view(), _end(0), _read_view(span=BAD)), VIEW, declared=READ)
+
+
+def test_a_region_that_names_no_view_local_is_refused():
+    _refused(_function(
+        [BLANK, STRING, STRING, BLANK, BLANK], {2},
+        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1, 3, BAD),
+               _set(2, r.Use(_copy(1))), _end(0), _dead(2), _drop(1), _dead(1), _blank())),
+        VIEW)
+
+
+def test_a_region_that_names_two_views_is_refused():
+    _refused(_function(
+        [BLANK, STRING, STRING, STRING, BLANK], {2, 3},
+        _block(0, _ret(), _live(1), _text(1), _live(2), _begin(0, 1, 2),
+               _set(2, r.Use(_copy(1))), _end(0), _live(3), _begin(0, 1, 3, BAD),
+               _set(3, r.Use(_copy(1))), _end(0), _dead(3), _dead(2), _drop(1), _dead(1),
+               _blank())),
+        VIEW)
 
 
 # -- the uses of an address local (ir.md 8.2, 8.13) -------------------------------------

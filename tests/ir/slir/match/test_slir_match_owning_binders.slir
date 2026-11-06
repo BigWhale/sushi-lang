@@ -37,7 +37,7 @@ fn main() -> i32 {
 
   bb1:
     StorageLive(_4)
-    BeginBorrow(b0, _2, peek)
+    BeginBorrow(b0, _2, peek, for _4)
     _4 = copy ((_2 as Some).0)
     StorageLive(_5)
     _5 = call builtin println@(string)(copy _4 @guaranteed)
@@ -69,10 +69,10 @@ fn main() -> i32 {
     StorageLive(_11)
     _11 = call @word(const "b" @guaranteed)
     StorageLive(_12)
-    BeginBorrow(b1, _10, peek)
+    BeginBorrow(b1, _10, peek, for _12)
     _12 = copy _10
     StorageLive(_13)
-    BeginBorrow(b2, _11, peek)
+    BeginBorrow(b2, _11, peek, for _13)
     _13 = copy _11
     StorageLive(_14)
     _14 = call builtin interp@(string, string, string)(copy _12 @guaranteed, const " " @guaranteed, copy _13 @guaranteed)

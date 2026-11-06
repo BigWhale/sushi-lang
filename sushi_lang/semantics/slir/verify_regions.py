@@ -5,7 +5,7 @@ is a view. The `_0` of a function with a `peek` return is a view local too, and 
 one time on each path to a `return` (the dataflow of `verify_flow.py`). A view local is never
 the place of a `Drop` or a `DropIfSet`, never `Move`d and never the operand of an `Owned`
 argument, at its root or at a projection of it. At each read of a view local, the regions
-that begin right before its write are open. One `Ref` writes an
+that name it are open; a region has one view, and it is a view local. One `Ref` writes an
 address local (8.2), and it is never dropped as a whole and never moved. The `Ref` comes
 before each use of the address local on every path (a dataflow: a block knows the address
 locals that each path into it wrote), and at each use a region over the root of the place of
@@ -48,10 +48,9 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
     """CE0158, through `fail`, at the first view-local rule or region rule that `function`
     breaks."""
     views = {local.id for local in function.locals if local.view}
-    regions: dict[LocalId, frozenset[BorrowId]] = {}
     if views:
         _view_locals(function, views, fail)
-        regions = _regions_of_views(function, views)
+    regions = _regions_of_views(function, views, fail)
     addresses = address_locals(function)
     refs: dict[LocalId, p.Place] = {}
     if addresses:
@@ -97,23 +96,25 @@ def _through(block: SlirBlock, open_: _Open, fail: Fail, refs: dict[LocalId, p.P
     return open_
 
 
-def _regions_of_views(function: SlirFunction,
-                      views: set[LocalId]) -> dict[LocalId, frozenset[BorrowId]]:
-    """The regions of each view local: the `BeginBorrow`s right before the statement that
-    writes it (`DropPlacement.begin_region`). A view with no such region reads a value that
-    no local owns, and the rule does not apply to it."""
-    regions: dict[LocalId, frozenset[BorrowId]] = {}
+def _regions_of_views(function: SlirFunction, views: set[LocalId],
+                      fail: Fail) -> dict[LocalId, frozenset[BorrowId]]:
+    """The regions of each view local: the `BeginBorrow`s that name it (ir.md 8.6). A region
+    has one view, and it is a view local. A view that no region names reads a value that no
+    local owns, and the rule does not apply to it."""
+    named: dict[BorrowId, Optional[LocalId]] = {}
+    regions: dict[LocalId, set[BorrowId]] = {}
     for block in function.blocks:
-        run: list[BorrowId] = []
         for stmt in block.statements:
-            if isinstance(stmt, st.BeginBorrow):
-                run.append(stmt.id)
+            if not isinstance(stmt, st.BeginBorrow):
                 continue
-            target = _written(stmt)
-            if run and target is not None and target.id in views and target.id.index != 0:
-                regions[target.id] = frozenset(run)
-            run = []
-    return regions
+            if stmt.view is not None and stmt.view not in views:
+                fail(VIEW_LOCAL, f"b{stmt.id.index} names _{stmt.view.index}, which is no "
+                                 f"view local", stmt.span)
+            if named.setdefault(stmt.id, stmt.view) != stmt.view:
+                fail(VIEW_LOCAL, f"b{stmt.id.index} names two views", stmt.span)
+            if stmt.view is not None:
+                regions.setdefault(stmt.view, set()).add(stmt.id)
+    return {view: frozenset(ids) for view, ids in regions.items()}
 
 
 def _view_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,

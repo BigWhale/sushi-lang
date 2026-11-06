@@ -87,7 +87,7 @@ fn main() -> i32 {
 
   bb4:
     StorageLive(_12)
-    BeginBorrow(b1, _6, peek)
+    BeginBorrow(b1, _6, peek, for _12)
     _12 = copy ((_6 as Some).0)
     StorageLive(_13)
     _13 = call builtin println@(string)(copy _12 @guaranteed)

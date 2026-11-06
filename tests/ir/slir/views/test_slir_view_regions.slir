@@ -12,7 +12,7 @@ fn read(_1: Result@(string, StdError) @guaranteed) -> Result@(i32, StdError) {
 
   bb1:
     StorageLive(_3)
-    BeginBorrow(b0, _1, peek)
+    BeginBorrow(b0, _1, peek, for _3)
     _3 = copy ((_1 as Ok).0)
     StorageLive(_4)
     _4 = call builtin string.len(copy _3 @guaranteed)
@@ -70,7 +70,7 @@ fn main() -> i32 {
     StorageDead(_3)
     StorageDead(_2)
     StorageLive(_4)
-    BeginBorrow(b0, _1, peek)
+    BeginBorrow(b0, _1, peek, for _4)
     _4 = call builtin list.get(copy _1 @guaranteed, const 0_i32 @guaranteed)
     StorageLive(_5)
     _5 = call builtin maybe.is_some(copy _4 @guaranteed)
@@ -81,7 +81,7 @@ fn main() -> i32 {
     StorageDead(_5)
     StorageDead(_4)
     StorageLive(_7)
-    BeginBorrow(b1, _1, peek)
+    BeginBorrow(b1, _1, peek, for _7)
     _7 = call builtin list.first(copy _1 @guaranteed)
     StorageLive(_8)
     _8 = call builtin maybe.is_some(copy _7 @guaranteed)

@@ -133,7 +133,7 @@ fn main() -> i32 {
 
   bb8:
     StorageLive(_23)
-    BeginBorrow(b0, _21, peek)
+    BeginBorrow(b0, _21, peek, for _23)
     _23 = copy ((_21 as Named).0)
     StorageLive(_24)
     _24 = call builtin interp@(string, string)(const "kept " @guaranteed, copy _23 @guaranteed)

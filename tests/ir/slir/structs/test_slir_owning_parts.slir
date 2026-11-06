@@ -42,7 +42,7 @@ fn main() -> i32 {
     StorageLive(_6)
     _6 = call @make(copy _1 @guaranteed)
     StorageLive(_7)
-    BeginBorrow(b0, _6, peek)
+    BeginBorrow(b0, _6, peek, for _7)
     _7 = copy (_6.0)
     StorageLive(_8)
     _8 = call builtin println@(string)(copy _7 @guaranteed)

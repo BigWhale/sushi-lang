@@ -25,10 +25,10 @@ fn show(_1: (string, string) @in_guaranteed) -> ~ {
 
   bb0:
     StorageLive(_2)
-    BeginBorrow(b0, _1, peek)
+    BeginBorrow(b0, _1, peek, for _2)
     _2 = copy (_1.0)
     StorageLive(_3)
-    BeginBorrow(b1, _1, peek)
+    BeginBorrow(b1, _1, peek, for _3)
     _3 = copy (_1.1)
     StorageLive(_4)
     _4 = call builtin interp@(string, string, string)(copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)

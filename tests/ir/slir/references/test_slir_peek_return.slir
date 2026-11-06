@@ -105,14 +105,14 @@ fn count(_1: i32[] @guaranteed, _2: i32 @guaranteed) -> Result@(i32, Short) {
 
   bb0:
     StorageLive(_3)
-    BeginBorrow(b0, _1, peek)
+    BeginBorrow(b0, _1, peek, for _3)
     _3 = call @head(copy _1 @guaranteed, copy _2 @guaranteed)
     _4 = discriminant(_3)
     switchInt(copy _4) -> [0: bb1, 1: bb2, otherwise: unreachable]
 
   bb1:
     StorageLive(_5)
-    BeginBorrow(b1, _1, peek)
+    BeginBorrow(b1, _1, peek, for _5)
     _5 = copy ((_3 as Ok).0)
     EndBorrow(b0)
     StorageDead(_3)
@@ -177,8 +177,8 @@ fn main() -> i32 {
     StorageLive(_2)
     _2 = const "Harmless"
     StorageLive(_3)
-    BeginBorrow(b0, _1, peek)
-    BeginBorrow(b1, _2, peek)
+    BeginBorrow(b0, _1, peek, for _3)
+    BeginBorrow(b1, _2, peek, for _3)
     _3 = call @longer(copy _1 @guaranteed, copy _2 @guaranteed)
     StorageLive(_4)
     _4 = call builtin println@(string)(copy _1 @guaranteed)
@@ -245,14 +245,14 @@ fn main() -> i32 {
     StorageDead(_14)
     StorageDead(_13)
     StorageLive(_19)
-    BeginBorrow(b2, _6, peek)
+    BeginBorrow(b2, _6, peek, for _19)
     _19 = call @head(copy _6 @guaranteed, const 5_i32 @guaranteed)
     _20 = discriminant(_19)
     switchInt(copy _20) -> [0: bb7, 1: bb8, otherwise: unreachable]
 
   bb7:
     StorageLive(_21)
-    BeginBorrow(b3, _19, peek)
+    BeginBorrow(b3, _19, peek, for _21)
     _21 = copy ((_19 as Ok).0)
     EndBorrow(b2)
     StorageLive(_22)
@@ -280,7 +280,7 @@ fn main() -> i32 {
     StorageLive(_26)
     _26 = call @make()
     StorageLive(_27)
-    BeginBorrow(b4, _26, peek)
+    BeginBorrow(b4, _26, peek, for _27)
     _27 = call @Bag.label(copy _26 @guaranteed)
     StorageLive(_28)
     _28 = call builtin string.len(copy _27 @guaranteed)

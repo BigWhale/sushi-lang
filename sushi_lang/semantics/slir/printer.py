@@ -31,7 +31,8 @@ The rules of the text are L1 to L17 of the migration plan, and the golden
   `<type>(<parts>)`, of a tuple `(<parts>)`, of an array `[<parts>]`, of a closure
   `closure(<parts>)`, and of an iterator `iterator(<parts>)`.
 - A statement: `<place> = <rvalue>`, `<place> = call <callee>(<operand> @<convention>, ...)`,
-  `Drop(<place>)`, `DropIfSet(<place>, _F)`, `BeginBorrow(bN, <place>, peek|poke)`,
+  `Drop(<place>)`, `DropIfSet(<place>, _F)`, `BeginBorrow(bN, <place>, peek|poke)` and
+  `BeginBorrow(bN, <place>, peek|poke, for _V)` for a region that names its view local,
   `EndBorrow(bN)`, `StorageLive(_N)`, `StorageDead(_N)`.
 - A terminator: `goto -> bbN`, `switchInt(<operand>) -> [<value>: bbN, ..., otherwise: bbN]`
   with `otherwise: unreachable` when no other value can reach it, `return`,
@@ -208,7 +209,8 @@ PRINTERS: dict[type, Render] = {
     st.Call: lambda n: f"{show(n.dest)} = call {show(n.callee)}({', '.join(_arg(a) for a in n.args)})",
     st.Drop: lambda n: f"Drop({show(n.place)})",
     st.DropIfSet: lambda n: f"DropIfSet({show(n.place)}, {_local(n.flag)})",
-    st.BeginBorrow: lambda n: f"BeginBorrow({_borrow(n.id)}, {show(n.place)}, {_MODES[n.mode]})",
+    st.BeginBorrow: lambda n: f"BeginBorrow({_borrow(n.id)}, {show(n.place)}, {_MODES[n.mode]}"
+                              f"{'' if n.view is None else f', for {_local(n.view)}'})",
     st.EndBorrow: lambda n: f"EndBorrow({_borrow(n.id)})",
     st.StorageLive: lambda n: f"StorageLive({_local(n.local)})",
     st.StorageDead: lambda n: f"StorageDead({_local(n.local)})",

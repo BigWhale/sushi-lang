@@ -1207,7 +1207,7 @@ def _poke_writes_field(*extra: st.SlirStatement) -> SlirFunction:
     end of the region and the drop of `_1`."""
     return _function([BLANK, NAMED, STRING, NAMED, STRING], _block(
         0, _ret(), *_named(1), _live(3),
-        st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.POKE, SPAN),
+        st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.POKE, None, SPAN),
         _set(3, r.Ref(_local(1), BorrowMode.POKE)),
         _live(4), _text(4), st.Drop(p.Field(_local(3), 0), SPAN),
         st.Assign(p.Field(_local(3), 0), r.Use(_move(4)), SPAN), _dead(4), *extra,
@@ -1248,7 +1248,7 @@ def _poke_rebinds(*middle: st.SlirStatement) -> SlirFunction:
     the drop of `_1`."""
     return _function([BLANK, NAMED, STRING, STRING, STRING], _block(
         0, _ret(), *_named(1), _live(3),
-        st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.POKE, SPAN),
+        st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.POKE, None, SPAN),
         _set(3, r.Ref(p.Field(_local(1), 0), BorrowMode.POKE)),
         _live(4), _text(4), *middle, _dead(4),
         st.EndBorrow(BorrowId(0), SPAN), _dead(3), _drop(1), _dead(1),

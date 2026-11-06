@@ -82,9 +82,12 @@ class DropIfSet:
 
 @dataclass(frozen=True, slots=True)
 class BeginBorrow:
+    """The begin of the region `id` over `place`. `view` is the view local that the region
+    lends to, and `None` for a region with no view local (ir.md 8.6)."""
     id: BorrowId
     place: Place
     mode: BorrowMode
+    view: Optional[LocalId]
     span: Span
 
 

@@ -39,7 +39,7 @@ fn show(_1: Result@(string, BadInput) @guaranteed) -> ~ {
 
   bb1:
     StorageLive(_3)
-    BeginBorrow(b0, _1, peek)
+    BeginBorrow(b0, _1, peek, for _3)
     _3 = copy ((_1 as Ok).0)
     StorageLive(_4)
     _4 = call builtin interp@(string, string)(const "ok " @guaranteed, copy _3 @guaranteed)
@@ -54,7 +54,7 @@ fn show(_1: Result@(string, BadInput) @guaranteed) -> ~ {
 
   bb2:
     StorageLive(_6)
-    BeginBorrow(b1, _1, peek)
+    BeginBorrow(b1, _1, peek, for _6)
     _6 = copy ((_1 as Err).0)
     StorageLive(_7)
     _7 = call builtin interp@(string, BadInput)(const "err " @guaranteed, copy _6 @guaranteed)
@@ -95,7 +95,7 @@ fn first(_1: Maybe@(string) @guaranteed, _2: string @guaranteed) -> Result@(i32,
   bb1:
     Drop(_5)
     StorageLive(_7)
-    BeginBorrow(b0, _1, peek)
+    BeginBorrow(b0, _1, peek, for _7)
     _7 = copy ((_1 as Some).0)
     StorageDead(_5)
     StorageLive(_8)
@@ -196,7 +196,7 @@ fn main() -> i32 {
 
   bb2:
     StorageLive(_16)
-    BeginBorrow(b0, _11, peek)
+    BeginBorrow(b0, _11, peek, for _16)
     _16 = copy ((_11 as Err).0)
     StorageLive(_17)
     _17 = call builtin interp@(string, BadInput)(const "err " @guaranteed, copy _16 @guaranteed)
@@ -232,7 +232,7 @@ fn main() -> i32 {
 
   bb5:
     StorageLive(_24)
-    BeginBorrow(b1, _19, peek)
+    BeginBorrow(b1, _19, peek, for _24)
     _24 = copy ((_19 as Err).0)
     StorageLive(_25)
     _25 = call builtin interp@(string, BadInput)(const "err " @guaranteed, copy _24 @guaranteed)
