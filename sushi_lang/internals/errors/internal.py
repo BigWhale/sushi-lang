@@ -192,11 +192,6 @@ _add(ErrorMessage("CE0064", Severity.ERROR,
 
 # Type Inference (CE0067-CE0070)
 
-# Iterator Operations (CE0071)
-_add(ErrorMessage("CE0071", Severity.ERROR,
-    "iter() expects 0 arguments, got {got}",
-    Category.INTERNAL, "Iterator method called with incorrect number of arguments."))
-
 # CE0072 ("unsupported iterator operation") is retired. It refused a dynamic-array receiver
 # whose element type the name tables did not hold, and #482 gave every receiver its type, so
 # nothing reached it. The number is not reused.

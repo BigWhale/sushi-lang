@@ -98,7 +98,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     taken: StatementTakes = {}
     for arg, convention, mode in zip(node.args, conventions, modes, strict=True):
         if mode is None and convention is Convention.OWNED:
-            if not take_lent_iterator(checker, node, callee, arg.value):
+            if not take_lent_iterator(checker, callee, arg.value):
                 consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
         elif mode is None:
             apply_convention(checker, arg.value, convention)
@@ -201,7 +201,7 @@ def _take_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Built
     `REJECT` row is on the receiver, and the call stands only as the operand of a `??`
     (CE2522)."""
     receiver = callee.recv
-    if take_lent_iterator(checker, node, callee, receiver):
+    if take_lent_iterator(checker, callee, receiver):
         return
     if read_through_receiver(checker, node) is None:
         take_receiver(checker, node, receiver, callee.method.name)

@@ -43,7 +43,7 @@ def test_every_array_method_the_table_marks_is_measured():
 
 #: The families with no receiver rule yet, at the day of the pin (ruling R-V). A family may
 #: leave the set and the pin together; none may join.
-PINNED_NO_RECEIVER_RULE = frozenset({"iterator", "foreign_ptr"})
+PINNED_NO_RECEIVER_RULE = frozenset({"foreign_ptr"})
 
 
 def _receiver_sets():
@@ -257,7 +257,7 @@ def test_slir_lowering_refuses_a_receiver_with_no_convention():
 
     span = Span(1, 1, 1, 2)
     recv = e.LocalRef(ShirId(1), span, LocalId(0))
-    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("iterator").callee("map"))
+    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("foreign_ptr").callee("load_f32"))
     with pytest.raises(InternalCompilerError) as caught:
         lower_calls._receiver_convention(callee, span)
     assert caught.value.code == "CE0000"

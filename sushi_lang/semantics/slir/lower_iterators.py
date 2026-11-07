@@ -206,14 +206,14 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items) -> None:
     low.emit(low.placement.close_scope(span))
     body, done, exit_ = low.new_block(), low.new_block(), low.new_block()
     if takes_item:
-        done.statements.append(st.Drop(p.Local(stepped), span))
+        done.statements.append(low.placement.drop_step(stepped, span))
     payload: p.Place = p.Field(p.Downcast(p.Local(stepped), "Some"), 0)
     binds: tuple[ctl.Binds, ...] = ()
     if not isinstance(source.binder, s.Discard):
         read = p.Move(payload) if takes_item else p.Copy(payload)
         binds = ((None, ((source.binder, r.Use(read)),)),)
     elif takes_item:
-        body.statements.append(st.Drop(p.Local(stepped), span))
+        body.statements.append(low.placement.drop_step(stepped, span))
     ctl.rounds(low, stmt, (p.Copy(p.Local(tag)), tag, span), body, header, done, exit_,
                (among, at_header), binds, leaves_at=1 - some)
 

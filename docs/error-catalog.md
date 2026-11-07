@@ -344,16 +344,6 @@ Variable/constant not found in symbol table during codegen.
 
 Generated C main wrapper not found in module.
 
-### CE0071 {#ce0071}
-
-**Error** · internal
-
-**Message:** `iter() expects 0 arguments, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Iterator method called with incorrect number of arguments.
-
 ### CE0073 {#ce0073}
 
 **Error** · internal

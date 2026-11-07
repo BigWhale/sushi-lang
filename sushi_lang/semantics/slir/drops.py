@@ -227,6 +227,11 @@ class DropPlacement:
         take, a `_` of a destructure, ir.md 8.9). The root keeps its state."""
         return [st.Drop(place, span)]
 
+    def drop_step(self, local: LocalId, span: Span) -> st.Drop:
+        """The drop of the answer of a step of a walk that holds an owned item, on an edge
+        that does not take the item (rule 7)."""
+        return st.Drop(p.Local(local), span)
+
     def _drop(self, local: LocalId, span: Span) -> list[st.SlirStatement]:
         """The drop of `local` by its state: `Drop`, `DropIfSet` or nothing (rule 3)."""
         if local not in self._owning or local in self._moved:

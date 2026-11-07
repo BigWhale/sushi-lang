@@ -112,14 +112,14 @@ def test_the_borrow_pass_stops_at_a_builtin_call_with_its_family() -> None:
     callee row."""
     span = Span(6, 4, 6, 12)
     call = _node(exprs.Call, span)
-    call.target = exprs.Dotted(None, "map")  # type: ignore[attr-defined, arg-type]
-    row = ResolvedCall(Builtin(None, BuiltinMethod("iterator", "map", nom_self=False)))  # type: ignore[arg-type]
+    call.target = exprs.Dotted(None, "load_f32")  # type: ignore[attr-defined, arg-type]
+    row = ResolvedCall(Builtin(None, BuiltinMethod("foreign_ptr", "load_f32", nom_self=False)))  # type: ignore[arg-type]
     checker = types.SimpleNamespace(answers=lambda: types.SimpleNamespace(
         callee_of=lambda _id: row))
     with pytest.raises(StageStop) as caught:
         calls.check_call(checker, call)  # type: ignore[arg-type]
     assert caught.value.code == "CE0155"
-    assert caught.value.params == {"stage": "borrow", "construct": "Call(method iterator)"}
+    assert caught.value.params == {"stage": "borrow", "construct": "Call(method foreign_ptr)"}
     assert caught.value.span == span
 
 

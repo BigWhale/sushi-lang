@@ -185,8 +185,7 @@ def lend_to_the_caller(checker: 'BorrowChecker', value: Optional[e.ShirExpr]) ->
             lend_to_the_caller(checker, source)
 
 
-def take_lent_iterator(checker: 'BorrowChecker', node: e.Call, callee: object,
-                       source: e.ShirExpr) -> bool:
+def take_lent_iterator(checker: 'BorrowChecker', callee: object, source: e.ShirExpr) -> bool:
     """A built-in adapter takes a lent iterator with `nom` (#1228). True when it did: the
     answer borrows the same owners, so the borrow does not leave with it. A `let` that holds
     the iterator is spent, and a lent temporary goes to the adapter whole. Any other position

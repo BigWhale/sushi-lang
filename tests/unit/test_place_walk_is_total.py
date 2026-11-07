@@ -41,6 +41,8 @@ _KNOWN_WALKS: set[tuple[str, str]] = set()
 # it visits every node, so it recurses through a receiver like through any other child.
 _NOT_A_ROOT_WALK = {
     ("sushi_lang/semantics/ast_walk.py", "_expr_types"),              # every type a node names
+    # The owners of a lent iterator: it recurses through an iterator clone and an adapter.
+    ("sushi_lang/semantics/passes/borrow/iterators.py", "lent_owners"),
     # A walk over the items of a SHIR pattern: `Own.inner` is a pattern, not a receiver.
     ("sushi_lang/semantics/passes/types/matching.py", "_bindings_of"),
     ("sushi_lang/semantics/passes/types/matching.py", "_item_signature"),

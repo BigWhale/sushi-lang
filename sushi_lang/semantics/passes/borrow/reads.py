@@ -24,16 +24,15 @@ from sushi_lang.semantics.ast import (
     DynamicArrayNew,
     Expr,
     IndexAccess,
-    MemberAccess,
     MethodCall,
     Name,
 )
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.places import Step, unwrap_try, walk_place
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.method_effects import answers_view
 from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
-from sushi_lang.semantics.ownership import TypeClass, is_get_out_container
+from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.shir.nodes import ShirNode
@@ -47,17 +46,6 @@ if TYPE_CHECKING:
 
 # A read through an owner crosses every step: a field, an element, a call's receiver, a `??`.
 OWNER_STEPS = Step.MEMBER | Step.INDEX | Step.CALL | Step.TRY
-
-
-def called_on(expr: Optional[Expr], *methods: str) -> Optional[Expr]:
-    """The receiver of `expr` if it calls one of `methods`, else None.
-
-    `MethodCall` and `DotCall` are separate nodes with the same three fields, and a
-    caller here holds a bare `Expr` that may be neither.
-    """
-    if not isinstance(expr, (MethodCall, DotCall)) or expr.method not in methods:
-        return None
-    return expr.receiver
 
 
 def borrow_owner(checker: 'BorrowChecker', node: object) -> Optional[Owner]:
@@ -178,32 +166,6 @@ def slice_on_path(expr: object) -> Optional[IndexAccess | e.Slice]:
     return None
 
 
-def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
-    """Does `expr` read a value out of storage something else still owns?"""
-    expr = unwrap_try(expr)
-
-    if is_bare_enum_constant(checker, expr):
-        # `Shape.Empty` parses as a MemberAccess but CONSTRUCTS a payload-free
-        # variant and owns it, like the `Shape.Empty()` spelling. Classifying it
-        # BORROWED skipped cleanup and a later owning rebind leaked (#289).
-        return False
-
-    if isinstance(expr, (MemberAccess, IndexAccess)):
-        return True
-
-    receiver = called_on(expr, "get", "first", "last")
-    if receiver is not None:
-        if isinstance(receiver, Name):
-            state = checker.borrow_state.get(receiver.id)
-            return state is not None and is_get_out_container(state.var_type)
-        # A temporary container is an owner too: the backend parks it and frees its
-        # elements at scope exit, so a get-out from it is a borrow (#1170).
-        return (reads_through_owner(checker, receiver)
-                or is_get_out_container(receiver_type(checker, receiver)))
-
-    return False
-
-
 def receiver_type(checker: 'BorrowChecker', receiver: Optional[Expr]) -> Optional[Type]:
     """The type of a get-out's receiver: a place, or a temporary that makes a new value.
 
@@ -219,37 +181,6 @@ def receiver_type(checker: 'BorrowChecker', receiver: Optional[Expr]) -> Optiona
         case ArrayLiteral() | DynamicArrayFrom() | DynamicArrayNew():
             return receiver.resolved_type
     return None
-
-
-def names_kept_storage(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
-    """Is `expr` storage that a named local keeps, and not an owned temporary (#1014)?
-
-    A place (member and index steps to a name) is kept storage, and so is a get-out
-    (`h.get(0)??`) whose receiver is kept storage. Any other call makes a new owned value
-    (`a.clone()`, `a.s(0, 3)`), and nothing keeps that value but its reader.
-    """
-    end = walk_place(expr, Step.MEMBER | Step.INDEX).node
-    if isinstance(end, Name):
-        return True
-    receiver = called_on(unwrap_try(end), "get", "first", "last")
-    if receiver is None or not reads_through_owner(checker, end):
-        return False
-    return names_kept_storage(checker, receiver)
-
-
-def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
-    """Is `expr` the parenthesis-free spelling of a payload-free variant (#289)?"""
-    if not isinstance(expr, MemberAccess) or not isinstance(expr.receiver, Name):
-        return False
-    if expr.receiver.id in checker.borrow_state:
-        return False  # a local shadows the enum name
-    # A GENERIC enum's bare variant carries the interned instance as a stamp: the
-    # receiver is written `Maybe` and the table holds `Maybe<string>` (#545).
-    enum_type = expr.resolved_enum_type
-    if enum_type is None:
-        enum_type = checker.tables.enums.by_name.get(expr.receiver.id)
-    get_variant = getattr(enum_type, "get_variant", None)
-    return get_variant is not None and get_variant(expr.member) is not None
 
 
 def unknown(checker: 'BorrowChecker', node: object) -> bool:

@@ -8,7 +8,6 @@ from sushi_lang.semantics.ownership import (
     Provenance,
     TypeClass,
     classify,
-    is_get_out_container,
     is_own_type,
     type_class_of,
 )
@@ -228,32 +227,9 @@ def test_recursive_type_terminates():
 # --- Get-out detection ---------------------------------------------------------------
 
 def test_is_own_type():
-    """`Own@(T)` alone, by name. One arm of `is_get_out_container` since #242."""
+    """`Own@(T)` alone, by name."""
     assert is_own_type(GenericTypeRef(base_name="Own", type_args=[I32]))
     assert is_own_type(StructType(name="Own<i32>", fields=(), generic_base="Own"))
     assert not is_own_type(GenericTypeRef(base_name="List", type_args=[I32]))
     assert not is_own_type(StructType(name="Owner", fields=()))  # prefix, not the type
     assert not is_own_type(None)
-
-
-def test_is_get_out_container():
-    """Every container keeps the element its `.get()` hands back, so every one is a view."""
-    for ty in (GenericTypeRef(base_name="Own", type_args=[I32]),
-               GenericTypeRef(base_name="List", type_args=[I32]),
-               GenericTypeRef(base_name="HashMap", type_args=[STR, I32]),
-               StructType(name="Own<i32>", fields=(), generic_base="Own"),
-               StructType(name="List<i32>", fields=(), generic_base="List"),
-               StructType(name="HashMap<string, i32>", fields=(), generic_base="HashMap"),
-               DynamicArrayType(base_type=I32),
-               ArrayType(base_type=I32, size=3)):
-        assert is_get_out_container(ty), ty
-
-    for ty in (None, I32, STR,
-               _struct("Holder", ("data", DynamicArrayType(base_type=I32))),
-               StructType(name="Owner", fields=())):     # prefix, not the type
-        assert not is_get_out_container(ty), ty
-
-    # A borrow of a container is still a container.
-    assert is_get_out_container(
-        ReferenceType(referenced_type=GenericTypeRef(base_name="List", type_args=[I32]),
-                      mutability=BorrowMode.PEEK))
