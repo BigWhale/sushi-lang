@@ -265,7 +265,7 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
 
 def validate_perk_template_bodies(self, target_type, impl: ExtendWithDef) -> None:
-    """The bodies of the check copy of a perk template (#1070): the target, then each method.
+    """The bodies of the check of a perk template (#1070): the target, then each method.
 
     The header is not judged here: `validate_template_header` judged it on the written
     template, one time.

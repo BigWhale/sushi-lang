@@ -108,12 +108,16 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
 
 
 def source_class(checker: 'BorrowChecker', node: e.ShirExpr) -> TypeClass:
-    """What the value at a consuming use owns. A local applies option B (`owns_no_heap`)."""
+    """What the value at a consuming use owns. A local applies option B (`owns_no_heap`). A
+    field of an instance over a borrow holds a reference, which owns nothing."""
     if isinstance(node, e.LocalRef):
         state = checker.borrow_state.get(node.local)
         ty = state.var_type if state is not None else checker.local_type(node.local)
         return checker.types.type_class_of_source(state, ty)
-    return checker.types.type_class(read_type(checker, node))
+    ty = read_type(checker, node)
+    if isinstance(node, e.Field) and isinstance(ty, ReferenceType):
+        return TypeClass.PLAIN
+    return checker.types.type_class(ty)
 
 
 def decide(checker: 'BorrowChecker', node: e.ShirExpr, provenance: Provenance,

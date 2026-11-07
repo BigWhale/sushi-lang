@@ -145,7 +145,7 @@ class BorrowChecker:
         self.typecheck_failed = typecheck_failed
         offered = sum(self.reporter.errors_offered.values())
         has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"
-        # The check copy of a generic free function gives its parameters no span: the note
+        # The template check of a generic free function gives its parameters no span: the note
         # of CE2411 names the type parameter there.
         located = not (isinstance(body.origin, TemplateCheck)
                        and isinstance(decl, GenericFuncDef))

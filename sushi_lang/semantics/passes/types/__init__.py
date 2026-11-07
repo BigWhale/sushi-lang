@@ -59,9 +59,9 @@ class TypeValidator:
     # table and its body in the copy queue. An inference before it does not (#1153).
     queues_late_copies = True
 
-    # True only over the check copy of a template (`templates.TemplateValidator`, #1070).
+    # True only over the check of a template (`templates.TemplateValidator`, #1070).
     in_template_check = False
-    # The element type of each `expand`, over the check copy of a pack template only.
+    # The element type of each `expand`, over the check of a pack template only.
     pack_elements: Optional['PackElements'] = None
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
@@ -74,11 +74,11 @@ class TypeValidator:
                  stops: Optional[Stops] = None,
                  next_stage: Optional[Callable[..., None]] = None) -> None:
         self.reporter = reporter
-        # Whether `run` checks each function template of the unit on a check copy
-        # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
+        # Whether `run` checks each function template of the unit (#1070): a unit of the
+        # program, and a bundled stdlib unit. A consumed library
         # unit was checked by its own `--lib` build.
         self.checks_templates = checks_templates
-        # The written templates that `run` checked on a check copy.
+        # The written templates that `run` checked.
         self.checked_template_ids: Set[int] = set()
         # The SHIR bodies of the program, the record of the stops of the body half, and the
         # stage that each body goes to when the body half finished it with no error: the
@@ -202,7 +202,7 @@ class TypeValidator:
         for const in program.constants:
             validate_constant(self, const)
 
-        # A template is checked one time, on a check copy, where it is written (#1070):
+        # A template is checked one time, where it is written (#1070):
         # a function template, an extension template and a perk template. The copy reads
         # the statement rules too, with the stamps it gets.
         from .templates import (

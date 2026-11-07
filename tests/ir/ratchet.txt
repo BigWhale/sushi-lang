@@ -2055,6 +2055,7 @@ tests/generics/expand_on_shir/test_eos_display_pack_printed.sushi
 tests/generics/expand_on_shir/test_eos_empty_pack.sushi
 tests/generics/expand_on_shir/test_eos_expand_with_return.sushi
 tests/generics/expand_on_shir/test_err_eos_array_clone_no_constraint.sushi
+tests/generics/expand_on_shir/test_err_eos_field_over_a_borrow.sushi
 tests/generics/expand_on_shir/test_err_eos_pack_arith_and_value.sushi
 tests/generics/explicit_type_args/test_err_explicit_type_args_arity.sushi
 tests/generics/explicit_type_args/test_err_explicit_type_args_method.sushi

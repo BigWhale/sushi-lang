@@ -59,6 +59,7 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
         if is_error_type(source) and is_error_type(resolved):
             diag.help(conversion_help(source, resolved, at_try=False))
         note_opaque(diag, source, resolved).emit()
+        validator.body_answers().record_conversion(node.shir_id, NoConversion())
         return resolved
     validator.body_answers().record_conversion(node.shir_id, NoConversion())
     return resolved

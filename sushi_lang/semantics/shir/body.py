@@ -18,7 +18,7 @@ class Instance:
 
 @dataclass(frozen=True, slots=True)
 class TemplateCheck:
-    """The check copy of one template, at opaque type arguments (ir.md 4.3)."""
+    """The check of one template, at opaque type arguments (ir.md 4.3)."""
     template: TemplateId
 
 

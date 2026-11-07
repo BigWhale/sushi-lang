@@ -38,7 +38,7 @@ _Decl = TypeVar("_Decl")
 
 
 class PackElements:
-    """The element type of each `expand` of one check copy (#1070, R6).
+    """The element type of each `expand` of one template check (#1070, R6).
 
     One element type per `expand` node of the SHIR body, numbered in the order the check
     meets them. The number only has to be unique in one template check: the overlay and
