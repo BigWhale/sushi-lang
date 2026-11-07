@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODE: CE2412
+# A use of the item after the change on the path of the leaving arm stays an error.
+
+fn main() i32:
+    let i32 n = 0
+    let string[] xs = from(["a{n}"])
+    foreach(x in xs.iter()):
+        if (x == "a0"):
+            xs.push("b")
+            println(x)
+            break
+        println(x)
+    return 0

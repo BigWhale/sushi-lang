@@ -10,7 +10,8 @@ of an owner after the last use is legal.
 The statements are read backwards from the end of the block of the view. A use in a loop
 that does not hold the `let` is a use of the whole loop: the next round can use the view
 again. A use in an arm of an `if` or a `match` gives the last uses of that arm, and an arm
-with no use ends the region at its top (SLIR lowering). A view that no statement uses ends
+with no use ends the region at its top (SLIR lowering). An arm that always leaves the scope of
+the view has its own leaving ends, also when a later statement uses the view (ir.md 7.9). A view that no statement uses ends
 its region at its `let`. A bare binder of an owning payload makes a view too: its uses
 are read in its arm, and a binder that no statement uses has no last use.
 """
@@ -22,6 +23,7 @@ from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.paths import terminates
 from sushi_lang.semantics.shir.ownership import Region
 from sushi_lang.semantics.shir.walk import walk
 
@@ -63,7 +65,9 @@ def write_regions(views: dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]]
                   table: OwnershipResults) -> None:
     """One region row for each view of the body, in `table`."""
     for view, (owners, block, index) in views.items():
-        table.record_region(view, Region(owners, last_uses(block, index, view)))
+        until = last_uses(block, index, view)
+        leaving = _leaving_ends(block.statements[index + 1:], view)
+        table.record_region(view, Region(owners, tuple(sorted(set(until) | leaving)), leaving))
 
 
 def last_uses(block: ShirBlock, index: int, view: LocalId) -> tuple[ShirId, ...]:
@@ -92,15 +96,31 @@ def _scan(statements: Iterable[s.ShirStmt], view: LocalId) -> tuple[set[ShirId],
 def _last_in(stmt: s.ShirStmt, view: LocalId) -> set[ShirId]:
     """The last uses in a statement that no later statement follows with a use: the last
     uses of each arm of a branch, else the statement itself."""
-    arms: list[ShirBlock] = []
-    if isinstance(stmt, s.If):
-        arms = [stmt.then] + ([stmt.otherwise] if stmt.otherwise is not None else [])
-    elif isinstance(stmt, s.Match):
-        arms = [arm.body for arm in stmt.arms]
     found: set[ShirId] = set()
-    for arm in arms:
+    for arm in _arms(stmt):
         found |= _scan(arm.statements, view)[0]
     return found or {stmt.shir_id}
+
+
+def _arms(stmt: s.ShirStmt) -> list[ShirBlock]:
+    if isinstance(stmt, s.If):
+        return [stmt.then] + ([stmt.otherwise] if stmt.otherwise is not None else [])
+    if isinstance(stmt, s.Match):
+        return [arm.body for arm in stmt.arms]
+    return []
+
+
+def _leaving_ends(statements: Iterable[s.ShirStmt], view: LocalId) -> frozenset[ShirId]:
+    """The leaving ends of `view` in `statements` (ir.md 7.9). The walk does not go into a
+    loop, so a `break` and a `continue` that it finds leave a loop that holds the view."""
+    found: set[ShirId] = set()
+    for stmt in statements:
+        for arm in _arms(stmt):
+            if terminates(arm, leaves_round=True):
+                anchors, used = _scan(arm.statements, view)
+                found |= anchors if used else {arm.shir_id}
+            found |= _leaving_ends(arm.statements, view)
+    return frozenset(found)
 
 
 def _uses(stmt: s.ShirStmt, view: LocalId) -> bool:

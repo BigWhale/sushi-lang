@@ -2458,10 +2458,13 @@ tests/ir/typeck/tuples/test_err_typeck_tuple_poke_part_no_type.sushi
 tests/ir/typeck/var/test_err_typeck_var_rebind_mismatch.sushi
 tests/iterators/direct_walks/test_dw_array.sushi
 tests/iterators/direct_walks/test_dw_change_after_last_use.sushi
+tests/iterators/direct_walks/test_dw_change_on_leaving_arm.sushi
 tests/iterators/direct_walks/test_dw_exits.sushi
 tests/iterators/direct_walks/test_dw_fixed_array.sushi
 tests/iterators/direct_walks/test_dw_in_instance.sushi
+tests/iterators/direct_walks/test_dw_let_view_on_leaving_arm.sushi
 tests/iterators/direct_walks/test_dw_list.sushi
+tests/iterators/direct_walks/test_dw_map_change_on_leaving_arm.sushi
 tests/iterators/direct_walks/test_dw_map_empty.sushi
 tests/iterators/direct_walks/test_dw_map_exits.sushi
 tests/iterators/direct_walks/test_dw_map_skips_holes.sushi
@@ -2481,6 +2484,7 @@ tests/iterators/direct_walks/test_err_dw_poke_of_a_borrow.sushi
 tests/iterators/direct_walks/test_err_dw_poke_of_a_slice.sushi
 tests/iterators/direct_walks/test_err_dw_second_poke.sushi
 tests/iterators/direct_walks/test_err_dw_use_after_change.sushi
+tests/iterators/direct_walks/test_err_dw_use_after_change_in_arm.sushi
 tests/iterators/direct_walks/test_err_dw_use_after_change_on_exit.sushi
 tests/iterators/value/test_err_iv_range_no_position.sushi
 tests/iterators/value/test_err_iv_range_operand.sushi

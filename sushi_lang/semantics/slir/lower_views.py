@@ -6,7 +6,8 @@ its value makes a view local, and its region is the region row of `borrow`: one
 `BeginBorrow` for each owner at the write, and one `EndBorrow` for each after the statement
 of each last use. An arm of an `if` or a `match` with no last use in it ends the region at
 its top, when the branch holds a last use (a last use in the condition, or in another arm);
-an `if` with no `else` ends it on its zero edge. An arm of a `match` ends the region of a
+an `if` with no `else` ends it on its zero edge. An arm that leaves the scope of the view has
+its own ends, from the `leaving` field of the row (ir.md 7.9). An arm of a `match` ends the region of a
 temporary view of its scrutinee at its top, after its binders. An exit ends each region that it crosses
 (`drops.py`). A view that goes into a temporary (the answer of a get-out, the payload of a
 `??` over a borrowed wrapper) has a region over the root of the place that it reads, which
@@ -314,14 +315,26 @@ def enter_arm(low: Lowering, branch: ShirNode, body: Optional[ShirBlock]) -> Non
 
 def _ending(low: Lowering, branch: ShirNode, body: Optional[ShirBlock]) -> list[OpenRegion]:
     """The regions that an arm of `branch` ends at its top. A temporary view of a `match` is
-    its scrutinee: the arm reads it no more after its binders."""
+    its scrutinee: the arm reads it no more after its binders. An arm that is a leaving end
+    of a region ends it, and a leaving end says nothing about any other arm (ir.md 7.9)."""
     regions = low.placement.open_regions()
     ending = [region for region in regions if not region.until and isinstance(branch, s.Match)]
+    if body is not None:
+        ending += [region for region in regions if body.shir_id in _leaving_of(low, region)]
     if any(region.until for region in regions):
         inside, here = _ids(branch), _ids(body)
-        ending += [region for region in regions
-                   if region.until & inside and not region.until & here]
+        for region in regions:
+            uses = region.until - _leaving_of(low, region)
+            if uses & inside and not uses & here:
+                ending.append(region)
     return ending
+
+
+def _leaving_of(low: Lowering, region: OpenRegion) -> frozenset[ShirId]:
+    """The leaving ends of the region row of a view. A temporary view has no row."""
+    local = low.shir_of.get(region.view)
+    row = None if local is None else low.answers.ownership.region_of(local)
+    return frozenset() if row is None else row.leaving
 
 
 def _ids(node: Optional[ShirNode]) -> frozenset[ShirId]:

@@ -1,0 +1,66 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a0\na0\nb0\nx\na0\n7\na0\na0\nb0\nb0\nc0\nd0\nd0\n"
+# EXPECT_NO_LEAKS
+# An arm that changes the owner and leaves the walk: the item has a use after the `if`, and no
+# use after the change on the path of the arm. `break`, `return`, `continue`, a `match` arm,
+# a use before the change in the arm, a nested arm.
+
+fn by_return(string[] xs) i32:
+    let string[] ys = xs.clone()
+    foreach(x in ys.iter()):
+        if (x == "b0"):
+            ys.push("c")
+            return ys.len()
+        println(x)
+    return 0
+
+fn by_nested_arm(string[] xs) i32:
+    let string[] ys = xs.clone()
+    foreach(x in ys.iter()):
+        if (x.len() > 0):
+            if (x == "b0"):
+                ys.clear()
+                return 7
+        println(x)
+    return 0
+
+fn main() i32:
+    let i32 n = 0
+    let string[] xs = from(["a{n}", "b{n}"])
+    foreach(x in xs.clone().iter()):
+        if (x == "b0"):
+            xs.push("c")
+            break
+        println(x)
+    let string[] ys = xs.clone()
+    foreach(y in ys.iter()):
+        if (y == "b0"):
+            println(y)
+            ys.push("d")
+            break
+        println(y)
+    let string[] zs = from(["a{n}", "b{n}"])
+    foreach(z in zs.iter()):
+        if (z == "a0"):
+            zs[1] := "x"
+            continue
+        println(z)
+    println(by_return(from(["a{n}"])) + by_nested_arm(from(["b{n}"])))
+    let string[] ws = from(["a{n}", "b{n}"])
+    foreach(w in ws.iter()):
+        match w.len():
+            0 ->
+                ws.clear()
+                break
+            _ -> println(w)
+        println(w)
+    let string[] vs = from(["c{n}", "d{n}"])
+    foreach(poke v in vs.iter()):
+        if (v == "d0"):
+            vs.push("e")
+            break
+        println(v)
+        v := "d{n}"
+    println(vs[0])
+    println(vs[1])
+    return 0
