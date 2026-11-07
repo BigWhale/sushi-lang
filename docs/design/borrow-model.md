@@ -170,7 +170,7 @@ round-trips a type with non-default metadata, and no construction under `semanti
 leave `param_modes` unstated.
 
 One resolver answers "what are the modes of this callee?" for every kind in the section 5
-table. It is modelled on the closed `ConsumingUse` enum: `CalleeKind` is a closed set, and
+table. It is modelled on the closed set of consuming positions: `CalleeKind` is a closed set, and
 a member with no row fails a unit test statically. The borrow pass and the backend call the same
 resolver, which stops the two halves drifting apart.
 
@@ -297,7 +297,7 @@ has no declaration side to agree with.
 - **Whether the mode is legal is a property of the SCRUTINEE.** A `nom` binding needs the
   match to own what it matches. A temporary is owned by construction; a place expression is
   not, and `match nom r:` is how the local is handed over -- one more consuming position,
-  `ConsumingUse.MATCH_SCRUTINEE`, so `r` afterwards is [CE2405](../error-catalog.md#ce2405) exactly as after `f(nom r)`.
+  `MATCH_SCRUTINEE`, so `r` afterwards is [CE2405](../error-catalog.md#ce2405) exactly as after `f(nom r)`.
   A `nom` binding under a plain `match r:` is [CE2432](../error-catalog.md#ce2432).
 
 An arm takes the variant WHOLE ([CE2433](../error-catalog.md#ce2433)): what suppresses the match's free is the whole
@@ -368,7 +368,7 @@ agree with, so [CE2427](../error-catalog.md#ce2427)'s both-ends rule has no fiel
 ## 10d. The fourth boundary: `??` over a place
 
 The unwrap moves the payload out of its wrapper, so `??` is a
-consuming position too -- `ConsumingUse.TRY`. Over a call the Result is a temporary,
+consuming position too -- `TRY`. Over a call the Result is a temporary,
 nothing else frees it, and the payload lands in the position that takes it. Over a NAMED
 wrapper, `let string got = r??` gives `got` the buffer, so `r` must not free it too.
 

@@ -133,7 +133,9 @@ view-region check reads the view from the statement). Amended on 2026-11-06 by g
 7.3, 7.6, 7.9, 8.6, 8.9 and 8.13 (an `Extern` callee carries the link name of its C
 function; it lowers to a `Direct` callee with no module, whose row the verifier finds in
 the external table; the emitter makes the C copy of a `string` argument at the call and
-frees it after the call, so no SLIR local holds it).
+frees it after the call, so no SLIR local holds it). Amended on 2026-11-07 by ruling R-AZ: 7.9 and 8.13 (a store into one capture slot is
+legal, and the environment as a whole is never written; CE2405 stays for a second capture of
+an owning local and for a use after a move from a rebound function value).
 
 ## The decisions, in one place
 
@@ -1276,9 +1278,7 @@ an array target (`on_perk_miss`, `PerkCopies`, `semantics/generics/perk_copies.p
 a table, and no shape of the IR. The first lookup that misses cuts the copy for that perk or
 that method, and the copy fixpoint places its body in the home unit of its template and
 checks it. This hook gives two of the changes that N4 names. `typecheck` keeps the path of `infer_lambda_type` that writes no stamp
-(`stamp=False`, `passes/types/visit/helpers.py`). This is not built yet: a generic function as
-a value, whose type row names the instance that its position gives (the SHIR walk stops at the
-`GlobalRef`).
+(`stamp=False`, `passes/types/visit/helpers.py`).
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
@@ -1905,7 +1905,7 @@ there: it never lowers to SLIR (4.3).
 
 The arm of a generic call makes a late request directly, and the analyzer cuts the copy at
 once (7.3). The callee row records the instance. The copy fixpoint (Q2) reads no row, and no
-pass reads an AST stamp for a late instance. A function value is not built yet (7.3).
+pass reads an AST stamp for a late instance.
 
 `typecheck` keeps one flag for the body that it walks, `refused_before`. A node whose error a
 pass before `typecheck` reported, or whose answer that error takes away, sets the flag, gets
@@ -2189,7 +2189,10 @@ capture and a write through it are legal, and they stay for the next call.
 **A rebind of a function type.** A local whose `let` holds a named function, or a lambda with
 no capture, owns nothing, and each use copies it. A rebind to a value that can hold an
 environment makes it own on every path after the rebind, so a `let` of it moves
-(`settle_rebound_function_value`). A rebind never takes that answer away.
+(`settle_rebound_function_value`). A rebind never takes that answer away. Ruling R-AZ keeps
+CE2405 in three cases: a second capture of an owning local, a use of a local after a `let`
+moved it from a rebound function value, and the same use when the rebind is in a branch that
+may not run.
 
 **The body half of `borrow`.** The declaration half of `borrow` reads the declaration of
 the body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
@@ -3393,10 +3396,7 @@ each `Convention` against the `FunctionType` of the operand (8.13). A named func
 value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no environment (8.7), and
 `materialize_function_ref` (`backend/runtime/closures.py`) becomes the emitter of that
 case. A generic function as a value names the instance that its position gives (7.3). The
-`Indirect` call of an `IteratorValue` walk has an iterator value as its operand (8.9). This
-is not built yet: `typecheck` stops at a call of a function value (`typecheck, Call(fn
-value)`) and at a function value (`typecheck, GlobalRef`), and the emitter stops at
-`Indirect` (`emit, Indirect`).
+`Indirect` call of an `IteratorValue` walk has an iterator value as its operand (8.9).
 
 ### 8.7 Rvalues
 
@@ -4017,9 +4017,9 @@ Runs after lowering, before the backend. It checks:
   capture is never moved out of, and the environment `_1` is never written as a whole, because
   a caller can call the closure two times or more. Each part of an `AggClosure` after its
   `FnRef` is a `Copy` or a `Move` of a place: lowering takes it from the `Ownership` row of the
-  capture (7.9). The rule does not refuse a store into one slot: a rebind of a capture stays
-  for the next call, as on the old pipeline (`n := n + 1` in a lambda), with the `Drop` of the
-  old value of the slot when it owns (`verify_values.capture_places`)
+  capture (7.9). A store into one slot is legal (ruling R-AZ): a rebind of a capture stays
+  for the next call (`n := n + 1` in a lambda), with the `Drop` of the old value of the slot
+  when it owns (`verify_values.capture_places`)
 - a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
   `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
   the operand of an `Owned` argument (8.7). This rule is not built yet

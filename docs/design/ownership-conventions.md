@@ -50,16 +50,14 @@ meaning here.
 
 ## 3. The two enumerations
 
-### 3.1 `ConsumingUse` — where (a closed set)
+### 3.1 The consuming positions — where (a closed set)
 
 The list below names each consuming position. The `borrow` pass finds each one from its
 SHIR node (`consuming_uses` and its table `CONSUMED`, `semantics/shir/ownership_check.py`,
 pinned by `tests/unit/test_ownership_results_are_complete.py`), so the names are the
-vocabulary of the rule and not members of an enum. The enum `ConsumingUse` of
-`semantics/ownership.py` keeps only `CAPTURE`, which the closure emitter names.
+vocabulary of the rule and not members of an enum.
 
-```python
-class ConsumingUse(Enum):
+```text
     CALL_ARG          # f(x), including struct/enum constructor calls and indirect calls
     LET               # let T x = <source>, and the hidden slot of a `next()` foreach
     REBIND            # x := <source>

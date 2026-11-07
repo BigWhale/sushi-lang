@@ -227,7 +227,7 @@ idioms.
 
 ### Capture policy
 
-Capture is a `ConsumingUse.CAPTURE` — an ownership sink like any other in
+Capture is the `CAPTURE` consuming position — an ownership sink like any other in
 `docs/design/ownership-conventions.md` — so what happens is the shared `classify()` table's answer
 for the captured variable's provenance and type class, not a closures-specific rule:
 
@@ -254,8 +254,8 @@ for the captured variable's provenance and type class, not a closures-specific r
 - **A nested lambda captures through the lambda around it.** The scope pass records a free name
   for every lambda it is free in, so when an inner lambda captures a local of the function, the
   outer lambda captures it too. In the lifted outer body that name is a field of the outer
-  environment, so the inner environment is filled from `#closure_env.<name>` (the `lift` pass
-  sets `Param.capture_source`, and `emit_lambda` reads it). This applies at every depth. The rules
+  environment, so the inner environment is filled from that field (`lambda_value`,
+  `semantics/slir/lower_closures.py`). This applies at every depth. The rules
   above do not change, because the source is a read of a captured field: a plain value is copied
   into the inner environment, and an owning value is the consuming use of a borrow ([CE2411](../error-catalog.md#ce2411)). To
   move an owning capture one level deeper, clone it in the outer body
@@ -333,7 +333,7 @@ The capture machinery, in dependency order:
 - **T1.2** — capture analysis (free-name recording in the scope pass).
 - **T1.3** — type-checking + capture legality, including [CE2094](../error-catalog.md#ce2094) for borrow capture.
 - **T1.4** — lambda-lifting pass (env struct + lifted function synthesis).
-- **T1.6** — backend materialization (`emit_lambda`, env heap-alloc, fat-value construction).
+- **T1.6** — backend materialization (`emit_capturing_closure`, env heap-alloc, fat-value construction).
 - **T1.7** — indirect-call env threading; [CE2094](../error-catalog.md#ce2094) additionally rejects owning/variadic fn-value
   *parameter* types (the indirect path has no deep copy, so this restriction prevents a
   double free; T2.5, Part II §3, is the fix).
@@ -616,8 +616,8 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | Ownership predicate (single source of truth) | `semantics/typesys.py:owns_resource` (see `docs/design/ownership-conventions.md` §6) |
 | Ownership of a capture | `semantics/ownership.py` (the `classify()` table); the borrow pass on SHIR writes the row of each capture (`OwnershipResults`, `docs/design/ir.md` 7.9) |
 | Env heap alloc / recursive env destructor / cloner | `backend/generics/own.py:emit_own_alloc`, `backend/destructors.py:emit_value_destructor`, `backend/runtime/closures.py` (env clone, `clone_ptr`) |
-| Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py`; the closures group C2 gives it operands from SLIR, and until then no body reaches it |
-| Indirect call, non-`Name` callee routing | the `Indirect` callee of a SLIR `Call` (`CALL_EMITTERS`, `backend/slir/emit.py`); it stops until C2 |
+| Runtime API (thunk, build value, indirect call, `emit_capturing_closure`) | `backend/runtime/closures.py`, with its operands from SLIR (`backend/slir/closures.py`) |
+| Indirect call, non-`Name` callee routing | the `Indirect` callee of a SLIR `Call` (`CALL_EMITTERS`, `backend/slir/emit.py`) |
 | Generic higher-order unification (`typecheck` / `instantiate`) | `semantics/generics/unify.py:unify_types`; the leading type-argument solver `semantics/generics/pack_inference.py:solve_leading_type_args` |
 | `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `semantics/generics/extensions.py` |
 | Gap D (`List@(T)` extensibility) | `semantics/passes/collect/` (List as generic struct); the `BuiltinMethod` callee of a SLIR `Call`, which the List group B2 connects to `LIST_EMITTERS` |

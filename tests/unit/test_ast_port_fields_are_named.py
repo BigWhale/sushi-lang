@@ -1,9 +1,8 @@
-"""Two AST fields stay past Gate 4 as stated port templates: `ownership_provenance` and
-`iterator_leaves`.
+"""One AST field stays past Gate 4 as a stated port template: `iterator_leaves`.
 
-David's ruling of 2026-11-05 lets both fields live until group C3 removes them. This gate
-lists every function that writes or reads either field. A new writer or reader fails the
-gate. Task 88 of group C3 deletes both fields and this gate.
+David's ruling of 2026-11-05 lets the field live until group C3 removes it. This gate
+lists every function that writes or reads the field. A new writer or reader fails the
+gate. Group C3 deletes the field and this gate.
 
 The scan reads the compiler's Python source. A site is an attribute access, a `setattr`
 or a `getattr` that names the field as a string. The dataclass declarations in
@@ -19,7 +18,7 @@ import sushi_lang
 PACKAGE = Path(sushi_lang.__file__).parent
 
 #: field -> the group that deletes it
-DELETED_BY = {"ownership_provenance": "C3", "iterator_leaves": "C3"}
+DELETED_BY = {"iterator_leaves": "C3"}
 
 #: (module path under sushi_lang/, qualified function name) -> the fields it names
 SITES: dict[tuple[str, str], frozenset[str]] = {
@@ -72,9 +71,8 @@ def test_every_site_of_a_port_field_is_named():
     new = {key: sorted(fields) for key, fields in _scan().items()
            if fields - SITES.get(key, frozenset())}
     assert not new, (
-        "ownership_provenance and iterator_leaves are stated port templates (David's "
-        "ruling of 2026-11-05). Group C3 (Task 88) deletes them. No new writer or reader "
-        f"may join. These sites name one of them: {new}")
+        "iterator_leaves is a stated port template (David's ruling of 2026-11-05). Group C3 "
+        f"deletes it. No new writer or reader may join. These sites name it: {new}")
 
 
 def test_every_named_site_still_exists():

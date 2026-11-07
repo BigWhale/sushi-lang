@@ -273,7 +273,7 @@ checked against `(A, B)`, but the borrow pass and the backend read the elements 
 (`match_scrutinees`, `passes/borrow/statements.py`). Each element is evaluated once, from
 left to right, and it takes the rules of a named scrutinee: a name or a place is borrowed
 (a `poke` binding writes through to it), a temporary is owned. `match nom (a, b):` consumes
-each element (`ConsumingUse.MATCH_SCRUTINEE`), so a later use of an owning element is
+each element (the `MATCH_SCRUTINEE` position), so a later use of an owning element is
 **[CE2405](../error-catalog.md#ce2405)**. The all-or-nothing rule of [CE2433](../error-catalog.md#ce2433) holds per root, so an arm can take `a` and
 leave `b`; the match then destroys `b` at its end.
 
