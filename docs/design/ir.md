@@ -426,9 +426,12 @@ A generic body is checked where it is written (`checked-generics.md`). Each type
 is OPAQUE, and an operation on it is legal only when a constraint promises it: `Eq` gives
 `==`, `Ord` gives `<`, `Clone` gives `.clone()`, and arithmetic on `T` is refused.
 
-The mechanism is a COPY. `passes/types/templates.py` deep-copies the template, cuts it
-with each type parameter replaced by its opaque form, and runs `typecheck`, `lift` and
-`borrow` on that copy, inside an overlay of the program tables. The written template is
+The mechanism is one more BODY. `passes/types/templates.py` makes a header of the template,
+with each type parameter replaced by its opaque form and with no body, inside an overlay of
+the program tables. `typecheck` checks that header and walks the SHIR body of the template
+as written, whose origin is `TemplateCheck`; each type that the body writes is read at the
+opaque parameters (`TemplateValidator.written_type`). `lift` and `borrow` read that body in
+the overlay. No pass copies, cuts or stamps the AST of a template. The written template is
 then skipped by the ordinary passes.
 
 The real instances are still cut by `monomorphize` and still checked one by one, but each
@@ -439,7 +442,7 @@ parameter ([CE2094](../error-catalog.md#ce2094)). Any other error from an instan
 [CE0149](../error-catalog.md#ce0149): a fault that the template check missed.
 
 So the CHECK is per template, and every fact that code generation needs is per instance.
-This settles Q1: SHIR is built per body, and the opaque check copy is one more body.
+This settles Q1: SHIR is built per body, and the template check is one more body.
 
 ### 4.4 An iterator is a value, and the walk is chosen statically
 
@@ -465,10 +468,20 @@ borrow fact too. Ruling S6 puts all three in `OwnershipResults`.
 The collect pass refuses an `expand` in a position that has no pack
 ([CE0119](../error-catalog.md#ce0119)).
 
-The template check copy of 4.3 keeps its `Expand`: `typecheck` checks the body once, for
-every pack element. An `Expand` anywhere else is an internal error
+The body of the template check of 4.3 keeps its `Expand`: `typecheck` checks the body once,
+for every pack element. An `Expand` anywhere else is an internal error
 ([CE0015](../error-catalog.md#ce0015)). So SHIR has an `Expand` node, legal only in a
 template check body, and a template check body never lowers to SLIR.
+
+Each `Expand` binds its own opaque element type (`PackElements`), which has the constraints
+of the pack. The value pack is no value: a parameter with `pack` has no type row, and a read
+of it, also as a bloom, is [CE0144](../error-catalog.md#ce0144) at the name. `borrow` checks
+the body of an `Expand` as a loop body, to its fixed point, because it runs zero or more
+times, so a move of an outer value in it is a move in a loop. It is no loop of its own: a
+`break` and a `continue` in it go to the frames of the enclosing loop. The binder is a borrow
+of the value of the caller, so a consuming use of it is
+[CE2411](../error-catalog.md#ce2411). In an instance, no path reaches a statement after a copy
+that ends every path (`reached_statements`, 7.2).
 
 ### 4.6 A rebind frees the OLD value, in a fixed order
 
@@ -515,7 +528,7 @@ source
  AST  ......... syntax and source spans. Declarations. NOTHING ELSE.  (section 6)
   |             `monomorphize` is the ONE pass that rewrites it.
   |
-  |  lower (bodies only, per copy: an instance, or a template check copy)
+  |  lower (bodies only, per copy: an instance, or a template check body)
   v
  SHIR  ......... typed, names resolved, calls resolved, MONOMORPHIC.   (section 7)
   |             `typecheck`, `lift` and `borrow` run here. `scope` does NOT (S3).
@@ -571,8 +584,8 @@ Only these may be asked of the AST once the migration completes:
   moves to SHIR and its side table. A marker that the AST builder sets from the source
   (`nom_marked`, `unchecked`, `borrowed_return`, `dont_panic`) is syntax and stays.
 - **Be rewritten by more than one pass.** `monomorphize` is the single sanctioned
-  rewriter (ruling Q1 keeps it there). The template check works on a deep copy and leaves
-  the written template as it is. Every other pass treats the AST as immutable.
+  rewriter (ruling Q1 keeps it there). The template check writes nothing on the AST: it reads
+  the SHIR body of the written template, and makes a header with no body. Every other pass treats the AST as immutable.
 - **Be read by the backend.** The new backend reads SLIR and nothing else.
 - **Be read by a per-body pass.** Once the passes move, the BODY modules of `typecheck`,
   `lift` and `borrow` read SHIR only. The declaration half of `typecheck` and `borrow`
@@ -634,7 +647,7 @@ declaration. Ruled 2026-10-11.
 and `borrow` both want them.
 
 **Position:** built after `monomorphize`, from bodies that are already specialized, once
-per copy: an instance, a copy that the copy fixpoint cuts later, or a template check copy
+per copy: an instance, a copy that the copy fixpoint cuts later, or a template check body
 at opaque type arguments (ruling Q1).
 
 ### 7.1 Two passes stay behind: `scope` and `effects`
@@ -667,8 +680,8 @@ nodes the AST builder synthesizes can share the span of their cause. A table key
 the node is valid for the tree it was built from and for no copy of it, so `scope` runs
 on EVERY copy before that copy is lowered: the copies of the fixpoint (Q2) get it today.
 The body of a template check (4.3) is lowered from the template AS WRITTEN, which `scope`
-walks in the per-unit loop, so its `Bindings` exist and the deep copy of the check needs no
-`scope` run of its own. Each type parameter stays a type as written in that body, and its
+walks in the per-unit loop, so its `Bindings` exist and the check needs no `scope` run of
+its own. Each type parameter stays a type as written in that body, and its
 origin `TemplateCheck(TemplateId)` names the template whose opaque parameters `typecheck`
 reads it at.
 
@@ -749,6 +762,11 @@ copies are one sequence of statements in SHIR. Three rules need the boundary of 
 dead-statement rule, the scope of each copy and the end of an element at a `break`, a
 `continue` or a `return`. Lowering is the one writer: for each block that holds copies, it
 records the statement range of each copy, in the order of the start, the outer copy first.
+One function answers which statements of a block a path reaches (`reached_statements`,
+`semantics/shir/paths.py`): it stops after a statement of a copy that ends every path, also
+at a `break` or a `continue`. `borrow`, its completeness check (`walk` with `reached_in`) and SLIR
+lowering read it, so they do not read the statements of the later copies; `typecheck` reads
+every statement (gate: `tests/unit/test_unrolled_run_end_is_one.py`).
 A copy local keeps the name that the unroll gives it (`#line_x0`). The dump prints the
 table on a `copies` line, by the path of each block, only for a body that has a copy.
 
@@ -859,8 +877,8 @@ position and answers the place of the pattern in the matrix of the one checker; 
 dispatch (`check_pattern`) writes no row, because a pattern has no type.
 An arm checks its node and writes the answers of the node; the check and the answer are
 one arm, so SHIR has no second inference walk. The walk of a template check reads the body
-of the template as written (origin `TemplateCheck`), and the header of its check copy
-stays with the declaration half (6.4). An expression arm takes the type of its position,
+of the template as written (origin `TemplateCheck`), and the header of the check stays with
+the declaration half (6.4). An expression arm takes the type of its position,
 when the position has one, and answers the type of its node; the one dispatch writes that
 answer as the type row of the node. A node that has an error has no answer, and a node that
 reads it has none either, so the completeness check runs only when a walk ends with no stop
@@ -926,8 +944,16 @@ checked; a named one is then CE6104 at the construction, as the old pipeline rep
 `collect` pass refused ([CE1005](../error-catalog.md#ce1005)) gives no second error, and
 the body holds that error. A construction gives its fields no
 convention: a field takes its value by position (7.9). A node that has an error has no
-answer. A generic struct of the program, and a struct whose name the unit lost, are not
-typed yet, and stop the walk of their body.
+answer. A struct whose name the unit lost is not typed yet, and stops the walk of its body.
+
+**A construction of a generic type** (`visit/constructions.py`). A `StructInit`, an `EnumInit`
+and a static of a generic type take the instance from the position when the position holds an
+instance of the type. Else the arguments solve the type parameters through the one leading
+solver (`solve_leading_type_args`), and each argument is checked one time. An argument that
+takes its type from its position (a `Maybe.None`, an empty `from([])`) waits for the other
+arguments. A construction that nothing solves is [CE2112](../error-catalog.md#ce2112), or
+[CE2065](../error-catalog.md#ce2065) when two arguments disagree. The instance is looked up or
+interned, never rebuilt (`intern_constructed_instance`), and it is the instance row of the node.
 
 **A field read.** A `Field` checks its base at no type of its position. The type of the
 base with no `peek` or `poke` decides the field. A field of a struct, and an element of a
@@ -1045,10 +1071,12 @@ element write of it are checked as those of a local, with no CE2096.
 target type. A cast between two numeric types, and a cast to the type of its operand, call
 nothing: the conversion row is `NoConversion`. Any other pair is
 [CE2014](../error-catalog.md#ce2014). In the body of a conversion, a cast of the pair of
-that conversion is [CE2523](../error-catalog.md#ce2523), with a note at the conversion. Three
+that conversion is [CE2523](../error-catalog.md#ce2523), with a note at the conversion. A
+refused cast still answers its target type, so the node that reads it is checked too. An
+opaque type parameter has no other rule: `v as T` with `v` of the type `T` calls nothing, and
+each other cast to or from `T` is CE2014 with a note at the parameter. Two
 casts are not typed yet, and each one stops the walk of the body with `typecheck, Cast`: a
-cast to an opaque type parameter of a template check, a cast to or from `ptr`, and a cast
-between two error types that a declared conversion joins.
+cast to or from `ptr`, and a cast between two error types that a declared conversion joins.
 An integer literal directly under a cast to an integer type, also under a negation there,
 has the target type, and the pass does not check its range: the cast keeps the bits that
 the type holds (`300 as u8` is 44). The fold reads that operand at the target type too
@@ -1077,7 +1105,11 @@ progress, a family with no arm in the table stops the walk with `typecheck, Call
 <family>)`, on a receiver of any type (`Call(method iterator)`), so the stops of each
 family are counted apart. A receiver that is not of a built-in type and that no family
 claims, and no extension method of a plain type answers (see below), stops the walk with
-the label of the call target (`Call(method)`, `Call(extension)`, `Call(stdlib method)`).
+the label of the call target (`Call(method)`, `Call(stdlib method)`), and a perk method that
+is no contract method stops with `Call(perk method)`. An opaque type parameter that a
+constraint gives `Clone` has the family of the derived `clone`, and a contract constraint the
+family of the contract (`promised_contract_family`). In an instance, the same call is the
+family of the concrete type.
 The primitive family has its arm: a primitive method takes no argument (a wrong count is
 [CE2009](../error-catalog.md#ce2009) from the arity row of the family), and the call yields
 the type of its row in `PRIMITIVE_METHOD_RETURNS`. A wrong count does not stop the call
@@ -1163,8 +1195,12 @@ channel of the method, or its bare return value, also after an error of an argum
 lowering. An array of a plain element that owns nothing (`i32[]`, `u8[3]`) takes the
 extension methods of a concrete target (`extend i32[] total()`) as a plain type does
 (`_takes_user_methods`). A method of a `T[]` that no concrete target declares is the copy
-of a template (`extend T[]`, `xs.map(f)`): the walk stops before the copy is cut, so no copy
-is typed before its template. A payload method on a `Result` or a `Maybe` that no method of
+of a template (`extend T[]`), and so is a method of a generic target and a method with a
+method-level type parameter: `resolve_user_method` (`visit/method_templates.py`) asks the
+extension rungs, then solves a method-level parameter from the arguments with the one leading
+solver. The copy is cut for the call, and it is one body of the copy fixpoint. A copy with
+solved method arguments has its own row (`ExtensionTable.method_generic_copies`), because it
+is no answer of (type, name), and `ResolvedCall.type_args` gives them to the symbol. A payload method on a `Result` or a `Maybe` that no method of
 the wrapper answers (`xs.first_big().doubled()`) is [CE2515](../error-catalog.md#ce2515)
 at the call, with a note at the receiver, through the one emitter
 (`reject_unhandled_channel_chain`, `calls/methods.py`). A static of a primitive type name
@@ -1174,12 +1210,9 @@ one argument goes through the one argument check at the type and the mode of its
 `HashMap.new`, `Own.alloc`) is the callee row `BuiltinStatic` too: its instance is the one
 that its position gives, and each argument goes through the one argument check at the
 convention of `argument_conventions` (8.3). These calls still stop the walk with their
-label: a perk method (its callee row is the `Method` of 7.6, not built yet), a receiver
-that is not plain and a static of a type that is not plain
-(an instance of a generic type, an iterator, a `Result`, a `Maybe`, a type parameter; a
-method of an instance of a generic type, `extend Maybe@(i32)` included, is the copy of a
-template), a method with a method-level type parameter, and a call through a field of a
-function type that no method of the struct names.
+label: a perk method (its callee row is the `Method` of 7.6, not built yet), a receiver of a
+kind that takes no user method (an iterator), and a call through a field of a function type
+that no method of the struct names.
 
 **A `peek` return.** A free function, an extension method and a static with a `peek T`
 return (`borrow-model.md` S10h) are typed as any other callee of their kind: the type of
@@ -1313,7 +1346,8 @@ the count the second, and SHIR-to-SLIR lowering evaluates each into a temp in th
 order, so the old order goes. Ruled 2026-10-11.
 
 A `TypeRef` is a type as WRITTEN: the `typesys.Type` the AST builder made from the
-annotation, concrete in an instance and opaque in a template check copy (4.3). It is
+annotation, concrete in an instance and as written in a template check, which reads it at
+the opaque parameters (4.3). It is
 syntax, so it may stand on a node (`Cast.target`, `Static.ty`, `ShirLocal.declared`,
 `ShirParam.ty`). What a written type RESOLVES to in a position is `typecheck`'s (S5).
 
@@ -2127,9 +2161,8 @@ each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
 one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
 too: a class with no row is an internal error at the span of the node, and the arm of a
 construct that the pass does not check yet stops the walk of its body with the stop code
-(`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path, with
-more statements after it in its block, stops the walk too (`borrow, Expand`): the statements of the
-copies that no path reaches are not decided yet. A call of a built-in method has its
+(`borrow, <class>`). The walk of a block reads the statements that a path reaches
+(`reached_statements`, 7.2). A call of a built-in method has its
 arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each
 method of the primitive family and of the `string` family, the derived `clone` of a struct
 or an enum, and each method of the `result` and `maybe` families that does not declare
@@ -2665,7 +2698,7 @@ the fixpoint. Three more rules apply:
 The dump lists the copies of a unit by name (`LoweredUnit.copies`), and the emitter defines the
 written functions of a unit in source order, then the instances by name. The rule of a lambda
 has no code yet: a lambda stops the walk of its body. The body of a pack instance has no
-`Expand`, and a pack template keeps the stop of its `Expand` until the template check takes it.
+`Expand`, and a block ends at a copy that ends every path (`reached_statements`, 7.2).
 
 **The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
 receiver is `_1` with the convention `Inout`, its symbol is the perk symbol of
