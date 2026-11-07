@@ -1,0 +1,38 @@
+# A constraint method called in the body of a generic function: in each instance the receiver
+# type is concrete, so the call names one implementation.
+# EXPECT_STDOUT_EXACT: "woof\nmeow\nbox of 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+perk Speaks:
+    fn speak() string
+
+struct Dog:
+    i32 n
+
+struct Cat:
+    string name
+
+struct Box@(T):
+    T value
+
+extend Dog with Speaks:
+    fn speak() string:
+        return "woof"
+
+extend Cat with Speaks:
+    fn speak() string:
+        return "meow"
+
+extend Box@(T: Display) with Speaks:
+    fn speak() string:
+        return "box of {self.value}"
+
+fn say@(T: Speaks)(T who) ~:
+    println(who.speak())
+
+fn main() i32:
+    say(Dog(1))
+    say(Cat("tom".concat("")))
+    say(Box(7))
+    return 0

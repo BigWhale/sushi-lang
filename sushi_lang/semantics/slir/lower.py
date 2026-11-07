@@ -41,14 +41,13 @@ that must make the flag. So a walk records what it finds (`_Learned`) and goes o
 body is lowered again with what the walks found, until a walk finds nothing new.
 
 The construct of a stop is the SHIR class of the node, or one of these names: `conversion`
-and `perk method` for the body of a conversion and of a perk method; `conversion` also for a
-`??` that calls a declared conversion,
+for the body of a conversion and for a `??` that calls a declared conversion,
 `library function` for a function, a method or a static whose declaring unit the typecheck
 row does not name, `bloom` for a bloom argument, `StructInit reference field`
 (`lower_aggregate.py`), `Match owning alternatives` (`lower_match.py`), and `ConstRef out of range` for a name
 of a constant whose value its type cannot hold. The symbol, the unit and the return type of the function are facts of its declaration
 (ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
-(`extension_decl_symbol`), and its receiver is `_1`. The unit is the declaring unit; a
+(`extension_decl_symbol`), the body of a perk method the perk symbol, and its receiver is `_1`. The unit is the declaring unit; a
 function that has none (a lifted lambda, the instance of a template of a binary library)
 goes into the module of the unit that holds its body.
 """
@@ -94,7 +93,7 @@ from sushi_lang.semantics.slir.function import (
 )
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
-from sushi_lang.semantics.slir.lower_signature import drop_impl_of, return_type_of, symbol_of
+from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value, ViewValue
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type, owns_resource
@@ -145,7 +144,8 @@ class SlirStage:
             self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
             return
         self.verifier.verify(function, funcs=tables.funcs, extensions=tables.extensions,
-                             externals=tables.externals, drops=drops, filename=filename)
+                             externals=tables.externals, perk_impls=tables.perk_impls,
+                             drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
 
 
@@ -188,7 +188,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     if isinstance(body.origin, TemplateCheck):
         er.raise_internal_error("CE0000", detail=f"the template check '{name}' reached SLIR")
     home = declaring_unit(decl, unit)
-    symbol = symbol_of(decl, home, body, drop_impl_of(decl, tables.perk_impls, drops))
+    symbol = symbol_of(decl, home, body, tables.perk_impls)
     ret = return_type_of(decl, tables, body)
     borrows = getattr(decl, "borrowed_return", None) is not None
     shir_locals = {local.id: local for local in body.locals}

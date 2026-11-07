@@ -82,7 +82,8 @@ def receiver(low: Lowering, callee: Callee,
 
 def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
     """A free function by its symbol and its source name; an extension method and a
-    static by their symbol and their written name `<type>.<method>`; a function of a
+    static by their symbol and their written name `<type>.<method>`, and a perk method by
+    the perk symbol of the implementation of the receiver type; a function of a
     registry stdlib module by the symbol of its generated function, its name and its
     module (`stdlib_symbol`, at the type of its arguments); a C function by its link name
     and its name, with no module; an intrinsic with
@@ -99,13 +100,16 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         name = free_callee_name(low.decls, node, callee)
         return st.Direct(function_symbol(name, resolved.unit), name)
     if isinstance(callee, (Method, Static)):
-        if resolved.unit is None:
-            raise StageStop(STAGE, "library function", node.loc)
         owner = (callee.ty if isinstance(callee, Static)
                  else deref_type(low.type_of(callee.recv)))
         name = low.decls.name_of(callee.decl)
-        return st.Direct(method_symbol(owner, name.rpartition(".")[2], resolved.unit,
-                                       resolved.type_args), name)
+        method = name.rpartition(".")[2]
+        if (isinstance(callee, Method) and owner is not None
+                and low.tables.perk_impls.get_method(owner, method) is not None):
+            return st.Direct(method_symbol(owner, method, None), name)
+        if resolved.unit is None:
+            raise StageStop(STAGE, "library function", node.loc)
+        return st.Direct(method_symbol(owner, method, resolved.unit, resolved.type_args), name)
     if isinstance(callee, Stdlib):
         name = low.decls.name_of(callee.decl).rpartition(".")[2]
         types = [low.type_of(arg.value) for arg in node.args]

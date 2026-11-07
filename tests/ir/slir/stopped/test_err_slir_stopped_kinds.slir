@@ -18,7 +18,13 @@ fn Dog.paws(_1: Dog @guaranteed) -> i32 {
 
 fn Small.as: stopped (slir, conversion)
 
-fn Dog.label: stopped (slir, perk method)
+fn Dog.label(_1: Dog @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 3_i32
+    return
+}
 
 fn keep__i32(_1: i32 @owned) -> i32 {
     let _0: i32

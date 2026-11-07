@@ -44,7 +44,7 @@ A plain type is a primitive, or a struct or an enum that is no instance of a gen
 and whose name the unit did not lose. Every other target, and a call that another group
 types (a function of a stdlib module other than `<math>` and
 `<time>`, a C function that `visit/extern_calls.py` does not type, a variadic function, a
-method of a type whose name the unit lost, a perk method), stops the walk of its body. A
+method of a type whose name the unit lost), stops the walk of its body. A
 call of a function or a method with a `peek` return has the source row of the call (`record_call_sources`).
 
 An `Interp` is a `string`, and each hole has a string form; the display type of each hole
@@ -54,7 +54,7 @@ reference type, and the position that holds it decides whether it takes one.
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Callable, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
@@ -115,6 +115,7 @@ from sushi_lang.semantics.passes.types.visit.list_methods import check_list_meth
 from sushi_lang.semantics.passes.types.visit.method_templates import (
     UserMethod, resolve_user_method)
 from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
+from sushi_lang.semantics.passes.types.visit.perk_calls import check_perk_call
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.passes.types.visit.signature_methods import check_signature_method
 from sushi_lang.semantics.shir import dispatch, exprs as e
@@ -227,9 +228,9 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     A field of a function type comes first, and it stops the walk (C2). A family answer goes
     to the arm of the family in `FAMILY_ARMS`, and a family with no arm stops the walk with
     the label of the family, on a receiver of any type. A contract method that a constraint
-    of an opaque receiver promises has the arm of its family. Any other perk method stops
-    the walk (C6), and so does any other method of a receiver that
-    takes no user method yet (`_takes_user_methods`). An extension method is a `Method`
+    of an opaque receiver promises has the arm of its family. Any other perk method is a
+    `Method` callee (`visit/perk_calls.py`). Any other method of a receiver that takes no user
+    method yet stops the walk (`_takes_user_methods`). An extension method is a `Method`
     callee: of a concrete target, or the copy of a template (`visit/method_templates.py`).
     A method that nothing answers on a local whose `let` the pass refused reports nothing
     more.
@@ -256,7 +257,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
                                                                receiver):
         return None
     if answer.rung is MethodRung.PERK:
-        dispatch.stop_at_perk_method(visit.STAGE, node)
+        return check_perk_call(validator, node, target, receiver)
     if not _takes_user_methods(validator, receiver):
         visit.stop_at(validator, node)
     if target.name == "clone" and reject_uncloneable(validator, node, receiver):
@@ -431,8 +432,19 @@ def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name
     of the method, or its bare return value, also after an error of an argument. A method
     with a `peek` return has the source row of the call."""
     method: ExtensionMethod = found.method
+    # A method of a binary library has its own link symbol, as a function has (D6).
+    unit = None if method.link_symbol else method.unit_name
     validator.body_answers().record_callee(
-        node.shir_id, ResolvedCall(callee, method.method_type_args, method.unit_name))
+        node.shir_id, ResolvedCall(callee, method.method_type_args, unit))
+    return check_method_arguments(validator, node, owner, name, method, callee, found.typed)
+
+
+def check_method_arguments(validator: TypeValidator, node: e.Call, owner: Type, name: str,
+                           method: Any, callee: Method | Static,
+                           typed: Mapping[int, Optional[Type]] = NOTHING_TYPED, *,
+                           stop_on_arity: bool = False) -> Optional[Type]:
+    """The arguments of a method, an extension or a method of a perk implementation, through
+    the one argument check, and what the call yields."""
     record_call_sources(validator, node, method)
     params = [_parameter_type(validator, param) for param in method.params]
     kind = CalleeKind.STATIC_METHOD if isinstance(callee, Static) else CalleeKind.METHOD
@@ -440,7 +452,7 @@ def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name
                           [param.name for param in method.params])
     check_arguments(validator, f"{display_type(owner)}.{name}", params, node.args, node.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared,
-                    typed=found.typed)
+                    typed=typed, stop_on_arity=stop_on_arity)
     return extension_call_result_type(validator, method)
 
 

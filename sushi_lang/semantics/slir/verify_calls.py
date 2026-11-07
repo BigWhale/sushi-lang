@@ -41,6 +41,7 @@ from sushi_lang.semantics.unit_symbols import function_symbol
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalTable
     from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
+    from sushi_lang.semantics.passes.collect.perks import PerkImplementationTable
     from sushi_lang.semantics.slir.verify import Check
 
 
@@ -56,14 +57,30 @@ class DeclaredParams:
 DeclaredLookup: TypeAlias = Callable[[st.Direct], Optional[DeclaredParams]]
 
 
+def _perk_params(perk_impls: Optional[PerkImplementationTable], symbol: str,
+                 name: str) -> Optional[DeclaredParams]:
+    """The method `name` of the perk implementation whose perk symbol is `symbol`: its
+    receiver first."""
+    for impl in () if perk_impls is None else perk_impls.implementations.values():
+        if method_symbol(impl.target_type, name, None) != symbol:
+            continue
+        for method in impl.methods:
+            if method.name == name:
+                return DeclaredParams((receiver_mode(method.self_mode).convention,) + tuple(
+                    mode.convention for mode in declared_modes(method.params)))
+    return None
+
+
 def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     callee: st.Direct, *,
-                    externals: Optional[ExternalTable] = None) -> Optional[DeclaredParams]:
+                    externals: Optional[ExternalTable] = None,
+                    perk_impls: Optional[PerkImplementationTable] = None,
+                    ) -> Optional[DeclaredParams]:
     """The declared parameters of the function that `callee` names. A free function is the
     function of its name in the unit whose symbol is the symbol of the callee; the name of a
     pack instance has a dot too. A method or a static has the written name `<type>.<method>`:
-    it is the extension of that name whose symbol is the symbol of the callee, and an instance
-    method has its receiver first. A function of a registry stdlib module is the row of its
+    it is the extension of that name whose symbol is the symbol of the callee, else the method of
+    the perk implementation of that symbol, and an instance method has its receiver first. A function of a registry stdlib module is the row of its
     module, and each of its parameters borrows. A C function is the declaration of `externals`
     whose link name is the symbol of the callee: each parameter has the convention of its
     declared mode, and a variadic one has `var_arg`."""
@@ -83,7 +100,7 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     receiver_mode(record.self_mode).convention,)
                 return DeclaredParams(receiver + tuple(
                     mode.convention for mode in declared_modes(record.params)))
-        return None
+        return _perk_params(perk_impls, callee.symbol, method)
     extern = None if externals is None else externals.by_link_name(callee.symbol, callee.name)
     if extern is not None:
         return DeclaredParams(tuple(mode_of_type(ty).convention for ty in extern.param_types),

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.library_registry import LibraryRegistry
     from sushi_lang.semantics.generics.instantiate import InstantiationCollector
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
-    from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
+    from sushi_lang.semantics.generics.perk_copies import PerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.shir.lookup import DeclLookup
 from sushi_lang.semantics.shir.lowering import (
@@ -115,7 +115,7 @@ def _written_declaration(method: Any, template_id: Any) -> tuple:
 
 
 # One row per kind of copy that is cut after the per-unit loop: a late function copy, a
-# generic-target or array-target extension copy, and an array-template perk copy.
+# generic-target or array-target extension copy, and a perk copy cut on a miss.
 _COPY_ENTRIES: dict[str, _CopyEntry] = {
     "function": _CopyEntry(
         scope=ScopeAnalyzer._check_function,
@@ -179,8 +179,8 @@ class SemanticAnalyzer:
         self.tables: SymbolTables = SymbolTables()
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
-        # The array-template perk copies cut on demand (#699); set with the monomorphizer.
-        self.array_perk_copies: Optional['ArrayPerkCopies'] = None
+        # The perk copies cut on demand (#699); set with the monomorphizer.
+        self.perk_copies: Optional['PerkCopies'] = None
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
         # The SHIR of each body that the scope pass checked, per unit, in the compilation
@@ -257,7 +257,7 @@ class SemanticAnalyzer:
         (`pipeline_stop`); with no stop, the backend emits the `SlirFunction` of each body
         (docs/design/ir.md 8.2). `_check_copies` repeats
         the per-unit stages for each copy cut after the loop started: an extension copy of
-        a generic or an array target, an array-template perk copy, and a function instance
+        a generic or an array target, a perk copy cut on a miss, and a function instance
         of a late request of the typecheck pass (#1155). `_check_array_extensions` drives
         it to a fixpoint. A copy of a checked template reports only the per-instance
         remainder.
@@ -283,7 +283,7 @@ class SemanticAnalyzer:
             self._check_multi_file()
         finally:
             # A miss in the backend is a miss: every copy it needs was cut here.
-            self.tables.perk_impls.on_array_miss = None
+            self.tables.perk_impls.on_perk_miss = None
 
     def _unit_reporter(self, unit, gate_env: Optional[str] = None) -> Reporter:
         """A Reporter that knows one unit's file and source, for a per-unit pass.
@@ -752,11 +752,11 @@ class SemanticAnalyzer:
 
         self.tables.check_call_constraints = monomorphizer.check_call_constraints
 
-        # The array-template perk copies are cut on demand from here on (#699): the
+        # The perk copies are cut on demand from here on (#699): the
         # constraint check of the next stage is the first reader that can miss.
-        from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
-        self.array_perk_copies = ArrayPerkCopies(self.tables, monomorphizer.substitutor)
-        self.tables.perk_impls.on_array_miss = self.array_perk_copies
+        from sushi_lang.semantics.generics.perk_copies import PerkCopies
+        self.perk_copies = PerkCopies(self.tables, monomorphizer.substitutor)
+        self.tables.perk_impls.on_perk_miss = self.perk_copies
         return monomorphizer
 
     def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
@@ -968,7 +968,7 @@ class SemanticAnalyzer:
         while True:
             marks = table_marks(self.tables.structs, self.tables.enums)
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
-            perk_copies = self._place_array_perk_copies(monomorphizer, compilation_order)
+            perk_copies = self._place_perk_copies(monomorphizer, compilation_order)
             batch = self.monomorphized_extensions[checked:]
             functions = self._place_late_functions(monomorphizer, compilation_order)
             self._check_late_instance_clash(compilation_order, functions)
@@ -1068,19 +1068,19 @@ class SemanticAnalyzer:
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
 
-    def _place_array_perk_copies(self, monomorphizer, compilation_order: list[Unit]
+    def _place_perk_copies(self, monomorphizer, compilation_order: list[Unit]
                                  ) -> list[tuple[Unit, ExtendWithDef]]:
-        """Put each array-template perk copy cut since the last round in its home unit.
+        """Put each perk copy cut since the last round in its home unit.
 
-        A copy is cut on demand (`generics/array_perk_copies.py`), at any point from the
+        A copy is cut on demand (`generics/perk_copies.py`), at any point from the
         `monomorphize` stage on, and its body waits until here: placed during the
         per-unit loop, a copy in a unit the loop has not reached would be checked twice.
         """
         placed: list[tuple[Unit, ExtendWithDef]] = []
-        if self.array_perk_copies is None:
+        if self.perk_copies is None:
             return placed
         fn_instantiations: set = set()
-        for template, impl in self.array_perk_copies.take_pending():
+        for template, impl in self.perk_copies.take_pending():
             home = self._adopt_perk_copy(template, impl, compilation_order,
                                          monomorphizer, fn_instantiations)
             if home is not None:
@@ -1297,7 +1297,7 @@ class SemanticAnalyzer:
         """scope, lowering, typecheck, lift and borrow over each copy cut after the loop.
 
         A late function copy (#1155), an extension copy of a generic or an array target,
-        and an array-template perk copy (#699). Each copy is checked with the passes of
+        and a perk copy cut on a miss (#699). Each copy is checked with the passes of
         its HOME unit, the unit that declared the template (#1064): its private functions
         and its aliases are the copy's too. The passes run in the per-unit order, and
         `typecheck` walks the SHIR body of the copy.

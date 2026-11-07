@@ -1030,7 +1030,7 @@ def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
     if perk_method is None:
         return False
 
-    if _reject_call_of_drop(validator, call, receiver_type):
+    if reject_call_of_drop(validator, call.loc, receiver_type, call.method):
         return True
 
     if not _check_user_method(validator, call, receiver_type, perk_method,
@@ -1042,8 +1042,8 @@ def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
     return True
 
 
-def _reject_call_of_drop(validator: 'TypeValidator', call: MethodCall,
-                         receiver_type) -> bool:
+def reject_call_of_drop(validator: 'TypeValidator', loc: Span, receiver_type,
+                        method: str) -> bool:
     """CE4020: a written call of the `drop` method of the predefined `Drop` perk (#1198).
 
     The compiler runs `drop()` at the scope exit, one time for each value, and the
@@ -1051,10 +1051,10 @@ def _reject_call_of_drop(validator: 'TypeValidator', call: MethodCall,
     gives the method, so a `drop` of a user perk stays an ordinary method.
     """
     from sushi_lang.semantics.passes.collect.perks import PerkCollector
-    perk = validator.perk_impl_table.providing_perk(receiver_type, call.method)
+    perk = validator.perk_impl_table.providing_perk(receiver_type, method)
     if perk != PerkCollector.DROP_PERK:
         return False
-    er.emit_with(validator.reporter, er.ERR.CE4020, call.loc,
+    er.emit_with(validator.reporter, er.ERR.CE4020, loc,
                  type=display_type(receiver_type)) \
         .help("to end the value early, let it leave its scope, give it to a function "
               "with 'nom', or declare a 'nom self' method on the type (as 'close()' "

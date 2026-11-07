@@ -266,8 +266,10 @@ instance too, and the next round cuts its own copies (#1146).
 array, and the collect pass files it under the array base `$array`. An array type has no
 instantiation set, because a program writes, infers and nests `i32[]` anywhere. So the copy
 for one array type is cut when a lookup of the perk-implementation table misses for that
-type: `PerkImplementationTable.on_array_miss` is the hook, and `ArrayPerkCopies`
-(`semantics/generics/array_perk_copies.py`) is the one seam that cuts. The hook cuts only a
+type: `PerkImplementationTable.on_perk_miss` is the hook, and `PerkCopies`
+(`semantics/generics/perk_copies.py`) is the one seam that cuts. An instance of a generic
+target that comes after the cut per instantiation (the return of a copy that a call cut)
+takes the same hook. The hook cuts only a
 template that gives the perk or the method that the lookup asked for, so a `u8[]` in a
 stdlib body does not get a copy that no question needs. Every reader of the table then
 agrees with no edit: a method call, a constraint, a contract walk and the hash override.

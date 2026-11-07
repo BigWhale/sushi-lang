@@ -888,6 +888,7 @@ class LibraryRegistration:
             sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file,
                                   receiver=not is_static and self_mode != "nom")
             method = ExtensionMethod(
+                link_symbol=record.get("link_symbol"),
                 target_type=target, name=sig.name, ret_type=sig.ret_type,
                 params=sig.params, self_mode=self_mode, filename=lib_file,
                 unit_name=unit, err_type=sig.err_type, is_static=is_static,

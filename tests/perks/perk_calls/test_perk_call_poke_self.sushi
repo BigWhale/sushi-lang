@@ -1,0 +1,37 @@
+# A `poke self` perk method writes through its receiver: a local, a field and an element. The
+# element's index is evaluated one time.
+# EXPECT_STDOUT_EXACT: "2\n5\npick\n11\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+perk Bumps:
+    fn bump(poke self, i32 by) ~
+    fn read(peek self) i32
+
+struct C:
+    i32 n
+
+struct Holder:
+    C c
+
+extend C with Bumps:
+    fn bump(poke self, i32 by) ~:
+        self.n := self.n + by
+    fn read(peek self) i32:
+        return self.n
+
+fn pick(i32 i) i32:
+    println("pick")
+    return i
+
+fn main() i32:
+    let C a = C(1)
+    a.bump(1)
+    println(a.read())
+    let Holder h = Holder(C(2))
+    h.c.bump(3)
+    println(h.c.read())
+    let C[] xs = from([C(10), C(10)])
+    xs[pick(1)].bump(1)
+    println(xs[1].n)
+    return 0

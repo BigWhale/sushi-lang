@@ -15,12 +15,14 @@ import pytest
 from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors.registry import REGISTRY, Category, ErrorMessage, Severity
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics import ast
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.passes.collect.externals import ExternalSig, ExternalTable
 from sushi_lang.semantics.passes.collect.functions import (
     ExtensionMethod, ExtensionTable, FuncSig, FunctionTable, Param,
 )
+from sushi_lang.semantics.passes.collect.perks import PerkImplementationTable
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -800,6 +802,21 @@ def test_the_declared_parameters_of_a_callee_are_read_from_the_function_table_at
     assert declared_params(funcs, extensions, callee) == DeclaredParams((OWNED,))
     assert declared_params(funcs, extensions,
                            st.Direct(emitted_symbol("late", "other"), "late")) is None
+
+
+def test_the_declared_parameters_of_a_perk_method_are_read_from_its_implementation():
+    """A perk method is the method of the implementation whose perk symbol is the symbol of
+    the callee, with its receiver first. Another symbol has no row."""
+    funcs, extensions = FunctionTable(), ExtensionTable()
+    impls = PerkImplementationTable()
+    method = ast.FuncDef(None, "bump", [ast.Param("by", I32)], BuiltinType.BLANK,
+                         ast.Block(None, []), self_mode="poke")
+    impls.register(ast.ExtendWithDef(None, PAIR, "Bumps", [method]), str(PAIR))
+    assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "bump", None),
+                                                        "Pair.bump"), perk_impls=impls) \
+        == DeclaredParams((Convention.INOUT, GUARANTEED))
+    assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "other", None),
+                                                        "Pair.other"), perk_impls=impls) is None
 
 
 def test_the_declared_parameters_of_a_method_are_its_receiver_then_its_parameters():

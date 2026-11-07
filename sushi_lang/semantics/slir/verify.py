@@ -80,6 +80,7 @@ from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES, is_insta
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalTable
     from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
+    from sushi_lang.semantics.passes.collect.perks import PerkImplementationTable
 
 
 _TERMINATORS = get_args(tm.SlirTerminator)
@@ -98,15 +99,16 @@ def _of_a_part(held: Type) -> Type:
 class SlirVerifier:
     """The pipeline entry of the verifier: the SLIR stage of a unit gives it each function
     that the lowering finished. The declared parameters come from the function table, the
-    extension table and the external table, at each call, so a generic instance that a
+    extension table, the perk implementation table and the external table, at each call, so a generic instance that a
     later body declares is found too."""
 
     def verify(self, function: SlirFunction, *, funcs: FunctionTable,
                extensions: ExtensionTable, externals: ExternalTable,
+               perk_impls: PerkImplementationTable,
                drops: frozenset[str], filename: Optional[str]) -> None:
         verify_function(function, drops=drops,
                         declared=partial(declared_params, funcs, extensions,
-                                         externals=externals),
+                                         externals=externals, perk_impls=perk_impls),
                         filename=filename)
 
 

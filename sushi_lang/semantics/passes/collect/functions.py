@@ -431,6 +431,8 @@ class ExtensionMethod:
     borrowed_return: Optional['BorrowedReturn'] = None
     # The solved method-level type arguments of a copy of a method-generic template.
     method_type_args: tuple[Type, ...] = ()
+    # The symbol a BINARY .slib's bitcode gave this method; the unit does not make it.
+    link_symbol: Optional[str] = None
 
 
 @dataclass

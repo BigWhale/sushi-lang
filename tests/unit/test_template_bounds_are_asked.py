@@ -26,7 +26,7 @@ ASKERS = {
         "what an instance has: the E3 judge of each instance, the shadowing check",
     ("semantics/generics/extensions.py", "monomorphize_all_perk_impls"):
         "the eager and late perk-template copies",
-    ("semantics/generics/array_perk_copies.py", "ArrayPerkCopies.__call__"):
+    ("semantics/generics/perk_copies.py", "PerkCopies.__call__"):
         "the array perk-template copies, cut on a miss",
     ("semantics/passes/types/calls/statics.py", "_interned_static_target"):
         "the late copy of a static",

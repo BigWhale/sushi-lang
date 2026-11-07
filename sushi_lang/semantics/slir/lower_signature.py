@@ -1,8 +1,7 @@
 """SHIR to SLIR: the facts of a function declaration that the lowering reads (ir.md 6.4).
 
-The symbol of the function, the kind of a body that is no free function, no extension
-method and no `drop` of a `Drop` implementation, and the type of the return slot. They
-hold no state of the lowering, and `lower.py` reads them once for each body.
+The symbol of the function and the type of the return slot. They hold no state of the
+lowering, and `lower.py` reads them once for each body.
 """
 from __future__ import annotations
 
@@ -27,45 +26,32 @@ if TYPE_CHECKING:
 
 
 def symbol_of(decl: object, home: Optional[str], body: ShirBody,
-              drop_impl: Optional[ExtendWithDef]) -> str:
-    """The symbol of the function in its module: `function_symbol` for a free function,
-    `extension_decl_symbol` for an extension method or a static, and the perk symbol of
-    the target for the `drop` of the `Drop` implementation `drop_impl` (ir.md 8.2). The
-    copy of a generic function is a free function: its name is the instance name, and `home`
-    is the unit that declares the template. Any other body stops with the name of its kind."""
-    if isinstance(decl, ExtendDef) and not decl.is_conversion:
+              perk_impls: PerkImplementationTable) -> str:
+    """The symbol of the function in its module: `extension_decl_symbol` for an extension
+    method or a static, the perk symbol of the target for a method of a perk implementation
+    (ir.md 8.2), and `function_symbol` for a free function. The copy of a generic function
+    is a free function: its name is the instance name, and `home` is the unit that declares
+    the template. A conversion stops with its name."""
+    if isinstance(decl, ExtendDef):
+        if decl.is_conversion:
+            raise StageStop(STAGE, "conversion", body.block.loc)
         return extension_decl_symbol(decl, home)
-    if drop_impl is not None and isinstance(decl, FuncDef):
-        return method_symbol(drop_impl.target_type, decl.name, None)
-    if isinstance(decl, GenericFuncDef) and not decl.type_params:
-        return function_symbol(decl.name, home)
-    if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
-        raise StageStop(STAGE, kind_of(decl, body), body.block.loc)
+    if isinstance(decl, FuncDef):
+        impl = perk_impl_of(decl, perk_impls)
+        if impl is not None:
+            return method_symbol(impl.target_type, decl.name, None)
+    elif not isinstance(decl, GenericFuncDef) or decl.type_params:
+        er.raise_internal_error("CE0000", span=body.block.loc,
+                                detail=f"a body of {type(decl).__name__} reached SLIR")
     return function_symbol(decl.name, home)
 
 
-def drop_impl_of(decl: object, perk_impls: PerkImplementationTable,
-                 drops: frozenset[str]) -> Optional[ExtendWithDef]:
-    """The `Drop` implementation whose `drop` is `decl`, else None."""
-    if not isinstance(decl, FuncDef) or decl.name != "drop":
-        return None
-    for type_name in drops:
-        impl = perk_impls.get(type_name, "Drop")
-        if impl is not None and any(method is decl for method in impl.methods):
+def perk_impl_of(decl: FuncDef, perk_impls: PerkImplementationTable) -> Optional[ExtendWithDef]:
+    """The perk implementation that holds the method `decl`, else None."""
+    for impl in perk_impls.implementations.values():
+        if any(method is decl for method in impl.methods):
             return impl
     return None
-
-
-def kind_of(decl: object, body: ShirBody) -> str:
-    """The kind of a body that is no free function, no extension method and no `drop` of a
-    `Drop` implementation. A perk method is a `FuncDef` whose body has a receiver before
-    its declared parameters."""
-    if isinstance(decl, FuncDef):
-        return "perk method"
-    if isinstance(decl, ExtendDef):
-        return "conversion"
-    er.raise_internal_error("CE0000", span=body.block.loc,
-                            detail=f"a body of {type(decl).__name__} reached SLIR")
 
 
 def return_type_of(decl: object, tables: SymbolTables, body: ShirBody) -> Type:

@@ -194,12 +194,13 @@ class PerkImplementationTable:
         """The unit that declared this implementation, if a unit declared it."""
         return self.units.get((type_name, perk_name))
 
-    # Cuts the copy of an array template (`extend T[] with P`) for one array type, on
-    # a miss (#699): an array has no instantiation set to cut it from ahead of time.
-    # It takes the array type and the perk OR the method name that was asked, and cuts
-    # only a template that gives it. The analyzer installs it for the length of the
-    # analysis; with none, a miss is a miss. True when a copy was registered.
-    on_array_miss: Optional[Callable[..., bool]] = field(
+    # Cuts the copy of a template (`extend T[] with P`, `extend Box@(T) with P`) for one
+    # type, on a miss (#699): an array has no instantiation set to cut it from ahead of
+    # time, and an instance can come after that cut. It takes the type and the perk OR the
+    # method name that was asked, and cuts only a template that gives it. The analyzer
+    # installs it for the length of the analysis; with none, a miss is a miss. True when a
+    # copy was registered.
+    on_perk_miss: Optional[Callable[..., bool]] = field(
         default=None, repr=False, compare=False)
 
     # The program's perks, set by `SymbolTables`: an opaque type parameter answers the
@@ -225,7 +226,7 @@ class PerkImplementationTable:
         return (type_name, perk_name) in self.implementations
 
     def implements_type(self, ty: 'Type', perk_name: str) -> bool:
-        """Does this TYPE implement the perk? An array template's copy is cut on a miss.
+        """Does this TYPE implement the perk? The copy of a template is cut on a miss.
 
         An opaque type parameter implements what a constraint of it promises (#1070).
         """
@@ -242,13 +243,11 @@ class PerkImplementationTable:
 
     def _cut_on_miss(self, ty: 'Type', *, perk: Optional[str] = None,
                      method: Optional[str] = None) -> bool:
-        """No copy is cut for an array over an opaque type parameter: it is no type of
-        the program (#1070)."""
+        """No copy is cut for a type over an opaque type parameter: it is no type of the
+        program (#1070)."""
         from sushi_lang.semantics.generics.opaque import holds_opaque
-        from sushi_lang.semantics.typesys import DynamicArrayType
-        return (self.on_array_miss is not None and isinstance(ty, DynamicArrayType)
-                and not holds_opaque(ty)
-                and self.on_array_miss(ty, perk=perk, method=method))
+        return (self.on_perk_miss is not None and not holds_opaque(ty)
+                and self.on_perk_miss(ty, perk=perk, method=method))
 
     def get(self, type_name: str, perk_name: str) -> Optional[ExtendWithDef]:
         """Get a specific perk implementation."""
