@@ -815,7 +815,7 @@ argument and a `print` argument by the index in the arguments, a part of an `Int
 the index in the parts (a text part has no row), a capture by the `LocalId` of the captured
 local, and a target of a `Destructure` by its path: the index of the target, then the index
 in each `Nested` level (`(1, 0)` is `b` in `let (a, (b, c)) = v`). The callee row holds the
-`Callee` of 7.6 with the method type arguments and the declaring unit (`ResolvedCall`). A
+`Callee` of 7.6 with its type arguments and the declaring unit (`ResolvedCall`). A
 `Builtin` and a `BuiltinStatic` name their row of `METHOD_TYPE_REGISTRY` by the family and
 the method (`BuiltinMethod`). The conversion row of a `Cast` and of a `Try` holds a
 `Conversion` callee, or `NoConversion` for a numeric cast and for a `??` that keeps its
@@ -1064,8 +1064,8 @@ pass refused an extension of that name on that type. A family answer is the call
 `Builtin(recv, BuiltinMethod)`, and only `MethodFamily.callee` makes the `BuiltinMethod`,
 so its family is always a row of the table (gate:
 `tests/unit/test_dotcall_ladder_is_one.py`). The AST ladder put its answer in a set of
-stamps on the call node. The SHIR ladder puts each fact in a row: the callee, the method
-type arguments and the declaring unit in `ResolvedCall`, the mode of each parameter in a
+stamps on the call node. The SHIR ladder puts each fact in a row: the callee, its type
+arguments and the declaring unit in `ResolvedCall`, the mode of each parameter in a
 convention row, the family in `BuiltinMethod`, and the type of the receiver in the type row
 of the receiver. The convention of the receiver is a fact of the callee: the answer of the
 receiver partition for a `Builtin`, and the declared mode of `self` for a `Method` (8.3,
@@ -1230,10 +1230,12 @@ does (8.2). A late copy of a perk implementation for a generic struct or enum ta
 from a miss hook on the perk-implementation table, on the model of `ArrayPerkCopies`
 (`semantics/generics/array_perk_copies.py`): a hook of a table, and no shape of the IR.
 `typecheck` keeps the path of `infer_lambda_type` that writes no stamp (`stamp=False`,
-`passes/types/visit/helpers.py`). This is not built yet: the SHIR walk stops at a call of a
-generic function (`Call(generic)`) and at a function value (`GlobalRef`), the late request
-reads the AST call (`_request_late_instance`, `passes/types/calls/generics.py`), and the
-perk-implementation table has a miss hook for an array target alone (`on_array_miss`).
+`passes/types/visit/helpers.py`). The arm of a generic call asks for the copy when it writes
+the callee row (`visit/generic_calls.py`), because the call needs the signature of the copy.
+The request gives the key of the row, and the key of the copy whose body makes the call, which
+the growth rule reads (CE0151). This is not built yet: the SHIR walk stops at a function value
+(`GlobalRef`), and the perk-implementation table has a miss hook for an array target alone
+(`on_array_miss`).
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
@@ -1295,7 +1297,8 @@ not reach prints as lowering made it.
 | `Interp` | `parts: [Str \| Expr]`; kept whole so `typecheck` reports per part |
 
 ```
-CallTarget = Named(ref: Expr, type_args: [TypeRef])  # a scope-resolved name, or any callable expr
+CallTarget = Named(ref: Expr, type_args: [TypeRef], type_args_loc: Span | None)
+                                             # a scope-resolved name, or any callable expr
            | Dotted(recv: Expr, name: str)   # x.f(...) -- built-in, extension, perk, adapter
            | Static(ty: TypeRef, name: str)  # Vec.at, List.new, Iterator.new, f64.from_bits
            | BuiltinFn(name: str)            # print, println: no declaration, no receiver
@@ -1322,7 +1325,8 @@ until the type of `x` is known. `Static` covers a call on a type name, user or b
 `hm.HashMap.new()` behind an alias included; it has no receiver EXPRESSION at all.
 
 The type arguments that a call writes (`identity@(i32)(5)`) stand on the callee:
-`Named.type_args`, each a `TypeRef`, empty when the call writes none. A call through a
+`Named.type_args`, each a `TypeRef`, empty when the call writes none, and `type_args_loc` is
+the span of the list, where a wrong count is reported (CE2062). A call through a
 namespace (`geo.nothing@(i32)()`) is a `Named` of a `GlobalRef` too, so the same field
 holds them. Lowering resolves no type argument; the instance that the call names is
 `typecheck`'s (S5). The grammar also parses type arguments after a type or a value and
@@ -1848,9 +1852,9 @@ later statements are reported, and the body does not go on to the next stage.
 A template check body runs the same three SHIR passes, at opaque type arguments, and stops
 there: it never lowers to SLIR (4.3).
 
-The copy fixpoint (Q2) reads each late request of `typecheck` from its rows: the callee row
-of a call, or the type row of a `GlobalRef` (7.3). It reads no AST stamp. This is not built
-yet.
+A late request of `typecheck` holds what its row holds: the declaring unit, the name and the
+type arguments of the callee row of a call, or the type row of a `GlobalRef` (7.3). It reads
+no AST stamp. The row of a `GlobalRef` is not built yet.
 
 `typecheck` keeps one flag for the body that it walks, `refused_before`. A node whose error a
 pass before `typecheck` reported, or whose answer that error takes away, sets the flag, gets
@@ -2647,11 +2651,10 @@ the fixpoint. Three more rules apply:
 - a copy that a pass refused, and a copy of a template that a pass refused, never lower;
 - an `Expand` never reaches SLIR: `monomorphize/unroll.py` unrolls it in an instance (4.5).
 
-The lowering of an instance body is not built yet: such a body stops with `generic
-instance` (`symbol_of`, `semantics/slir/lower_signature.py`), so the rule of a lambda and
-the rule of a refused copy have no code yet. The dump lists the copies of a unit by name
-already (`LoweredUnit.copies`). The order of the emitter is not built yet: it defines the
-functions of a unit in the order of the AST of the unit.
+The dump lists the copies of a unit by name (`LoweredUnit.copies`), and the emitter defines the
+written functions of a unit in source order, then the instances by name. The rule of a lambda
+has no code yet: a lambda stops the walk of its body. The body of a pack instance has no
+`Expand`, and a pack template keeps the stop of its `Expand` until the template check takes it.
 
 **The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
 receiver is `_1` with the convention `Inout`, its symbol is the perk symbol of
@@ -2683,8 +2686,8 @@ implementation that holds the method. It never reads the shape of the body, so t
 
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or one of these names: `generic instance`, `conversion` and `perk method` for the
-body of a monomorphized generic instance, of a conversion and of a perk method other than
+class, or one of these names: `conversion` and `perk method` for the
+body of a conversion and of a perk method other than
 the `drop` of a `Drop` implementation; `conversion` also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
