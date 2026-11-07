@@ -716,7 +716,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     arity=CONTRACT_METHOD_ARITY,
     infer=lambda _receiver, call, _validator: ContractMethodInferrer(call.method)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="function", beats_perk=False, answers=_answers_function,
+    name="function", beats_perk=False, answers=_answers_function, arity={"clone": 0},
     infer=lambda rt, call, v: FunctionMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=PRIMITIVE_FAMILY, beats_perk=False, answers=_answers_primitive,

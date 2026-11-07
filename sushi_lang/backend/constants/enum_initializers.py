@@ -29,6 +29,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
+    FunctionType,
     BuiltinType, StructType, EnumType, EnumVariantInfo, ArrayType, Type, deref_type)
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
 
@@ -127,7 +128,7 @@ def checked_struct(ty: Type, parts: Sequence[Type], fault: Fault) -> StructType:
 
 def _check_constant(constant: k.Constant, fault: Fault) -> None:
     """The one check for each variant and each struct in a constant, at every depth."""
-    if isinstance(constant, k.Aggregate):
+    if isinstance(constant, k.Aggregate) and not isinstance(constant.ty, FunctionType):
         parts = [semantic_type_of(part, fault) for part in constant.parts]
         if constant.variant is not None:
             checked_variant(constant.ty, constant.variant, parts, fault)
@@ -155,11 +156,19 @@ def semantic_type_of(constant: k.Constant, fault: Fault) -> Type:
 
 def constant_initializer(value: k.Aggregate, types, finish_string: Optional[StringFinisher],
                          data_name: str, *, span: Optional[Span] = None,
-                         filename: Optional[str] = None) -> ir.Constant:
+                         filename: Optional[str] = None,
+                         finish_function: Optional[Callable[[str], ir.Constant]] = None
+                         ) -> ir.Constant:
     """The LLVM constant of an aggregate constant: an enum variant through
     `enum_initializer`, a struct or a tuple as one constant for each field, an array as one
     constant for each element. A string part is the constant of `finish_string`, named
-    `<data_name>.<index>`."""
+    `<data_name>.<index>`. A function value is the constant of `finish_function`."""
+    if isinstance(value.ty, FunctionType):
+        (part,) = value.parts
+        if finish_function is None or not isinstance(part, k.FnRef):
+            raise_internal_error("CE0000", span=span, filename=filename,
+                                 detail=f"the function constant {value} has no finisher")
+        return finish_function(part.symbol)
     if value.variant is not None:
         return enum_initializer(value, types, finish_string, data_name, span=span,
                                 filename=filename)
@@ -174,7 +183,8 @@ def constant_initializer(value: k.Aggregate, types, finish_string: Optional[Stri
         name = f"{data_name}.{index}"
         if isinstance(part, k.Aggregate):
             fields.append(constant_initializer(part, types, finish_string, name, span=span,
-                                               filename=filename))
+                                               filename=filename,
+                                               finish_function=finish_function))
         elif isinstance(part, k.Str):
             if finish_string is None:
                 fault("a string field has no finisher")

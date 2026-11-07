@@ -145,12 +145,3 @@ def fn_field_call_type(type_validator, recv_ty, method: str) -> Optional["Type"]
                 base_name, method, recv_ty.name) is not None:
             return None
     return field_ty
-
-
-def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
-    """Validate `obj.handler(args)` against the field's FunctionType."""
-    from sushi_lang.semantics.passes.types.calls.user_defined import (
-        validate_fn_value_call_args,
-    )
-    validate_fn_value_call_args(type_validator, node.args, fn_ty, node.loc)
-

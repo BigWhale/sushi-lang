@@ -14,7 +14,6 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Lambda, Let, Name
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
@@ -46,25 +45,18 @@ def binds_a_bare_literal_string(declared_ty, init) -> bool:
             and isinstance(init.value, e.StrConst))
 
 
-def reconcile_closure_bind(checker: 'BorrowChecker', stmt: Let) -> None:
-    """Record whether a `fn(...)` binding owns a heap environment."""
-    if not isinstance(stmt.ty, FunctionType):
+def settle_function_value(checker: 'BorrowChecker', state: BorrowState, value: e.ShirExpr) -> None:
+    """A `let` of a function type reads what its value holds. A named function captures
+    nothing, so the local owns nothing and each use copies it. A local of a function type
+    hands on its own answer."""
+    if not isinstance(state.var_type, FunctionType):
         return
-    dest = checker.borrow_state.get(stmt.name)
-    if dest is None:
-        return
-    value = stmt.value
-    if isinstance(value, Lambda):
-        dest.var_type = replace(stmt.ty, captures=tuple(value.captures or ()))
-    elif isinstance(value, Name):
-        src = checker.borrow_state.get(value.id)
-        if src is None:
-            # Not a local: a reference to a top-level function, which captures
-            # nothing. State the empty tuple -- leaving it None would read as
-            # "unstated", and a plain fn reference would then move on every use.
-            dest.var_type = replace(stmt.ty, captures=())
-        elif isinstance(src.var_type, FunctionType):
-            dest.var_type = src.var_type
+    if isinstance(value, e.GlobalRef):
+        state.var_type = replace(state.var_type, captures=())
+    elif isinstance(value, e.LocalRef):
+        source = checker.borrow_state.get(value.local)
+        if source is not None and isinstance(source.var_type, FunctionType):
+            state.var_type = source.var_type
 
 
 def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:

@@ -6,7 +6,7 @@ A `Call` node holds the written `CallTarget`. Which callee it names is an answer
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Optional, TypeAlias
 
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.exprs import ShirExpr
@@ -91,8 +91,10 @@ class Intrinsic:
 
 @dataclass(frozen=True, slots=True)
 class Indirect:
-    """A call through a function value: a closure or a local of a function type."""
+    """A call through a function value: a closure, a local of a function type, or the field
+    `field` of a function type of `value`."""
     value: ShirExpr
+    field: Optional[str] = None
 
 
 Callee: TypeAlias = (

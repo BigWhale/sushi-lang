@@ -1337,7 +1337,6 @@ def _stamp_param_modes(call, method) -> None:
     from sushi_lang.semantics.param_modes import CalleeKind, modes_for
     params = getattr(method, "params", None) or ()
     call.callee_param_modes = modes_for(params, CalleeKind.METHOD)
-    call.callee_param_names = tuple(p.name for p in params)
     call.callee_param_types = tuple(p.ty for p in params)
 
 

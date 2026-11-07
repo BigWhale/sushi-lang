@@ -87,7 +87,9 @@ MAYBE_FAMILY = "maybe"
 # one of the four sets below (ruling R-V, docs/design/ir.md 8.3). The clone family and the
 # contract families are in no set.
 # Only reads: no method of the family changes or consumes its receiver.
-RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
+# The one method of a function value is its `clone`, the same rvalue.
+FUNCTION_FAMILY = "function"
+RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY, FUNCTION_FAMILY})
 # The one row of the string family that writes its receiver: the call of the concat
 # peephole. Only SLIR lowering makes it, and no program can name it (docs/design/ir.md 8.9).
 CONCAT_IN_PLACE = "concat_in_place"
@@ -100,7 +102,7 @@ CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
 RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
 # No rule yet: the set can only shrink.
-NO_RECEIVER_RULE_FAMILIES = frozenset({"iterator", "foreign_ptr", "function"})
+NO_RECEIVER_RULE_FAMILIES = frozenset({"iterator", "foreign_ptr"})
 # The derived `clone` of a struct and an enum is in no set: SLIR lowering makes the rvalue
 # `Clone` of every `.clone()`, which reads its receiver (docs/design/ir.md 8.3, 8.7).
 CLONE_FAMILY = "derived_clone"

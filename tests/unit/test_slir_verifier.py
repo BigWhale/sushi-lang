@@ -16,7 +16,7 @@ from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors.registry import REGISTRY, Category, ErrorMessage, Severity
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics import ast
-from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.param_modes import Convention, ParamMode
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.passes.collect.externals import ExternalSig, ExternalTable
 from sushi_lang.semantics.passes.collect.functions import (
@@ -36,7 +36,7 @@ from sushi_lang.semantics.slir.verify import (
 )
 from sushi_lang.semantics.typesys import (
     ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
-    PointerType, ReferenceType, StructType, Type, UnknownType,
+    FunctionType, PointerType, ReferenceType, StructType, Type, UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -412,6 +412,50 @@ def test_a_var_arg_callee_checks_the_convention_of_its_declared_prefix():
     call = _call((p.Const(k.Int(1, I32)), OWNED), (p.Const(k.Int(2, I32)), GUARANTEED))
     _refused(_function([BLANK, BLANK], _block(0, _ret(), call)), "declared conventions",
              declared={"unit$take": DeclaredParams((GUARANTEED,), var_arg=True)})
+
+
+def _indirect(*args: tuple[p.Operand, Convention]) -> st.Call:
+    return st.Call(_local(1), st.Indirect(p.Copy(_local(2))), args, BAD)
+
+
+_BY_NOM = FunctionType((I32,), I32, None, captures=(), param_modes=(ParamMode.NOM,))
+
+
+def _closure(local: int, ty: Type) -> st.Assign:
+    return _set(local, r.Aggregate(r.AggClosure(ty), (p.Const(k.FnRef("unit$f")),)))
+
+
+def test_an_indirect_argument_with_the_convention_of_its_function_type_passes():
+    call = _indirect((p.Const(k.Int(1, I32)), OWNED))
+    blank = _set(0, r.Use(p.Const(k.Blank())))
+    _passes(_function([BLANK, I32, _BY_NOM], _block(0, _ret(), _closure(2, _BY_NOM), call, blank)))
+
+
+def test_an_indirect_argument_with_another_convention_is_refused():
+    call = _indirect((p.Const(k.Int(1, I32)), GUARANTEED))
+    _refused(_function([BLANK, I32, _BY_NOM], _block(0, _ret(), _closure(2, _BY_NOM), call)),
+             CONVENTIONS)
+
+
+def test_an_indirect_call_with_a_wrong_count_is_refused():
+    _refused(_function([BLANK, I32, _BY_NOM], _block(0, _ret(), _closure(2, _BY_NOM), _indirect())),
+             CONVENTIONS)
+
+
+def test_an_indirect_call_of_a_value_that_is_no_function_is_refused():
+    call = _indirect((p.Const(k.Int(1, I32)), OWNED))
+    _refused(_function([BLANK, I32, I32], _block(0, _ret(), _set(2, r.Use(p.Const(k.Int(1, I32)))), call)),
+             CONVENTIONS)
+
+
+def test_an_owned_copy_of_a_function_value_passes():
+    """A named function owns no heap, and `borrow` adopts it (docs/design/ir.md 7.9)."""
+    owning = replace(_BY_NOM, captures=None)
+    takes = FunctionType((owning,), I32, None, captures=(), param_modes=(ParamMode.NOM,))
+    call = st.Call(_local(1), st.Indirect(p.Copy(_local(3))), ((p.Copy(_local(2)), OWNED),), BAD)
+    _passes(_function([BLANK, I32, owning, takes],
+                      _block(0, _ret(), _closure(2, owning), _closure(3, takes), call,
+                             st.Drop(_local(2), SPAN), _set(0, r.Use(p.Const(k.Blank()))))))
 
 
 def _method(*args: tuple[p.Operand, Convention]) -> st.Call:

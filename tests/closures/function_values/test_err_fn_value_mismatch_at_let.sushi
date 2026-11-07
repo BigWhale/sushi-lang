@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2
+
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let fn(i64) -> i32 f = inc
+    println(f(1 as i64))
+    return 0

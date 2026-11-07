@@ -33,10 +33,6 @@ if TYPE_CHECKING:
 #: The mode of the borrow that a value passed by address takes (docs/design/ir.md 8.3).
 BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
 
-#: The root of a place that a later group checks: a function used as a value.
-LATER_ROOTS = (e.GlobalRef,)
-
-
 def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
                  span: Optional[Span]) -> None:
     """Borrow `place` for the statement: `peek x`, `poke x`, `peek x.f`, `poke x.f.g`.
@@ -51,8 +47,8 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     for each `let`-borrow of it. A call result, a literal and a
     construction are temporaries and have no address, and nor does a field of one: CE2404.
     An element has no stable address either, because a growth of its array can move it:
-    CE2404. A slice is a view of its array (`_borrow_slice`). A root that a later group
-    checks (`LATER_ROOTS`) stops the walk.
+    CE2404. A slice is a view of its array (`_borrow_slice`). The scope pass refuses a borrow
+    of the bare name of a function (CE2400).
     """
     is_poke = mode is BorrowMode.POKE
     if isinstance(place, e.Slice):
@@ -61,8 +57,8 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     if borrow_of_constant(checker, place, mode):
         return
     root = walk_place(place, Step.MEMBER).node
-    if isinstance(root, LATER_ROOTS):
-        arms.stop_at(checker, root)
+    if isinstance(root, e.GlobalRef) and "." not in checker.decl_name(root.decl):
+        return
     if isinstance(root, e.StorageRef):
         state = storage_state(checker, root)
         if is_poke:

@@ -17,7 +17,8 @@ peephole included), a call statement, a `return`, an
 (`lower_iterators.py`) with their `break` and `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
 of an array, a field read and write, an element read and write with its bounds check, a
-slice, a destructure, a call, an interpolation, a `??`, `clone`, `expect`, `realise` and
+slice, a destructure, a call, a function value and its call (`lower_closures.py`), an
+interpolation, a `??`, `clone`, `expect`, `realise` and
 `err` (`lower_copies.py`), a borrowed view in a view local with its region, and a take of an
 owning value (`lower_takes.py`). The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
@@ -77,6 +78,7 @@ from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_calls as calls
+from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
@@ -547,6 +549,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.LocalRef: Lowering.leaf,
     e.ConstRef: Lowering.leaf,
     e.StorageRef: Lowering.leaf,
+    e.GlobalRef: closures.function_value,
     e.Binary: Lowering.binary,
     e.Unary: Lowering.unary,
     e.Cast: Lowering.cast,

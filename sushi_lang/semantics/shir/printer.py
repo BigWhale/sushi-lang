@@ -382,7 +382,8 @@ PRINTERS: dict[type, Render] = {
     c.Extern: lambda pr, n: _node("Extern", pr.decl(n.decl), quoted(n.symbol)),
     c.Stdlib: lambda pr, n: _node("Stdlib", f"<{n.module}>", pr.decl(n.decl)),
     c.Intrinsic: lambda _pr, n: _node("Intrinsic", quoted(n.name)),
-    c.Indirect: lambda pr, n: _node("Indirect", pr.show(n.value)),
+    c.Indirect: lambda pr, n: _node("Indirect", pr.show(n.value),
+                                    *(() if n.field is None else (f"field: {n.field}",))),
     c.BuiltinMethod: lambda _pr, m: quoted(m.name),
 }
 

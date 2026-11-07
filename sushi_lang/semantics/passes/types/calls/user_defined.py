@@ -94,45 +94,6 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                             index=index, expected=display_type(element_ty), got=display_type(arg_type))
 
 
-def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
-                                span) -> None:
-    """Arity and per-argument check for a call through a function VALUE (CE2092)."""
-    expected = fn_ty.param_types
-    if len(args) != len(expected):
-        er.emit(validator.reporter, er.ERR.CE2092, span,
-                expected=display_type(fn_ty),
-                actual=f"a call with {len(args)} argument(s)")
-        return
-    for arg, param_ty in zip(args, expected, strict=False):
-        validator.validate_expression(arg)
-        arg_ty = validator.infer_expression_type(arg)
-        if arg_ty is None:
-            continue
-        if types_compatible(validator, arg_ty, param_ty):
-            continue
-        diag = er.emit_with(validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', span),
-                            expected=display_type(param_ty), actual=display_type(arg_ty))
-        _explain_missing_borrow(diag, arg, arg_ty, param_ty)
-        diag.emit()
-
-
-def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
-    """Add the "you meant `peek x`" help where the mismatch is a missing borrow."""
-    from sushi_lang.semantics.typesys import ReferenceType
-    if not isinstance(arg, Name) or isinstance(arg_ty, ReferenceType):
-        return
-    if not isinstance(param_ty, ReferenceType) or param_ty.referenced_type != arg_ty:
-        return
-    diag.help(f"a borrow is created where it is USED, so the argument is written "
-              f"`{param_ty.mutability} {arg.id}`; a reference-typed name mentioned "
-              f"bare is its referent")
-
-
-def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
-    """Validate a call through a first-class function value held in a local (CE2092)."""
-    validate_fn_value_call_args(validator, call.args, fn_ty, call.callee.loc)
-
-
 def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:
     """`errno()`: no argument, and a unit that declares an `unsafe external` block."""
     if not check_arguments(validator, ERRNO_FUNCTION, (), call.args, call.callee.loc,

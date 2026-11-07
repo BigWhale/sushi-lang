@@ -19,6 +19,7 @@ from llvmlite import ir
 from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.runtime.closures import emit_indirect_call
 from sushi_lang.backend.slir.externs import emit_extern
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
@@ -39,7 +40,7 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import (
     SlirBlock, SlirFunction, SlirLocal, address_locals)
 from sushi_lang.semantics.slir.lower import RETURN_SLOT
-from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.typesys import BuiltinType, FunctionType, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -239,16 +240,26 @@ def _builtin(state: FunctionState, statement: st.Call) -> None:
     state.builder.store(emit(state, statement), place_address(state, statement.dest))
 
 
-def _not_yet(state: FunctionState, statement: st.Call) -> None:
-    """A callee kind that the emitter does not handle yet: `emit, <class>`."""
-    state.stop(statement.callee)
+def _indirect(state: FunctionState, statement: st.Call) -> None:
+    """A call of a function value: the emitter reads the semantic type of the operand, loads
+    `fn_ptr` and `env_ptr`, and passes the environment first."""
+    callee = statement.callee
+    if not isinstance(callee, st.Indirect):
+        state.fault(f"the row of an indirect call got a {type(callee).__name__} callee")
+    called = deref_type(type_of_operand(state, callee.operand))
+    if not isinstance(called, FunctionType):
+        state.fault(f"an indirect call of a value of {called}")
+    value = operand_value(state, callee.operand)
+    args = [_argument(state, operand, convention) for operand, convention in statement.args]
+    result = emit_indirect_call(state.codegen, value, called, args, to_i1=False)
+    state.builder.store(result, place_address(state, statement.dest))
 
 
 #: One row for each variant of `SlirCallee` (gate: `test_slir_call_dispatch_is_a_table.py`).
 CALL_EMITTERS: dict[type, Callable[[FunctionState, st.Call], None]] = {
     st.Direct: _direct,
     st.Builtin: _builtin,
-    st.Indirect: _not_yet,
+    st.Indirect: _indirect,
 }
 
 

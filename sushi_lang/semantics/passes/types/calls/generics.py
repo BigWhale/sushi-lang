@@ -134,6 +134,22 @@ def reject_unsolved_generic_value(validator: 'TypeValidator', loc, name: str,
 GENERIC_VALUE_REFUSED = object()
 
 
+def solved_value_type_args(validator: 'TypeValidator', generic_func, expected_ty) -> Optional[tuple]:
+    """The type arguments of a generic function value that the function type of its position
+    solves, or None. A pack parameter takes no value."""
+    from sushi_lang.semantics.typesys import FunctionType
+    from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
+    if not isinstance(expected_ty, FunctionType):
+        return None
+    type_params = generic_func.type_params or []
+    if type_params and type_params[-1].is_pack:
+        return None
+    return solve_leading_type_args(
+        generic_func, list(expected_ty.param_types),
+        validator.struct_table.by_name, validator.enum_table.by_name,
+        ret_type=expected_ty.ok_type)
+
+
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty,
                                  generic_func=None, loc=None):
     """Resolve a generic-fn reference against an expected FunctionType (T2.3).
@@ -142,20 +158,11 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     declaration its provider resolved (#1017).
     """
     from sushi_lang.semantics.typesys import FunctionType
-    from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
-    if not isinstance(expected_ty, FunctionType):
-        return None
     if generic_func is None:
         generic_func = validator.generic_sig(name)
     if generic_func is None:
         return None
-    type_params = generic_func.type_params or []
-    if type_params and type_params[-1].is_pack:
-        return None
-    type_args = solve_leading_type_args(
-        generic_func, list(expected_ty.param_types),
-        validator.struct_table.by_name, validator.enum_table.by_name,
-        ret_type=expected_ty.ok_type)
+    type_args = solved_value_type_args(validator, generic_func, expected_ty)
     if type_args is None:
         return None
 

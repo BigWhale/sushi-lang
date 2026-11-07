@@ -15,7 +15,8 @@ from sushi_lang.semantics.const_eval import ConstantValue, ScalarConstant
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_float_type
-from sushi_lang.semantics.typesys import ArrayType, BuiltinType, EnumType, StructType, Type
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, EnumType, FunctionType, StructType, Type)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -106,9 +107,12 @@ def of_value(value: ConstantValue) -> Constant:
 
 
 def of_scalar(value: ScalarConstant) -> Constant:
-    """The constant of a scalar value that typecheck wrote: a number, a bool or a string. A
-    string is a literal, so it owns no heap."""
+    """The constant of a scalar value that typecheck wrote: a number, a bool, a string or a
+    function. A string is a literal, so it owns no heap. A function value is an aggregate of
+    its function type that holds the one `FnRef`."""
     ty = value.semantic_type
+    if isinstance(ty, FunctionType):
+        return Aggregate(ty, (FnRef(str(value.value)),))
     if ty == BuiltinType.BOOL:
         return Bool(bool(value.value))
     if ty == BuiltinType.STRING:

@@ -17,7 +17,8 @@ type yet is `stop_at`, which stops the walk of the body with the stop code CE015
 destructure, `expressions.py` the expression arms of the leaves and of a struct
 construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms
 of the operators and the check of a condition, `calls.py` the arms of a call, an
-interpolated string and a borrow, `container_statics.py` the arm of a static of a built-in
+interpolated string and a borrow, `function_values.py` the arms of a function used as a value
+and of a call of a function value, `container_statics.py` the arm of a static of a built-in
 container, `results.py` the arm of an enum construction, `constructions.py` the instance of
 a construction and of a static of a generic type,
 `ranges.py` the arms of a range, and `arrays.py` the arms of an array construction, an
@@ -37,6 +38,7 @@ from sushi_lang.semantics.passes.types.visit import calls as ca
 from sushi_lang.semantics.passes.types.visit import destructure as ds
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import fields as fd
+from sushi_lang.semantics.passes.types.visit import function_values as fv
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import ranges as rg
 from sushi_lang.semantics.passes.types.visit import results as rs
@@ -137,7 +139,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.LocalRef: ex.check_local_ref,
     e.ConstRef: ex.check_const_ref,
     e.StorageRef: ex.check_storage_ref,
-    e.GlobalRef: stop_at,
+    e.GlobalRef: fv.check_global_ref,
     e.Field: fd.check_field,
     e.Index: ar.check_index,
     e.Slice: ar.check_slice,

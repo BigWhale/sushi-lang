@@ -4,13 +4,13 @@ ShirBody LIMIT (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(10))
+    Return(adopt Lit(10))
 
 ShirBody counter (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(7))
+    Return(adopt Lit(7))
 
 ShirBody double
   params : [(_0 "x": i32, Guaranteed)]
@@ -28,13 +28,13 @@ ShirBody stored
   params : []
   locals : []
   block  :
-    Return(StorageRef(@counter))
+    Return(adopt StorageRef(@counter))
 
 ShirBody pick
   params : []
   locals : []
   block  :
-    Return(GlobalRef(@double))
+    Return(adopt GlobalRef(@double))
 
 ShirBody main
   params : []

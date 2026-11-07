@@ -43,7 +43,7 @@ def test_every_array_method_the_table_marks_is_measured():
 
 #: The families with no receiver rule yet, at the day of the pin (ruling R-V). A family may
 #: leave the set and the pin together; none may join.
-PINNED_NO_RECEIVER_RULE = frozenset({"iterator", "foreign_ptr", "function"})
+PINNED_NO_RECEIVER_RULE = frozenset({"iterator", "foreign_ptr"})
 
 
 def _receiver_sets():

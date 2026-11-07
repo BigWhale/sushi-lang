@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
 
+from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import FunctionType, StructType
 from sushi_lang.backend.memory.heap import emit_malloc
@@ -71,6 +72,17 @@ def materialize_function_ref(
     fn_ptr_i8 = codegen.builder.bitcast(thunk, codegen.types.str_ptr)
     nul = null_ptr(codegen)
     return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
+
+
+def closure_constant(codegen: "LLVMCodegen", symbol: str) -> ir.Constant:
+    """The constant `{thunk, null, null, null}` of a function-typed constant. The module of
+    another unit does not declare a private function, so its constant stops."""
+    target = codegen.module.globals.get(symbol)
+    if not isinstance(target, ir.Function):
+        raise StageStop("emit", "constant of a private function", None)
+    nul = null_ptr(codegen)
+    fn_ptr = synthesize_thunk(codegen, target).bitcast(codegen.types.str_ptr)
+    return ir.Constant(codegen.types.closure_struct, [fn_ptr, nul, nul, nul])
 
 
 def env_owns_field(codegen: "LLVMCodegen", field_type) -> bool:

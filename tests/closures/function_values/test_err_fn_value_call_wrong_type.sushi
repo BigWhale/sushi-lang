@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODES_EXACT: CE2092
+
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let fn(i32) -> i32 f = inc
+    println(f("no"))
+    return 0

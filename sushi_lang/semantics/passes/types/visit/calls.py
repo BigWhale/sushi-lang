@@ -18,7 +18,7 @@ A `Call` answers what its callee yields. Its written target decides the callee:
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
 - `Dotted` is a method call. The receiver is typed first. A call through a field of a
-  function type stops the walk, and the field comes before a family. Then the ladder of the
+  function type is an `Indirect` callee, and the field comes before a family. Then the ladder of the
   call (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
   implementation, an extension method, or nothing (CE2008). A family answer is the callee
   row `Builtin`, and the arm of the family in `FAMILY_ARMS` types the call. So does a
@@ -70,8 +70,8 @@ from sushi_lang.semantics.generics.maybe import (
     MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, CLONE_FAMILY, CONTRACT_FAMILIES, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY,
-    OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, CLONE_FAMILY, CONTRACT_FAMILIES, FUNCTION_FAMILY, HASHMAP_FAMILY, LIST_FAMILY,
+    MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.passes.collect.externals import ExternalSig
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import (
@@ -97,8 +97,9 @@ from sushi_lang.semantics.passes.types.expressions import top_level_contract
 from sushi_lang.semantics.passes.types.resolution import call_yield, resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import names_no_type
 from sushi_lang.semantics.passes.types.visibility import (
-    name_is_contested, name_was_refused, out_of_scope_help, reject_ambiguous_name,
-    reject_private_call, reject_private_kept_call, reject_private_type, type_is_contested,
+    name_is_contested, reject_ambiguous_name,
+    reject_private_call, reject_private_type,
+    reject_undefined_function, type_is_contested,
     type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.constructions import (
     Constructed, generic_static_owner)
@@ -107,6 +108,8 @@ from sushi_lang.semantics.passes.types.visit.container_statics import (
 from sushi_lang.semantics.passes.types.visit.contract_calls import (
     check_contract_method, promised_contract_family)
 from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_call
+from sushi_lang.semantics.passes.types.visit.function_values import (
+    check_field_call, check_function_clone, check_value_call, function_behind_local)
 from sushi_lang.semantics.passes.types.visit.generic_calls import resolve_generic_call
 from sushi_lang.semantics.passes.types.visit.helpers import (
     fn_field_call_type, function_type_of_sig)
@@ -128,8 +131,8 @@ from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, ReferenceType, StructType, Type,
-    deref_type)
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, ReferenceType, StructType,
+    Type, deref_type)
 from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
@@ -155,7 +158,10 @@ def check_call(validator: TypeValidator, node: e.Call,
         if base is not None:
             return check_container_static(validator, node, target, base, expected)
         return _check_static_call(validator, node, target, expected)
-    visit.stop_at(validator, node)
+    function = function_behind_local(validator, node)
+    if function is not None:
+        return _check_free_call(validator, node, function)
+    return check_value_call(validator, node, target.ref)
 
 
 def _rejects_a_pack_bloom(validator: TypeValidator, node: e.Call) -> bool:
@@ -225,7 +231,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
                        target: e.Dotted) -> Optional[Type]:
     """`x.f(args)`: the receiver, then the callee that the ladder finds (ir.md 7.3).
 
-    A field of a function type comes first, and it stops the walk (C2). A family answer goes
+    A field of a function type comes first (`visit/function_values.py`). A family answer goes
     to the arm of the family in `FAMILY_ARMS`, and a family with no arm stops the walk with
     the label of the family, on a receiver of any type. A contract method that a constraint
     of an opaque receiver promises has the arm of its family. Any other perk method is a
@@ -243,8 +249,9 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if received is None:
         return None
     receiver = deref_type(received)
-    if fn_field_call_type(validator, receiver, target.name) is not None:
-        visit.stop_at(validator, node)
+    called = fn_field_call_type(validator, receiver, target.name)
+    if called is not None:
+        return check_field_call(validator, node, target, receiver, called)
     answer = resolve_dotted(validator, receiver, target.name)
     family = answer.family or promised_contract_family(validator, receiver, target.name)
     if family is not None:
@@ -412,15 +419,15 @@ def _called_name(validator: TypeValidator, recv: e.ShirExpr) -> Optional[str]:
 
 def _takes_user_methods(validator: TypeValidator, ty: Type) -> bool:
     """A receiver whose extension methods the pass types: a primitive, a struct or an enum
-    (an instance of a generic type too), an array of one, and an opaque type parameter (no
-    extension method answers it, so its call is CE2008). A type whose name the unit lost
+    (an instance of a generic type too), an array of one, and an opaque type parameter or a
+    function value (no extension method answers either, so its call is CE2008). A type whose name the unit lost
     and a receiver of any other kind stop."""
     if isinstance(ty, (ArrayType, DynamicArrayType)):
         return _takes_user_methods(validator, ty.base_type)
     if isinstance(ty, TypeParameter):
         return ty.is_opaque
-    return (isinstance(ty, (BuiltinType, StructType, EnumType))
-            and not type_is_contested(validator, ty))
+    return isinstance(ty, FunctionType) or (isinstance(ty, (BuiltinType, StructType, EnumType))
+                                            and not type_is_contested(validator, ty))
 
 
 def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
@@ -567,6 +574,7 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     RESULT_FAMILY: _check_result_method,
     MAYBE_FAMILY: _check_maybe_method,
     CLONE_FAMILY: _check_derived_clone,
+    FUNCTION_FAMILY: check_function_clone,
     **dict.fromkeys(CONTRACT_FAMILIES, check_contract_method),
 })
 
@@ -613,25 +621,6 @@ def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
     if binding is None or binding.kind not in ("function", "generic function", "extern"):
         visit.stop_at(validator, node)
     return binding.record
-
-
-def reject_undefined_function(validator: TypeValidator, name: str, loc: Span) -> None:
-    """CE2008 for a name that no function of the unit's scope takes.
-
-    A name that a library keeps is refused as kept (#469), and a name that the unit
-    declared under another kind was refused at its declaration (#1102).
-    """
-    kept = validator.library_not_exported.get(name)
-    if kept is not None and reject_private_kept_call(validator, name, loc, library=kept[0],
-                                                     kind=kept[1]):
-        return
-    if name_was_refused(validator, name):
-        return
-    diag = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=name)
-    missing = out_of_scope_help(validator, "function", name)
-    if missing is not None:
-        diag.help(missing)
-    diag.emit()
 
 
 def _parameter_type(validator: TypeValidator, param: Param) -> Type:

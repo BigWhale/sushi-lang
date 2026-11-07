@@ -277,7 +277,8 @@ class TypeValidator:
         from sushi_lang.semantics.const_eval import ConstantEvaluator
         return ConstantEvaluator(reporter if reporter is not None else Reporter(),
                                  self.const_table, self.current_unit_name,
-                                 self.namespaces_of, self.struct_table, self.enum_table)
+                                 self.namespaces_of, self.struct_table, self.enum_table,
+                                 functions=self.func_table)
 
     def check_body(self, decl,
                    path_faults: Optional[Callable[['ShirBody', Set['ShirId']], None]] = None,

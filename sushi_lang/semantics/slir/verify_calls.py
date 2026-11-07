@@ -33,9 +33,10 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.printer import show
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS, OWNED_COPY, RECEIVER_OPERAND
+from sushi_lang.semantics.slir.verify_values import copies_with_no_transfer, indirect_conventions
 from sushi_lang.semantics.statics import CONTAINER_STATIC_FAMILIES
 from sushi_lang.semantics.stdlib_registry import stdlib_arity
-from sushi_lang.semantics.typesys import BuiltinType, owns_resource
+from sushi_lang.semantics.typesys import owns_resource
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
@@ -120,6 +121,8 @@ def check_call(check: Check, stmt: st.Call) -> None:
             _owned_copy(check, operand, stmt.span)
     if isinstance(callee, st.Direct):
         _conventions_of(check, stmt, callee)
+    elif isinstance(callee, st.Indirect):
+        indirect_conventions(check, stmt, callee)
     elif isinstance(callee, st.Builtin) and isinstance(callee.method, Intrinsic):
         _static_conventions(check, stmt, callee.method.name)
     elif isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod):
@@ -134,7 +137,7 @@ def _owned_copy(check: Check, operand: p.Copy, span: Span) -> None:
     owning type that may come as a copy: one bound from a literal owns no heap, and
     `borrow` adopts it (ir.md 7.9)."""
     ty = check.operand_type(operand, span)
-    if ty is None or ty == BuiltinType.STRING:
+    if ty is None or copies_with_no_transfer(ty):
         return
     if owns_resource(ty, check.drops):
         check.fail(OWNED_COPY, f"{show(operand)} has the type {display_type(ty)}, which "

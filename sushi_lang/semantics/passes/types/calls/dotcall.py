@@ -133,7 +133,6 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall') -> DotCallTarge
         # The one parameter has its mode in the row, and the `borrow` pass checks the
         # marker by the rule of every callee (#1173).
         node.callee_param_modes = (ParamMode.NOM if static.consumes else ParamMode.BORROW,)
-        node.callee_param_names = [static.param_name]
         return DotCallTarget(DotCallKind.PRIMITIVE_STATIC, type=static.returns)
 
     # The receiver is deliberately NOT validated here: every path either has no receiver
@@ -158,11 +157,9 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall') -> DotCallTarge
     receiver_type = validator.infer_expression_type(node.receiver)
 
     # obj.handler(): an indirect call through a fn-typed struct field (a same-named method
-    # wins over the field -- see `resolve_fn_field_call`). The backend reads
-    # `callee_fn_type` to emit the fat-pointer indirect call.
+    # wins over the field -- see `resolve_fn_field_call`).
     fn_type = _fn_field_type(validator, node, receiver_type)
     if fn_type is not None:
-        node.callee_fn_type = fn_type
         return DotCallTarget(DotCallKind.FN_FIELD, fn_type=fn_type)
 
     return DotCallTarget(DotCallKind.METHOD,

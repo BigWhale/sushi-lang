@@ -32,7 +32,7 @@ SITES = (
     ("generics/instantiate/expressions.py", "_infer_type_args_from_call"),
     ("generics/instantiate/expressions.py", "_record_fn_reference"),
     ("generics/monomorphize/functions.py", "_call_type_args"),
-    ("passes/types/calls/generics.py", "resolve_generic_fn_reference"),
+    ("passes/types/calls/generics.py", "solved_value_type_args"),
     ("passes/types/calls/generics.py", "_infer_type_args_from_call_site"),
     # The PARTIAL callers (#809): a generic static's target, and the method-level type
     # parameters of an extension. Each keeps its own contract (the stamp fill, CE2063).

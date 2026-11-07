@@ -27,8 +27,8 @@ from sushi_lang.semantics.passes.types.calls.generics import (
     constraints_hold_in_template, substituted_sig)
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_call
 from sushi_lang.semantics.passes.types.visit.constructions import (
-    TypedArguments, names_a_parameter, solved_type_args, typed_alone, unify_arguments,
-    walk_unchecked)
+    TypedArguments, is_generic_value, names_a_parameter, solved_type_args, typed_alone,
+    unify_arguments, walk_unchecked)
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.typesys import Type
@@ -76,6 +76,10 @@ def resolve_generic_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRe
         joins = _joining_faults(validator)
         solved = _solved(validator, node, template)
         typed = solved.typed
+        if solved.type_args is None and any(is_generic_value(validator, arg.value)
+                                            for arg in node.args):
+            walk_unchecked(validator, node.args, typed)
+            return None
         if solved.type_args is None:
             faults = validator.errors_offered() - offered - (_joining_faults(validator) - joins)
             if ((not faults or solved.unreached)
@@ -132,7 +136,8 @@ def _solved(validator: TypeValidator, node: e.Call, template: GenericFuncDef) ->
     leading = [param for param in template.params if not param.is_pack]
     names = [tp.name for tp in template.type_params if not tp.is_pack]
     params = [param.ty for param in leading]
-    typed = {index: typed_alone(validator, arg) for index, arg in enumerate(node.args)}
+    typed = {index: typed_alone(validator, arg) for index, arg in enumerate(node.args)
+             if not is_generic_value(validator, arg.value)}
     solution = unify_arguments(validator, names, params, range(len(leading)), typed)
     reason = solution.why[0] if solution.why else "could not infer type arguments from call site"
     args = solved_type_args(validator, names, solution.solved)
@@ -166,6 +171,24 @@ def _instance_callee(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
     """The signature of the instance in its declaring unit. An instance that the early
     passes did not cut is a late request, and a constraint can refuse it: that refusal is
     the one diagnostic."""
+    instance = declared_or_late_instance(validator, ref, template, type_args, written)
+    if instance is None:
+        walk_unchecked(validator, node.args, typed)
+        return None
+    return GenericCallee(instance.sig, instance.decl, type_args, typed)
+
+
+class DeclaredInstance(NamedTuple):
+    """The signature of an instance, and the name that a callee row holds for it."""
+    sig: FuncSig
+    decl: DeclId
+
+
+def declared_or_late_instance(validator: TypeValidator, ref: e.GlobalRef,
+                              template: GenericFuncDef, type_args: tuple[Type, ...],
+                              written: str) -> Optional[DeclaredInstance]:
+    """The instance that `type_args` name. One that the early passes did not cut is a late
+    request. None after the refusal of a constraint, or after CE2061."""
     params = template.type_params
     pack_arity = (len(type_args) - (len(params) - 1) if params[-1].is_pack else None)
     mangled = mangle_function_name(template.name, type_args, pack_arity=pack_arity)
@@ -173,20 +196,19 @@ def _instance_callee(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
     if sig is None:
         request = validator.tables.request_function_instance
         if request is None:
-            er.raise_internal_error("CE0000", span=node.loc,
+            er.raise_internal_error("CE0000", span=ref.loc,
                                     detail="the analyzer set no late request of an instance")
         refused = request((template.unit_name, template.name, type_args),
                           (ref.loc, validator.reporter.filename),
                           validator.body_instance_key)
         sig = _declared_instance(validator, template, mangled)
         if refused or sig is None:
-            walk_unchecked(validator, node.args, typed)
             validator.refused_before = refused or validator.refused_before
             if not refused:
                 er.emit(validator.reporter, er.ERR.CE2061, ref.loc, name=written, mangled=mangled,
                         type_args=", ".join(display_type(arg) for arg in type_args))
             return None
-    return GenericCallee(sig, validator.shir.decls.refer(mangled), type_args, typed)
+    return DeclaredInstance(sig, validator.shir.decls.refer(mangled))
 
 
 def _declared_instance(validator: TypeValidator, template: GenericFuncDef,

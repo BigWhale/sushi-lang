@@ -184,7 +184,8 @@ class LLVMCodegen:
         from sushi_lang.semantics.const_eval import ConstantEvaluator
         return ConstantEvaluator(Reporter(), self.const_table,
                                  unit_name or self.emitting_unit, self.namespaces_of,
-                                 self.struct_table, self.enum_table)
+                                 self.struct_table, self.enum_table,
+                                 functions=self.func_table)
 
     # Centralized memory management function declarations.
     # Private: allocate through backend.memory.heap.emit_malloc, which null-checks
@@ -278,14 +279,15 @@ class LLVMCodegen:
         self.runtime.declare_externs()
         self.declare_user_externs()
 
-        for unit in all_units:
-            if unit.ast is None:
-                continue
-            for const in unit.ast.constants:
-                # A unit variable is defined by its own unit's module only.
-                self._emit_global_constant(const, unit.name,
-                                           defining=unit.name == target_unit.name,
-                                           filename=str(unit.file_path))
+        def emit_constants() -> None:
+            for unit in all_units:
+                if unit.ast is None:
+                    continue
+                for const in unit.ast.constants:
+                    # A unit variable is defined by its own unit's module only.
+                    self._emit_global_constant(const, unit.name,
+                                               defining=unit.name == target_unit.name,
+                                               filename=str(unit.file_path))
 
         # The target unit declares ALL its functions, public and private, because this
         # module holds their bodies; another unit declares only its PUBLIC functions,
@@ -300,7 +302,8 @@ class LLVMCodegen:
         # used to be decided by the compilation order, which put the consumer first.
         self._declare_and_define(
             sorted(all_units, key=lambda u: u.name != target_unit.name), [target_unit],
-            declares_private=lambda unit: unit.name == target_unit.name)
+            declares_private=lambda unit: unit.name == target_unit.name,
+            emit_constants=emit_constants)
 
         _set_linkonce_odr_on_inline_runtime(self.module)
 
@@ -333,26 +336,29 @@ class LLVMCodegen:
         """
         from sushi_lang.backend.library_linkage import weaken_foreign_globals
 
-        for unit in units:
-            if unit.ast is None:
-                continue
+        def emit_constants() -> None:
+            for unit in units:
+                if unit.ast is None:
+                    continue
 
-            before = set(self.module.globals) if unit.name in weak_units else None
-            for const in unit.ast.constants:
-                self._emit_global_constant(const, unit.name, filename=str(unit.file_path))
-            if before is not None:
-                weaken_foreign_globals(self.module, before)
+                before = set(self.module.globals) if unit.name in weak_units else None
+                for const in unit.ast.constants:
+                    self._emit_global_constant(const, unit.name, filename=str(unit.file_path))
+                if before is not None:
+                    weaken_foreign_globals(self.module, before)
 
         self._declare_and_define(units, units, declares_private=lambda unit: True,
-                                 weak_units=weak_units)
+                                 emit_constants=emit_constants, weak_units=weak_units)
 
     def _declare_and_define(self, declared: list[Unit], defined: list[Unit], *,
                             declares_private: Callable[[Unit], bool],
+                            emit_constants: Callable[[], None],
                             weak_units: frozenset[str] = frozenset()) -> None:
-        """Declare the functions of `declared`, then define the bodies of `defined`.
+        """Declare the functions of `declared`, emit the constants, then define the bodies of
+        `defined`.
 
         ONE walk for both build paths: every function, extension and perk-impl method
-        is declared before any body is emitted, so a body may call a function that a
+        is declared before a constant, which can name a function, and before any body is emitted, so a body may call a function that a
         later unit defines. The declarations come from the AST; each body comes from the
         `SlirFunction` of the analysis (`slir_bodies`), through the SLIR emitter. A
         monomorphized extension is declared in every module and defined in the module of
@@ -388,6 +394,8 @@ class LLVMCodegen:
             self._declare_library_perk_impl_methods()
             for ext in self.library_extensions:
                 self.functions.emit_extension_method_decl(ext)
+
+        emit_constants()
 
         for unit in defined:
             if unit.ast is None:
@@ -625,8 +633,8 @@ class LLVMCodegen:
 
     def _value_of_global(self, const: ConstDef, ty: Type, unit_name: str | None,
                          filename: Optional[str]) -> "ConstantValue":
-        """The value of the initializer of a constant or a `var`. A constant with no value (a
-        function-typed constant) stops (`emit, constant with no value`)."""
+        """The value of the initializer of a constant or a `var`. A constant with no value
+        stops (`emit, constant with no value`)."""
         value = self._evaluate_constant_expression(const.value, ty, unit_name)
         if value is None:
             stop("constant with no value", const.loc, filename)
@@ -642,7 +650,8 @@ class LLVMCodegen:
         converter of a scalar constant (`scalar_initializer`), which writes an integer at the
         width of its type.
         """
-        from sushi_lang.semantics.typesys import BuiltinType
+        from sushi_lang.backend.runtime.closures import closure_constant
+        from sushi_lang.semantics.typesys import BuiltinType, FunctionType
         from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
         from sushi_lang.semantics.const_eval import AggregateConstant
 
@@ -651,7 +660,11 @@ class LLVMCodegen:
                 constant_initializer, constant_of)
             return constant_initializer(constant_of(value, span, filename), self.types,
                                         self._constant_string_value, data_name,
-                                        span=span, filename=filename)
+                                        span=span, filename=filename,
+                                        finish_function=lambda symbol: closure_constant(self, symbol))
+
+        if isinstance(value.semantic_type, FunctionType):
+            return closure_constant(self, str(value.value))
 
         if value.semantic_type == BuiltinType.STRING:
             return self._constant_string_value(value.value, data_name)

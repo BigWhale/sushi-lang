@@ -65,6 +65,7 @@ from sushi_lang.semantics.slir.verify_arrays import (
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
+from sushi_lang.semantics.slir.verify_values import copies_with_no_transfer
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
@@ -72,7 +73,7 @@ from sushi_lang.semantics.slir.verify_rules import (
     SHORT_CIRCUIT, SPANS, STRUCT_VALUE, TAG_SWITCH, TRAP, TYPED_LOCALS, TYPED_PLACES, VIEW,
 )
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
+    ArrayType, FunctionType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
     StructType, Type, UnknownType, owns_resource,
 )
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES, is_instance_of
@@ -357,7 +358,7 @@ class Check:
             elif isinstance(constant.ty, ArrayType):
                 self.parts_fit(ARRAY_VALUE, display_type(constant.ty),
                                [constant.ty.base_type] * constant.ty.size, types, span)
-            else:
+            elif not isinstance(constant.ty, FunctionType):
                 self.struct_value(constant.ty, types, span)
             for part in constant.parts:
                 self.constant(part, span)
@@ -436,7 +437,7 @@ class Check:
         for part in parts:
             if isinstance(part, p.Copy):
                 ty = self.operand_type(part, stmt.span)
-                if (ty is not None and ty != BuiltinType.STRING
+                if (ty is not None and not copies_with_no_transfer(ty)
                         and owns_resource(ty, self.drops)):
                     self.fail(PEEK_RETURN, f"_0 takes a copy of the owning value "
                                            f"{show(part.place)}, and the function does not "

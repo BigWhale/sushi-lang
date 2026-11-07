@@ -36,7 +36,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 
 from sushi_lang.semantics.ownership import Provenance, TypeClass
-from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
@@ -53,9 +52,10 @@ from .pattern_takes import (
     declare_taken_binders, owns_scrutinee, reject_partial_take, reject_take_from_a_borrow,
     taken_binders)
 from .borrowed_returns import check_borrowed_return
-from .borrows import LATER_ROOTS, clear_borrows
+from .borrows import clear_borrows
 from .consume import (
-    bind, binds_a_bare_literal_string, consume, decide, source_provenance, value_owners)
+    bind, binds_a_bare_literal_string, consume, decide, settle_function_value, source_provenance,
+    value_owners)
 from .diagnostics import emit_consume_of_borrow, spelled
 from .expressions import reject_a_use_after_the_change
 from .flow import (
@@ -140,6 +140,7 @@ def _check_let(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> None
     checker.declare(state)
     arms.check(checker, node.value)
     bind(checker, node, state)
+    settle_function_value(checker, state, node.value)
     note_view(checker, node, state)
     # The local is in its scope from here: an exit in its value comes before it.
     checker.block_locals[-1].append(local)
@@ -214,11 +215,7 @@ def _reject_readonly_place_write(checker: 'BorrowChecker', target: e.Field | e.I
                                  span: Optional[Span]) -> None:
     """The gate of a write of a field or of an element, then the read of the place. A write
     is allowed unless its root is a read-only view, where the store cannot reach what it
-    writes, a temporary (CE2429), or a slice (CE2426). A root that a later group checks
-    stops the walk."""
-    root = walk_place(target, Step.MEMBER | Step.INDEX).node
-    if isinstance(root, LATER_ROOTS):
-        arms.stop_at(checker, root)
+    writes, a temporary (CE2429), or a slice (CE2426)."""
     if isinstance(target, e.Field):
         what = "assign to a field"
     else:

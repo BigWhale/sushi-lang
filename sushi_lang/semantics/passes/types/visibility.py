@@ -27,6 +27,7 @@ from sushi_lang.semantics.visibility import (
 )
 
 if TYPE_CHECKING:
+    from sushi_lang.internals.report import Span
     from . import TypeValidator
 
 __all__ = ["built_in_generic_unreachable", "calling_unit", "extension_reaches",
@@ -38,7 +39,7 @@ __all__ = ["built_in_generic_unreachable", "calling_unit", "extension_reaches",
            "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
            "reject_private_type", "type_is_contested", "type_name_is_contested",
-           "name_was_refused"]
+           "name_was_refused", "reject_undefined_function"]
 
 
 # Which kinds one written type name could be. `struct` and `enum` share one namespace,
@@ -438,3 +439,22 @@ def reject_ambiguous_extension(validator: 'TypeValidator', receiver_type: Any,
     diagnostic.help("a method call cannot name the unit it means: move the code that "
                     "needs each method into a unit of its own, or rename one of the "
                     "methods").emit()
+
+
+def reject_undefined_function(validator: 'TypeValidator', name: str, loc: Span) -> None:
+    """CE2008 for a name that no function of the unit's scope takes.
+
+    A name that a library keeps is refused as kept (#469), and a name that the unit
+    declared under another kind was refused at its declaration (#1102).
+    """
+    kept = validator.library_not_exported.get(name)
+    if kept is not None and reject_private_kept_call(validator, name, loc, library=kept[0],
+                                                     kind=kept[1]):
+        return
+    if name_was_refused(validator, name):
+        return
+    diag = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=name)
+    missing = out_of_scope_help(validator, "function", name)
+    if missing is not None:
+        diag.help(missing)
+    diag.emit()

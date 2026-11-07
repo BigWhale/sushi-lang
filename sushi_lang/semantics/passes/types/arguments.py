@@ -306,17 +306,32 @@ def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_nam
     """Report the mismatch, and say how to borrow when the parameter wants a borrow."""
     diag = er.emit_with(validator.reporter, code, argument_span(arg),
                         index=index, expected=display_type(expected_ty),
-                        got=display_type(actual_ty),
+                        got=display_type(actual_ty), actual=display_type(actual_ty),
                         **_callee_key(code, callee_name), **_field_key(code, field))
     place = None
     if isinstance(expected_ty, ReferenceType) and arg.marker not in _BORROWS:
         place = _spell_place(validator, arg.value)
-    if place is not None and isinstance(expected_ty, ReferenceType):
+    if code is er.ERR.CE2092:
+        _help_a_value_call(validator, diag, arg, actual_ty, expected_ty)
+    elif place is not None and isinstance(expected_ty, ReferenceType):
         diag.help(f"borrow it at the call site: `{expected_ty.mutability} {place}`")
     if others:
         spelled = ", ".join(f"`{display_type(other)}`" for other in others)
         diag.help(f"this argument also takes {spelled}")
     diag.emit()
+
+
+def _help_a_value_call(validator: 'TypeValidator', diag: Any, arg: e.Arg, actual: Type,
+                       expected: Type) -> None:
+    """The help of a call of a function value, where the mismatch is a missing borrow of a
+    local."""
+    if (not isinstance(arg.value, e.LocalRef) or isinstance(actual, ReferenceType)
+            or not isinstance(expected, ReferenceType) or expected.referenced_type != actual):
+        return
+    name = validator.body_locals[arg.value.local].name
+    diag.help(f"a borrow is created where it is USED, so the argument is written "
+              f"`{expected.mutability} {name}`; a reference-typed name mentioned bare is its "
+              f"referent")
 
 
 def names_a_type_pack(validator: 'TypeValidator', expr: Any) -> bool:

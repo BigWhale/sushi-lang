@@ -32,6 +32,8 @@ from sushi_lang.backend.constants.enum_initializers import (
 )
 from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
+from sushi_lang.backend.runtime.closures import closure_constant
+from sushi_lang.backend.slir.closures import emit_closure_value
 from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.generics.list.types import extract_element_type
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -191,7 +193,8 @@ def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
             constant.value.decode("utf-8", "surrogatepass"))
     if isinstance(constant, k.Aggregate):
         return constant_initializer(constant, codegen.types, _literal_constant(state), "",
-                                    span=state.span, filename=state.filename)
+                                    span=state.span, filename=state.filename,
+                                    finish_function=lambda symbol: closure_constant(codegen, symbol))
     if isinstance(constant, k.FnRef):
         state.stop(constant)
     return scalar_initializer(constant, codegen.types, state.fault)
@@ -296,6 +299,8 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
             state.fault(f"an array value of {kind.ty}")
         return emit_array_value(state.codegen, kind.ty, kind.runs,
                                 [operand_value(state, part) for part in rvalue.parts])
+    if isinstance(kind, r.AggClosure):
+        return emit_closure_value(state, rvalue)
     if not isinstance(kind, (r.AggVariant, r.AggStruct, r.AggTuple)):
         state.stop(kind)
     parts = [type_of_operand(state, part) for part in rvalue.parts]

@@ -1,0 +1,30 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\nab\n2\nMostly Harmless\n"
+# EXPECT_NO_LEAKS
+
+struct Named:
+    string name
+
+fn count(nom i32[] xs) i32:
+    return xs.len()
+
+fn glue(nom string a, string b) string:
+    return "{a}{b}"
+
+fn peek_len(string[] xs) i32:
+    return xs.len()
+
+fn name_of(nom Named n) string:
+    return n.name.clone()
+
+fn main() i32:
+    let fn(nom i32[]) -> i32 c = count
+    println(c(nom from([1, 2, 3])))
+    let fn(nom string, string) -> string g = glue
+    println(g(nom "a".clone(), "b"))
+    let fn(string[]) -> i32 p = peek_len
+    let string[] xs = from(["a", "b"])
+    println(p(xs))
+    let fn(nom Named) -> string n = name_of
+    println(n(nom Named("Mostly Harmless".clone())))
+    return 0

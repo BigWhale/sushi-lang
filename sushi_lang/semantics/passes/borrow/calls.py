@@ -11,23 +11,23 @@ from __future__ import annotations
 from typing import Optional, Sequence, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Call, CallLike, DotCall, Expr, MethodLike, Name
+from sushi_lang.semantics.ast import MethodLike, Name
 from sushi_lang.semantics.generics.iterators import produces_from_a_container
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import effect_of, receiver_convention
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.typesys import BorrowMode, FunctionType, deref_type
+from sushi_lang.semantics.typesys import BorrowMode, deref_type
 from sushi_lang.semantics.param_modes import (
-    CalleeKind, Convention, ParamMode, effective_modes, receiver_mode,
+    Convention, receiver_mode,
 )
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import (
-    Builtin, BuiltinStatic, Extern, Free, Intrinsic, Method, Static, Stdlib)
+    Builtin, BuiltinStatic, Extern, Free, Indirect, Intrinsic, Method, Static, Stdlib)
 
 from . import arms
 from .borrows import (
-    BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow,
+    BY_ADDRESS, acquire_borrow, borrow_of_constant, check_borrow,
     register_implicit_borrow)
 from .iterators import take_lent_iterator
 from .consume import StatementTakes, consume, consume_once, decide, read_through_receiver
@@ -58,7 +58,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     and the pass decides its `Ownership`. A callee that destroys its `poke` parameter
     destroys the caller's value (#168). The `nom` marker is compared against the declared
     mode by the typecheck pass (CE2427). A built-in method reads its receiver first. A
-    family that has no arm yet stops the walk. The receiver of an extension method is read
+    family that has no arm yet stops the walk. A call of a function value reads the value
+    first, and the modes of its function type gave the conventions. The receiver of an extension method is read
     before the arguments, and it takes the borrow of the convention of its `self` after the
     borrows of the arguments (`check_method_receiver`), so a receiver beside a `poke` of its
     owner is the second borrow (CE2407 at the receiver, as on `main`); a `poke self` change
@@ -72,6 +73,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     writes_receiver = False
     if isinstance(callee, Builtin):
         writes_receiver = _check_builtin_receiver(checker, node, callee)
+    elif isinstance(callee, Indirect):
+        arms.check(checker, callee.value)
     elif not isinstance(callee, (Free, Intrinsic, Method, Static, Stdlib, Extern,
                                  BuiltinStatic)):
         er.raise_internal_error(
@@ -143,9 +146,6 @@ def _write_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> b
     receiver = callee.recv
     if borrow_of_constant(checker, receiver, BorrowMode.POKE):
         return False
-    root = walk_place(receiver, Step.MEMBER).node
-    if isinstance(root, LATER_ROOTS):
-        arms.stop_at(checker, root)
     what = f"call `.{_method_name(checker, callee)}()`"
     owner = borrow_owner(checker, receiver)
     if reject_readonly_write(checker, owner, node.loc, what, receiver=receiver):
@@ -440,22 +440,6 @@ def _slot_path(checker: 'BorrowChecker', value: e.ShirExpr) -> Optional[tuple]:
                             or (isinstance(step, e.Call) and get_out(step))))
 
 
-def apply_mode(checker: 'BorrowChecker', call: CallLike, arg: Expr, index: int,
-               modes: Sequence[ParamMode], kind: CalleeKind) -> None:
-    """Apply ONE declared parameter mode to the argument that lands on it.
-
-    THE rule, shared by a plain call and an extension/perk method, so the two cannot
-    disagree about what an unmarked argument does (docs/design/borrow-model.md S5).
-    """
-    mode = checker.callee_modes.mode_at(modes, index, kind)
-    check_nom_marker(checker, call, arg, index, mode, kind)
-    if mode.consumes:
-        if not take_lent_iterator(checker, call, arg):
-            consume(checker, arg)
-    elif not mode.by_pointer:
-        register_implicit_borrow(checker, arg)
-
-
 def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
     """A `nom self` receiver is a consuming use of what the method was called on.
 
@@ -481,46 +465,6 @@ def _arguments_text(checker: 'BorrowChecker', args) -> str:
     """The arguments of a call as source text, or `...` when one has no short spelling."""
     texts = [spelled(checker, arg) for arg in args or ()]
     return "..." if "<expression>" in texts else ", ".join(texts)
-
-
-def consume_indirect_args(checker: 'BorrowChecker', expr: DotCall) -> None:
-    """An indirect call through a fn-typed field follows the fn type's declared modes."""
-    # `apply_mode`, like every other call shape: a thinner arm here skipped the implicit
-    # borrow of an unmarked argument, so `h.handler(arr, poke arr)` compiled clean and read
-    # the buffer the `poke` had reallocated (#365).
-    fn_type = expr.callee_fn_type
-    assert isinstance(fn_type, FunctionType)
-    modes = effective_modes(fn_type.modes, CalleeKind.INDIRECT)
-    for i, arg in enumerate(expr.args):
-        apply_mode(checker, expr, arg, i, modes, CalleeKind.INDIRECT)
-
-
-def check_nom_marker(checker: 'BorrowChecker', call: CallLike, arg: Expr, index: int,
-                     mode: ParamMode, kind: CalleeKind) -> None:
-    """The `nom` marker must be written at the call site if and only if it is declared."""
-    if kind in (CalleeKind.CONSTRUCTOR, CalleeKind.CONTAINER):
-        return
-    if arg.nom_marked == mode.consumes:
-        return
-    span = arg.nom_span or arg.loc
-    name = param_name(checker, call, index) or f"#{index + 1}"
-    help_text = ("the callee takes ownership here; write `nom` at the call site too, or "
-                 "`nom <arg>.clone()` to keep your own value") if mode.consumes else (
-                 "the callee only borrows this argument, so it stays yours after the "
-                 "call; drop the `nom`")
-    checker.err.emit_with(er.ERR.CE2427, span, name=name).help(help_text).emit()
-
-
-def param_name(checker: 'BorrowChecker', call: CallLike, index: int) -> Optional[str]:
-    """The declared name of parameter `index` of a call's callee, if it is known."""
-    names = call.callee_param_names
-    if names is not None:
-        return names[index] if index < len(names) else None
-    if not isinstance(call, Call) or not isinstance(call.callee, Name):
-        return None
-    sig = checker.callee_modes.signature_of(call.callee.id)
-    params = getattr(sig, "params", None) or ()
-    return params[index].name if index < len(params) else None
 
 
 def apply_destroy_effects(checker: 'BorrowChecker', node: e.Call, callee: Free) -> None:

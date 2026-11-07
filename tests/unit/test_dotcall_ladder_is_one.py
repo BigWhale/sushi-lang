@@ -48,7 +48,7 @@ LATER = {
 
 #: The facts that need no SHIR home: the typecheck pass reads them from the declaration of
 #: the callee when it checks the arguments, and no later stage reads them.
-_READ_FROM_THE_DECLARATION = ("callee_param_names", "callee_param_types")
+_READ_FROM_THE_DECLARATION = ("callee_param_types",)
 
 #: What the AST half handed INTO the temporary node instead of reading back off it: the
 #: propagation stamp (#272) and the namespace stamp (#506). No rung copies them back.
@@ -59,7 +59,7 @@ _WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
 
 #: Shared fields that are no fact of a resolved method: the written parts of the call, and
 #: what the other call shapes and the AST borrow helpers write on their own nodes.
-_NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names", "callee_fn_type",
+_NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names",
                        "iterator_leaves",
                        "iterator_state")
 

@@ -21,11 +21,12 @@ from sushi_lang.semantics.method_effects import (
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
-    Builtin, BuiltinStatic, Callee, Extern, Free, Intrinsic, Method, Static, Stdlib)
+    Builtin, BuiltinStatic, Callee, Extern, Free, Indirect, Intrinsic, Method, Static, Stdlib)
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
+from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_copies as copies
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
@@ -92,8 +93,10 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     with the type of each argument; a built-in method by
     its family and its name, with no types: the receiver is the first operand of the
     call (`receiver_convention`); a contract call as the intrinsic of its method, with the
-    type of each operand."""
+    type of each operand; a function value through `lower_closures.py`."""
     callee = resolved.callee
+    if isinstance(callee, Indirect):
+        return closures.indirect(low, node, callee)
     if isinstance(callee, Free):
         if resolved.unit is None:
             raise StageStop(STAGE, "library function", node.loc)

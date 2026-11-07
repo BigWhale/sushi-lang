@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2092
+
+struct Holder:
+    fn(i32) -> i32 f
+
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let Holder h = Holder(inc)
+    println(h.f(1, 2))
+    return 0

@@ -21,6 +21,7 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     NOTHING_TYPED, marked_type, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.calls.enums import intern_constructed_instance
+from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
 from sushi_lang.semantics.passes.types.calls.statics import (
     _interned_static_target, reject_unreached_type_params, static_template_for)
 from sushi_lang.semantics.passes.types.calls.structs import (
@@ -62,9 +63,24 @@ def names_a_parameter(ty: Optional[Type], names: Sequence[str]) -> bool:
         ty, dict.fromkeys(names, BuiltinType.BLANK)) != ty
 
 
+def is_generic_value(validator: TypeValidator, value: e.ShirExpr) -> bool:
+    """Is `value` a generic function written as a value? It has a type only at a position
+    that states a function type, so a solver leaves it to the argument check."""
+    if not isinstance(value, e.GlobalRef):
+        return False
+    alias, dot, name = validator.decl_name(value.decl).rpartition(".")
+    if dot:
+        binding = validator.namespaces.lookup(alias, name)
+        return binding is not None and binding.kind == "generic function"
+    return (own_concrete_function(validator.func_table, name, validator.current_unit_name) is None
+            and validator.generic_sig(name) is not None)
+
+
 def stands_alone(validator: TypeValidator, value: e.ShirExpr) -> bool:
     """Does the value have a type with no type from its position? `Maybe.Some(1)` does, and
-    `Maybe.None`, `Result.Ok(1)`, `from([])` and `List.new()` do not."""
+    `Maybe.None`, `Result.Ok(1)`, `from([])`, `List.new()` and a generic function do not."""
+    if is_generic_value(validator, value):
+        return False
     if isinstance(value, e.EnumInit):
         return _variant_stands_alone(validator, value)
     if isinstance(value, e.StructInit):

@@ -73,7 +73,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.LocalRef: ex.check_local_ref,
     e.ConstRef: ex.check_leaf,
     e.StorageRef: ex.check_leaf,
-    e.GlobalRef: stop_at,
+    e.GlobalRef: ex.check_leaf,
     e.Field: ex.check_field,
     e.Index: ex.check_index,
     e.Slice: ex.check_slice,

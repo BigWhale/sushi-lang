@@ -957,11 +957,9 @@ class Call(Node):
     # Set by the type checker when `callee` is a non-Name expression resolving to a
     # FunctionType: the backend uses it to emit the fat-pointer indirect call without
     # re-inferring the callee's signature.
-    callee_fn_type: Optional[Type] = None
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
@@ -997,11 +995,9 @@ class MethodCall(Node):
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
     # The unit that declares the extension method the call resolved to; the backend
     # composes it into the callee symbol (`docs/design/extension-visibility.md` C5).
     callee_extension_unit: Optional[str] = None
@@ -1043,7 +1039,6 @@ class DotCall(Node):
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
     # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
@@ -1054,7 +1049,6 @@ class DotCall(Node):
     type_args_loc: Optional["Span"] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
     callee_extension_unit: Optional[str] = None  # see MethodCall
     iterator_state: Optional[str] = None  # see MethodCall
     iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall
@@ -1127,8 +1121,6 @@ class RangeExpr(Node):
     is_value: bool = False
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
-# The three call shapes; each carries the whole set of callee stamps.
-CallLike = Union[Call, MethodCall, DotCall]
 # The two call shapes with a receiver and a method name.
 MethodLike = Union[MethodCall, DotCall]
 

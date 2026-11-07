@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n12\n9\n16\n7\n25\n"
+# EXPECT_NO_LEAKS
+
+struct Handler:
+    fn(i32, i32) -> i32 run
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn mul(i32 a, i32 b) i32:
+    return a * b
+
+fn apply(fn(i32, i32) -> i32 f, i32 a, i32 b) i32:
+    return f(a, b)
+
+fn square(i32 x) i32:
+    return x * x
+
+fn pick() fn(i32) -> i32:
+    return square
+
+fn main() i32:
+    let fn(i32, i32) -> i32 f = add
+    println(f(3, 4))
+    println(apply(mul, 3, 4))
+    let (fn(i32) -> i32)[] table = from([square])
+    println(table[0](3))
+    println(pick()(4))
+    let Handler h = Handler(add)
+    println(h.run(3, 4))
+    let fn(i32) -> i32 g = pick()
+    let fn(i32) -> i32 same = g
+    println(same(5))
+    return 0

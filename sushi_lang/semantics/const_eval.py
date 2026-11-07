@@ -24,7 +24,9 @@ from sushi_lang.semantics.ast import (
     Spread, TryExpr, TupleLiteral
 )
 from sushi_lang.semantics import integer_ops
-from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, UnknownType
+from sushi_lang.semantics.typesys import (
+    Type, BuiltinType, FunctionType, StructType, EnumType, UnknownType)
+from sushi_lang.semantics.unit_symbols import emitted_symbol
 from sushi_lang.semantics.type_predicates import is_error_type, is_float_type, is_integer_type
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.namespaces import NamespaceRef, NamespaceTable, UnitScope
@@ -268,6 +270,7 @@ class ConstantEvaluator:
                  unit_name: Optional[str] = None,
                  namespaces_of: Optional[NamespacesOf] = None,
                  struct_table: object = None, enum_table: object = None, *,
+                 functions: object = None,
                  reported_cycles: Optional[
                      set[frozenset[Tuple[Optional[str], str]]]] = None):
         """Initialize the evaluator.
@@ -297,6 +300,9 @@ class ConstantEvaluator:
         # there, which is what those positions want anyway.
         self.struct_table = struct_table
         self.enum_table = enum_table
+        # The authority for a function that a function-typed constant names. A reader that
+        # passes none gets no value for one.
+        self.functions = functions
         # For cycle detection. Keyed by DECLARATION, not by name: this unit's SIZE may be
         # built from another unit's SIZE, and that is two constants and not a cycle.
         self.evaluation_stack: List[Tuple[Optional[str], str]] = []
@@ -317,7 +323,7 @@ class ConstantEvaluator:
         """
         return ConstantEvaluator(Reporter(), self.const_table, self.unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table,
-                                 reported_cycles=set())
+                                 functions=self.functions, reported_cycles=set())
 
     def _namespaces_for(self, unit_name: Optional[str]) -> Optional[NamespaceTable]:
         return None if self.namespaces_of is None else self.namespaces_of(unit_name)
@@ -369,7 +375,20 @@ class ConstantEvaluator:
             return self._evaluate_enum_construction(expr, expected_type, span)
         if ref.kind == "constant":
             return self._evaluate_constant_ref(ref, span)
+        if ref.kind == "function" and ref.producer == "unit":
+            return self._function_value(ref.name, expected_type, ref.origin, None)
         return None
+
+    def _function_value(self, name: str, expected_type: Type, unit: Optional[str],
+                        scope: Optional[UnitScope]) -> Optional[ScalarConstant]:
+        """The value of a named function at a position of a function type: its symbol."""
+        if self.functions is None or not isinstance(expected_type, FunctionType):
+            return None
+        sig = self.functions.lookup(name, unit, scope)
+        if sig is None:
+            return None
+        return ScalarConstant(emitted_symbol(sig.name, sig.unit_name, sig.link_symbol),
+                              expected_type)
 
     def _evaluate_dot_call(self, expr: DotCall, expected_type: Type,
                            span: Optional[Span]) -> Optional[ConstantValue]:
@@ -738,8 +757,8 @@ class ConstantEvaluator:
             # both at this same token. The CE1002 that stood here was the second
             # diagnostic for one fault, and it read "assignment to" about a READ (#710).
             # A name the scope pass lets through -- a function -- is a value of the wrong
-            # type, and the assignment rule below says so.
-            return None
+            # type, and the assignment rule below says so. At a function type it is a value.
+            return self._function_value(const_name, expected_type, self.unit_name, self.scope)
         return self._fold_constant(const_sig, span)
 
     def _fold_constant(self, sig: ConstSig, span: Optional[Span]) -> Optional[ConstantValue]:

@@ -135,10 +135,8 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
-    (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
-    (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _port("C2")),
     (_TYPES + "statements.py", "validate_foreach_statement", _port("C3")),
 )
 
@@ -161,8 +159,6 @@ def _ast_probe(group: str) -> str:
 WHITELIST += (
     (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "calls.py", "settle_receiver", _kept("C", "C3: a lent iterator receiver")),
-    (_BORROW + "calls.py", "consume_indirect_args", _kept("C", "C2: closures")),
-    (_BORROW + "consume.py", "reconcile_closure_bind", _kept("C", "C2: closures")),
     (_BORROW + "bindings.py", "BindingScope", _kept("C", "C3: iterators, the scope of a loop")),
     (_BORROW + "bindings.py", "bind_item", _kept("C", "C3: iterators")),
     (_BORROW + "bindings.py", "bind_lent_walk", _kept("C", "C3: iterators")),
@@ -193,8 +189,6 @@ WHITELIST += (
      _family("C3", "the iter() producer of a List")),
     (_BACKEND + "generics/hashmap/methods/iterators.py", "_emit_bucket_iterator",
      _family("C3", "the four producers of a HashMap")),
-    (_BACKEND + "runtime/closures.py", "materialize_function_ref",
-     _family("C2", "a named function as a function value")),
     (_BACKEND + "runtime/closures.py", "emit_lambda",
      _family("C2", "the closure value and its environment")),
     (_BACKEND + "runtime/iterator_adapters.py", "emit_adapter_call",

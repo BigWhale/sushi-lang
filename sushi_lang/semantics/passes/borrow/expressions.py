@@ -33,9 +33,10 @@ if TYPE_CHECKING:
     from . import BorrowChecker
 
 
-def check_leaf(_checker: 'BorrowChecker', _node: e.Lit | e.ConstRef | e.StorageRef) -> None:
-    """A literal, a constant or a `var`: it reads nothing that the body owns, and a `var`
-    always holds its value."""
+def check_leaf(_checker: 'BorrowChecker',
+               _node: e.Lit | e.ConstRef | e.StorageRef | e.GlobalRef) -> None:
+    """A literal, a constant, a `var` or a named function: it reads nothing that the body
+    owns, and a `var` always holds its value."""
 
 
 def check_local_ref(checker: 'BorrowChecker', node: e.LocalRef) -> None:
