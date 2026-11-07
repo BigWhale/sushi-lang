@@ -1,0 +1,24 @@
+# `compare()` of a struct, an enum, a tuple and a primitive answers an i32 with the sign of
+# the order: fields in order, the variant in declaration order, then its payload.
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+# EXPECT_NO_LEAKS
+
+struct Named:
+    string name
+    i32 rank
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+fn main() i32:
+    println(Named("a", 1).compare(Named("a", 2)) < 0)
+    println(Named("b", 1).compare(Named("a", 2)) > 0)
+    println(Shape.Dot.compare(Shape.Circle(1)) < 0)
+    println(Shape.Circle(2).compare(Shape.Circle(1)) > 0)
+    println((1, "t").compare((1, "t")) == 0)
+    let i32 n = 3
+    println(n.compare(4) < 0)
+    println("b".compare("a") > 0)
+    println(true.compare(false) > 0)
+    return 0

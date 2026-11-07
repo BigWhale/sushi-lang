@@ -118,17 +118,23 @@ def _channel_arrived_later(lam: Lambda, cached, expected) -> bool:
 
 def resolve_fn_field_call(type_validator, node, recv_ty) -> Optional["Type"]:
     """Field-vs-method rule for `obj.handler(args)` (a DotCall), over the receiver's type."""
+    return fn_field_call_type(type_validator, recv_ty, node.method)
+
+
+def fn_field_call_type(type_validator, recv_ty, method: str) -> Optional["Type"]:
+    """The type of the field of a function type that a call of `method` goes through, or
+    None. An extension method that applies wins over the field, and `hash` is never a field."""
     from sushi_lang.semantics.typesys import StructType, FunctionType, ReferenceType
     if isinstance(recv_ty, ReferenceType):
         recv_ty = recv_ty.referenced_type
     if not isinstance(recv_ty, StructType):
         return None
-    field_ty = recv_ty.get_field_type(node.method)
+    field_ty = recv_ty.get_field_type(method)
     if not isinstance(field_ty, FunctionType):
         return None
-    if node.method == "hash":
+    if method == "hash":
         return None
-    if type_validator.extension_table.get_method(recv_ty, node.method) is not None:
+    if type_validator.extension_table.get_method(recv_ty, method) is not None:
         return None
     if '<' in recv_ty.name:
         # A method wins over a same-named fn-typed field only if it APPLIES to this
@@ -136,7 +142,7 @@ def resolve_fn_field_call(type_validator, node, recv_ty) -> Optional["Type"]:
         # (#393).
         base_name = recv_ty.name.split('<')[0]
         if type_validator.generic_extension_table.find_applicable(
-                base_name, node.method, recv_ty.name) is not None:
+                base_name, method, recv_ty.name) is not None:
             return None
     return field_ty
 

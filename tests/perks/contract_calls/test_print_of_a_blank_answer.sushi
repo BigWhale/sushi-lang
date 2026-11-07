@@ -1,0 +1,14 @@
+# `print` of a call that answers `~` runs the call and writes the zero that a `~` value holds.
+# EXPECT_STDOUT_EXACT: "00\nx0\n3\n"
+# EXPECT_NO_LEAKS
+
+fn nothing() ~:
+    print("x")
+
+fn main() i32:
+    let i32[] xs = from([1])
+    print(xs.push(2))
+    println(xs.push(3))
+    println(nothing())
+    println(xs.len())
+    return 0

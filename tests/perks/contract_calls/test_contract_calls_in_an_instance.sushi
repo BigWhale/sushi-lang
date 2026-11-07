@@ -1,0 +1,43 @@
+# Each contract over an opaque `T`: the body is checked one time at its constraint, and each
+# instance calls the contract of its type argument.
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\n1\nx\nBox(v: 2)\nMark.Red\n1\nBox(v: 3)\n"
+# EXPECT_NO_LEAKS
+
+struct Box@(T):
+    T v
+
+enum Mark:
+    Red
+    Green(i32)
+
+fn digest@(T: Hashable)(T x) u64:
+    return x.hash()
+
+fn same@(T: Eq)(T x, T y) bool:
+    return x.eq(y)
+
+fn order@(T: Ord)(T x, T y) i32:
+    return x.compare(y)
+
+fn text@(T: Display)(T x) string:
+    return x.to_str()
+
+fn show@(T: Display)(T x) ~:
+    println(x)
+
+fn main() i32:
+    println(digest(1) == digest(1))
+    println(digest(Box(1)) == digest(Box(1)))
+    println(digest(from(["a"])) == digest(from(["a"])))
+    println(same(1, 2))
+    println(same("a", "a"))
+    println(same(Mark.Green(1), Mark.Green(1)))
+    println(order(1, 2) < 0)
+    println(order(Box(2), Box(1)) > 0)
+    println(text(1))
+    println(text("x"))
+    println(text(Box(2)))
+    println(text(Mark.Red))
+    show(1)
+    show(Box(3))
+    return 0

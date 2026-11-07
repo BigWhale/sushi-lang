@@ -1,0 +1,28 @@
+# `eq()` of a struct, an enum, a tuple and a primitive reads the contract seam. Each
+# operand only reads, so the caller keeps both.
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\na\n"
+# EXPECT_NO_LEAKS
+
+struct Named:
+    string name
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+fn main() i32:
+    let Named a = Named("a")
+    let Named b = Named("b")
+    println(a.eq(a))
+    println(a.eq(b))
+    println(Shape.Circle(1).eq(Shape.Circle(1)))
+    println(Shape.Dot.eq(Shape.Circle(1)))
+    println((1, "t").eq((1, "t")))
+    println((1, "t").eq((1, "u")))
+    let i32 n = 3
+    println(n.eq(3))
+    println(n.eq(4))
+    println("x".eq("x"))
+    println(true.eq(false))
+    println(a.name)
+    return 0

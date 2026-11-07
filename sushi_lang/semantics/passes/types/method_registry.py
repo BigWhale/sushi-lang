@@ -49,7 +49,8 @@ from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, ARRAY_HASH_FAMILY, CONTRACT_FAMILY, DERIVED_HASH_FAMILY, MAYBE_FAMILY,
+    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
@@ -702,16 +703,16 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     arity=FOREIGN_PTR_METHOD_ARITY,
     infer=lambda _receiver, call, v: ForeignPtrMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="array_hash", beats_perk=False, answers=_answers_array_hash,
+    name=ARRAY_HASH_FAMILY, beats_perk=False, answers=_answers_array_hash, arity=DERIVED_HASH_ARITY,
     infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="derived_hash", beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY,
+    name=DERIVED_HASH_FAMILY, beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY,
     infer=lambda rt, call, v: StructEnumBuiltinInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="derived_clone", beats_perk=False, answers=_answers_derived_clone, arity=DERIVED_CLONE_ARITY,
     infer=lambda rt, call, v: StructEnumBuiltinInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="contract", beats_perk=False, answers=_answers_contract,
+    name=CONTRACT_FAMILY, beats_perk=False, answers=_answers_contract,
     arity=CONTRACT_METHOD_ARITY,
     infer=lambda _receiver, call, _validator: ContractMethodInferrer(call.method)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(

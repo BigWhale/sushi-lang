@@ -1,0 +1,14 @@
+# The answer of each contract call has its one type.
+# EXPECT_ERROR_CODES_EXACT: CE2002, CE2002, CE2002, CE2002
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point a = Point(1)
+    let i32 h = a.hash()
+    let i32 e = a.eq(a)
+    let bool c = a.compare(a)
+    let i32 s = a.to_str()
+    println(c)
+    return h + e + s

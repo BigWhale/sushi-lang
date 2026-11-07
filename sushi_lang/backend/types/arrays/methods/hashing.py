@@ -126,32 +126,6 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     return emitter
 
 
-def emit_fixed_array_hash_direct(codegen: Any, array_ptr: ir.Value,
-                                 receiver_type: ir.Type, array_type: Type) -> ir.Value:
-    """Direct emitter for fixed array hash.
-
-    The receiver arrives as an address and its type arrives with it. Looking the type up by
-    NAME rejected every receiver that has no name, so `b.slots.hash()` on a field was CE0056
-    (#480). A wrong element type would silently produce a wrong hash, which is why the old
-    code refused rather than guessed; the caller now knows the type, so there is nothing to
-    guess.
-    """
-    emitter = _emit_fixed_array_hash(array_type)
-    return emitter(codegen, (), array_ptr, receiver_type)
-
-
-def emit_dynamic_array_hash_direct(codegen: Any, receiver_value: ir.Value,
-                                   receiver_type: ir.Type, array_type: DynamicArrayType) -> ir.Value:
-    """Direct emitter for dynamic array hash.
-
-    The receiver's type arrives with it, the way the fixed twin above takes one. Reading it
-    out of the name tables rejected every receiver that has no name, so `h.nums.hash()` on a
-    field was CE0056 (#482).
-    """
-    emitter = _emit_dynamic_array_hash(array_type)
-    return emitter(codegen, (), receiver_value, receiver_type)
-
-
 def _make_array_hash_emitter(array_type: Type) -> Any:
     """Build the hash() emitter for an array type, fixed or dynamic."""
     if isinstance(array_type, ArrayType):

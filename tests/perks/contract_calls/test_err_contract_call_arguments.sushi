@@ -1,0 +1,15 @@
+# A contract call takes one value of the type of its receiver, or none: a wrong type, a wrong
+# count and a `nom` marker are each one error.
+# EXPECT_ERROR_CODES_EXACT: CE2006, CE2006, CE2009, CE2009, CE2427
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point a = Point(1)
+    println(a.eq(1))
+    println(a.compare("x"))
+    println(a.to_str(1))
+    println(a.hash(2))
+    println(a.eq(nom a))
+    return 0

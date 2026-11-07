@@ -25,7 +25,7 @@ from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
-from .methods import declaration_was_refused
+from .methods import declaration_was_refused, explain_unpromised_method
 from ..call_facts import TypecheckCallFacts
 from ..method_registry import METHOD_TYPE_REGISTRY, MethodFamily
 
@@ -77,8 +77,10 @@ def reject_unknown_method(validator: 'TypeValidator', receiver_type: Type, name:
     if declaration_was_refused(validator, receiver_type, name):
         validator.refused_before = True
         return
-    er.emit(validator.reporter, er.ERR.CE2008, loc,
-            name=f"{display_type(receiver_type)}.{name}")
+    diag = er.emit_with(validator.reporter, er.ERR.CE2008, loc,
+                        name=f"{display_type(receiver_type)}.{name}")
+    explain_unpromised_method(validator, diag, receiver_type, name)
+    diag.emit()
 
 
 class DotCallKind(Enum):

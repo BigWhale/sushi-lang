@@ -1,0 +1,19 @@
+# `to_str()` of a struct, an enum and a tuple answers a fresh string that its caller owns.
+# EXPECT_STDOUT_EXACT: "Named(name: "a")\nShape.Dot\nShape.Circle(1)\n(1, "t")\n16\n"
+# EXPECT_NO_LEAKS
+
+struct Named:
+    string name
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+fn main() i32:
+    println(Named("a").to_str())
+    println(Shape.Dot.to_str())
+    let string circle = Shape.Circle(1).to_str()
+    println(circle)
+    println((1, "t").to_str())
+    println(Named("a").to_str().len())
+    return 0

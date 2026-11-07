@@ -84,7 +84,7 @@ RESULT_FAMILY = "result"
 MAYBE_FAMILY = "maybe"
 
 # The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` but the clone
-# family is in exactly one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
+# family and the contract families is in exactly one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
 # Only reads: no method of the family changes or consumes its receiver.
 RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 # The one row of the string family that writes its receiver: the call of the concat
@@ -99,12 +99,16 @@ CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
 RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
 # No rule yet: the set can only shrink.
-NO_RECEIVER_RULE_FAMILIES = frozenset({
-    "iterator", "foreign_ptr", "array_hash", "derived_hash", "contract", "function",
-})
+NO_RECEIVER_RULE_FAMILIES = frozenset({"iterator", "foreign_ptr", "function"})
 # The derived `clone` of a struct and an enum is in no set: SLIR lowering makes the rvalue
 # `Clone` of every `.clone()`, which reads its receiver (docs/design/ir.md 8.3, 8.7).
 CLONE_FAMILY = "derived_clone"
+# The families of the contract calls are in no set too: SLIR lowering makes each call an
+# intrinsic, which reads each operand (docs/design/ir.md 8.3, 8.6).
+ARRAY_HASH_FAMILY = "array_hash"
+DERIVED_HASH_FAMILY = "derived_hash"
+CONTRACT_FAMILY = "contract"
+CONTRACT_FAMILIES = frozenset({ARRAY_HASH_FAMILY, DERIVED_HASH_FAMILY, CONTRACT_FAMILY})
 
 
 # The methods whose answer is a view of what the receiver holds, by family: a container
@@ -145,13 +149,15 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
     `nom self`, and reads it otherwise. A method of a family of `RULED_EFFECT_FAMILIES`
     writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. The clone
-    family reads its receiver. Any other family in no set is an internal error.
+    family and a family of `CONTRACT_FAMILIES` read their receiver. Any other family in no
+    set is an internal error.
     """
     if method.family == STRING_FAMILY and method.name == CONCAT_IN_PLACE:
         return Convention.INOUT
     if steps_a_cursor(method):
         return Convention.IN_GUARANTEED
-    if method.family in RECEIVER_READ_FAMILIES or method.family == CLONE_FAMILY:
+    if (method.family in RECEIVER_READ_FAMILIES or method.family == CLONE_FAMILY
+            or method.family in CONTRACT_FAMILIES):
         return Convention.GUARANTEED
     if method.family in CONSUMING_RECEIVER_FAMILIES:
         return Convention.OWNED if method.nom_self else Convention.GUARANTEED

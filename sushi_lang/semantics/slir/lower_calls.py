@@ -16,7 +16,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
-from sushi_lang.semantics.method_effects import answers_view, receiver_convention
+from sushi_lang.semantics.method_effects import (
+    CONTRACT_FAMILIES, answers_view, receiver_convention)
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
@@ -34,7 +35,7 @@ from sushi_lang.semantics.slir.lower_generics import free_callee_name
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
 from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.type_predicates import generic_base_of
-from sushi_lang.semantics.typesys import BuiltinType, Type, deref_type
+from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref_type
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
@@ -63,9 +64,13 @@ def call(low: Lowering, node: e.Call) -> Value:
 
 def receiver(low: Lowering, callee: Callee,
              node: e.Call) -> tuple[tuple[p.Operand, Convention], ...]:
-    """The receiver of a method call, the first operand: a built-in method with the
-    answer of the receiver partition, an extension method with the convention of its
-    `self`. Any other callee has none."""
+    """The receiver of a method call, the first operand: a contract call with a read before
+    each later argument that can call, any other built-in method with the answer of the
+    receiver partition, an extension method with the convention of its `self`. Any other
+    callee has none."""
+    if isinstance(callee, Builtin) and callee.method.family in CONTRACT_FAMILIES:
+        return ((_by_convention(low, callee.recv, Convention.GUARANTEED, node.args),
+                 Convention.GUARANTEED),)
     if isinstance(callee, Builtin):
         return ((low.operand(callee.recv, in_place=True),
                  _receiver_convention(callee, node.loc)),)
@@ -85,7 +90,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     built-in container as the intrinsic of its written name (`f64.from_bits`, `List.new`),
     with the type of each argument; a built-in method by
     its family and its name, with no types: the receiver is the first operand of the
-    call (`receiver_convention`)."""
+    call (`receiver_convention`); a contract call as the intrinsic of its method, with the
+    type of each operand."""
     callee = resolved.callee
     if isinstance(callee, Free):
         if resolved.unit is None:
@@ -113,6 +119,12 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         type_name = generic_base_of(callee.ty) or str(callee.ty)
         return st.Builtin(Intrinsic(f"{type_name}.{callee.method.name}"),
                           tuple(low.type_of(arg.value) for arg in node.args))
+    if isinstance(callee, Builtin) and callee.method.family in CONTRACT_FAMILIES:
+        received = low.type_of(callee.recv)
+        operand_type = (received.referenced_type if isinstance(received, ReferenceType)
+                        else received)
+        return st.Builtin(Intrinsic(callee.method.name),
+                          (operand_type,) * (1 + len(node.args)))
     if isinstance(callee, Builtin):
         return st.Builtin(callee.method, ())
     raise StageStop(STAGE, type(callee).__name__, node.loc)

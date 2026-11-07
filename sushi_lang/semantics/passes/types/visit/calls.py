@@ -17,14 +17,16 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   of that function.
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
-- `Dotted` is a method call. The receiver is typed first, and the ladder of the call
-  (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
+- `Dotted` is a method call. The receiver is typed first. A call through a field of a
+  function type stops the walk, and the field comes before a family. Then the ladder of the
+  call (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
   implementation, an extension method, or nothing (CE2008). A family answer is the callee
-  row `Builtin`, and the arm of the family in `FAMILY_ARMS` types the call. A family with
-  no arm stops with the label `Call(method <family>)`, for a receiver of any type. A
-  method is never variadic, so a bloom argument is CE0120. An extension method of a
-  receiver of a plain type is the callee row `Method`. A call through a field of a
-  function type stops the walk.
+  row `Builtin`, and the arm of the family in `FAMILY_ARMS` types the call. So does a
+  contract method that a constraint of an opaque receiver promises
+  (`visit/contract_calls.py`). A family with no arm stops with the label
+  `Call(method <family>)`, for a receiver of any type. A method is never variadic, so a
+  bloom argument is CE0120. An extension method of a receiver of a plain type is the
+  callee row `Method`.
 - `Static` is a call on a type name. On an enum whose dot holds no such member it is
   CE2045 (`visit/results.py:reject_unknown_variant`). A static method of a plain type is
   the callee row `Static`, and a type whose dot holds no static of the name is CE2102. A
@@ -64,12 +66,13 @@ from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscoun
 from sushi_lang.semantics.generics.opaque import explain_unpromised
 from sushi_lang.semantics.generics.primitives import primitive_method_return_type
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.maybe import (
     MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, CLONE_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY,
-    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, CLONE_FAMILY, CONTRACT_FAMILIES, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY,
+    OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.passes.collect.externals import ExternalSig
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import (
@@ -79,7 +82,8 @@ from sushi_lang.semantics.passes.types.arguments import (
     NOTHING_TYPED, Parameters, check_arguments, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.arrays import check_array_method
 from sushi_lang.semantics.passes.types.calls.dotcall import (
-    PRIMITIVE_STATICS, MethodRung, PrimitiveStatic, reject_unknown_method, resolve_dotted)
+    PRIMITIVE_STATICS, MethodAnswer, MethodRung, PrimitiveStatic, reject_unknown_method,
+    resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
 from sushi_lang.semantics.passes.types.calls.methods import (
     RESOLUTION_REPORTED, extension_call_result_type, reject_uncloneable,
@@ -102,9 +106,12 @@ from sushi_lang.semantics.passes.types.visit.constructions import (
     Constructed, generic_static_owner)
 from sushi_lang.semantics.passes.types.visit.container_statics import (
     check_container_static, container_static_base)
+from sushi_lang.semantics.passes.types.visit.contract_calls import (
+    check_contract_method, promised_contract_family)
 from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_call
 from sushi_lang.semantics.passes.types.visit.generic_calls import resolve_generic_call
-from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
+from sushi_lang.semantics.passes.types.visit.helpers import (
+    fn_field_call_type, function_type_of_sig)
 from sushi_lang.semantics.passes.types.visit.hashmap_methods import check_hashmap_method
 from sushi_lang.semantics.passes.types.visit.list_methods import check_list_method
 from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
@@ -120,8 +127,8 @@ from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, ReferenceType,
-    StructType, Type, deref_type, owns_resource)
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, ReferenceType, StructType, Type,
+    deref_type, owns_resource)
 from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
@@ -204,9 +211,11 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
                        target: e.Dotted) -> Optional[Type]:
     """`x.f(args)`: the receiver, then the callee that the ladder finds (ir.md 7.3).
 
-    A family answer goes to the arm of the family in `FAMILY_ARMS`, and a family with no
-    arm stops the walk with the label of the family, on a receiver of any type. A perk
-    implementation stops the walk (C6), and so does any other method of a receiver that
+    A field of a function type comes first, and it stops the walk (C2). A family answer goes
+    to the arm of the family in `FAMILY_ARMS`, and a family with no arm stops the walk with
+    the label of the family, on a receiver of any type. A contract method that a constraint
+    of an opaque receiver promises has the arm of its family. Any other perk method stops
+    the walk (C6), and so does any other method of a receiver that
     takes no user method yet (`_takes_user_methods`). An extension method of a concrete
     target is a `Method` callee. A method of a `T[]` that no concrete target declares is the
     copy of a template (`extend T[]`, `xs.map(f)`), and it stops the walk before the copy is
@@ -221,20 +230,26 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if received is None:
         return None
     receiver = deref_type(received)
+    if _calls_a_function_field(validator, receiver, target.name):
+        visit.stop_at(validator, node)
     answer = resolve_dotted(validator, receiver, target.name)
-    if answer.family is not None:
-        arm = FAMILY_ARMS.get(answer.family.name)
+    family = answer.family or promised_contract_family(validator, receiver, target.name)
+    if family is not None:
+        arm = FAMILY_ARMS.get(family.name)
         if arm is None:
-            dispatch.stop_at_family(visit.STAGE, node, answer.family.name)
-        callee = Builtin(target.recv, answer.family.callee(target.name))
+            dispatch.stop_at_family(visit.STAGE, node, family.name)
+        callee = Builtin(target.recv, family.callee(target.name))
         validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
-        return arm(validator, node, receiver, target.name, answer.family)
+        return arm(validator, node, receiver, target.name, family)
     if answer.rung is not MethodRung.PERK and _rejects_a_chain(validator, node, target,
                                                                receiver):
         return None
-    if (answer.rung is MethodRung.PERK or not _takes_user_methods(validator, receiver)
-            or _calls_a_function_field(validator, receiver, target.name)):
+    if (answer.rung is MethodRung.PERK
+            or not (_takes_user_methods(validator, receiver)
+                    or _answers_nothing(answer, receiver))):
         visit.stop_at(validator, node)
+    if target.name == "clone" and reject_uncloneable(validator, node, receiver):
+        return None
     method = None
     if answer.rung is MethodRung.EXTENSION:
         if (isinstance(receiver, DynamicArrayType)
@@ -385,22 +400,26 @@ def _called_name(validator: TypeValidator, recv: e.ShirExpr) -> Optional[str]:
     return None
 
 
+def _calls_a_function_field(validator: TypeValidator, receiver: Type, name: str) -> bool:
+    """`h.op(v)` through a field of a function type: a call of a function value (C2)."""
+    return fn_field_call_type(validator, receiver, name) is not None
+
+
+def _answers_nothing(answer: MethodAnswer, receiver: Type) -> bool:
+    """No rung answers a method of a struct, an enum or an array, so its call is CE2008."""
+    return (answer.rung is MethodRung.UNANSWERED
+            and isinstance(receiver, (StructType, EnumType, ArrayType, DynamicArrayType)))
+
+
 def _takes_user_methods(validator: TypeValidator, ty: Type) -> bool:
-    """A receiver whose extension methods the pass types: a plain type, and an array of a
+    """A receiver whose extension methods the pass types: a plain type, an opaque type
+    parameter (no extension method answers it, so its call is CE2008), and an array of a
     plain element that owns nothing (`extend i32[]`). A method of an instance of a generic
     type (`extend Maybe@(i32)`) is the copy of a template, and stops (C1)."""
-    if _is_plain(validator, ty):
+    if _is_plain(validator, ty) or (isinstance(ty, TypeParameter) and ty.is_opaque):
         return True
     return (isinstance(ty, (ArrayType, DynamicArrayType)) and _is_plain(validator, ty.base_type)
             and not owns_resource(ty.base_type, validator.drop_type_names))
-
-
-def _calls_a_function_field(validator: TypeValidator, receiver: Type, name: str) -> bool:
-    """`h.op(v)` through a field of a function type, where no extension method of the
-    struct has the name: a call of a function value (C2). A method wins over the field."""
-    return (isinstance(receiver, StructType)
-            and isinstance(receiver.get_field_type(name), FunctionType)
-            and validator.extension_table.get_method(receiver, name) is None)
 
 
 def _user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str, *,
@@ -547,6 +566,7 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     RESULT_FAMILY: _check_result_method,
     MAYBE_FAMILY: _check_maybe_method,
     CLONE_FAMILY: _check_derived_clone,
+    **dict.fromkeys(CONTRACT_FAMILIES, check_contract_method),
 })
 
 

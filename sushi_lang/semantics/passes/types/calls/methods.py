@@ -18,7 +18,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, ARRAY_HASH_FAMILY, CONTRACT_FAMILY, DERIVED_HASH_FAMILY, MAYBE_FAMILY,
+    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
     IteratorType, StructType)
@@ -1071,7 +1072,7 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
                       "'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' "
                       "and 'collect': walk it with 'foreach', or call the method on the "
                       "collection it comes from")
-        _explain_unpromised_method(validator, diag, receiver_type, call.method)
+        explain_unpromised_method(validator, diag, receiver_type, call.method)
         diag.emit()
         return
 
@@ -1079,7 +1080,7 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
     _check_user_method(validator, call, receiver_type, method, stop_on_arity=False)
 
 
-def _explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
+def explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
                                method_name: str) -> None:
     """The note and the help of CE2008 on an opaque type parameter (#1070).
 
@@ -1175,7 +1176,7 @@ def _check_receiver_mode(validator: 'TypeValidator', call: MethodCall, method) -
 
 
 @METHOD_TYPE_REGISTRY.validator(ARRAY_FAMILY)
-@METHOD_TYPE_REGISTRY.validator("array_hash")
+@METHOD_TYPE_REGISTRY.validator(ARRAY_HASH_FAMILY)
 def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
     """The SHIR arm of the family checks the call (`arrays.py:check_array_method`)."""
@@ -1240,7 +1241,7 @@ def _validate_foreign_ptr_family(validator: 'TypeValidator', call: MethodCall,
                     arity_code=er.ERR.CE2009)
 
 
-@METHOD_TYPE_REGISTRY.validator("derived_hash")
+@METHOD_TYPE_REGISTRY.validator(DERIVED_HASH_FAMILY)
 @METHOD_TYPE_REGISTRY.validator("derived_clone")
 def _validate_derived_method(validator: 'TypeValidator', call: MethodCall,
                              receiver_type) -> None:
@@ -1250,7 +1251,7 @@ def _validate_derived_method(validator: 'TypeValidator', call: MethodCall,
     """
 
 
-@METHOD_TYPE_REGISTRY.validator("contract")
+@METHOD_TYPE_REGISTRY.validator(CONTRACT_FAMILY)
 def _validate_contract_method(validator: 'TypeValidator', call: MethodCall,
                               receiver_type) -> None:
     """`a.eq(b)` and `a.compare(b)` take one value of the receiver's type; `to_str`

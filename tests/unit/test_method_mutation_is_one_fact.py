@@ -43,9 +43,7 @@ def test_every_array_method_the_table_marks_is_measured():
 
 #: The families with no receiver rule yet, at the day of the pin (ruling R-V). A family may
 #: leave the set and the pin together; none may join.
-PINNED_NO_RECEIVER_RULE = frozenset({
-    "iterator", "foreign_ptr", "array_hash", "derived_hash", "contract", "function",
-})
+PINNED_NO_RECEIVER_RULE = frozenset({"iterator", "foreign_ptr", "function"})
 
 
 def _receiver_sets():
@@ -57,16 +55,18 @@ def _receiver_sets():
 
 def test_each_registry_family_is_in_exactly_one_receiver_set():
     """The receiver sets are a TOTAL partition of the families of `METHOD_TYPE_REGISTRY`
-    but the clone family, which is in no set (ruling R-V, docs/design/ir.md 8.3)."""
-    from sushi_lang.semantics.method_effects import CLONE_FAMILY
+    but the clone family and the contract families, which are in no set (ruling R-V,
+    docs/design/ir.md 8.3)."""
+    from sushi_lang.semantics.method_effects import CLONE_FAMILY, CONTRACT_FAMILIES
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
     registry = [family.name for family in METHOD_TYPE_REGISTRY.families]
-    assert CLONE_FAMILY in registry
+    in_no_set = CONTRACT_FAMILIES | {CLONE_FAMILY}
+    assert in_no_set <= set(registry)
     sets = _receiver_sets()
     for name in registry:
         holders = [label for label, families in sets.items() if name in families]
-        assert len(holders) == (0 if name == CLONE_FAMILY else 1), \
+        assert len(holders) == (0 if name in in_no_set else 1), \
             f"the family {name!r} is in {holders}"
     unknown = frozenset().union(*sets.values()) - set(registry)
     assert not unknown, f"no family of METHOD_TYPE_REGISTRY is named {sorted(unknown)}"
@@ -96,7 +96,7 @@ def test_a_read_family_gives_a_borrow_and_a_family_with_no_answer_gives_none():
     from sushi_lang.semantics.param_modes import Convention
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
-    for name in me.RECEIVER_READ_FAMILIES | {me.CLONE_FAMILY}:
+    for name in me.RECEIVER_READ_FAMILIES | me.CONTRACT_FAMILIES | {me.CLONE_FAMILY}:
         callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
         assert me.receiver_convention(callee) is Convention.GUARANTEED
     for name in (me.EFFECT_FAMILIES - me.RULED_EFFECT_FAMILIES) | me.NO_RECEIVER_RULE_FAMILIES:

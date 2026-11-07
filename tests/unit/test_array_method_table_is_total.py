@@ -52,7 +52,7 @@ MEASURED_DESCRIPTOR_ARMS = 16
 #: may only get shorter. `hash` is the `array_hash` family, which a `Hashable`
 #: implementation overrides, and not a row of the `array` family.
 NOT_EMITTED_YET = {
-    "hash": "C6: the array_hash family",
+    "hash": "never: the array_hash family, which SLIR lowering makes the intrinsic `hash`",
     "iter": "C3: the borrow pass stops at a lent iterator",
 }
 

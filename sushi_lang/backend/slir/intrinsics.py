@@ -1,5 +1,6 @@
-"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, `eq`, the statics of
-a primitive type name and the statics of a built-in container (docs/design/ir.md 8.6).
+"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, the contract calls
+`hash`, `eq`, `compare` and `to_str`, the statics of a primitive type name and the statics
+of a built-in container (docs/design/ir.md 8.6).
 
 Each row gives the LLVM values of every operand to an emitter family of the backend (ruling
 Q7), and the family reads the type of each operand from the callee. A static of a container
@@ -14,15 +15,18 @@ from typing import TYPE_CHECKING, Callable
 
 from llvmlite import ir
 
+from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.generics.hashmap import emit_hashmap_static
 from sushi_lang.backend.generics.list import emit_list_static
 from sushi_lang.backend.generics.own import emit_own_static
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import constant_value, operand_value, type_of_place
 from sushi_lang.backend.types.arrays.addressing import as_array_address
 from sushi_lang.backend.types.arrays.indexing import array_data, array_length
-from sushi_lang.backend.types.contracts import emit_value_eq
-from sushi_lang.backend.types.display import emit_interpolation
+from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
+from sushi_lang.backend.types.display import emit_interpolation, emit_value_to_str
+from sushi_lang.backend.types.value_hash import emit_value_hash
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.type_predicates import is_numeric_type
@@ -30,6 +34,11 @@ from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+#: The types that the print emitter writes with no `Display` form, beside a number. A `~`
+#: answer prints as an integer zero.
+_PRINTS_AS_IT_IS = frozenset({BuiltinType.STRING, BuiltinType.BOOL, BuiltinType.BLANK})
 
 
 def operands(state: FunctionState, statement: st.Call) -> list[tuple[ir.Value, Type]]:
@@ -58,27 +67,67 @@ def _println(state: FunctionState, statement: st.Call) -> ir.Value:
 
 def _write(state: FunctionState, statement: st.Call, *, is_line: bool) -> ir.Value:
     """One value to the console, through the print emitter. A value that prints by its
-    `Display` form stops for now. The call answers `~`."""
+    `Display` form writes that form, a fresh string that the print frees. The call answers
+    `~`."""
     parts = operands(state, statement)
     if len(parts) != 1:
         state.fault(f"a print of {len(parts)} values")
     (value, ty), = parts
-    if ty != BuiltinType.STRING and ty != BuiltinType.BOOL and not is_numeric_type(ty):
-        state.stop("Display print")
-    state.codegen.runtime.formatting.emit_print_value(value, is_line=is_line,
-                                                      semantic_type=ty)
+    codegen = state.codegen
+    if ty in _PRINTS_AS_IT_IS or is_numeric_type(ty):
+        codegen.runtime.formatting.emit_print_value(value, is_line=is_line, semantic_type=ty)
+    else:
+        text = emit_value_to_str(codegen, value, ty)
+        codegen.runtime.formatting.emit_print_value(text, is_line=is_line,
+                                                    semantic_type=BuiltinType.STRING)
+        slot = entry_alloca(state.builder, text.type, name="printed")
+        state.builder.store(text, slot)
+        emit_value_destructor(codegen, slot, BuiltinType.STRING)
     return constant_value(state, k.Blank())
+
+
+def _two_values(state: FunctionState, statement: st.Call) -> tuple[ir.Value, ir.Value, Type]:
+    """The two operands of an `eq` or a `compare`, and their one type."""
+    parts = operands(state, statement)
+    if len(parts) != 2 or parts[0][1] != parts[1][1]:
+        state.fault(f"a contract call of {len(parts)} values of the types "
+                    f"{[ty for _, ty in parts]}")
+    (left, ty), (right, _) = parts
+    return left, right, ty
 
 
 def _eq(state: FunctionState, statement: st.Call) -> ir.Value:
     """The equality of two values of one type, through the contract seam. A match on a
     string tests each literal arm with it. The answer is a `bool`."""
-    parts = operands(state, statement)
-    if len(parts) != 2 or parts[0][1] != parts[1][1]:
-        state.fault(f"an eq of {len(parts)} values of the types {[ty for _, ty in parts]}")
-    (left, ty), (right, _) = parts
+    left, right, ty = _two_values(state, statement)
     answer = emit_value_eq(state.codegen, left, right, ty)
     return state.builder.zext(answer, state.codegen.types.ll_type(BuiltinType.BOOL))
+
+
+def _compare(state: FunctionState, statement: st.Call) -> ir.Value:
+    """The order of two values of one type, through the contract seam: an `i32`."""
+    left, right, ty = _two_values(state, statement)
+    return emit_value_compare(state.codegen, left, right, ty)
+
+
+def _one_value(state: FunctionState, statement: st.Call) -> tuple[ir.Value, Type]:
+    """The one operand of a `hash` or a `to_str`, and its type."""
+    parts = operands(state, statement)
+    if len(parts) != 1:
+        state.fault(f"a contract call of {len(parts)} values")
+    return parts[0]
+
+
+def _hash(state: FunctionState, statement: st.Call) -> ir.Value:
+    """The `u64` hash of a value, through the one hash seam."""
+    value, ty = _one_value(state, statement)
+    return emit_value_hash(state.codegen, value, ty)
+
+
+def _to_str(state: FunctionState, statement: st.Call) -> ir.Value:
+    """The string form of a value, through the `Display` seam: a fresh string."""
+    value, ty = _one_value(state, statement)
+    return emit_value_to_str(state.codegen, value, ty)
 
 
 def _from_bits(float_type: ir.Type) -> Callable[[FunctionState, st.Call], ir.Value]:
@@ -154,8 +203,11 @@ INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
     "List.with_capacity": _container_static(_list_static("with_capacity"), 1),
     "HashMap.new": _container_static(_hashmap_static("new"), 0),
     "Own.alloc": _container_static(_own_static("alloc"), 1),
+    "compare": _compare,
     "eq": _eq,
+    "hash": _hash,
     "interp": _interp,
     "print": _print,
     "println": _println,
+    "to_str": _to_str,
 }
