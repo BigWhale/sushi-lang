@@ -1331,7 +1331,7 @@ not reach prints as lowering made it.
 | `Borrow` | `place: Expr`, `mode: BorrowMode` |
 | `Take` | `place: Expr`; a marked field take `nom s.out` in a `let` or a `return` |
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
-| `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
+| `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`, `captures: [LocalId]`; `captures` holds the locals of the enclosing body that it reads, as lowering takes them from `Bindings`, in the order of their first use. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
 | `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`, `named: bool`, `decl_loc: Span`; `fields` in the declaration order; `named` is true for a named construction; `decl_loc` is where a diagnostic of the written type points |
 | `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]`, `decl_loc: Span`; `decl_loc` is the span of the written type path (`geo.Sign`) |
 | `TupleInit` | `parts: [Expr]` |
@@ -2077,8 +2077,7 @@ fact with one writer (S6): the `Ownership` row of the capture in `OwnershipResul
 `borrow` writes. A copy for a plain value and a move for an owning one is the answer of
 `owns_resource`, an ownership fact, so `lift` writes no mode. SLIR lowering reads that row
 for the part of the closure: `MOVE` gives a `Move` of the captured local, and `ADOPT` a
-`Copy` (8.9). This is not built yet: `Capture` (`semantics/shir/lift.py`) still holds a mode
-of its own, `moves`.
+`Copy` (8.9).
 
 **What a consuming use is.** A consuming use is a value in a position that takes it over
 (the closed set of `ownership-conventions.md` 3.1). SHIR shows the position, and the rule reads the
@@ -2158,14 +2157,39 @@ come; the pipeline never reports the stop, because the program has an error. The
 as in the discovery round of a loop: the `OwnershipResults` of the body stay empty, the pass
 does not check them, and the body never goes to the SLIR lowering.
 
-**`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`). A `Lambda` stops the walk of its body with the stop code (`lift, Lambda`),
-and the pass writes no row: a body with a lambda never reaches `borrow`. Today
-`typecheck` stops at a `Lambda` first, so no compile meets the stop of `lift`. A body with
-no `Lambda` has an empty `LiftResults`, and the dump prints no answer of `lift`. When the
-walk ends with no stop, `check_lift` runs, and the body goes to `borrow`, which reads
-`LiftResults` for the captures. The AST pass `LambdaLifter` stays in the same module, and
-no stage runs it. The SHIR lowering of a lambda takes the symbol and the environment layout
-from it, and then it is deleted.
+**`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`) and stops at
+nothing. For each `Lambda`, a lambda in a lambda too, in the order of the walk, it writes the
+symbol, the symbol of the body with the suffix `.__lambda_<n>`, and the captures of the node
+in slot order. A template check, an initializer and a conversion never lower, so their name is
+the prefix. A body with no `Lambda` has an empty `LiftResults`, and the dump prints no answer
+of `lift`. `check_lift` runs, and the body goes to `borrow`, also a body with an error of
+`typecheck`.
+
+**A lambda in `typecheck`.** The arm (`visit/lambdas.py`) walks the body where the lambda
+stands, and writes its rows into the `TypeckResults` of the enclosing body. A written
+parameter type wins, and a bare parameter takes the type and the mode of the function type of
+the position. The channel is the annotation or the channel of that function type, and never
+comes from the body. An expression body with no written return type answers the type of its
+value. The answer is a `FunctionType`: its `captures` is empty when the lambda captures
+nothing, so the value is plain, and it is not empty when it captures, so the value owns.
+CE2094 refuses a parameter of an owning type and a capture of a borrow. An error in a lambda
+body and one in the enclosing body are both given (R-AR). A generic call solves its other
+arguments first: a lambda with written parameter types is then checked at the part of the
+function type that is known, and a bare lambda at a parameter that names a type parameter
+solves nothing (CE2060).
+
+**A lambda in `borrow`.** The arm (`borrow/lambdas.py`) takes each capture as a consuming use
+at the lambda, and writes its row. A use of a local after its capture is CE2405, and so is a
+second capture of an owning local. Then it walks the body as a callable of its own: it starts
+from no local of the enclosing body, and each capture has the state of a `poke` parameter. A
+borrow of one capture is counted on that capture alone (#1129). A consuming use of a capture
+is CE2411, and a capture of a capture of an enclosing lambda too, if it owns. A rebind of a
+capture and a write through it are legal, and they stay for the next call.
+
+**A rebind of a function type.** A local whose `let` holds a named function, or a lambda with
+no capture, owns nothing, and each use copies it. A rebind to a value that can hold an
+environment makes it own on every path after the rebind, so a `let` of it moves
+(`settle_rebound_function_value`). A rebind never takes that answer away.
 
 **The body half of `borrow`.** The declaration half of `borrow` reads the declaration of
 the body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
@@ -2499,8 +2523,7 @@ on a `cond_moved : [_5]` line after the `locals` line; the borrow regions on a
 `iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator
 call; `in_place: true` or `in_place: false` after the body of a `Loop`; and
 `symbol: "<symbol>"` and `env: [(move _4), (adopt _5)]` after the fields of a `Lambda`,
-each capture with its `Ownership` row (the printer does not print this form yet: it prints
-the mode of `Capture.moves` beside the row, `(adopt _4, Copy)`). The source row of
+each capture with its `Ownership` row. The source row of
 `typecheck` prints as
 `borrows: [0, -1]` after the arguments of a call with a `peek` return. With no row, the
 text does not change: a
@@ -2592,6 +2615,8 @@ SlirFunction
   locals : [SlirLocal]
   blocks : [SlirBlock]
   entry  : BlockId
+  environment : LocalId | None       # the function of a lambda: its environment `_1`
+  lifted : [SlirFunction]            # the functions cut from the lambdas of the body (8.9)
 
 SlirLocal
   id   : LocalId
@@ -2710,8 +2735,9 @@ the fixpoint. Three more rules apply:
 - an `Expand` never reaches SLIR: `monomorphize/unroll.py` unrolls it in an instance (4.5).
 
 The dump lists the copies of a unit by name (`LoweredUnit.copies`), and the emitter defines the
-written functions of a unit in source order, then the instances by name. The rule of a lambda
-has no code yet: a lambda stops the walk of its body. The body of a pack instance has no
+written functions of a unit in source order, then the instances by name. The functions of the
+lambdas of a body come with the body (`SlirFunction.lifted`), each with internal linkage in the
+module that defines the body, so each module holds its own copy. The body of a pack instance has no
 `Expand`, and a block ends at a copy that ends every path (`reached_statements`, 7.2).
 
 **The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
@@ -2998,8 +3024,7 @@ read-through `or_err` under a `??` as a borrowed view. In SLIR, an owned `or_err
 `result` and the `maybe` family (`backend/slir/methods.py`) gives the value and the type of
 the receiver and of the argument, and the type of the destination, to
 `emit_maybe_signature_method` and `emit_result_signature_method`. On the `Some` path of an
-`or_err`, the emitter destroys the error value. A `map_err` whose argument is a function
-value stops in `typecheck` (`typecheck, GlobalRef`, `typecheck, Lambda`).
+`or_err`, the emitter destroys the error value.
 
 ### 8.4 Places and operands
 
@@ -3029,7 +3054,8 @@ ONE lowering makes a `Deref`: the pointee of an `Own(...)` pattern is the place
 by-address parameter (8.3) and an address local (8.2) are read and written as ordinary
 locals, and the emitter knows that their storage is an address. So a capture in the body of
 a lifted lambda is the place `Field(_1, k)`: the environment `_1` is an `InGuaranteed`
-parameter (8.7, 8.9), and that lowering is not built yet.
+parameter (8.7, 8.9). In the code it is `Capture`, a `Field` that `root_of` takes as a root, so
+a region over one capture does not hold another capture of the environment.
 
 `Index` is a place, and its operand is an `i32`. An element never moves: a `Move` of a
 place that holds an `Index` is refused (8.13), because the array would be left PARTIALLY
@@ -3435,7 +3461,7 @@ A closure and an iterator have one layout, four words. `AggKind` keeps them apar
 the backend reads the SEMANTIC type and never the layout to know which one it has
 (`iteration.md`, ruling 10).
 
-**A closure value.** The kind of a closure is `AggClosure(ty)`, and `ty` is the function
+**A closure value.** The kind of a closure is `AggClosure(ty, env)`, `ty` is the function
 type of the value. The first part is the constant `FnRef` of the lifted function (8.5), and
 one part follows for each capture, in slot order (8.9). The emitter allocates ONE heap block
 for the environment, with a checked `malloc`, stores each part after the first into it in
@@ -3445,8 +3471,9 @@ the seam "Clone/destroy pair per type kind"): one `linkonce_odr` pair for each l
 writes no glue. A closure with no capture has a null `env_ptr` and glue that does nothing.
 The destroy of a closure value is an ordinary `Drop(place)`, which reaches that pair through
 the one destroy seam. The lifted function reads a capture through the place
-`Field(_1, k)` (8.9). This shape is not built yet: no lowering makes an `AggClosure`,
-and the emitter has no arm for it.
+`Field(_1, k)` (8.9). `env` is the struct type of the environment, with one field for each
+capture, and its name comes from its layout (`__closure_env<i32, string>`). A named function
+has no `env`, and takes its thunk: it has no environment in its own signature.
 
 **An iterator value.** The kind of an iterator producer or a lazy adapter is
 `AggIterator(ty, source, heap)`. `ty` is the `Iterator@(T)` of the value. `source` names one
@@ -3544,7 +3571,7 @@ backstop of the checker, as on the AST backend.
 | an iterator producer or a lazy adapter | ONE `Aggregate(AggIterator(ty, source, heap))` (8.7) into a fresh owning local: `source` is the row of the producer or the adapter, and `heap` is the heap decision of `OwnershipResults` for the `shir_id` of the call. The emitter of the row builds the state and supplies the three functions. This is not built yet |
 | `Range` as a value | an owned iterator: an `AggIterator` of the range row, with its bounds as parts and `heap: true`. This is not built yet: `typecheck` stops at it (`typecheck, Range`) |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
-| `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(_1, k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by the `Ownership` row of the capture (7.9). A lambda with no capture has the `FnRef` alone. This is not built yet: `typecheck` stops at a `Lambda` (`typecheck, Lambda`) |
+| `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(_1, k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by the `Ownership` row of the capture (7.9). A lambda with no capture has the `FnRef` alone. An expression body with a channel returns its value in `Result.Ok`, and a bare `~` body evaluates a value that it does not return (`semantics/slir/lower_closures.py`) |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
 | `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range. An owning element in a `let` is a view local (8.2) in a region over the array; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) it is a `Copy` of the place |
 | the concat peephole: a rebind `s := s.concat(x)` of a local whose old value the function holds, where the receiver of `concat` is the local itself | `Call(Builtin(string.concat_in_place), [(copy s @inout), (x @guaranteed)])` into a `~` temporary, and NO `Drop` of the old value: the emitter grows the buffer of `s` in place when `s` owns it, and copies it when `s` does not (`string_append`). The argument is evaluated first, and the call reads `s` after it: when the argument rebinds `s` through a `poke`, the append reads the new value of `s`. The local must hold a value of its own on the straight line: a live local, an `Inout` parameter or a `poke` address local. A local whose state is unknown or moved (a `Guaranteed` parameter before its first rebind) takes the general path (rule 6 of 8.10), and so does a local over which a borrow region is open at the rebind, and a field or an element target (`semantics/slir/lower_rebind.py`) |
@@ -3987,10 +4014,12 @@ Runs after lowering, before the backend. It checks:
   each use of it on every path, and at each use a region over the root of the place of its
   `Ref` is open (8.6)
 - a capture place: in the body of a lifted lambda, the place `Field(_1, k)` of a
-  capture is never moved out of and never written, because a caller can call the closure
-  two times or more. Each part of an `AggClosure` after its `FnRef` is a `Copy` or a `Move`
-  of a local: lowering takes it from the `Ownership` row of the capture (7.9). This rule is
-  not built yet
+  capture is never moved out of, and the environment `_1` is never written as a whole, because
+  a caller can call the closure two times or more. Each part of an `AggClosure` after its
+  `FnRef` is a `Copy` or a `Move` of a place: lowering takes it from the `Ownership` row of the
+  capture (7.9). The rule does not refuse a store into one slot: a rebind of a capture stays
+  for the next call, as on the old pipeline (`n := n + 1` in a lambda), with the `Drop` of the
+  old value of the slot when it owns (`verify_values.capture_places`)
 - a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
   `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
   the operand of an `Owned` argument (8.7). This rule is not built yet
