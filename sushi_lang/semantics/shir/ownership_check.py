@@ -205,7 +205,8 @@ def _capture_gaps(lam: e.Lambda, lift: LiftResults,
 def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
                      ownership: OwnershipResults) -> set[LocalId]:
     """The locals that hold a borrow: a parameter with no `nom`, a local of a reference
-    type, and a let-borrow (a `let` whose value answers REJECT)."""
+    type, a let-borrow (a `let` whose value answers REJECT), and the binder of a direct
+    walk."""
     borrowed = {param.local for param in body.params
                 if param.convention is not Convention.OWNED}
     borrowed |= {local.id for local in body.locals
@@ -215,6 +216,10 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
                 and isinstance(value.target, e.LocalRef)
                 and ownership.ownership_of(value.value.shir_id) is Ownership.REJECT):
             borrowed.add(value.target.local)
+        elif (isinstance(value, s.Loop) and isinstance(value.source, s.Items)
+                and isinstance(typeck.loop_kind_of(value.shir_id), (Cursor, HashMapCursor))
+                and isinstance(value.source.binder, LocalId)):
+            borrowed.add(value.source.binder)
     return borrowed
 
 

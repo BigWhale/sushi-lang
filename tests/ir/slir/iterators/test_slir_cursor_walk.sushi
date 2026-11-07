@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a0\nb0\nnew\nnew\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_cursor_walk.slir
+# The SLIR of a `Cursor` walk: `Len` into a local, then the shape of a counted loop. A bare
+# binder of an owning element is a view local, and a `poke` binder is an address local, each
+# in a region over the array.
+
+fn main() i32:
+    let i32 n = 0
+    let string[] words = from(["a{n}", "b{n}"])
+    foreach(w in words.iter()):
+        println(w)
+    foreach(poke w in words.iter()):
+        w := "new"
+    foreach(w in words.iter()):
+        println(w)
+    return 0

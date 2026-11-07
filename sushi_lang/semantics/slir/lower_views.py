@@ -15,7 +15,7 @@ ends with the storage of the temporary. Each arm is a free function that takes t
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
@@ -132,8 +132,15 @@ def bind_view(low: Lowering, local: ShirLocalId, value: r.Rvalue,
     statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
     if region.until:
         statements += low.placement.begin_region(
-            ident, [p.root_of(value.operand.place)], frozenset(region.until), span)
+            ident, [_region_root(low, value.operand.place)], frozenset(region.until), span)
     return statements + [st.Assign(p.Local(ident), value, span)]
+
+
+def _region_root(low: Lowering, place: p.Place) -> p.Place:
+    """The root of `place`. The answer of a step of a map walk holds a copy of a slot or its
+    address, and its binder views the map too (`lower_iterators.py`)."""
+    root = p.root_of(place)
+    return low.walk_owners.get(root.id, root) if isinstance(root, p.Local) else root
 
 
 def bind_part_view(low: Lowering, local: ShirLocalId, read: p.Copy, root: p.Place,
@@ -169,7 +176,8 @@ def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref,
     statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
     if region.until:
         statements += low.placement.begin_region(
-            ident, [p.root_of(value.place)], frozenset(region.until), span, value.mode)
+            ident, list(dict.fromkeys((_region_root(low, value.place), p.root_of(value.place)))),
+            frozenset(region.until), span, value.mode)
     return statements + [st.Assign(p.Local(ident), value, span)]
 
 
@@ -191,10 +199,11 @@ def let_reference(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     low.emit([st.Assign(p.Local(ident), r.Ref(place, borrow.mode), stmt.loc)])
 
 
-def reference_place(low: Lowering, expr: e.ShirExpr) -> p.Place:
+def reference_place(low: Lowering, expr: e.ShirExpr, *, new_value: bool = False) -> p.Place:
     """The place that a reference points into: a local or a `var`, a field or an element of
     one, the pointee of an `Own` (`o.get()`, `Deref(Field(place, 0))`), or a part of a
-    constant, whose value a hidden local of the block holds (ir.md 8.9)."""
+    constant, whose value a hidden local of the block holds (ir.md 8.9). With `new_value`,
+    any other root goes into a temporary of the statement: the container of a direct walk."""
     walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL, crosses_call=is_get_call)
     root = walked.node
     place: p.Place
@@ -203,6 +212,9 @@ def reference_place(low: Lowering, expr: e.ShirExpr) -> p.Place:
     elif isinstance(root, e.ConstRef):
         place = p.Local(low.temporary(r.Use(p.Const(low.constant(root))), low.type_of(root),
                                       root.loc, held=True))
+    elif new_value and isinstance(root, ShirNode):
+        held = cast(e.ShirExpr, root)
+        place = p.Local(low.temporary(low.value(held), low.type_of(held), held.loc))
     else:
         er.raise_internal_error("CE0000", span=expr.loc,
                                 detail="a reference into no place reached SLIR")

@@ -287,13 +287,13 @@ def _while(low: Lowering, stmt: s.Loop, source: s.Cond) -> None:
     to the header, and the exit block. When a condition local must end on the zero edge,
     that edge goes to a block of its own, which goes to the exit, because a `break` goes to
     the exit too."""
-    header = _enter_header(low, stmt)
-    among, at_header = _header_state(low, stmt)
+    header = enter_header(low, stmt)
+    among, at_header = header_state(low, stmt)
     cond, local = condition(low, source.cond)
     body = low.new_block()
     done = None if local is None else low.new_block()
     exit_ = low.new_block()
-    _rounds(low, stmt, (cond, local, source.cond.loc), body, header, done, exit_,
+    rounds(low, stmt, (cond, local, source.cond.loc), body, header, done, exit_,
             (among, at_header), ())
 
 
@@ -303,20 +303,26 @@ def _counted(low: Lowering, stmt: s.Loop, source: s.Items, range_: e.Range) -> N
     block that adds one to `k` and goes to the header, and the exit block. A `continue`
     goes to the step. The blocks are made in the order header, body, step, the zero block
     (see `_while`), exit."""
-    span = stmt.loc
     count, item = _range_formula(low, range_)
+    counted_walk(low, stmt, count, lambda at: () if isinstance(source.binder, s.Discard) else (
+        (None, ((source.binder, item(at)),)),))
+
+
+def counted_walk(low: Lowering, stmt: s.Loop, count: p.Operand,
+                 binds: Callable[[p.Operand], tuple[Binds, ...]]) -> None:
+    """The counter `k` at 0, a header that compares it with `count`, the body, which writes
+    the binders of `binds` at `k`, a step block that adds one to `k`, and the exit block."""
+    span = stmt.loc
     counter = low.temporary(r.Use(i32(0)), BuiltinType.I32, span)
-    header = _enter_header(low, stmt)
-    among, at_header = _header_state(low, stmt)
+    header = enter_header(low, stmt)
+    among, at_header = header_state(low, stmt)
     low.placement.open_statement()
     cond, local = _test(low, r.Binary("<", p.Copy(p.Local(counter)), count), span)
     body, step = low.new_block(), low.new_block()
     done = None if local is None else low.new_block()
     exit_ = low.new_block()
-    binds: tuple[Binds, ...] = () if isinstance(source.binder, s.Discard) else (
-        (None, ((source.binder, item(p.Copy(p.Local(counter)))),)),)
-    _rounds(low, stmt, (cond, local, span), body, step, done, exit_, (among, at_header),
-            binds)
+    rounds(low, stmt, (cond, local, span), body, step, done, exit_, (among, at_header),
+           binds(p.Copy(p.Local(counter))))
     step.statements.append(st.Assign(
         p.Local(counter), r.Binary("+", p.Copy(p.Local(counter)), i32(1)), span))
     step.terminator = tm.Goto(header.id, span)
@@ -378,14 +384,14 @@ def int_of(operand: p.Operand) -> int | None:
     return None
 
 
-def _enter_header(low: Lowering, stmt: s.Loop) -> Block:
+def enter_header(low: Lowering, stmt: s.Loop) -> Block:
     header = low.new_block()
     low.jump(tm.Goto(header.id, stmt.loc))
     low.block = header
     return header
 
 
-def _header_state(low: Lowering, stmt: s.Loop) -> tuple[tuple[LocalId, ...], FlowState]:
+def header_state(low: Lowering, stmt: s.Loop) -> tuple[tuple[LocalId, ...], FlowState]:
     """The locals in scope at the header, and their state there: a local whose state a
     back edge changes is unknown at the header."""
     among = low.placement.in_scope()
@@ -395,15 +401,16 @@ def _header_state(low: Lowering, stmt: s.Loop) -> tuple[tuple[LocalId, ...], Flo
     return among, low.placement.state()
 
 
-def _rounds(low: Lowering, stmt: s.Loop,
-            test: tuple[p.Operand, Optional[LocalId], Span], body: Block, next_: Block,
-            done: Optional[Block], exit_: Block,
-            header: tuple[tuple[LocalId, ...], FlowState], binds: Sequence[Binds]) -> None:
+def rounds(low: Lowering, stmt: s.Loop,
+           test: tuple[p.Operand, Optional[LocalId], Span], body: Block, next_: Block,
+           done: Optional[Block], exit_: Block,
+           header: tuple[tuple[LocalId, ...], FlowState], binds: Sequence[Binds],
+           *, leaves_at: int = 0) -> None:
     """The switch of the header, the body with its binders, which goes to `next_`, and the
-    exit, where the zero edge and each `break` meet."""
+    exit, where the edge of the value `leaves_at` and each `break` meet."""
     cond, local, span = test
     among, at_header = header
-    low.jump(tm.SwitchInt(cond, ((0, (done or exit_).id),), body.id, stmt.loc))
+    low.jump(tm.SwitchInt(cond, ((leaves_at, (done or exit_).id),), body.id, stmt.loc))
     targets(local, (body,) if done is None else (body, done), span)
     after_cond = low.placement.state()
     frame = LoopFrame(next_.id, exit_.id, low.placement.depth())

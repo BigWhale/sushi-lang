@@ -164,15 +164,12 @@ def _ast_probe(group: str) -> str:
 
 
 WHITELIST += (
-    (_BORROW + "flow.py", "without", _kept("C", "C3: iterators, the item of each round")),
-    (_BORROW + "flow.py", "invalidation_of", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "calls.py", "settle_receiver", _kept("C", "C3: a lent iterator receiver")),
     (_BORROW + "calls.py", "consume_indirect_args", _kept("C", "C2: closures")),
     (_BORROW + "consume.py", "reconcile_closure_bind", _kept("C", "C2: closures")),
     (_BORROW + "bindings.py", "BindingScope", _kept("C", "C3: iterators, the scope of a loop")),
     (_BORROW + "bindings.py", "bind_item", _kept("C", "C3: iterators")),
-    (_BORROW + "bindings.py", "bind_iterator", _kept("C", "C3: iterators")),
     (_BORROW + "bindings.py", "bind_lent_walk", _kept("C", "C3: iterators")),
     (_BORROW + "iterators.py", "settle_walk", _kept("C", "C3: iterators")),
     (_BORROW + "iterators.py", "is_lent_name",
@@ -180,7 +177,6 @@ WHITELIST += (
     (_BORROW + "state.py", "lent_value",
      _kept("C", "C3: a lent iterator that leaves through a peek return")),
     (_BORROW + "iterators.py", "settle_iterator_source", _kept("C", "C3: iterators")),
-    (_BORROW + "diagnostics.py", "emit_change_under_iterator", _kept("C", "C3: iterators")),
     (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),
     (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
 )

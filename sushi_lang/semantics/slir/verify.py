@@ -75,7 +75,7 @@ from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
     StructType, Type, UnknownType, owns_resource,
 )
-from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
+from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES, is_instance_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalTable
@@ -505,13 +505,17 @@ class Check:
         return _Typed(base.root, parts[place.index], base.indexes)
 
     def index_place(self, place: p.Index, span: Span) -> _Typed:
-        """An element of an array, or a byte of a string, at an `i32` index."""
+        """An element of an array, or a byte of a string, at an `i32` index. An element of a
+        `List@(T)` too: the verifier holds no table that resolves its argument, so its type
+        is not checked."""
         base, ty = self.base(place, span)
         self.operand(place.index, span)
         if self.operand_type(place.index, span) not in (BuiltinType.I32, None):
             self.fail(TYPED_PLACES, f"{show(place)} has an index that is no i32", span)
         if ty == BuiltinType.STRING:
             return _Typed(base.root, BuiltinType.U8, (*base.indexes, place.index))
+        if is_instance_of(ty, "List"):
+            return _Typed(base.root, _Payload(()), (*base.indexes, place.index))
         if not isinstance(ty, (ArrayType, DynamicArrayType)):
             self.fail(TYPED_PLACES, f"{show(place)} indexes a value that is no array", span)
         return _Typed(base.root, ty.base_type, (*base.indexes, place.index))

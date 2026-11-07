@@ -13,13 +13,12 @@ from __future__ import annotations
 from typing import Iterable, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import DotCall, Expr, MethodCall
+from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir.stmts import Bare, Ref
 from sushi_lang.semantics.typesys import BorrowMode, Type
 
-from .reads import borrow_owner, names_kept_storage
 from .regions import note_binder
 from .state import BorrowState, record_owners
 
@@ -29,8 +28,6 @@ if TYPE_CHECKING:
 
     from . import BorrowChecker
     from .state import Owner
-
-from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 
 
 def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> None:
@@ -122,16 +119,6 @@ def reference_binders(pattern: p.ShirPattern | p.PatBinding
     return []
 
 
-def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:
-    """Does a `foreach` walk an owned temporary that only the loop keeps (#1014)?
-
-    The iterator and the item then view the temporary, so neither freezes the local
-    that the temporary was copied from.
-    """
-    return (isinstance(iterable, (MethodCall, DotCall))
-            and not names_kept_storage(checker, iterable.receiver))
-
-
 class BindingScope:
     """The lifetime of one `match` arm's or `foreach` loop's bindings (#337, #300).
 
@@ -180,29 +167,6 @@ class BindingScope:
         """
         self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))
 
-    def bind_iterator(self, iterable: Expr) -> Optional[BorrowState]:
-        """Freeze the container a `foreach` walks, for the whole loop (#956).
-
-        The iterator reads the container's storage on every round, whatever the item
-        does, so it is a `let`-borrow of the container with a name no source can spell.
-        A range and a `next()` protocol value own their state; the caller does not ask.
-        An iterator over an owned temporary (`a.clone().iter()`) walks storage that the
-        loop alone keeps, so it freezes nothing (#1014).
-        """
-        if not isinstance(iterable, (MethodCall, DotCall)) or iterable.args:
-            return None
-        if iterable.method not in CONTAINER_ITERATORS:
-            return None
-        if walks_a_temporary(self.checker, iterable):
-            return None
-        state = BorrowState(name=f"<iterator {id(iterable)}>",
-                            bound_at_span=iterable.loc,
-                            views_storage_of=iterable.receiver)
-        self.register(state)
-        self.freeze_owner(state, iterable, iterable.loc)
-        frozen = any(binding == state.name for _owner, binding in self._frozen)
-        return state if frozen else None
-
     def bind_lent_walk(self, iterable: Expr) -> Optional[BorrowState]:
         """Freeze the owners of a lent iterator value that a `foreach` walks (#1228).
 
@@ -219,19 +183,3 @@ class BindingScope:
         record_owners(self.checker.borrow_state, state, owners, iterable.loc, self._frozen)
         frozen = any(binding == state.name for _owner, binding in self._frozen)
         return state if frozen else None
-
-    def freeze_owner(self, state: BorrowState, source: Expr, span: Optional[Span],
-                     poke_span: Optional[Span] = None) -> None:
-        """Give a reference binding the owner freeze a `let`-borrow gets (#242)."""
-        owner = borrow_owner(self.checker, source)
-        owner_state = self.checker.borrow_state.get(owner) if owner else None
-        if owner is None or owner_state is None:
-            return
-        from .references import pokes_through_a_peek, reject_poke_through_peek
-        if pokes_through_a_peek(state, owner_state):
-            reject_poke_through_peek(self.checker, owner_state, poke_span or span)
-            return
-        # An item of a lent iterator views its owners' storage, not the iterator (#1259).
-        from .iterators import owners_through
-        record_owners(self.checker.borrow_state, state,
-                      owners_through(self.checker, owner), span, self._frozen)

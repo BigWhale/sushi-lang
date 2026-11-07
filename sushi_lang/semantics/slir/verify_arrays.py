@@ -3,7 +3,7 @@
 An `Aggregate(AggArray)` gives the parts of each run: a value of the element type, an
 `i32` count, and an `i32` first value of a sequence of `i32` slots. The value of a repeat
 run is a borrow, never a `Move`. The counts of a `T[N]` are constants that add up to `N`. A
-`Drop` of a field or an element is of an owning type, off a local that is no view. `Len` reads an array or a string, and `Slice` reads an
+`Drop` of a field or an element is of an owning type, off a local that is no view. `Len` reads an array, a `List@(T)` or a string, and `Slice` reads an
 array with two `i32` bounds. Each check is a free function that takes the `Check` of
 `verify.py` first.
 """
@@ -18,6 +18,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.printer import show
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.slir.verify_rules import ARRAY_VALUE, LENGTH_SLICE, OWNING_DROP, VIEW
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, Type, owns_resource,
@@ -74,10 +75,11 @@ def _fixed_size(check: Check, ty: ArrayType, runs: Sequence[r.ArrayRun],
 
 
 def length_or_slice(check: Check, value: r.Len | r.Slice, span: Span) -> None:
-    """`Len` reads an array or a string; `Slice` reads an array with two `i32` bounds."""
+    """`Len` reads an array, a `List@(T)` or a string; `Slice` reads an array with two `i32`
+    bounds."""
     ty = check.place(value.place, span).ty
     kinds: tuple[type, ...] = (ArrayType, DynamicArrayType)
-    if isinstance(value, r.Len) and ty == BuiltinType.STRING:
+    if isinstance(value, r.Len) and (ty == BuiltinType.STRING or is_instance_of(ty, "List")):
         return
     if ty is not None and not isinstance(ty, kinds):
         check.fail(LENGTH_SLICE, f"{show(value)} reads a value that is no array", span)

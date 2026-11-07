@@ -42,6 +42,7 @@ from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet
 if TYPE_CHECKING:
     from typing import TypeAlias
 
+    from sushi_lang.semantics.shir.exprs import ShirExpr
     from sushi_lang.semantics.shir.ids import LocalId
 
     #: The key of a state: a local, or the symbol of the global of a `var`.
@@ -75,12 +76,12 @@ class BorrowState:
     declared_at_span: Optional[Span] = None   # where the variable was introduced
     moved_at_span: Optional[Span] = None      # where ownership was transferred away
     consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
-    move_reported_by: Optional[LocalId] = None  # the iterator whose CE2412 reports the move
+    move_reported_by: Optional[Owner] = None  # the walk whose CE2412 reports the move
     borrows_from: tuple[Owner, ...] = ()      # the root owners a `let`-borrow reads out of
     is_lent_iterator: bool = False            # a `let`-borrow that owns its iterator value
     lent_value: Optional[Expr] = None         # the value a lent iterator `let` was bound to
-    views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
-    covered_by: Optional[LocalId] = None      # the iterator whose freeze covers this one
+    views_storage_of: Optional[ShirExpr] = None  # a direct walk: the container it walks
+    covered_by: Optional[Owner] = None        # the walk whose freeze covers this one
     invalidated_at: Optional[Span] = None     # where that owner changed or was released
     invalidated_by: tuple = ()                # (owner, what the change was)
     # A tuple per entry, not a set: `Span` is an unfrozen dataclass and so unhashable.

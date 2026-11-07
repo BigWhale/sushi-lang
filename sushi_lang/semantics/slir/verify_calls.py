@@ -24,6 +24,7 @@ from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_MODES
 from sushi_lang.semantics.method_effects import (
     CONCAT_IN_PLACE, MAYBE_FAMILY, RESULT_FAMILY, RULED_EFFECT_FAMILIES, STRING_FAMILY,
+    steps_a_cursor,
     argument_conventions, receiver_convention,
 )
 from sushi_lang.semantics.param_modes import BuiltinModes
@@ -164,11 +165,18 @@ def _method_conventions(check: Check, stmt: st.Call, method: BuiltinMethod) -> N
     of `argument_conventions`. A method of `Result` or `Maybe` (`WRAPPER_MODES`): the
     receiver has the convention of `receiver_convention`, and each argument the convention
     of the mode of its row. `concat_in_place` of the string family: the receiver has the
-    convention of `receiver_convention`, and its one argument is `Guaranteed`. Any other
-    family has no rule here."""
+    convention of `receiver_convention`, and its one argument is `Guaranteed`. A
+    `cursor_next` row of the map family: the map is `InGuaranteed`, and the cursor is
+    `Inout`. Any other family has no rule here."""
     count = len(stmt.args) - 1
     name = f"{method.family}.{method.name}"
-    if method.family in RULED_EFFECT_FAMILIES:
+    arguments: tuple[Convention, ...]
+    if steps_a_cursor(method):
+        if count != 1:
+            check.fail(CONVENTIONS, f"the call of {name} has {count} arguments, and it "
+                                    f"takes 1", stmt.span)
+        arguments = (Convention.INOUT,)
+    elif method.family in RULED_EFFECT_FAMILIES:
         arguments = argument_conventions(method.family, method.name, count)
     elif method.family in WRAPPER_MODES:
         modes = WRAPPER_MODES[method.family].of(method.name, count) or ()

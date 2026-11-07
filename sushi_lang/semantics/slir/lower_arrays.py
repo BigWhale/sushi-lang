@@ -77,7 +77,7 @@ def element(low: Lowering, base: p.Place, node: e.Index) -> p.Place:
     """`Index(base, i)`: the index into a local of the statement, then the bounds check."""
     index = bound(low, node.index)
     if not node.unchecked:
-        length = _length(low, base, low.type_of(node.base), node.loc)
+        length = length_of(low, base, low.type_of(node.base), node.loc)
         at, size = int_of(index), int_of(length)
         if at is None or size is None or not 0 <= at < size:
             ok = _compare(low, "<", index, length, node.loc)
@@ -91,7 +91,7 @@ def view(low: Lowering, base: p.Place, node: e.Slice) -> p.Place:
     span = node.loc
     start = bound(low, node.start)
     end = _add(low, bound(low, node.end), node.inclusive, span)
-    length = _length(low, base, low.type_of(node.base), span)
+    length = length_of(low, base, low.type_of(node.base), span)
     first, last, size = int_of(start), int_of(end), int_of(length)
     if first is None or last is None or size is None or not 0 <= first <= last <= size:
         end_ok = _compare(low, "<=", end, length, span)
@@ -105,9 +105,9 @@ def view(low: Lowering, base: p.Place, node: e.Slice) -> p.Place:
     return p.Local(ident)
 
 
-def _length(low: Lowering, base: p.Place, ty: Type, span: Span) -> p.Operand:
-    """The length of a `T[N]` is a constant; of a `T[]` and a `string`, a `Len` into a
-    local of the statement, which the trap reads too."""
+def length_of(low: Lowering, base: p.Place, ty: Type, span: Span) -> p.Operand:
+    """The length of a `T[N]` is a constant; of a `T[]`, a `List@(T)` and a `string`, a `Len`
+    into a local of the statement, which the trap reads too."""
     held = deref_type(ty)
     if isinstance(held, ArrayType):
         return i32(held.size)

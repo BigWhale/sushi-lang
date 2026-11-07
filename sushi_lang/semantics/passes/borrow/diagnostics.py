@@ -6,8 +6,6 @@ from typing import Callable, Optional, TYPE_CHECKING, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import DotCall, Expr, MethodCall
-from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.places import Step, walk_place
@@ -140,39 +138,25 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
-def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
-                               iterable: Expr, header: Optional[Span]) -> None:
-    """Report CE2412 at a change of the container a `foreach` still walks (#956).
-
-    `change` is the span of the change and its cause, as `FlowFacts.invalidation_of`
-    answers them.
-    """
-    span, (owner, what) = change
+def emit_change_under_iterator(checker: 'BorrowChecker', walk: BorrowState,
+                               iterable: e.Call, header: Optional[Span]) -> None:
+    """Report CE2412 at a change of the container that a direct walk still walks (#956)."""
+    owner, what = walk.invalidated_by
     text = spelled(checker, iterable)
-    diag = checker.err.emit_with(er.ERR.CE2412, span,
-                                 owner=owner, name=text)
+    diag = checker.err.emit_with(er.ERR.CE2412, walk.invalidated_at,
+                                 owner=checker.name_of(owner), name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    if (not isinstance(iterable, MethodLikeNodes)
-            or iterable.method not in CONTAINER_ITERATORS):
-        # A lent iterator held by a `let` (#1259), or a lent value such as an adapter
-        # chain (#1228): the change is to one of its owners.
-        diag.help(f"{what} after the loop")
-        diag.emit()
-        return
-    walked = cast(MethodCall, iterable).receiver
-    receiver = spelled(checker, walked)
-    receiver_type = read_type(checker, walked)
+    target = cast(e.Dotted, iterable.target)
+    receiver = spelled(checker, target.recv)
+    receiver_type = read_type(checker, target.recv)
     if refuses_clone(checker, receiver_type):
         diag.help(f"{what} after the loop: "
                   f"{no_clone_reason(checker, receiver, receiver_type)}")
     else:
         diag.help(f"{what} after the loop, or walk an independent value: "
-                  f"`{receiver}.clone().{iterable.method}()`")
+                  f"`{receiver}.clone().{target.name}()`")
     diag.emit()
-
-
-MethodLikeNodes = (MethodCall, DotCall)
 
 
 def refuses_clone(checker: 'BorrowChecker', ty) -> bool:

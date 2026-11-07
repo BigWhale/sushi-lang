@@ -33,6 +33,7 @@ from sushi_lang.backend.constants.enum_initializers import (
 from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.gep_utils import gep_struct_field
+from sushi_lang.backend.generics.list.types import extract_element_type
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.ownership import copy_out
 from sushi_lang.backend.expressions.operators import (
@@ -47,7 +48,7 @@ from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARIS
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
-from sushi_lang.semantics.type_predicates import is_numeric_type
+from sushi_lang.semantics.type_predicates import is_instance_of, is_numeric_type
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, StructType, Type,
 )
@@ -117,10 +118,13 @@ def _pointee_type(state: FunctionState, base: p.Place) -> Type:
 
 
 def _element_type(state: FunctionState, base: p.Place) -> Type:
-    """The type of an element of the array, or of a byte of the string, in `base`."""
+    """The type of an element of the array or the `List@(T)`, or of a byte of the string, in
+    `base`."""
     ty = type_of_place(state, base)
     if ty == BuiltinType.STRING:
         return BuiltinType.U8
+    if isinstance(ty, StructType) and is_instance_of(ty, "List"):
+        return extract_element_type(ty, state.codegen)
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
         state.fault(f"{base} of {ty} has no element")
     return ty.base_type

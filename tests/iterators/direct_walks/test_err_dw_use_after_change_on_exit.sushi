@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2412
+# A use of the item after a change of the owner, on a path that leaves the loop: the walk does
+# not meet the change again, so the item reports it.
+
+fn main() i32:
+    let string[] xs = from(["a"])
+    foreach(x in xs.iter()):
+        xs.push("c")
+        println(x)
+        break
+    return 0

@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a0\nb0\nb0\na0\n"
+# EXPECT_NO_LEAKS
+# `break`, `continue` and `return` run the drops of each scope that they leave.
+
+fn first_long(string[] words) string:
+    foreach(w in words.iter()):
+        let string held = w.clone()
+        if (held.len() > 1):
+            return held
+    return ""
+
+fn main() i32:
+    let i32 n = 0
+    let string[] words = from(["a{n}", "b{n}"])
+    foreach(w in words.iter()):
+        let string copy = w.clone()
+        if (copy == "b0"):
+            println(copy)
+            break
+        println(copy)
+    foreach(w in words.iter()):
+        let string copy = w.clone()
+        if (copy == "a0"):
+            continue
+        println(copy)
+    println(first_long(words))
+    return 0

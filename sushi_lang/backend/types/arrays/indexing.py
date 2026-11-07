@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 
 from sushi_lang.backend import gep_utils
+from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_len_ptr
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType, Type
 
 if TYPE_CHECKING:
@@ -23,14 +25,17 @@ _STRING_DATA, _STRING_SIZE = 0, 1
 
 def element_address(codegen: 'LLVMCodegen', base: ir.Value, ty: Type,
                     index: ir.Value) -> ir.Value:
-    """The address of element `index` of the array or the string at `base`."""
+    """The address of element `index` of the array, the `List@(T)` or the string at `base`."""
     if isinstance(ty, ArrayType):
         return gep_utils.gep_fixed_array_element(codegen, base, index, "elem_ptr")
+    if is_instance_of(ty, "List"):
+        data = codegen.builder.load(get_list_data_ptr(codegen.builder, base), name="list_data")
+        return gep_utils.gep_array_element(codegen, data, index, "elem_ptr")
     return gep_utils.gep_array_element(codegen, array_data(codegen, base, ty), index, "elem_ptr")
 
 
 def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
-    """The length of the array or the string at `base`, as an `i32`."""
+    """The length of the array, the `List@(T)` or the string at `base`, as an `i32`."""
     if isinstance(ty, ArrayType):
         return ir.Constant(codegen.types.i32, ty.size)
     if isinstance(ty, DynamicArrayType):
@@ -39,6 +44,8 @@ def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
     if ty == BuiltinType.STRING:
         return codegen.builder.load(gep_utils.gep_struct_field(codegen, base, _STRING_SIZE),
                                     name="string_len")
+    if is_instance_of(ty, "List"):
+        return codegen.builder.load(get_list_len_ptr(codegen.builder, base), name="list_len")
     raise_internal_error("CE0000", detail=f"the length of {ty}, which is no array")
 
 

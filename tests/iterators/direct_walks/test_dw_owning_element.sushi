@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ann0\nbob0\n2\n"
+# EXPECT_NO_LEAKS
+# A walk of an element that owns, through a field: the item is a view, and the array stays
+# the one owner.
+
+struct Person:
+    string name
+
+struct Team:
+    Person[] people
+
+fn main() i32:
+    let i32 n = 0
+    let Team t = Team(from([Person("ann{n}"), Person("bob{n}")]))
+    let i32 count = 0
+    foreach(p in t.people.iter()):
+        println(p.name)
+        count := count + 1
+    println(count)
+    return 0

@@ -26,9 +26,9 @@ that has no value, and is no empty container, stops the walk.
 An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
 `While` (ir.md 7.7). A loop over a range with a bare binder is `CountedRange`: its range is
-checked by `ranges.check_range_iterable`, and the binder is an i32. A loop over any other
-iterable is not typed yet. A `break` and a `continue` have
-no answer: the scope pass refuses one outside a loop.
+checked by `ranges.check_range_iterable`, and the binder is an i32. A direct walk is in
+`visit/walks.py`. A loop over any other iterable stops the walk. A `break` and a `continue`
+have no answer: the scope pass refuses one outside a loop.
 
 A `Match` checks its scrutinee (CE2048, `matching.matchable_type`) and writes its
 `MatchFacts`. Then it checks the pattern of each arm, gives the arm its row for the one
@@ -64,6 +64,8 @@ from sushi_lang.semantics.passes.types.utils import (
 from sushi_lang.semantics.passes.types.visit.arrays import reject_wrong_size
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.passes.types.visit.ranges import check_range_iterable
+from sushi_lang.semantics.passes.types.visit.walks import (
+    check_direct_walk, unwraps_a_try_binder)
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, is_get_call, walk_place
 from sushi_lang.semantics.shir import exprs as e
@@ -136,7 +138,7 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
         return
     answers = validator.body_answers()
     if declared is None:
-        if local.name is not None:
+        if local.name is not None and not unwraps_a_try_binder(validator, node):
             er.emit(validator.reporter, er.ERR.CE2007, local.loc, name=local.name)
             return
         inferred = visit.check_expr(validator, node.value)
@@ -306,10 +308,10 @@ def check_if(validator: TypeValidator, node: s.If) -> None:
 
 
 def check_loop(validator: TypeValidator, node: s.Loop) -> None:
-    """A `while` loop or a counted loop: its source, its kind and its body. A counted loop
-    walks a range with a bare binder, which is an i32; `_` binds nothing. A range makes its
-    values and has no storage for them, so a `peek` or a `poke` binder over one is CE2423
-    at the marker, and the body is not checked."""
+    """A `while` loop, a counted loop or a direct walk (`visit/walks.py`): its source, its
+    kind and its body. A counted loop walks a range with a bare binder, which is an i32; `_`
+    binds nothing. A range makes its values and has no storage for them, so a `peek` or a
+    `poke` binder over one is CE2423 at the marker, and the body is not checked."""
     source = node.source
     answers = validator.body_answers()
     if isinstance(source, s.Cond):
@@ -324,8 +326,8 @@ def check_loop(validator: TypeValidator, node: s.Loop) -> None:
         if not isinstance(source.binder, s.Discard):
             answers.record_local(source.binder, BuiltinType.I32)
         answers.record_loop_kind(node.shir_id, CountedRange())
-    else:
-        visit.stop_at(validator, node)
+    elif not check_direct_walk(validator, node, source):
+        return
     check_block(validator, node.body)
 
 

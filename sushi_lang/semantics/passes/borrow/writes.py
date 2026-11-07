@@ -7,7 +7,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, MemberAccess
+from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType
@@ -204,7 +204,7 @@ def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr | e.Shir
 
 def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[LocalId],
                              span: Optional[Span], what: str, *,
-                             place: Optional[Expr] = None,
+                             place: Optional[e.ShirExpr] = None,
                              moves_storage: bool = True) -> None:
     """Reject a change to `owner` while a `let`-borrow binding reads out of it (#242).
 
@@ -246,24 +246,25 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[LocalId],
                                  if entry in kept]
 
 
-def _views_storage(checker: 'BorrowChecker', name: LocalId) -> Optional[Expr]:
+def _views_storage(checker: 'BorrowChecker', name: LocalId) -> Optional[e.ShirExpr]:
     """The container a foreach iterator binding walks, or None for any other binding."""
     binding = checker.borrow_state.get(name)
     return binding.views_storage_of if binding is not None else None
 
 
-def _place_shape(expr: Optional[Expr]) -> Optional[tuple[str, ...]]:
+def _place_shape(expr: Optional[e.ShirExpr]) -> Optional[tuple[str, ...]]:
     """A place as its root and its steps, every index one step: `a.b[i]` -> a, b, []."""
     walked = walk_place(expr, Step.MEMBER | Step.INDEX)
-    if walked.name is None:
+    if not isinstance(walked.node, (e.LocalRef, e.StorageRef)):
         return None
-    steps = [node.member if isinstance(node, MemberAccess) else "[]"
+    steps = [node.name if isinstance(node, e.Field) else "[]"
              for node in reversed(walked.path)]
-    return (walked.name.id, *steps)
+    root = walked.node.local if isinstance(walked.node, e.LocalRef) else walked.node.decl
+    return (str(root), *steps)
 
 
-def changes_storage_of(place: Optional[Expr], moves_storage: bool,
-                       viewed: Expr) -> bool:
+def changes_storage_of(place: Optional[e.ShirExpr], moves_storage: bool,
+                       viewed: e.ShirExpr) -> bool:
     """Can a change at `place` move or free the storage of the container `viewed`?
 
     A change at the container itself does when it moves storage; a change at a place

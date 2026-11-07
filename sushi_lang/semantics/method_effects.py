@@ -90,6 +90,9 @@ RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 # The one row of the string family that writes its receiver: the call of the concat
 # peephole. Only SLIR lowering makes it, and no program can name it (docs/design/ir.md 8.9).
 CONCAT_IN_PLACE = "concat_in_place"
+# The rows of the map family that step a `HashMapCursor` walk, one for each view. Only SLIR
+# lowering makes them, and no program can name them (docs/design/ir.md 8.6).
+CURSOR_NEXT = "cursor_next."
 # Consumes: the family has a `nom self` method, so the answer is per method.
 CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
@@ -127,12 +130,18 @@ def answers_view(method: BuiltinMethod) -> bool:
     return method.name in VIEW_ANSWERS.get(method.family, frozenset())
 
 
+def steps_a_cursor(method: BuiltinMethod) -> bool:
+    """Whether `method` is a `cursor_next` row of the map family."""
+    return method.family == HASHMAP_FAMILY and method.name.startswith(CURSOR_NEXT)
+
+
 def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     """The convention of the receiver of a call of `method`, or None when its family has
     no receiver rule yet: a family of `NO_RECEIVER_RULE_FAMILIES`.
 
     A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`), but
-    `concat_in_place` of the string family writes it (`Inout`). A method of a
+    `concat_in_place` of the string family writes it (`Inout`). A `cursor_next` row of the
+    map family reads the map where it is (`InGuaranteed`). A method of a
     family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
     `nom self`, and reads it otherwise. A method of a family of `RULED_EFFECT_FAMILIES`
     writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. The clone
@@ -140,6 +149,8 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     """
     if method.family == STRING_FAMILY and method.name == CONCAT_IN_PLACE:
         return Convention.INOUT
+    if steps_a_cursor(method):
+        return Convention.IN_GUARANTEED
     if method.family in RECEIVER_READ_FAMILIES or method.family == CLONE_FAMILY:
         return Convention.GUARANTEED
     if method.family in CONSUMING_RECEIVER_FAMILIES:

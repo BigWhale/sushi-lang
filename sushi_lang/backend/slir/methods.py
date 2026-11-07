@@ -15,6 +15,7 @@ from sushi_lang.backend.expressions.calls.stdlib.strings import (
     emit_stdlib_string_call, emit_string_append)
 from sushi_lang.backend.generics.container_table import blank
 from sushi_lang.backend.generics.hashmap import emit_hashmap_method
+from sushi_lang.backend.generics.hashmap.cursor import emit_hashmap_cursor_next
 from sushi_lang.backend.generics.list import emit_list_method
 from sushi_lang.backend.generics.maybe import (
     emit_builtin_maybe_method, emit_maybe_signature_method)
@@ -26,8 +27,8 @@ from sushi_lang.backend.slir.values import (
     operand_address, operand_value, type_of_operand, type_of_place)
 from sushi_lang.backend.types.arrays import emit_array_method
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, CONCAT_IN_PLACE, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY,
-    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY,
+    ARRAY_FAMILY, CONCAT_IN_PLACE, CURSOR_NEXT, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY,
+    OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY, steps_a_cursor,
 )
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import BuiltinMethod
@@ -124,6 +125,25 @@ def _container(base: str, emit: _ContainerEmitter) -> _MethodRow:
     return row
 
 
+_hashmap_method = _container("HashMap", emit_hashmap_method)
+
+
+def _hashmap(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
+    """A method of a `HashMap@(K, V)`. A `cursor_next` row answers the item of its view, in
+    the form of the type of the destination (docs/design/ir.md 8.6)."""
+    if not steps_a_cursor(method):
+        return _hashmap_method(state, method, statement)
+    if len(statement.args) != 2:
+        state.fault(f"the call of '{method.name}' has {len(statement.args)} operands")
+    (owner, _), (cursor, _) = statement.args
+    map_type, answer = type_of_operand(state, owner), type_of_place(state, statement.dest)
+    if not isinstance(map_type, StructType) or not isinstance(answer, EnumType):
+        state.fault(f"the call of '{method.name}' has the types {map_type} and {answer}")
+    return emit_hashmap_cursor_next(state.codegen, method.name.removeprefix(CURSOR_NEXT),
+                                    operand_address(state, owner),
+                                    operand_address(state, cursor), map_type, answer)
+
+
 #: The emitter of a method of the `result` or the `maybe` family that reads its receiver:
 #: the codegen, the method name and the value of the receiver.
 _WrapperEmitter = Callable[[Any, str, ir.Value], ir.Value]
@@ -168,7 +188,7 @@ def _wrapper(emit: _WrapperEmitter, emit_signature: _SignatureEmitter) -> _Metho
 METHOD_FAMILIES: dict[str, _MethodRow] = {
     ARRAY_FAMILY: _array,
     LIST_FAMILY: _container("List", emit_list_method),
-    HASHMAP_FAMILY: _container("HashMap", emit_hashmap_method),
+    HASHMAP_FAMILY: _hashmap,
     OWN_FAMILY: _container("Own", emit_own_method),
     PRIMITIVE_FAMILY: _primitive,
     STRING_FAMILY: _string,

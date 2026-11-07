@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a0 1\na0 2\n1\n2\n"
+# EXPECT_NO_LEAKS
+# A walk in a walk, an inner `break` and `continue`, and an element that is an array.
+
+fn main() i32:
+    let i32 n = 0
+    let string[] words = from(["a{n}", "b{n}"])
+    let i32[] xs = from([1, 2, 3])
+    foreach(w in words.iter()):
+        if (w == "b0"):
+            continue
+        foreach(x in xs.iter()):
+            if (x == 3):
+                break
+            println("{w} {x}")
+    let i32[][] rows = from([from([1]), from([2])])
+    foreach(row in rows.iter()):
+        foreach(x in row.iter()):
+            println(x)
+    return 0

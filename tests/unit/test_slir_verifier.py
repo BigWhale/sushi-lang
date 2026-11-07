@@ -432,7 +432,7 @@ def test_a_built_in_method_call_with_its_receiver_first_passes():
 
 LIST_I32 = StructType(name="List<i32>", fields=(("len", I32), ("capacity", I32),
                                                  ("data", I32)))
-INOUT = Convention.INOUT
+INOUT, IN_GUARANTEED = Convention.INOUT, Convention.IN_GUARANTEED
 
 
 def _list_method(name: str, *args: tuple[p.Operand, Convention]) -> SlirFunction:
@@ -492,6 +492,8 @@ def _map_method(name: str, *args: tuple[p.Operand, Convention]) -> SlirFunction:
     ("remove", ((_copy(2), GUARANTEED), (FOUR, GUARANTEED))),
     ("free", ((_copy(2), GUARANTEED),)),
     ("len", ((_copy(2), INOUT),)),
+    ("cursor_next.keys", ((_copy(2), GUARANTEED), (FOUR, INOUT))),
+    ("cursor_next.values", ((_copy(2), IN_GUARANTEED), (FOUR, GUARANTEED))),
 ])
 def test_a_map_method_with_another_convention_is_refused(name: str, args):
     """The rule of a List method holds for a HashMap method: the receiver from
@@ -506,9 +508,15 @@ def test_a_map_method_with_another_convention_is_refused(name: str, args):
     ("contains_key", ((_copy(2), GUARANTEED), (FOUR, GUARANTEED))),
     ("free", ((_copy(2), INOUT),)),
     ("len", ((_copy(2), GUARANTEED),)),
+    ("cursor_next.values", ((_copy(2), IN_GUARANTEED), (_copy(2), INOUT))),
 ])
 def test_a_map_method_with_the_conventions_of_its_rows_passes(name: str, args):
     _passes(_map_method(name, *args))
+
+
+def test_a_cursor_step_with_another_count_of_operands_is_refused():
+    """A `cursor_next` row takes the map and the cursor (ir.md 8.6, 8.13)."""
+    _refused(_map_method("cursor_next.keys", (_copy(2), IN_GUARANTEED)), "declared conventions")
 
 
 OWN_STRING = StructType(name="Own<string>", fields=(("value", PointerType(STRING)),),

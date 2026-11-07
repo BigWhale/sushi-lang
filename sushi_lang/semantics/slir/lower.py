@@ -13,8 +13,8 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 
 The lowering handles the parameters, a `let`, a rebind (`lower_rebind.py`, the concat
 peephole included), a call statement, a `return`, an
-`if`, a `match`, a `while` and a counted loop over a range with their `break` and
-`continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
+`if`, a `match`, a `while`, a counted loop over a range and a direct walk
+(`lower_iterators.py`) with their `break` and `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
 of an array, a field read and write, an element read and write with its bounds check, a
 slice, a destructure, a call, an interpolation, a `??`, `clone`, `expect`, `realise` and
@@ -77,6 +77,7 @@ from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_control as ctl
+from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_takes as takes
@@ -191,7 +192,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     shir_locals = {local.id: local for local in body.locals}
     learned = _Learned()
     while True:
-        lowering = Lowering(answers, decls, drops, shir_locals, learned, label)
+        lowering = Lowering(answers, decls, drops, shir_locals, learned, label, tables)
         lowering.new_local(ret, None, None, view=borrows and lowering.owns(ret))
         params = lowering.parameters()
         lowering.lower_block(ret)
@@ -214,6 +215,7 @@ class Lowering:
     shir_locals: dict[ShirLocalId, ShirLocal]
     learned: _Learned
     label: str
+    tables: SymbolTables
     locals: list[SlirLocal] = field(default_factory=list)
     ids: dict[ShirLocalId, LocalId] = field(default_factory=dict)
     shir_of: dict[LocalId, ShirLocalId] = field(default_factory=dict)
@@ -227,6 +229,7 @@ class Lowering:
     found_unknown: set[tuple[ShirId, ShirLocalId]] = field(default_factory=set)
     takes: dict[p.Place, tuple[p.Field, ...]] = field(default_factory=dict)
     calls: dict[ShirId, bool] = field(default_factory=dict)
+    walk_owners: dict[LocalId, p.Place] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.block = self.blocks[0]
@@ -527,7 +530,7 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
     s.Return: Lowering.ret,
     s.If: ctl.if_,
     s.Match: lower_match.match,
-    s.Loop: ctl.loop,
+    s.Loop: iterators.loop,
     s.Break: ctl.break_,
     s.Continue: ctl.continue_,
     s.Assert: ctl.assert_,

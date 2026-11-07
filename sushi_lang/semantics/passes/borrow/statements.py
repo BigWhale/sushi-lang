@@ -21,8 +21,8 @@ its bare binders, and its arms join as the blocks of an `if` do. A `while` loop 
 condition once, then its body in two rounds (`check_loop_body`): the paths of a
 `continue` and of the end of the body go round the back edge, and the paths of a `break`
 leave the loop. A counted loop reads the bounds of its range once, and declares its binder
-as a read-only view before its body. A loop over any other iterable is checked by the
-iterators group, and it stops the walk. The end of a block that the path
+as a read-only view before its body. A direct walk has its own arm (`walks.py`). A loop over
+any other iterable is checked by the iterators group, and it stops the walk. The end of a block that the path
 reaches, a `return`, a `break` and a `continue` are exits of the blocks that they leave
 (`flow.record_exit`), and a rebind is an exit of the old value of its local
 (`flow.record_rebind`).
@@ -41,7 +41,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.loop_kind import CountedRange
+from sushi_lang.semantics.shir.loop_kind import CountedRange, Cursor, HashMapCursor
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.paths import terminates
 from sushi_lang.semantics.shir.walk import walk
@@ -72,6 +72,7 @@ from .reads import borrow_owner, read_type
 from .references import check_let_reference, declare_reference_binders
 from .regions import note_part_view, note_view
 from .state import BorrowState, record_owners
+from .walks import check_direct_walk
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
 if TYPE_CHECKING:
@@ -517,15 +518,19 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     """`while (cond)`: the condition is read at the entry, then the body is checked to its
     fixed point, and each view that the condition reads is read again at the back edge: a
     change of its owner in the body is CE2412 there. A counted loop reads the bounds of its range once, at the entry,
-    and its binder is a read-only view, as a bare binder of a match is. A loop over any
-    other iterable stops the walk: the iterators group checks it."""
+    and its binder is a read-only view, as a bare binder of a match is. A direct walk has
+    its own arm (`walks.py`). A loop over any other iterable stops the walk: the iterators
+    group checks it."""
     source = node.source
     again: Optional[Callable[[], None]] = None
+    kind = checker.answers().loop_kind_of(node.shir_id)
     if isinstance(source, s.Cond):
         arms.check(checker, source.cond)
         again = partial(_read_views_again, checker, source.cond)
-    elif isinstance(checker.answers().loop_kind_of(node.shir_id), CountedRange) \
-            and isinstance(source.iterable, e.Range):
+    elif isinstance(kind, (Cursor, HashMapCursor)):
+        check_direct_walk(checker, node, source)
+        return
+    elif isinstance(kind, CountedRange) and isinstance(source.iterable, e.Range):
         arms.check(checker, source.iterable.start)
         arms.check(checker, source.iterable.end)
         if not isinstance(source.binder, s.Discard):
@@ -549,7 +554,9 @@ def _read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
 
 
 def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
-                    again: Optional[Callable[[], None]] = None) -> None:
+                    again: Optional[Callable[[], None]] = None,
+                    *, per_round: frozenset[LocalId] = frozenset(),
+                    walk: Optional[BorrowState] = None) -> None:
     """Check a loop body to a fixed point, so that the back edge is honoured.
 
     The first round discovers the facts that come round the back edge: it reports no
@@ -557,30 +564,68 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
     joined with that back edge, and reports. The code after the loop sees the fixed point
     (the condition is false) joined with each `break` path of the second round (#993).
     `again` reads the condition of the loop at the back edge of the second round.
+    `per_round` holds the locals that each round makes again, so their facts do not go round
+    the back edge. `walk` is the state of a direct walk (`walks.py`): when a move of its
+    owner comes round the back edge, the walk reports it, one time.
     """
     entry = snapshot_flow(checker)
     suppressed = checker.err.suppressed
     checker.err.suppressed = True
     checker.discovery_rounds += 1
     try:
-        first_back, _first_breaks = _check_round(checker, body)
+        first_back, _first_breaks = _check_round(checker, body, per_round)
     finally:
         checker.discovery_rounds -= 1
         checker.err.suppressed = suppressed
     fixed_point = entry if first_back is None else entry | first_back
     restore_flow(checker, fixed_point)
-    back, breaks = _check_round(checker, body)
+    _leave_to_the_items(checker, walk, first_back, per_round)
+    reported = _move_reported_by_walk(checker, walk, entry, first_back)
+    if reported is not None and walk is not None:
+        reported.move_reported_by = walk.local
+    try:
+        back, breaks = _check_round(checker, body, per_round)
+    finally:
+        if reported is not None:
+            reported.move_reported_by = None
     if again is not None and back is not None:
         restore_flow(checker, back)
         again()
     restore_flow(checker, fixed_point if breaks is None else fixed_point | breaks)
 
 
-def _check_round(checker: 'BorrowChecker', body: ShirBlock
+def _leave_to_the_items(checker: 'BorrowChecker', walk: Optional[BorrowState],
+                        first_back: FlowFacts | None, items: frozenset[LocalId]) -> None:
+    """A change that does not reach the next round does not meet the walk again, so the walk
+    covers no item for it: a use of the item after the change is CE2412 at that use."""
+    if walk is None or (first_back is not None
+                        and first_back.invalidation_of(walk.local) is not None):
+        return
+    for local in items:
+        checker.borrow_state[local].covered_by = None
+
+
+def _move_reported_by_walk(checker: 'BorrowChecker', walk: Optional[BorrowState],
+                           entry: FlowFacts, first_back: FlowFacts | None
+                           ) -> Optional[BorrowState]:
+    """The owner whose move came round the back edge and changed under `walk`, or None."""
+    if walk is None or first_back is None:
+        return None
+    change = first_back.invalidation_of(walk.local)
+    if change is None:
+        return None
+    _span, (owner, _what) = change
+    if owner not in first_back.moved or owner in entry.moved:
+        return None
+    return checker.borrow_state.get(owner)
+
+
+def _check_round(checker: 'BorrowChecker', body: ShirBlock,
+                 per_round: frozenset[LocalId] = frozenset()
                  ) -> tuple[FlowFacts | None, FlowFacts | None]:
     """Check one round of a loop body: the join of the paths to the back edge, and the
-    join of the `break` paths. Each is None when no path of that kind exists, because
-    `FlowFacts.join` of no path is no identity."""
+    join of the `break` paths, with no fact about `per_round`. Each is None when no path of
+    that kind exists, because `FlowFacts.join` of no path is no identity."""
     frame = LoopFrame(len(checker.block_locals))
     checker.loop_frames.append(frame)
     try:
@@ -590,8 +635,8 @@ def _check_round(checker: 'BorrowChecker', body: ShirBlock
     back = list(frame.continues)
     if not terminates(body, leaves_round=True):
         back.append(snapshot_flow(checker))
-    return (FlowFacts.join(back) if back else None,
-            FlowFacts.join(frame.breaks) if frame.breaks else None)
+    return (FlowFacts.join(back).without(per_round) if back else None,
+            FlowFacts.join(frame.breaks).without(per_round) if frame.breaks else None)
 
 
 def check_break(checker: 'BorrowChecker', node: s.Break) -> None:

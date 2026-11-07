@@ -7,7 +7,8 @@ what the source says. Data only.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from types import MappingProxyType
+from typing import ClassVar, Mapping, TypeAlias
 
 from sushi_lang.semantics.shir.callee import Callee
 
@@ -15,24 +16,32 @@ from sushi_lang.semantics.shir.callee import Callee
 @dataclass(frozen=True, slots=True)
 class Keys:
     """`.keys()`."""
+    name: ClassVar[str] = "keys"
 
 
 @dataclass(frozen=True, slots=True)
 class Values:
     """`.values()`."""
+    name: ClassVar[str] = "values"
 
 
 @dataclass(frozen=True, slots=True)
 class Entries:
     """`.entries()`."""
+    name: ClassVar[str] = "entries"
 
 
 @dataclass(frozen=True, slots=True)
 class Pairs:
     """`.pairs()`."""
+    name: ClassVar[str] = "pairs"
 
 
 HashMapView: TypeAlias = Keys | Values | Entries | Pairs
+
+#: The view of each producer of a HashMap.
+HASHMAP_VIEWS: Mapping[str, HashMapView] = MappingProxyType({
+    view.name: view for view in (Keys(), Values(), Entries(), Pairs())})
 
 
 @dataclass(frozen=True, slots=True)

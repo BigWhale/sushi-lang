@@ -1,0 +1,113 @@
+"""The direct walks of the typecheck pass over SHIR (docs/design/ir.md 7.7).
+
+A `foreach` whose iterable is a built-in producer over a container is a direct walk: `iter`
+on a `T[]`, a `T[N]`, a `List@(T)` or a slice is a `Cursor`, and `keys`, `values`, `entries`
+and `pairs` on a `HashMap@(K, V)` are a `HashMapCursor`. The iterable is no value. Its call
+has the rows of any call of its family, and the kind of the loop says what it walks. Any
+other iterable stops the walk (`Loop`).
+
+The binder is the item of the iterator. A written type that the item does not fit is CE2034.
+A `peek` or a `poke` binder points into the storage of the container, and an entry and a
+pair have none: that is CE2423 at the marker. A `??` binder is a hidden binder and a `let` of
+its `??` at the top of the body, and an item that is no `Result` is CE2517.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.iterators import (
+    CONTAINER_ITERATORS, produces_from_a_container)
+from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.compatibility import types_compatible
+from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
+from sushi_lang.semantics.passes.types.utils import validate_type_name
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.callee import Builtin
+from sushi_lang.semantics.shir.loop_kind import HASHMAP_VIEWS, Cursor, HashMapCursor, LoopKind
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.typesys import IteratorType, Type
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.types import TypeValidator
+
+#: The producers whose item has storage in the container.
+_ADDRESSABLE = frozenset({"iter", "keys", "values"})
+
+
+def check_direct_walk(validator: TypeValidator, node: s.Loop, source: s.Items) -> bool:
+    """The iterable, the binder and the kind of a direct walk. True when the pass goes on
+    with the body: a fault of the iterable or of the binder leaves the body unread."""
+    iterable = source.iterable
+    if not (isinstance(iterable, e.Call) and isinstance(iterable.target, e.Dotted)
+            and iterable.target.name in CONTAINER_ITERATORS and not iterable.args):
+        visit.stop_at(validator, node)
+    ty = visit.check_expr(validator, iterable)
+    if ty is None:
+        if not validator.reporter.has_errors:
+            er.emit(validator.reporter, er.ERR.CE0146, iterable.loc)
+        return False
+    kind = _kind_of(validator, iterable)
+    if kind is None or not isinstance(ty, IteratorType):
+        visit.stop_at(validator, node)
+    item = _binder_type(validator, source, ty.element_type)
+    if item is None:
+        return False
+    first = node.body.statements[0] if node.body.statements else None
+    if isinstance(first, s.Assign) and unwraps_a_try_binder(validator, first) \
+            and not is_instance_of(item, "Result"):
+        end = first.value.loc
+        marker = Span(end.end_line, end.end_col - len("??"), end.end_line, end.end_col)
+        er.emit(validator.reporter, er.ERR.CE2517, marker, ty=display_type(item))
+        return False
+    if isinstance(source.by, s.Ref) and iterable.target.name not in _ADDRESSABLE:
+        er.emit(validator.reporter, er.ERR.CE2423, source.by.loc or node.loc)
+        return False
+    answers = validator.body_answers()
+    if not isinstance(source.binder, s.Discard):
+        answers.record_local(source.binder, item)
+    answers.record_loop_kind(node.shir_id, kind)
+    return True
+
+
+def unwraps_a_try_binder(validator: TypeValidator, node: s.Assign) -> bool:
+    """Whether a `let` is the one that the AST builder put at the top of the body of a `??`
+    binder (`let x = <hidden>??`): the source writes no type for it, because `??` of the
+    item gives it. A `peek`, a `poke` and a type on the binder are on the `let` or refused."""
+    value = node.value
+    return (isinstance(value, e.Try) and isinstance(value.inner, e.LocalRef)
+            and validator.body_locals[value.inner.local].name is None)
+
+
+def _kind_of(validator: TypeValidator, iterable: e.Call) -> Optional[LoopKind]:
+    """The kind of the walk that the callee row of the call gives, or None for a callee that
+    is no producer: an extension method can have the name of one."""
+    resolved = validator.body_answers().callee_of(iterable.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    if not isinstance(callee, Builtin) or not produces_from_a_container(
+            callee.method.family, callee.method.name, len(iterable.args)):
+        return None
+    view = HASHMAP_VIEWS.get(callee.method.name)
+    return Cursor() if view is None else HashMapCursor(view)
+
+
+def _binder_type(validator: TypeValidator, source: s.Items, item: Type) -> Optional[Type]:
+    """The type of the binder: its written type when the item fits it, else the item. None
+    after a fault of the written type."""
+    if isinstance(source.binder, s.Discard):
+        return item
+    local = validator.body_locals[source.binder]
+    if local.declared is None:
+        return item
+    declared = validator.written_type(local.declared)
+    if validate_type_name(validator, declared, local.declared_loc):
+        return None
+    declared = resolve_variable_type(validator, declared, local.declared_loc)
+    if not types_compatible(validator, declared, item):
+        er.emit(validator.reporter, er.ERR.CE2034, local.declared_loc,
+                expected=display_type(item), got=display_type(declared))
+        return None
+    return declared

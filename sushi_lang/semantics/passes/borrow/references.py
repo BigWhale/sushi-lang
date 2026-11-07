@@ -62,17 +62,19 @@ def check_let_reference(checker: 'BorrowChecker', node: s.Assign, local: LocalId
     if not isinstance(value, e.Borrow) or borrow_of_constant(checker, value.place, mode):
         note_part_view(checker, state)
         return
-    _freeze(checker, state, value.place, node.loc, writes=True)
+    freeze_reference(checker, state, value.place, node.loc, writes=True)
     note_part_view(checker, state)
 
 
-def _freeze(checker: 'BorrowChecker', state: BorrowState, place: e.ShirExpr,
+def freeze_reference(checker: 'BorrowChecker', state: BorrowState, place: e.ShirExpr,
             span: Optional[Span], *, writes: bool,
             siblings: frozenset[Owner] = frozenset(),
-            frame: Optional[list[tuple[Owner, Owner]]] = None) -> None:
+            frame: Optional[list[tuple[Owner, Owner]]] = None,
+                     bound_at: Optional[Span] = None) -> None:
     """Freeze the owner of `place` for the reference `state`, after the gates of the second
     reference and, for a `poke`, of the read-only root. `writes`: a `poke` changes the owner
-    for each `let`-borrow of it (a reference `let`)."""
+    for each `let`-borrow of it (a reference `let`). `bound_at` is where the owner records the
+    binding, when that is not `span`."""
     owner = borrow_owner(checker, place)
     owner_state = checker.borrow_state.get(owner) if owner is not None else None
     if owner is None or owner_state is None:
@@ -91,7 +93,7 @@ def _freeze(checker: 'BorrowChecker', state: BorrowState, place: e.ShirExpr,
         # A writer invalidates every value binding read out of the owner, as `f(poke x)`
         # does (#242).
         check_owner_not_borrowed(checker, owner, span, "take `poke`", place=place)
-    record_owners(checker.borrow_state, state, (owner,), span,
+    record_owners(checker.borrow_state, state, (owner,), bound_at or span,
                   checker._scope_binding_borrows[-1] if frame is None else frame)
 
 
@@ -126,7 +128,7 @@ def declare_reference_binders(checker: 'BorrowChecker', node: s.Match,
         if borrowed and not _is_a_place(root):
             checker.err.emit(er.ERR.CE2404, at, expr=spelled(checker, root))
         elif borrowed or isinstance(root, e.LocalRef):
-            _freeze(checker, state, root, at, writes=False, siblings=frozenset(declared),
+            freeze_reference(checker, state, root, at, writes=False, siblings=frozenset(declared),
                     frame=frame)
         declared.append(local)
         note_binder(checker, state, body)

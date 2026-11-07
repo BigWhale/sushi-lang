@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "one0\none0\n"
+# EXPECT_NO_LEAKS
+# `break` and `return` out of a walk of a map, each with an owning local.
+use <collections/hashmap>
+
+fn any_value(HashMap@(i32, string) m) string:
+    foreach(v in m.values()):
+        let string held = v.clone()
+        return held
+    return ""
+
+fn main() i32:
+    let i32 n = 0
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one{n}")
+    foreach(v in m.values()):
+        let string copy = v.clone()
+        println(copy)
+        break
+    println(any_value(m))
+    m.free()
+    return 0
