@@ -1,0 +1,15 @@
+# A lent iterator in a local has a stack state. The walk moves its cursor in place, and the
+# owner stays usable after the last use of the iterator.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a\nbb\n3\n"
+use <collections/iter>
+
+fn main() i32:
+    let string[] xs = from(["a", "bb"])
+    let Iterator@(peek string) it = xs.iter()
+    foreach(s in it):
+        println(s)
+    xs.push("c")
+    println(xs.len())
+    return 0

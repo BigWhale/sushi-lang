@@ -119,6 +119,17 @@ def _variant(ty: Type, variant: str, parts: Sequence[object]) -> str:
     return f"{head}({_each(parts)})" if parts else head
 
 
+def _iterator_source(source: r.IterSource) -> str:
+    """The row of the closed table of an iterator value (ir.md 8.7)."""
+    if isinstance(source, r.IterElements):
+        return "elements lent" if source.lent else "elements owned"
+    if isinstance(source, r.IterMapView):
+        return f"{source.view} {'lent' if source.lent else 'owned'}"
+    if isinstance(source, r.IterRange):
+        return f"range step {source.step}"
+    return f"new {source.next_symbol}"
+
+
 def _constant_aggregate(c: k.Aggregate) -> str:
     if c.variant is not None:
         return _variant(c.ty, c.variant, c.parts)
@@ -187,7 +198,7 @@ PRINTERS: dict[type, Render] = {
     r.AggVariant: lambda kind: _variant(kind.ty, kind.variant, ()),
     r.AggArray: lambda _kind: "",
     r.AggClosure: lambda _kind: "closure",
-    r.AggIterator: lambda _kind: "iterator",
+    r.AggIterator: lambda kind: f"iterator {_iterator_source(kind.source)}, heap: {str(kind.heap).lower()}",
     # rvalues (ir.md 8.7)
     r.Use: lambda n: show(n.operand),
     r.Binary: lambda n: f"{show(n.left)} {n.op} {show(n.right)}",

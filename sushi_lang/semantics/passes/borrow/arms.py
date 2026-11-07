@@ -90,6 +90,6 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.EnumInit: ex.check_enum_init,
     e.TupleInit: ex.check_tuple_init,
     e.ArrayInit: ex.check_array_init,
-    e.Range: stop_at,
+    e.Range: ex.read_value,
     e.Interp: ex.check_interp,
 }

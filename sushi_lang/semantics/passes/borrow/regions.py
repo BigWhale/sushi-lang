@@ -36,9 +36,11 @@ if TYPE_CHECKING:
 
 
 def note_view(checker: 'BorrowChecker', node: s.Assign, state: 'BorrowState') -> None:
-    """Keep the view that the `let` `node` makes (a `REJECT` row at its value), with its
-    owners and its statement. A discovery round of a loop writes no row, and keeps nothing."""
-    if (checker.table().ownership_of(node.value.shir_id) is not Ownership.REJECT
+    """Keep the view that the `let` `node` makes (a `REJECT` row at its value), or the lent
+    iterator that it holds, with its owners and its statement. A discovery round of a loop
+    writes no row, and keeps nothing."""
+    if ((checker.table().ownership_of(node.value.shir_id) is not Ownership.REJECT
+            and not state.is_lent_iterator)
             or state.local is None or not checker.statement_at):
         return
     block, index = checker.statement_at[-1]

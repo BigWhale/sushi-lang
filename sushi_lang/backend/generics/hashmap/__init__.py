@@ -38,7 +38,7 @@ from .methods import (
 
 
 def _iterator(*_operands: Any) -> ir.Value:
-    """The four producers take no operands yet: the borrow pass stops their calls (C3)."""
+    """SLIR lowering makes each producer an `AggIterator`, so no call reaches this row."""
     raise_internal_error("CE0000", detail="a call of an iterator of a HashMap reached the "
                                           "emitter")
 

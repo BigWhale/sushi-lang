@@ -82,6 +82,7 @@ PRIMITIVE_FAMILY = "primitive"
 STRING_FAMILY = "string"
 RESULT_FAMILY = "result"
 MAYBE_FAMILY = "maybe"
+ITERATOR_FAMILY = "iterator"
 
 # The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` is in exactly
 # one of the four sets below (ruling R-V, docs/design/ir.md 8.3). The clone family and the
@@ -97,12 +98,12 @@ CONCAT_IN_PLACE = "concat_in_place"
 # lowering makes them, and no program can name them (docs/design/ir.md 8.6).
 CURSOR_NEXT = "cursor_next."
 # Consumes: the family has a `nom self` method, so the answer is per method.
-CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
+CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY, ITERATOR_FAMILY})
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
 RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
 # No rule yet: the set can only shrink.
-NO_RECEIVER_RULE_FAMILIES = frozenset({"iterator", "foreign_ptr"})
+NO_RECEIVER_RULE_FAMILIES = frozenset({"foreign_ptr"})
 # The derived `clone` of a struct and an enum is in no set: SLIR lowering makes the rvalue
 # `Clone` of every `.clone()`, which reads its receiver (docs/design/ir.md 8.3, 8.7).
 CLONE_FAMILY = "derived_clone"

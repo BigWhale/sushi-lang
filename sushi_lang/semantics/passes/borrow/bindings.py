@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Iterable, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir.stmts import Bare, Ref
@@ -166,20 +165,3 @@ class BindingScope:
         run-time drop flag.
         """
         self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))
-
-    def bind_lent_walk(self, iterable: Expr) -> Optional[BorrowState]:
-        """Freeze the owners of a lent iterator value that a `foreach` walks (#1228).
-
-        A lent temporary (`xs.iter().map(f)`, `it.clone()`) reads the storage of its
-        owners on every round, as a direct walk reads its container, so the loop is a
-        `let`-borrow of each owner with a name no source can spell.
-        """
-        from .iterators import lent_owners
-        owners = lent_owners(self.checker, iterable)
-        if not owners:
-            return None
-        state = BorrowState(name=f"<iterator {id(iterable)}>", bound_at_span=iterable.loc)
-        self.register(state)
-        record_owners(self.checker.borrow_state, state, owners, iterable.loc, self._frozen)
-        frozen = any(binding == state.name for _owner, binding in self._frozen)
-        return state if frozen else None

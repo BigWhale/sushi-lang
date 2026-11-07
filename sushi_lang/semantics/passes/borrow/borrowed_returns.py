@@ -146,7 +146,8 @@ def reject_view_of_temporary(checker: 'BorrowChecker', value: e.ShirExpr) -> boo
 def check_borrowed_return(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
     """A `return` in a `peek` body: the value, or the payload of `Result.Ok(...)`, must be a
     borrow whose owner is a source (CE2443). `Result.Err(...)` is an ordinary return."""
-    from .consume import consume, decide, source_class
+    from .consume import consume, consume_named, decide, source_class
+    from .iterators import is_lent_name, lend_to_the_caller
 
     variant = _result_variant(checker, value)
     if variant == "Err":
@@ -164,7 +165,13 @@ def check_borrowed_return(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
         reason = _why_not_a_view(checker, returned, value)
         if reason is not None and not (returned.template_copy and _owns_nothing(checker, value)):
             _emit_not_a_view(checker, returned, value, reason)
+    if is_lent_name(checker, value):
+        # The `let` owns the iterator value, so it is spent.
+        lend_to_the_caller(checker, value)
+        consume_named(checker, value, Provenance.OWNED, value.loc)
+        return
     # The view goes to the caller as it is: nothing here frees it, and nothing moves.
+    lend_to_the_caller(checker, value)
     decide(checker, value, Provenance.FRESH, source_class(checker, value))
 
 
@@ -185,10 +192,14 @@ def _owns_nothing(checker: 'BorrowChecker', value: e.ShirExpr) -> bool:
 def _why_not_a_view(checker: 'BorrowChecker', returned: BodyReturn,
                     value: e.ShirExpr) -> Optional[str]:
     """Why `value` is not a borrow of a source, or None when it is one."""
+    from .iterators import lent_owners
     call = borrowed_call(checker, value)
     if call is not None:
         owners, temporary = call_owners(checker, call)
         return _TEMPORARY if temporary is not None else _outside(checker, returned, owners)
+    lent = lent_owners(checker, value)
+    if lent is not None:
+        return _outside(checker, returned, lent)
     if names_an_owner(checker, value):
         owner = borrow_owner(checker, value)
         if owner is None or owner in returned.source_locals:

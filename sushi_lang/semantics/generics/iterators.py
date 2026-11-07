@@ -50,11 +50,8 @@ def is_lazy_adapter(family: Optional[str], method: str) -> bool:
     return family == "iterator" and method in LAZY_ADAPTERS
 
 
-# How a producer call keeps the state of its iterator (`MethodCall.iterator_state`). The
-# borrow pass is the one writer (ruling S6, docs/design/ir.md): CURSOR on the iterable of
-# a direct walk, LENT or OWNED on every other producer, and LENT on the clone of a lent
-# iterator.
-CURSOR = "cursor"   # the bare cursor a direct `foreach` walk reads; no value is made
+# How the AST port template of an adapter reads the state of its iterator
+# (`MethodCall.iterator_state`). The rows of `OwnershipResults` hold the answer of `borrow`.
 LENT = "lent"       # a value that borrows the owners of its source; stack state
 OWNED = "owned"     # a value that takes its source (a temporary); heap state
 
@@ -136,6 +133,15 @@ def iterator_method_modes() -> Any:
     rows = dict(signed.rows)
     rows["new"] = (ParamMode.NOM,)
     return BuiltinModes(rows=MappingProxyType(rows), nom_self=signed.nom_self)
+
+
+def answers_an_iterator(ty: Any) -> bool:
+    """Is `ty` an iterator, or a `Result` whose `Ok` is one (`peek Iterator@(T) | E`)? The
+    answer of a `peek` return of such a type owns its value, and it borrows its sources."""
+    from sushi_lang.semantics.generics.results import result_ok_err
+    from sushi_lang.semantics.type_predicates import is_instance_of
+    return isinstance(ty, IteratorType) or (is_instance_of(ty, "Result")
+                                            and isinstance(result_ok_err(ty)[0], IteratorType))
 
 
 def lent_whole(iterator: IteratorType) -> Optional[bool]:

@@ -7,7 +7,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import EnumType, IteratorType
-from sushi_lang.semantics.ast import Foreach, DotCall, MethodCall, Name, RangeExpr
+from sushi_lang.semantics.ast import Foreach, DotCall, MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
@@ -44,7 +44,6 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
 
     if isinstance(iterable_type, IteratorType):
         element_type = iterable_type.element_type
-        _choose_the_walk(validator, stmt, iterable_type)
     else:
         # Not an iterator: it may still carry `next()` (HANDLES.md ruling R21). The
         # protocol is asked SECOND, because `Iterator@(T)` is a cursor over contiguous
@@ -246,23 +245,6 @@ def protocol_next_call(validator: 'TypeValidator', iterable_type, iter_name: str
         else:
             validator.variable_types[iter_name] = previous
     return protocol_item_type(validator, iterable_type), call
-
-
-def _choose_the_walk(validator: 'TypeValidator', stmt: Foreach, iterable_type) -> None:
-    """A walk of an `Iterator@(T)`: a direct walk, or a walk of a value (#1259).
-
-    A range and a built-in producer written as the iterable are walked DIRECTLY: the loop
-    reads the source with no call through `next_fn` and no allocation. Every other
-    iterator is a VALUE, and the loop calls its `next_fn`. The borrow pass reads this
-    choice: it stamps the producer of a direct walk, and it decides whether a value is
-    walked in place (ruling S6, docs/design/ir.md).
-    """
-    from sushi_lang.semantics.generics.iterators import is_producer
-    from .utils import settle_item_modes
-
-    if isinstance(stmt.iterable, RangeExpr) or is_producer(stmt.iterable):
-        return
-    stmt.value_iterator = settle_item_modes(validator, iterable_type)
 
 
 def _foreach_iterable_is_addressable(iterable) -> bool:

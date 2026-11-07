@@ -1,181 +1,220 @@
-"""An iterator value that borrows its source (#1259, docs/design/borrow-model.md).
+"""An iterator value in the borrow pass over SHIR (#1259, docs/design/ir.md 4.4, 7.9).
 
-A built-in producer over a PLACE (`xs.iter()`, `m.keys()`) makes a LENT iterator: a new
-value that owns its own state and borrows the owners of the place. A producer over a
-temporary makes an OWNED iterator, which takes the temporary. The clone of a lent iterator
-is lent too, and borrows the same owners. Two facts, kept apart: a lent iterator is a
-let-borrow of its owners (frozen while it lives, CE2411 when it would leave), and it is
-still destroyed at scope exit, because it owns its value.
+A built-in producer over a place (`xs.iter()`, `m.keys()`) makes a LENT iterator: a new value
+that owns its own state and borrows the owners of the place. A producer over a temporary makes
+an OWNED iterator, which takes the temporary. The clone of a lent iterator is lent and borrows
+the same owners, and so is a lazy adapter with a lent input and the answer of a `peek` return.
+Two facts, kept apart: a lent iterator is a `let`-borrow of its owners (frozen to its last use,
+CE2411 when it would leave), and it is still destroyed, because it owns its value.
+
+`borrow` is the one writer of the two rows of a call: LENT or OWNED, and the heap decision of a
+lent one. A lent state is on the stack, except when the iterator leaves through a `peek` return
+(`lend_to_the_caller`) and for a clone and the answer of a `peek` return, which are on the heap
+already.
+
+A walk of an `IteratorValue` is in place for a `let` that holds a lent iterator and for a place
+under a `poke` reference. Any other value goes to the loop: a lent temporary with its owners
+frozen for the loop, any other value by a consuming use.
 """
 
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
-from sushi_lang.semantics.ast import Call, DotCall, Expr, Foreach, MethodCall, Name, TryExpr
-from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from sushi_lang.semantics.generics.iterators import (
-    ADAPTERS, CURSOR, LAZY_ADAPTERS, LENT, OWNED, is_producer)
-from sushi_lang.semantics.ownership import Provenance
+    is_lazy_adapter, produces_from_a_container)
+from sushi_lang.semantics.method_effects import ITERATOR_FAMILY
+from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.callee import Builtin
+from sushi_lang.semantics.shir.ownership import OwnershipResults
+from sushi_lang.semantics.typesys import IteratorType, ReferenceType, deref_type
 
-from sushi_lang.semantics.places import Step, unwrap_try, walk_place
-
-from .reads import borrow_owner, names_kept_storage
+from .borrowed_returns import borrowed_call, call_owners
+from .reads import borrow_owner, names_an_owner
 
 if TYPE_CHECKING:
     from . import BorrowChecker
+    from .state import Owner
 
 
-def settle_walk(checker: 'BorrowChecker', stmt: Foreach) -> None:
-    """Stamp the two walk facts of a `foreach` from the walk that the typecheck pass chose.
-
-    A direct walk (no protocol call, no iterator value) makes no value, so its producer
-    answers its bare cursor (CURSOR). A protocol walk or a value walk of a place whose root
-    is a `poke` reference is walked IN PLACE (#1258). A `let` that holds a lent iterator is
-    walked in place too, and `_settle_value_walk` stamps it (#1259).
-    """
-    if stmt.protocol_next is None and stmt.value_iterator is None:
-        if is_producer(stmt.iterable):
-            stmt.iterable.iterator_state = CURSOR
-        return
-    stmt.walks_in_place = _reached_through_poke(checker, stmt.iterable)
-
-
-def _reached_through_poke(checker: 'BorrowChecker', iterable: Expr) -> bool:
-    """Is the iterable a place whose root is a `poke` reference?
-
-    A `poke` parameter or receiver, a `let poke` binding, a `poke` pattern or item
-    binding, and the environment of a lifted lambda all register a `ReferenceType`.
-    """
-    from sushi_lang.semantics.typesys import ReferenceType
-    root = walk_place(iterable, Step.MEMBER | Step.INDEX).name
-    state = checker.borrow_state.get(root.id) if root is not None else None
-    return (state is not None and isinstance(state.var_type, ReferenceType)
-            and state.var_type.is_poke())
-
-
-def _is_iterator_clone(expr: Optional[Expr]) -> bool:
-    """Is `expr` the built-in `.clone()` of an iterator value?"""
-    return (isinstance(expr, (MethodCall, DotCall)) and expr.method == "clone"
-            and expr.callee_builtin_family == "iterator")
-
-
-def is_adapter(expr: Optional[Expr]) -> bool:
-    """Is `expr` a built-in adapter of an iterator: `it.map(f)`, `it.collect()` (#1228)?"""
-    return (isinstance(expr, (MethodCall, DotCall)) and expr.method in ADAPTERS
-            and expr.callee_builtin_family == "iterator")
-
-
-def adapter_inputs(expr: MethodCall | DotCall) -> tuple[Expr, ...]:
-    """The iterators an adapter takes: its receiver, and the argument of `zip`."""
-    if expr.method == "zip" and expr.args:
-        return (expr.receiver, expr.args[0])
-    return (expr.receiver,)
-
-
-def settle_iterator_source(checker: 'BorrowChecker', expr: MethodCall | DotCall) -> None:
-    """Stamp how a producer keeps its state, and take a temporary source.
-
-    The stamp is the backend's one answer: LENT keeps the state on the stack, OWNED takes
-    the receiver and keeps the state on the heap. A direct walk (CURSOR) makes no value.
-    A lazy adapter is LENT when one of its inputs is lent, as its input keeps its state
-    on the stack, and OWNED otherwise (#1228).
-    """
-    if expr.iterator_state == CURSOR:
-        return
-    if is_adapter(expr):
-        if expr.method in LAZY_ADAPTERS:
-            lent = any(lent_owners(checker, source) is not None
-                       for source in adapter_inputs(expr))
-            expr.iterator_state = LENT if lent else OWNED
-        return
-    if is_producer(expr):
-        if names_kept_storage(checker, expr.receiver):
-            expr.iterator_state = LENT
-            return
-        expr.iterator_state = OWNED
-        from .consume import consume
-        consume(checker, expr.receiver)
-        return
-    if _is_iterator_clone(expr) and lent_owners(checker, expr.receiver) is not None:
-        expr.iterator_state = LENT
-
-
-def lent_owners(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[tuple[str, ...]]:
-    """The owners a lent iterator borrows, or None when `expr` is no lent iterator.
-
-    A clone borrows what its receiver borrows, so the walk crosses every lent clone and
-    asks the source: a `let` that holds a lent iterator, or a producer over a place.
-    """
-    if isinstance(expr, TryExpr) and is_borrowed_call(expr):
-        # `f(xs)??` over a borrowed return whose `Ok` is an iterator (#1229).
-        return lent_owners(checker, unwrap_try(expr))
-    if isinstance(expr, (Call, MethodCall, DotCall)) and expr.iterator_state != LENT:
+def _builtin_of(checker: 'BorrowChecker', node: object) -> Optional[Builtin]:
+    """The built-in callee of `node`, or None."""
+    if not isinstance(node, e.Call):
         return None
-    if isinstance(expr, (MethodCall, DotCall)) and is_adapter(expr):
-        return _adapter_owners(checker, expr)
-    source = walk_place(expr, Step.CALL, crosses_call=_is_lent_clone).node
-    if is_borrowed_call(source) and getattr(source, "iterator_state", None) == LENT:
-        # The answer of a borrowed return that is an iterator (#1229).
-        from .borrowed_returns import call_owners
-        return call_owners(checker, source)[0]
-    if isinstance(source, Name):
-        state = checker.borrow_state.get(source.id)
-        if state is not None and state.is_lent_iterator:
-            return state.borrows_from
+    resolved = checker.answers().callee_of(node.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    return callee if isinstance(callee, Builtin) else None
+
+
+def is_producer(checker: 'BorrowChecker', node: object) -> bool:
+    callee = _builtin_of(checker, node)
+    return callee is not None and produces_from_a_container(
+        callee.method.family, callee.method.name, len(node.args))
+
+
+def _is_clone(checker: 'BorrowChecker', node: object) -> bool:
+    callee = _builtin_of(checker, node)
+    return (callee is not None and callee.method.family == ITERATOR_FAMILY
+            and callee.method.name == "clone")
+
+
+def _is_lazy_adapter(checker: 'BorrowChecker', node: object) -> bool:
+    callee = _builtin_of(checker, node)
+    return callee is not None and is_lazy_adapter(callee.method.family, callee.method.name)
+
+
+def lent_source(checker: 'BorrowChecker', value: e.ShirExpr) -> e.ShirExpr:
+    """The place that a producer reads, under each iterator clone. Any other value is itself."""
+    while _is_clone(checker, value) or is_producer(checker, value):
+        value = _builtin_of(checker, value).recv
+    return value
+
+
+def adapter_inputs(node: e.Call, callee: Builtin) -> tuple[e.ShirExpr, ...]:
+    """The iterators that an adapter takes: its receiver, and the argument of `zip`."""
+    if callee.method.name == "zip" and node.args:
+        return (callee.recv, node.args[0].value)
+    return (callee.recv,)
+
+
+def lent_owners(checker: 'BorrowChecker', value: object) -> Optional[tuple['Owner', ...]]:
+    """The owners that a lent iterator borrows, or None when `value` is no lent iterator."""
+    call = borrowed_call(checker, value)
+    if call is not None:
+        answer = checker.answers().type_of(call.shir_id)
+        return call_owners(checker, call)[0] if holds_an_iterator(answer) else None
+    if isinstance(value, e.LocalRef):
+        state = checker.borrow_state.get(value.local)
+        return state.borrows_from if state is not None and state.is_lent_iterator else None
+    callee = _builtin_of(checker, value)
+    if callee is None:
         return None
-    if is_producer(source) and source.iterator_state == LENT:
-        return owners_through(checker, borrow_owner(checker, source.receiver))
-    if (isinstance(source, (MethodCall, DotCall)) and is_adapter(source)
-            and source.iterator_state == LENT):
-        return _adapter_owners(checker, source)
+    if is_producer(checker, value):
+        return (owners_through(checker, borrow_owner(checker, callee.recv))
+                if names_an_owner(checker, callee.recv) else None)
+    if _is_clone(checker, value):
+        return lent_owners(checker, callee.recv)
+    if _is_lazy_adapter(checker, value):
+        return _adapter_owners(checker, value, callee)
     return None
 
 
-def _is_lent_clone(call) -> bool:
-    return _is_iterator_clone(call) and call.iterator_state == LENT
+def holds_an_iterator(ty: object) -> bool:
+    """Is `ty` an iterator, or a `Result` whose `Ok` is one (`peek Iterator@(T) | E`)?"""
+    from sushi_lang.semantics.generics.iterators import answers_an_iterator
+    return answers_an_iterator(ty)
 
 
-def _adapter_owners(checker: 'BorrowChecker', expr: MethodCall | DotCall) -> tuple[str, ...]:
-    """The owners a lent adapter borrows: the owners of each lent input, both sides of a
-    `zip` included."""
-    owners: tuple[str, ...] = ()
-    for source in adapter_inputs(expr):
-        for owner in lent_owners(checker, source) or ():
-            if owner not in owners:
-                owners = (*owners, owner)
+def _adapter_owners(checker: 'BorrowChecker', node: e.Call,
+                    callee: Builtin) -> Optional[tuple['Owner', ...]]:
+    """The owners of each lent input of a lazy adapter, or None with no lent input."""
+    owners: Optional[tuple[Owner, ...]] = None
+    for source in adapter_inputs(node, callee):
+        found = lent_owners(checker, source)
+        if found is not None:
+            owners = (*(owners or ()), *(owner for owner in found
+                                         if owner not in (owners or ())))
     return owners
 
 
-def take_lent_iterator(checker: 'BorrowChecker', call: Expr, source: Expr) -> bool:
-    """A built-in adapter takes a lent iterator with `nom` (#1228). True when it did.
-
-    Only a built-in adapter may: its result borrows the same owners, so the borrow does
-    not leave with it. A `let` that held the iterator is spent, as `f(nom it)` spends a
-    local; a lent temporary goes to the adapter whole. Any other position that takes a
-    lent iterator refuses it (CE2411).
-    """
-    if not is_adapter(call) or lent_owners(checker, source) is None:
-        return False
-    if isinstance(source, Name):
-        from .consume import consume_named
-        checker.err.meet(source)
-        consume_named(checker, source.id, Provenance.OWNED, source.loc)
-    return True
-
-
-def owners_through(checker: 'BorrowChecker', owner: Optional[str]) -> tuple[str, ...]:
-    """The owners a borrow of `owner` freezes: a lent iterator's own, else `owner`."""
+def owners_through(checker: 'BorrowChecker', owner: Optional['Owner']) -> tuple['Owner', ...]:
+    """The owners that a borrow of `owner` freezes: the owners of a lent iterator, else
+    `owner`, and the owners of a view."""
+    from .consume import view_owners
     if owner is None:
         return ()
     state = checker.borrow_state.get(owner)
     if state is not None and state.is_lent_iterator:
         return state.borrows_from
-    return (owner,)
+    return view_owners(checker, owner)
 
 
-def is_lent_name(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
-    """Is `expr` the name of a `let` that holds a lent iterator?"""
-    return isinstance(expr, Name) and lent_owners(checker, expr) is not None
+def is_lent_name(checker: 'BorrowChecker', value: object) -> bool:
+    """Is `value` the name of a `let` that holds a lent iterator?"""
+    return isinstance(value, e.LocalRef) and lent_owners(checker, value) is not None
+
+
+def settle_iterator_call(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
+    """The rows of a producer, a clone and a lazy adapter. A producer over a temporary takes
+    the temporary. The heap decision of a lent call waits for the end of the body."""
+    from .consume import consume
+    producer = is_producer(checker, node)
+    if not (producer or _is_clone(checker, node) or _is_lazy_adapter(checker, node)):
+        return
+    owners = lent_owners(checker, node)
+    if producer and owners is None:
+        consume(checker, callee.recv)
+    if not checker.discovery_rounds:
+        checker.table().record_lent(node.shir_id, owners is not None)
+        if owners is not None:
+            checker.lent_calls[node.shir_id] = _is_clone(checker, node)
+
+
+def settle_borrowed_iterator(checker: 'BorrowChecker', node: e.Call) -> None:
+    """A call with a `peek` return that answers an iterator makes a lent iterator on the heap."""
+    if (not checker.discovery_rounds and checker.answers().sources_of(node.shir_id) is not None
+            and holds_an_iterator(checker.answers().type_of(node.shir_id))):
+        checker.table().record_lent(node.shir_id, True)
+        checker.lent_calls[node.shir_id] = True
+
+
+def write_heap_decisions(checker: 'BorrowChecker', ownership: OwnershipResults) -> None:
+    """One heap decision for each lent call of the body (ruling S13)."""
+    for call, on_heap in checker.lent_calls.items():
+        ownership.record_lent_on_heap(call, on_heap or call in checker.leaving_calls)
+
+
+def lend_to_the_caller(checker: 'BorrowChecker', value: Optional[e.ShirExpr]) -> None:
+    """Each link of a lent iterator that leaves through a `peek` return goes on the heap. A
+    `let` is followed to the value that it holds, and a clone and a borrowed call are on the
+    heap already."""
+    if isinstance(value, e.LocalRef):
+        state = checker.borrow_state.get(value.local)
+        if state is not None and state.lent_value is not None:
+            lend_to_the_caller(checker, state.lent_value)
+        return
+    callee = _builtin_of(checker, value)
+    if callee is None or lent_owners(checker, value) is None:
+        return
+    if is_producer(checker, value):
+        checker.leaving_calls.add(value.shir_id)
+    elif _is_lazy_adapter(checker, value):
+        checker.leaving_calls.add(value.shir_id)
+        for source in adapter_inputs(value, callee):
+            lend_to_the_caller(checker, source)
+
+
+def take_lent_iterator(checker: 'BorrowChecker', node: e.Call, callee: object,
+                       source: e.ShirExpr) -> bool:
+    """A built-in adapter takes a lent iterator with `nom` (#1228). True when it did: the
+    answer borrows the same owners, so the borrow does not leave with it. A `let` that holds
+    the iterator is spent, and a lent temporary goes to the adapter whole. Any other position
+    that takes a lent iterator refuses it (CE2411)."""
+    from sushi_lang.semantics.ownership import Provenance, TypeClass
+    from .consume import consume_named, decide
+    if (not isinstance(callee, Builtin) or callee.method.family != ITERATOR_FAMILY
+            or lent_owners(checker, source) is None):
+        return False
+    if isinstance(source, e.LocalRef):
+        consume_named(checker, source, Provenance.OWNED, source.loc)
+    else:
+        decide(checker, source, Provenance.FRESH, TypeClass.MOVE)
+    return True
+
+
+def reached_through_poke(checker: 'BorrowChecker', iterable: e.ShirExpr) -> bool:
+    """Is the iterable a place whose root is a `poke` reference?"""
+    root = walk_place(iterable, Step.MEMBER | Step.INDEX).local
+    state = checker.borrow_state.get(root) if root is not None else None
+    return (state is not None and isinstance(state.var_type, ReferenceType)
+            and state.var_type.is_poke())
+
+
+def owns_its_items(ty: object) -> bool:
+    """Does a walk of an iterator of type `ty` own each item? A `peek` part makes it lend."""
+    iterator = deref_type(ty)
+    return isinstance(iterator, IteratorType) and not iterator.peeks
 
 
 LENT_HELP = ("this iterator borrows {owners}, so it cannot leave the function or be kept: "
@@ -183,7 +222,15 @@ LENT_HELP = ("this iterator borrows {owners}, so it cannot leave the function or
              "copy it walks")
 
 
-def lent_iterator_help(owners: tuple[str, ...]) -> str:
+def lent_iterator_help(checker: 'BorrowChecker', owners: tuple['Owner', ...]) -> str:
     """The help of CE2411 for a lent iterator: its escape is an owned source."""
-    named = ", ".join(f"'{owner}'" for owner in owners) or "a container"
+    named = ", ".join(f"'{checker.name_of(owner)}'" for owner in owners) or "a container"
     return LENT_HELP.format(owners=named)
+
+
+def walks_in_place(checker: 'BorrowChecker', loop: s.Loop, iterable: e.ShirExpr) -> bool:
+    """The walk-in-place answer of `loop`, written once."""
+    in_place = is_lent_name(checker, iterable) or reached_through_poke(checker, iterable)
+    if not checker.discovery_rounds:
+        checker.table().record_in_place(loop.shir_id, in_place)
+    return in_place

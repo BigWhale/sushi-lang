@@ -5,7 +5,9 @@ its operand, because the modes are part of the type. A function value is the one
 beside a `string` that may come as a copy: a named function owns no heap, and `borrow` adopts
 it (`copies_with_no_transfer`). In a function that lowering cut from a lambda, a capture place
 is never moved out of, and the environment is never written as a whole: a caller can call the
-closure two times or more (`capture_places`).
+closure two times or more (`capture_places`). The `Indirect` call of an `IteratorValue` walk
+has an iterator as its operand, and no argument. A local that holds an iterator with a stack
+state never reaches `_0` or an `Owned` argument (`stack_iterators`).
 """
 from __future__ import annotations
 
@@ -16,8 +18,9 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import SlirFunction
-from sushi_lang.semantics.slir.verify_rules import CAPTURE_PLACES, CONVENTIONS
-from sushi_lang.semantics.typesys import BuiltinType, FunctionType, Type, deref_type
+from sushi_lang.semantics.slir.ids import LocalId
+from sushi_lang.semantics.slir.verify_rules import CAPTURE_PLACES, CONVENTIONS, STACK_ITERATOR
+from sushi_lang.semantics.typesys import BuiltinType, FunctionType, IteratorType, Type, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.verify import Check
@@ -32,6 +35,10 @@ def copies_with_no_transfer(ty: Optional[Type]) -> bool:
 def indirect_conventions(check: Check, stmt: st.Call, callee: st.Indirect) -> None:
     ty = check.operand_type(callee.operand, stmt.span)
     called = None if ty is None else deref_type(ty)
+    if isinstance(called, IteratorType):
+        if stmt.args:
+            check.fail(CONVENTIONS, "the step of an iterator takes no argument", stmt.span)
+        return
     if not isinstance(called, FunctionType):
         check.fail(CONVENTIONS, f"the operand of an indirect call has the type {ty}, which is "
                                 f"no function type", stmt.span)
@@ -67,3 +74,44 @@ def capture_places(check: Check, function: SlirFunction) -> None:
                 if isinstance(operand, p.Move) and p.locals_read(operand.place)[:1] == (env,):
                     check.fail(CAPTURE_PLACES, f"moves {operand.place} out of the environment",
                                stmt.span)
+
+
+def stack_iterators(check: Check, function: SlirFunction) -> None:
+    """Each local that an `AggIterator` with a stack state writes, and each local that it moves
+    or copies into, stays in the function."""
+    held = _stack_state_locals(function)
+    for block in function.blocks:
+        for stmt in block.statements:
+            if isinstance(stmt, st.Call):
+                for operand, convention in stmt.args:
+                    if convention.consumes and _reads_one_of(operand, held):
+                        check.fail(STACK_ITERATOR, f"{operand} gives a stack state to an owned "
+                                                   f"argument", stmt.span)
+            if (isinstance(stmt, st.Assign) and stmt.place == p.Local(LocalId(0))
+                    and isinstance(stmt.rvalue, r.Use)
+                    and _reads_one_of(stmt.rvalue.operand, held)):
+                check.fail(STACK_ITERATOR, "a stack state reaches the return slot", stmt.span)
+
+
+def _stack_state_locals(function: SlirFunction) -> set[LocalId]:
+    held: set[LocalId] = set()
+    grew = True
+    while grew:
+        grew = False
+        for block in function.blocks:
+            for stmt in block.statements:
+                if not (isinstance(stmt, st.Assign) and isinstance(stmt.place, p.Local)):
+                    continue
+                value = stmt.rvalue
+                makes = (isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggIterator)
+                         and not value.kind.heap)
+                if ((makes or (isinstance(value, r.Use) and _reads_one_of(value.operand, held)))
+                        and stmt.place.id not in held):
+                    held.add(stmt.place.id)
+                    grew = True
+    return held
+
+
+def _reads_one_of(operand: p.Operand, held: set[LocalId]) -> bool:
+    return (isinstance(operand, (p.Copy, p.Move)) and isinstance(operand.place, p.Local)
+            and operand.place.id in held)

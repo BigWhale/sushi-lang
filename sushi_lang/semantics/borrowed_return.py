@@ -117,13 +117,3 @@ def source_positions(record: Optional[BorrowedReturn], param_names: Sequence[str
 def borrowed_return_of(decl: Any) -> Optional[BorrowedReturn]:
     """The record a declaration, a signature or a lifted lambda carries, or None."""
     return getattr(decl, "borrowed_return", None)
-
-
-def is_borrowed_call(expr: Any) -> bool:
-    """Is `expr` a call of a callable with a borrowed return (a `??` over one included)?"""
-    from sushi_lang.semantics.ast import TryExpr
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
-    return getattr(expr, "callee_borrows", None) is not None
-
-

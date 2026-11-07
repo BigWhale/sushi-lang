@@ -1,0 +1,30 @@
+# An iterator that no walk reaches is still dropped: a lent one frees nothing, an owned one
+# frees its state and what it holds.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n"
+use <collections/iter>
+use <collections/hashmap>
+
+fn keep_i(Iterator@(i32) it) ~:
+    foreach(_ in it.clone()):
+        continue
+
+fn keep_s(Iterator@(peek string) it) ~:
+    foreach(_ in it.clone()):
+        continue
+
+fn main() i32:
+    let string[] xs = from(["a", "b"])
+    let Iterator@(peek string) lent = xs.iter()
+    let Iterator@(peek string) owned = from(["c"]).iter()
+    let Iterator@(i32) range = 0..3
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("k", 1)
+    let Iterator@(i32) values = m.values()
+    keep_s(lent)
+    keep_s(owned)
+    keep_i(range)
+    keep_i(values)
+    println(xs.len())
+    return 0

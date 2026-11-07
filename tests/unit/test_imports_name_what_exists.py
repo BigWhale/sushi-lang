@@ -36,12 +36,7 @@ PORT_TEMPLATES: dict[tuple[str, str], str] = {
     (_B + "expressions/calls/stdlib/process.py", "_emit_run"): "D7",
     (_B + "expressions/calls/stdlib/process.py", "_emit_exit"): "D7",
     (_B + "expressions/calls/stdlib/signatures.py", "emit_registry_call"): "D7",
-    (_B + "generics/hashmap/methods/iterators.py", "_emit_bucket_iterator.owned"): "C3",
-    (_B + "generics/list/methods_iter.py", "emit_list_iter.owned"): "C3",
-    (_B + "ranges.py", "emit_range"): "C3",
     (_B + "runtime/iterator_adapters.py", "emit_adapter_call"): "C3",
-    (_B + "types/arrays/methods/iterators.py", "emit_dynamic_array_iter.owned"): "C3",
-    (_B + "types/arrays/methods/iterators.py", "emit_fixed_array_iter.owned"): "C3",
 }
 
 #: The rows of `PORT_TEMPLATES` at the day of the pin. A row may leave both; none may join.
@@ -49,12 +44,7 @@ PINNED_PORT_TEMPLATES: frozenset[tuple[str, str]] = frozenset({
     (_B + "expressions/calls/stdlib/process.py", "_emit_run"),
     (_B + "expressions/calls/stdlib/process.py", "_emit_exit"),
     (_B + "expressions/calls/stdlib/signatures.py", "emit_registry_call"),
-    (_B + "generics/hashmap/methods/iterators.py", "_emit_bucket_iterator.owned"),
-    (_B + "generics/list/methods_iter.py", "emit_list_iter.owned"),
-    (_B + "ranges.py", "emit_range"),
     (_B + "runtime/iterator_adapters.py", "emit_adapter_call"),
-    (_B + "types/arrays/methods/iterators.py", "emit_dynamic_array_iter.owned"),
-    (_B + "types/arrays/methods/iterators.py", "emit_fixed_array_iter.owned"),
 })
 
 

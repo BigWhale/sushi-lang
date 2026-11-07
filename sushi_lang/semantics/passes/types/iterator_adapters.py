@@ -12,7 +12,7 @@ One reader for both halves of the pass: inference calls `adapter_result` with
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.iterators import (
@@ -42,10 +42,15 @@ def settle_adapter_instance(validator: 'TypeValidator', call: 'MethodCall',
     if call.method != "zip" or not call.args:
         return instance
     from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
+    return zip_instance(validator, instance, infer_call_arg_type(validator, call.args[0]))
+
+
+def zip_instance(validator: 'TypeValidator', instance: 'BuiltinInstance',
+                 written: Optional[Type]) -> 'BuiltinInstance':
+    """The instance of `zip` with its parameter in the item mode of the argument `written`."""
     from sushi_lang.semantics.typesys import deref_type
     from .utils import settle_item_modes
-    argument = settle_item_modes(validator, deref_type(infer_call_arg_type(validator,
-                                                                           call.args[0])))
+    argument = settle_item_modes(validator, deref_type(written))
     expected = instance.params[0].ty
     if (isinstance(argument, IteratorType) and isinstance(expected, IteratorType)
             and argument.element_type == expected.element_type):
@@ -53,12 +58,12 @@ def settle_adapter_instance(validator: 'TypeValidator', call: 'MethodCall',
     return instance
 
 
-def adapter_result(validator: 'TypeValidator', call: 'MethodCall', receiver: Type,
+def adapter_result(validator: 'TypeValidator', call: Any, method: str, receiver: Type,
                    instance: 'BuiltinInstance', *, report: bool) -> Optional[Type]:
-    """What the adapter call yields, or None after a refusal (reported when `report`)."""
+    """What a call of the adapter `method` yields, or None after a refusal (reported when
+    `report`). `call` is a node of the AST or of SHIR, and it gives the span."""
     if not isinstance(receiver, IteratorType):
         return None
-    method = call.method
     if method == "map":
         return _iterator(validator, IteratorType(element_type=instance.substitution["U"]))
     if method == "filter":
@@ -89,7 +94,7 @@ def adapter_result(validator: 'TypeValidator', call: 'MethodCall', receiver: Typ
     return _intern(validator, tuple_ref((items, items)))
 
 
-def _tuple_item(validator: 'TypeValidator', call: 'MethodCall',
+def _tuple_item(validator: 'TypeValidator', call: Any,
                 result: Optional[IteratorType], receiver: IteratorType,
                 report: bool) -> Optional[Type]:
     """The result of `enumerate` or `zip`, or CE2419 when a `peek` would stand deeper
@@ -121,7 +126,7 @@ def _intern(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
     return interned if interned is not None else resolve_declared_type(validator, ty)
 
 
-def _refuses_a_clone(validator: 'TypeValidator', call: 'MethodCall',
+def _refuses_a_clone(validator: 'TypeValidator', call: Any,
                      receiver: IteratorType) -> bool:
     """`clone_each` clones each lent part, by the rule of `.clone()` on that part."""
     from .calls.methods import reject_uncloneable

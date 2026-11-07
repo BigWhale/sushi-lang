@@ -48,6 +48,7 @@ from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
 from .flow import FlowFacts, LoopFrame, record_exit, terminates
 from .methods import MUTATING_METHODS
+from .iterators import write_heap_decisions
 from .regions import write_regions
 from .state import BorrowState
 from .statements import check_block
@@ -123,6 +124,10 @@ class BorrowChecker:
         # that a `let` made, with its owners and its statement (`regions.py`).
         self.statement_at: list[tuple[ShirBlock, int]] = []
         self.views: Dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]] = {}
+        # Each lent iterator call of the body, True for a state that is on the heap anyway,
+        # and the lent calls that leave through a `peek` return (`iterators.py`).
+        self.lent_calls: Dict[ShirId, bool] = {}
+        self.leaving_calls: Set[ShirId] = set()
         # The operand of each `??` that the walk entered: a read-through `or_err` stands
         # there and nowhere else (CE2522).
         self.try_operands: Set[ShirId] = set()
@@ -169,6 +174,7 @@ class BorrowChecker:
         for local in sorted(self.moved_locals & self.kept_at_an_exit):
             ownership.record_conditional_move(local)
         write_regions(self.views, ownership)
+        write_heap_decisions(self, ownership)
         check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
                         ownership, self.shir.decls)
         if not isinstance(body.origin, TemplateCheck):
@@ -195,6 +201,8 @@ class BorrowChecker:
         self.kept_at_an_exit = set()
         self.statement_at = []
         self.views = {}
+        self.lent_calls = {}
+        self.leaving_calls = set()
         self.try_operands = set()
 
     def _leave(self) -> None:

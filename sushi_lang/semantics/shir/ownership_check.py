@@ -25,9 +25,8 @@ The receiver of a `Method` callee whose `receiver` is `Owned` (a `nom self` exte
 and the receiver of a built-in method that declares `nom self` (`or_err`, `map_err`) are
 consuming uses too: the convention is a fact of the callee row.
 
-Two writers of LENT have no check yet, because no spine body holds them: the clone of a
-lent iterator and a call with a `peek` return that answers an iterator. The iterators group
-(C3) adds each call to `_makes_an_iterator`.
+The clone of an iterator and a call with a `peek` return that answers an iterator have LENT or
+OWNED too (`_makes_an_iterator`).
 
 When the `borrow` pass ends on a body with no error, the check walks the body once and
 asks the table: each consuming use and each capture has an `Ownership`; each iterator
@@ -51,8 +50,9 @@ from __future__ import annotations
 from typing import Any, Callable, Iterator, TypeAlias
 
 from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
-from sushi_lang.semantics.generics.iterators import is_lazy_adapter, produces_from_a_container
-from sushi_lang.semantics.method_effects import receiver_convention
+from sushi_lang.semantics.generics.iterators import (
+    answers_an_iterator, is_lazy_adapter, produces_from_a_container)
+from sushi_lang.semantics.method_effects import ITERATOR_FAMILY, receiver_convention
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
@@ -69,7 +69,7 @@ from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
 from sushi_lang.semantics.shir.typeck import TypeckResults, lambda_conventions
 from sushi_lang.semantics.shir.walk import walk
-from sushi_lang.semantics.typesys import ReferenceType, deref_type
+from sushi_lang.semantics.typesys import IteratorType, ReferenceType, deref_type
 
 Consumed: TypeAlias = Callable[[Any, TypeckResults, OwnershipResults], Iterator[e.ShirExpr]]
 
@@ -179,13 +179,17 @@ def _direct_iterables(body: ShirBody, typeck: TypeckResults) -> set[ShirId]:
 
 
 def _makes_an_iterator(call: e.Call, typeck: TypeckResults) -> bool:
-    """Is `call` an iterator producer over a container or a lazy adapter?"""
+    """Is `call` an iterator producer over a container, a lazy adapter, the clone of an
+    iterator, or a call with a `peek` return that answers an iterator?"""
+    if _borrowed_call(call, typeck):
+        return answers_an_iterator(typeck.type_of(call.shir_id))
     resolved = typeck.callee_of(call.shir_id)
     if resolved is None or not isinstance(resolved.callee, Builtin):
         return False
     method = resolved.callee.method
     return (produces_from_a_container(method.family, method.name, len(call.args))
-            or is_lazy_adapter(method.family, method.name))
+            or is_lazy_adapter(method.family, method.name)
+            or (method.family == ITERATOR_FAMILY and method.name == "clone"))
 
 
 def _iterator_gaps(call: e.Call, ownership: OwnershipResults) -> Iterator[str]:
@@ -223,10 +227,22 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
                 and ownership.ownership_of(value.value.shir_id) is Ownership.REJECT):
             borrowed.add(value.target.local)
         elif (isinstance(value, s.Loop) and isinstance(value.source, s.Items)
-                and isinstance(typeck.loop_kind_of(value.shir_id), (Cursor, HashMapCursor))
-                and isinstance(value.source.binder, LocalId)):
+                and isinstance(value.source.binder, LocalId)
+                and _binder_borrows(value, typeck)):
             borrowed.add(value.source.binder)
     return borrowed
+
+
+def _binder_borrows(loop: s.Loop, typeck: TypeckResults) -> bool:
+    """Whether the binder of `loop` holds a borrow: a direct walk, or a value walk of an
+    iterator whose item has a `peek` part."""
+    kind = typeck.loop_kind_of(loop.shir_id)
+    if isinstance(kind, IteratorValue):
+        source = loop.source
+        iterator = (deref_type(typeck.type_of(source.iterable.shir_id))
+                    if isinstance(source, s.Items) else None)
+        return isinstance(iterator, IteratorType) and bool(iterator.peeks)
+    return isinstance(kind, (Cursor, HashMapCursor))
 
 
 def borrowed_views(body: ShirBody, typeck: TypeckResults,

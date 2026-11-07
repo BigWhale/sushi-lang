@@ -1,0 +1,12 @@
+# A lent iterator cannot leave through an owned return.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn leak() Iterator@(i32):
+    let i32[] xs = from([1])
+    return xs.iter()
+
+fn main() i32:
+    foreach(x in leak()):
+        println(x)
+    return 0

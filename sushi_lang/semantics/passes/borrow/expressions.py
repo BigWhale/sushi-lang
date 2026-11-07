@@ -18,14 +18,16 @@ from typing import Optional, Sequence, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 
 from . import arms
 from .borrows import BY_ADDRESS, check_borrow as borrow_place
-from .consume import StatementTakes, consume, consume_once, unwrap_place
+from .consume import StatementTakes, consume, consume_once, decide, unwrap_place
 from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
+from .iterators import lent_owners
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
@@ -195,7 +197,11 @@ def check_try(checker: 'BorrowChecker', node: e.Try) -> None:
     (`flow.record_exit`). Its operand is the one position of a read-through `or_err`."""
     checker.try_operands.add(node.inner.shir_id)
     arms.check(checker, node.inner)
-    unwrap_place(checker, node)
+    if lent_owners(checker, node.inner) is not None:
+        # The answer of a `peek` return that holds an iterator owns its value: the `??` takes it.
+        decide(checker, node.inner, Provenance.FRESH, TypeClass.MOVE)
+    else:
+        unwrap_place(checker, node)
     record_exit(checker)
 
 

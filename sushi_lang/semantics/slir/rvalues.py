@@ -11,6 +11,7 @@ from typing import Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.operators import BinOp, UnOp
+from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.slir.places import Operand, Place
 from sushi_lang.semantics.typesys import BorrowMode, StructType, Type
 
@@ -71,8 +72,47 @@ class AggClosure:
 
 
 @dataclass(frozen=True, slots=True)
+class IterElements:
+    """The cursor over `T[]`, `T[N]` or `List@(T)`: one part, the container, as a read of its
+    place when `lent`, else as its move."""
+    container: Type
+    lent: bool
+
+
+@dataclass(frozen=True, slots=True)
+class IterMapView:
+    """The cursor over one view of a `HashMap`, with the part of `IterElements`."""
+    container: Type
+    view: str
+    lent: bool
+
+
+@dataclass(frozen=True, slots=True)
+class IterRange:
+    """Two parts: the first value and the count; item k is `first + step * k`."""
+    step: int
+
+
+@dataclass(frozen=True, slots=True)
+class IterNew:
+    """`Iterator.new(nom x)`: one part, the move of `x`, and the `next()` that the state
+    calls, by the convention of its `self`."""
+    value: Type
+    next_symbol: str
+    receiver: Convention
+
+
+IterSource: TypeAlias = IterElements | IterMapView | IterRange | IterNew
+
+
+@dataclass(frozen=True, slots=True)
 class AggIterator:
+    """`source` is one row of the closed table of producers and adapters (ir.md 8.7), and
+    `heap` is the heap decision of `borrow`: the kind carries it, and the emitter decides
+    nothing."""
     ty: Type
+    source: IterSource
+    heap: bool
 
 
 AggKind: TypeAlias = AggStruct | AggTuple | AggVariant | AggArray | AggClosure | AggIterator

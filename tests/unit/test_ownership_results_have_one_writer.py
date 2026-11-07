@@ -10,9 +10,8 @@ makes the table, only `semantics/passes/borrow/` names the write API, only
 `semantics/shir/ownership.py` names the tables, and the class has a read API and a write
 API and nothing else.
 
-This gate takes the place of `test_walk_fields_have_one_writer.py` for SHIR; the AST scan
-goes with the two AST fields. The borrow pass on SHIR writes the rows, so the gate also asks
-that a module of the pass calls the write API.
+The borrow pass on SHIR writes the rows, so the gate also asks that a module of the pass calls
+the write API.
 """
 from __future__ import annotations
 

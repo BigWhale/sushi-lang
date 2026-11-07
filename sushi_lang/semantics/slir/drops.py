@@ -309,15 +309,16 @@ class DropPlacement:
     # -- borrow regions (ir.md 8.6) ------------------------------------------------------
 
     def begin_region(self, view: LocalId, owners: Sequence[p.Place], until: frozenset[ShirId],
-                     span: Span, mode: BorrowMode = BorrowMode.PEEK
+                     span: Span, mode: BorrowMode = BorrowMode.PEEK, *, owning: bool = False
                      ) -> list[st.SlirStatement]:
         """The region of `view`: one `BeginBorrow` for each owner, with the mode `mode`. Each
-        names `view`, but an address local is no view local, so its region names none."""
+        names `view`, but an address local is no view local, and an `owning` local (a lent
+        iterator) owns its value, so the region of either names none."""
         ids = tuple(BorrowId(self._borrows + at) for at in range(len(owners)))
         self._borrows += len(owners)
         self._open.append(OpenRegion(view, ids, until, tuple(p.root_of(owner)
                                                               for owner in owners)))
-        lends = None if view in self._addresses else view
+        lends = None if owning or view in self._addresses else view
         return [st.BeginBorrow(ident, owner, mode, lends, span)
                 for ident, owner in zip(ids, owners, strict=True)]
 

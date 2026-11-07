@@ -4,26 +4,26 @@ ShirBody TOP (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(10))
+    Return(adopt Lit(10))
 
 ShirBody total
   params : [(_0 "it": Iterator@(i32), Owned)]
-  locals : [_1 "sum": i32, _2 "i"]
+  locals : [_1 "sum": i32, _2 "i": i32]
   block  :
-    Assign(LocalRef(_1), Lit(0), is_init: true)
-    Loop(Items(LocalRef(_0), _2, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), LocalRef(_2)), is_init: false)])
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Loop(Items(move LocalRef(_0), _2, Bare), [Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), LocalRef(_2)), is_init: false)], in_place: false)
+    Return(adopt LocalRef(_1))
 
 ShirBody main
   params : []
   locals : [_0 "up": Iterator@(i32), _1 "all": Iterator@(i32), _2 "n": i32, _3 "down": Iterator@(i32)]
   block  :
-    Assign(LocalRef(_0), Range(Lit(0), ConstRef(@TOP), inclusive: false, reverse: false), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@total)), [(LocalRef(_0), Owned)])]))
-    Assign(LocalRef(_1), Range(Lit(0), Lit(10), inclusive: true, reverse: false), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@total)), [(LocalRef(_1), Owned)])]))
-    Assign(LocalRef(_2), Lit(10), is_init: true)
-    Assign(LocalRef(_3), Range(Lit(0), LocalRef(_2), inclusive: false, reverse: true), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@total)), [(LocalRef(_3), Owned)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt Range(Lit(0), ConstRef(@TOP), inclusive: false, reverse: false), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@total), [(move LocalRef(_0), Owned)]), Guaranteed)]))
+    Assign(LocalRef(_1), adopt Range(Lit(0), Lit(10), inclusive: true, reverse: false), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@total), [(move LocalRef(_1), Owned)]), Guaranteed)]))
+    Assign(LocalRef(_2), adopt Lit(10), is_init: true)
+    Assign(LocalRef(_3), adopt Range(Lit(0), LocalRef(_2), inclusive: false, reverse: true), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@total), [(move LocalRef(_3), Owned)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

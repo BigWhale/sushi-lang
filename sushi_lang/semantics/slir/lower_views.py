@@ -37,7 +37,9 @@ from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
+from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.slir.drops import OpenRegion
+from sushi_lang.semantics.slir.ids import LocalId
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.lower_values import CallValue, ViewValue
 
@@ -82,8 +84,30 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     ident, _ = low.bind(target.local, stmt.loc, view=True)
     low.placement.declare(ident, False)
     low.emit([st.StorageLive(ident, stmt.loc)])
+    if _changes_a_source(written):
+        # A `poke self` call with a `peek` return changes its owner, and the region starts at
+        # its answer.
+        low.write(p.Local(ident), written, stmt.loc)
+        low.emit(low.placement.begin_region(ident, owners, frozenset(region.until), stmt.loc))
+        return
     low.emit(low.placement.begin_region(ident, owners, frozenset(region.until), stmt.loc))
     low.write(p.Local(ident), written, stmt.loc)
+
+
+def _changes_a_source(written: object) -> bool:
+    return isinstance(written, CallValue) and any(
+        convention is Convention.INOUT for _, convention in written.args)
+
+
+def lent_region(low: Lowering, local: ShirLocalId, ident: LocalId,
+                span: Span) -> list[st.SlirStatement]:
+    """The region of a `let` that holds a lent iterator, over the owners of its region row. It
+    owns its value, so it is no view local. Any other `let` of a new value has no region."""
+    region = low.answers.ownership.region_of(local)
+    if region is None:
+        return []
+    return low.placement.begin_region(ident, [_owner(low, owner, span) for owner in region.owners],
+                                      frozenset(region.until), span, owning=True)
 
 
 def held_root(low: Lowering, value: e.ShirExpr) -> ShirId:
@@ -241,9 +265,9 @@ def view_of_sources(value: CallValue, sources: tuple[int, ...], method: bool) ->
 
 def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:
     """A view of what `read` reads, over the root of its place. A constant has no owner, so
-    a view of one is an internal error."""
+    a view of one has no region."""
     if isinstance(read, p.Const):
-        er.raise_internal_error("CE0000", detail="a view of a constant reached SLIR")
+        return ViewValue(value, ())
     return ViewValue(value, (p.root_of(read.place),))
 
 

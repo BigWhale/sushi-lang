@@ -635,16 +635,6 @@ class Foreach(Stmt):
     # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
     protocol_next: "Optional[MethodCall]" = None
     protocol_iter_name: Optional[str] = None
-    # The borrow pass is the one writer (ruling S6, docs/design/ir.md). It sets it for a
-    # `next()` walk or a value walk of a place reached through a `poke` reference: the
-    # loop moves the caller's state and does not take the value (#1258). It also sets it
-    # for an iterator value that a `let` borrows (#1259). No pass reads it: the borrow pass
-    # on SHIR records the walk in place in OwnershipResults.
-    walks_in_place: bool = False
-    # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
-    # the value's `next_fn` (#1259). None for a range, for a built-in producer that the
-    # loop walks directly (`xs.iter()`, `m.keys()`), and for a `next()` protocol walk.
-    value_iterator: Optional[Type] = None
 
 @dataclass(slots=True)
 class Expand(Stmt):
@@ -1108,7 +1098,6 @@ class RangeExpr(Node):
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The two call shapes with a receiver and a method name.
-MethodLike = Union[MethodCall, DotCall]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """Accepts either a Token (from the parser) or a str (already a lexeme). Returns one of:

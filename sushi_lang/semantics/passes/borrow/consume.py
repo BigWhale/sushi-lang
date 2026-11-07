@@ -22,6 +22,7 @@ from sushi_lang.semantics.shir.body import Initializer
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .borrowed_returns import borrowed_call, call_owners, reject_view_of_temporary
+from .iterators import lent_owners
 from .diagnostics import (
     CopyUse,
     emit_consume_of_borrow,
@@ -93,8 +94,8 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it. A `??`
     over a `??` that reads through, and over a read-through `or_err`, reads through too
-    (`reads_through`). A marked field take is the one read through an owner that is not
-    a borrow: the owner is a local this function holds, and the take spends it; any other
+    (`reads_through`). A lent iterator borrows its owners, so it may not leave. A marked
+    field take is the one read through an owner that is not a borrow: the owner is a local this function holds, and the take spends it; any other
     `Take` is its place, and the marker is inert (`takes.field_take`). Anything else makes
     a new value.
     """
@@ -108,7 +109,7 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return name_provenance(checker, node.local)
     if isinstance(node, (e.ConstRef, e.StorageRef)):
         return Provenance.OWNED
-    if borrowed_call(checker, node) is not None:
+    if borrowed_call(checker, node) is not None or lent_owners(checker, node) is not None:
         return Provenance.BORROWED
     if isinstance(node, (e.Field, e.Index, e.Slice)) or view_receiver(checker, node) is not None:
         return Provenance.BORROWED
@@ -402,6 +403,12 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
         value = value.place
     if reject_slice_of_temporary(checker, value) or reject_view_of_temporary(checker, value):
         return
+    lent = lent_owners(checker, value)
+    if lent is not None and not isinstance(value, e.LocalRef):
+        # A lent iterator borrows its owners and owns its value, so the binding drops it.
+        decide(checker, value, Provenance.FRESH, source_class(checker, value))
+        _record_lent_binding(checker, node, dest, lent)
+        return
     provenance = source_provenance(checker, value)
     src_state = (checker.borrow_state.get(value.local)
                  if isinstance(value, e.LocalRef) else None)
@@ -430,7 +437,23 @@ def record_borrowed_binding(checker: 'BorrowChecker', node: s.Assign,
     dest.is_borrowed_binding = True
     dest.is_let_borrow = True
     dest.bound_at_span = node.loc
+    lent = lent_owners(checker, node.value)
+    if lent is not None:
+        _record_lent_binding(checker, node, dest, lent)
+        return
     record_owners(checker.borrow_state, dest, value_owners(checker, node.value), node.loc,
+                  checker._scope_binding_borrows[-1])
+
+
+def _record_lent_binding(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState,
+                         owners: tuple) -> None:
+    """A `let` of a lent iterator is a `let`-borrow of its owners that owns its value."""
+    dest.is_borrowed_binding = True
+    dest.is_let_borrow = True
+    dest.bound_at_span = node.loc
+    dest.is_lent_iterator = True
+    dest.lent_value = node.value
+    record_owners(checker.borrow_state, dest, owners, node.loc,
                   checker._scope_binding_borrows[-1])
 
 

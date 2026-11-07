@@ -51,7 +51,7 @@ def check_signature_method(validator: TypeValidator, node: e.Call, receiver: Typ
     if written is None:
         return None
     instance = settle_builtin_instance(validator, signature, receiver, [written], node.loc,
-                                       name, _unsolved_help)
+                                       name, unsolved_help)
     if instance is None:
         return None
     parameter = instance.params[0]
@@ -62,7 +62,7 @@ def check_signature_method(validator: TypeValidator, node: e.Call, receiver: Typ
     return instance_return_type(validator, instance)
 
 
-def _unsolved_help(count: int) -> str:
+def unsolved_help(count: int) -> str:
     """The help of CE2063: the argument has no type that holds the type parameter."""
     pronoun = "them" if count > 1 else "it"
     return (f"no argument of this call has a type that holds {pronoun}; a method call has "

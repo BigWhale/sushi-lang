@@ -34,9 +34,10 @@ from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import (
     CONVENTIONS, DeclaredParams, declared_params, verify_function,
 )
+from sushi_lang.semantics.slir.verify_rules import STACK_ITERATOR
 from sushi_lang.semantics.typesys import (
     ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
-    FunctionType, PointerType, ReferenceType, StructType, Type, UnknownType,
+    FunctionType, IteratorType, PointerType, ReferenceType, StructType, Type, UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -456,6 +457,60 @@ def test_an_owned_copy_of_a_function_value_passes():
     _passes(_function([BLANK, I32, owning, takes],
                       _block(0, _ret(), _closure(2, owning), _closure(3, takes), call,
                              st.Drop(_local(2), SPAN), _set(0, r.Use(p.Const(k.Blank()))))))
+
+
+_ITERATOR = IteratorType(I32)
+_ELEMENTS = DynamicArrayType(I32)
+
+
+def _iterator_value(local: int, *, heap: bool) -> st.Assign:
+    """An iterator over the array that the parameter `_1` holds."""
+    source = r.IterElements(_ELEMENTS, True)
+    return _set(local, r.Aggregate(r.AggIterator(_ITERATOR, source, heap), (_copy(1),)))
+
+
+def _returns_iterator(*, heap: bool) -> SlirFunction:
+    return _function([_ITERATOR, _ELEMENTS, _ITERATOR],
+                     _block(0, _ret(), _live(2), _iterator_value(2, heap=heap),
+                            st.Assign(_local(0), r.Use(_move(2)), BAD), _dead(2)),
+                     params=((1, GUARANTEED),))
+
+
+def test_a_heap_state_iterator_reaches_the_return_slot():
+    _passes(_returns_iterator(heap=True))
+
+
+def test_a_stack_state_iterator_in_the_return_slot_is_refused():
+    _refused(_returns_iterator(heap=False), STACK_ITERATOR)
+
+
+def test_a_stack_state_iterator_after_a_move_into_a_local_is_refused():
+    function = _function([_ITERATOR, _ELEMENTS, _ITERATOR, _ITERATOR],
+                         _block(0, _ret(), _live(2), _iterator_value(2, heap=False), _live(3),
+                                _set(3, r.Use(_move(2))),
+                                st.Assign(_local(0), r.Use(_move(3)), BAD), _dead(3), _dead(2)),
+                         params=((1, GUARANTEED),))
+    _refused(function, STACK_ITERATOR)
+
+
+def test_a_stack_state_iterator_as_an_owned_argument_is_refused():
+    takes = FunctionType((_ITERATOR,), BLANK, None, captures=(), param_modes=(ParamMode.NOM,))
+    call = st.Call(_local(0), st.Indirect(p.Copy(_local(3))), ((_move(2), OWNED),), BAD)
+    function = _function([BLANK, _ELEMENTS, _ITERATOR, takes],
+                         _block(0, _ret(), _live(2), _iterator_value(2, heap=False),
+                                _closure(3, takes), call, _dead(2)),
+                         params=((1, GUARANTEED),))
+    _refused(function, STACK_ITERATOR)
+
+
+def test_the_step_of_an_iterator_takes_no_argument():
+    call = st.Call(_local(0), st.Indirect(p.Copy(_local(2))), ((p.Const(k.Int(1, I32)), GUARANTEED),),
+                   BAD)
+    function = _function([BLANK, _ELEMENTS, _ITERATOR],
+                         _block(0, _ret(), _live(2), _iterator_value(2, heap=True), call,
+                                _drop(2), _dead(2)),
+                         params=((1, GUARANTEED),))
+    _refused(function, CONVENTIONS)
 
 
 def _method(*args: tuple[p.Operand, Convention]) -> st.Call:

@@ -119,10 +119,12 @@ def _regions_of_views(function: SlirFunction, views: set[LocalId],
 
 def _view_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,
                     regions: dict[LocalId, frozenset[BorrowId]], fail: Fail) -> None:
-    """At each read of a view local, each region over its owners is open."""
+    """At each read of a view local, each region over its owners is open. A `poke self` call
+    with a `peek` return writes its answer before the region starts."""
+    answer = node.dest if isinstance(node, st.Call) else None
     for local in _uses(node):
         closed = regions.get(local, frozenset()) - open_.keys()
-        if closed:
+        if closed and answer != p.Local(local):
             fail(VIEW_LOCAL, f"_{local.index} is read while its regions {_names(closed)} "
                              f"are closed", _span(node))
 

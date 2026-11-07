@@ -20,6 +20,7 @@ from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.runtime.closures import emit_indirect_call
+from sushi_lang.backend.runtime.iterators import emit_next
 from sushi_lang.backend.slir.externs import emit_extern
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
@@ -40,7 +41,7 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import (
     SlirBlock, SlirFunction, SlirLocal, address_locals)
 from sushi_lang.semantics.slir.lower import RETURN_SLOT
-from sushi_lang.semantics.typesys import BuiltinType, FunctionType, deref_type
+from sushi_lang.semantics.typesys import BuiltinType, FunctionType, IteratorType, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -247,6 +248,11 @@ def _indirect(state: FunctionState, statement: st.Call) -> None:
     if not isinstance(callee, st.Indirect):
         state.fault(f"the row of an indirect call got a {type(callee).__name__} callee")
     called = deref_type(type_of_operand(state, callee.operand))
+    if isinstance(called, IteratorType):
+        answer = emit_next(state.codegen, operand_value(state, callee.operand),
+                           called.element_type)
+        state.builder.store(answer, place_address(state, statement.dest))
+        return
     if not isinstance(called, FunctionType):
         state.fault(f"an indirect call of a value of {called}")
     value = operand_value(state, callee.operand)

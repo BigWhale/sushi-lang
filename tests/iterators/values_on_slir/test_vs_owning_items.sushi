@@ -1,0 +1,21 @@
+# The items of `Iterator.new` are owned: the loop drops each one, also at `continue`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "s2\ns0\n"
+use <collections/iter>
+
+struct Spell:
+    i32 left
+
+extend Spell next(poke self) Maybe@(string):
+    if (self.left == 0):
+        return Maybe.None
+    self.left := self.left - 1
+    return Maybe.Some("s{self.left}")
+
+fn main() i32:
+    foreach(s in Iterator.new(nom Spell(3))):
+        if (s == "s1"):
+            continue
+        println(s)
+    return 0

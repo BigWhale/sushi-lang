@@ -61,7 +61,7 @@ def check_container_static(validator: TypeValidator, node: e.Call, target: e.Sta
     name = f"{base}.{target.name}"
     family = METHOD_TYPE_REGISTRY.family(CONTAINER_STATIC_FAMILIES[base])
     bare = getattr(target.ty, "namespace", None) is None
-    if bare and reject_out_of_scope_type(validator, base, _type_name_span(node.loc, base)):
+    if bare and reject_out_of_scope_type(validator, base, type_name_span(node.loc, base)):
         return _walk_arguments(validator, node)
     if reject_builtin_miscount(validator.reporter, node.loc, target.name, len(node.args),
                                name, family.arity):
@@ -113,7 +113,7 @@ def _reject_no_position(validator: TypeValidator, node: e.Call, base: str, name:
                    f"solves it")
 
 
-def _type_name_span(call: Span, name: str) -> Span:
+def type_name_span(call: Span, name: str) -> Span:
     """The span of the bare type name that a static call starts with (`HashMap.new()`)."""
     return Span(call.line, call.col, call.line, call.col + len(name))
 

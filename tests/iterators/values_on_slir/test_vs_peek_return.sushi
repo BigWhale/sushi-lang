@@ -1,0 +1,26 @@
+# A lent iterator leaves through a `peek` return: its state goes to the heap, and it still
+# borrows the argument. The walk of the caller frees the state and nothing else. A `let`
+# in the body is followed to its producer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n4\n1\n2\n"
+use <collections/iter>
+
+fn all(i32[] xs) peek Iterator@(i32):
+    return xs.iter()
+
+fn kept(i32[] xs) peek Iterator@(i32):
+    let Iterator@(i32) it = xs.iter()
+    return it
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(x in all(xs)):
+        println(x)
+    let i32[] ys = from([3, 4])
+    let Iterator@(i32) it = kept(ys)
+    foreach(y in it):
+        println(y)
+    foreach(x in kept(xs)):
+        println(x)
+    return 0

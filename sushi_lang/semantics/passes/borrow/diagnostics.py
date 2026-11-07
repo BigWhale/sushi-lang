@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, TYPE_CHECKING, cast
+from typing import Callable, Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.places import Step, walk_place
@@ -144,15 +145,20 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
 
 
 def emit_change_under_iterator(checker: 'BorrowChecker', walk: BorrowState,
-                               iterable: e.Call, header: Optional[Span]) -> None:
-    """Report CE2412 at a change of the container that a direct walk still walks (#956)."""
+                               iterable: e.ShirExpr, header: Optional[Span]) -> None:
+    """Report CE2412 at a change of the container that a walk still walks (#956). A lent
+    iterator that is no producer has no container to clone."""
     owner, what = walk.invalidated_by
     text = spelled(checker, iterable)
     diag = checker.err.emit_with(er.ERR.CE2412, walk.invalidated_at,
                                  owner=checker.name_of(owner), name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    target = cast(e.Dotted, iterable.target)
+    target = iterable.target if isinstance(iterable, e.Call) else None
+    if not (isinstance(target, e.Dotted) and target.name in CONTAINER_ITERATORS):
+        diag.help(f"{what} after the loop")
+        diag.emit()
+        return
     receiver = spelled(checker, target.recv)
     receiver_type = read_type(checker, target.recv)
     if refuses_clone(checker, receiver_type):
@@ -324,7 +330,8 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
     read spelled as the user wrote it, with a temporary in its short form (`read_spelled`)."""
     text = read_spelled(checker, expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
-    owner = borrow_owner(checker, expr)
+    from .iterators import lent_source
+    owner = borrow_owner(checker, lent_source(checker, expr))
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None and state.declared_at_span is not None:
         diag.note_at(f"'{state.name}' owns this value and still frees it",
@@ -337,6 +344,11 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
     # `test_own_get_*` files hold the branch honest until it is fixed.
     value_type = read_type(checker, expr)
     _note_opaque_mover(checker, diag, value_type)
+    from .iterators import lent_iterator_help, lent_owners
+    owners = lent_owners(checker, expr)
+    if owners is not None:
+        diag.help(lent_iterator_help(checker, owners)).emit()
+        return
     diag.help(escape_help(checker, text, owner_type, value_type,
                           use_of_copy=use_of_copy,
                           through_receiver=state is not None and state.is_method_receiver))
@@ -358,7 +370,7 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
     _note_opaque_mover(checker, diag, state.var_type)
     if state.is_lent_iterator:
         from .iterators import lent_iterator_help
-        diag.help(lent_iterator_help(state.borrows_from)).emit()
+        diag.help(lent_iterator_help(checker, state.borrows_from)).emit()
         return
     diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy,
                           through_receiver=state.is_method_receiver))

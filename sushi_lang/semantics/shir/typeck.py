@@ -103,6 +103,7 @@ class TypeckResults(SideTable):
     _values: dict[ShirId, ConstantValue] = row_table()
     _globals: dict[ShirId, str] = row_table()
     _source_rows: dict[ShirId, tuple[int, ...]] = row_table()
+    _iterator_nexts: dict[ShirId, ResolvedCall] = row_table()
 
     # -- the read API: None when the table holds no answer ------------------------------
 
@@ -170,6 +171,10 @@ class TypeckResults(SideTable):
         each argument in the source set, and -1 for the receiver. None for any other call."""
         return self._source_rows.get(call)
 
+    def iterator_next_of(self, call: ShirId) -> Optional[ResolvedCall]:
+        """The `next()` that the state of an `Iterator.new` calls."""
+        return self._iterator_nexts.get(call)
+
     # -- the write API: the typecheck pass alone calls it --------------------------------
 
     def record_type(self, node: ShirId, ty: Type) -> None:
@@ -219,6 +224,9 @@ class TypeckResults(SideTable):
 
     def record_global(self, node: ShirId, symbol: str) -> None:
         write_once(self._globals, node, symbol, "typecheck", "global")
+
+    def record_iterator_next(self, call: ShirId, answer: ResolvedCall) -> None:
+        write_once(self._iterator_nexts, call, answer, "typecheck", "iterator next")
 
     def record_sources(self, call: ShirId, positions: tuple[int, ...]) -> None:
         write_once(self._source_rows, call, positions, "typecheck", "sources")

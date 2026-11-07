@@ -1,0 +1,24 @@
+unit test_borrow_iterator_rows
+
+ShirBody lend
+  params : [(_0 "xs": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(LocalRef(_0), "iter"), [], iterator: lent, heap: true))
+
+ShirBody own
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(adopt ArrayInit(Dynamic, [Single(adopt Lit(1))]), "iter"), [], iterator: owned))
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": i32[], _1 "lent": Iterator@(i32), _2 "x": i32, _3 "x": i32]
+  regions : [_1: {_0} until #10]
+  block  :
+    Assign(LocalRef(_0), adopt ArrayInit(Dynamic, [Single(adopt Lit(1))]), is_init: true)
+    Assign(LocalRef(_1), adopt Call(Free(@lend), [(LocalRef(_0), Guaranteed)], borrows: [0], iterator: lent, heap: true), is_init: true)
+    Loop(Items(LocalRef(_1), _2, Bare), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))], in_place: true)
+    Loop(Items(adopt Call(Free(@own), []), _3, Bare), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))], in_place: false)
+    Return(adopt Lit(0))

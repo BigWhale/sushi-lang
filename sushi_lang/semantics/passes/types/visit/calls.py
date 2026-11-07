@@ -70,7 +70,8 @@ from sushi_lang.semantics.generics.maybe import (
     MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, CLONE_FAMILY, CONTRACT_FAMILIES, FUNCTION_FAMILY, HASHMAP_FAMILY, LIST_FAMILY,
+    ARRAY_FAMILY, CLONE_FAMILY, CONTRACT_FAMILIES, FUNCTION_FAMILY, HASHMAP_FAMILY, ITERATOR_FAMILY,
+    LIST_FAMILY,
     MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.passes.collect.externals import ExternalSig
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
@@ -103,6 +104,8 @@ from sushi_lang.semantics.passes.types.visibility import (
     type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.constructions import (
     Constructed, generic_static_owner)
+from sushi_lang.semantics.passes.types.visit.iterator_methods import (
+    check_iterator_method, check_iterator_new, names_iterator_new)
 from sushi_lang.semantics.passes.types.visit.container_statics import (
     check_container_static, container_static_base)
 from sushi_lang.semantics.passes.types.visit.contract_calls import (
@@ -131,6 +134,7 @@ from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
+    IteratorType,
     ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, ReferenceType, StructType,
     Type, deref_type)
 from sushi_lang.semantics.written_types import written_name
@@ -154,6 +158,8 @@ def check_call(validator: TypeValidator, node: e.Call,
     if isinstance(target, e.Static):
         if reject_unknown_variant(validator, node, target, expected):
             return None
+        if names_iterator_new(validator, target):
+            return check_iterator_new(validator, node, target)
         base = container_static_base(validator, target)
         if base is not None:
             return check_container_static(validator, node, target, base, expected)
@@ -290,7 +296,7 @@ def _check_static_call(validator: TypeValidator, node: e.Call, target: e.Static,
     A type whose dot holds no static `m` is CE2102, and an enum CE2045. A static of a
     primitive type name (`f64.from_bits`) is a `BuiltinStatic`. A static of a generic type
     has the instance that its arguments and its position solve (`generic_static_owner`).
-    `Iterator.new` and a static of a type whose name the unit lost stop the walk.
+    A static of a type whose name the unit lost stops the walk.
     """
     primitive = (PRIMITIVE_STATICS.get((target.ty.value, target.name))
                  if isinstance(target.ty, BuiltinType) else None)
@@ -426,8 +432,9 @@ def _takes_user_methods(validator: TypeValidator, ty: Type) -> bool:
         return _takes_user_methods(validator, ty.base_type)
     if isinstance(ty, TypeParameter):
         return ty.is_opaque
-    return isinstance(ty, FunctionType) or (isinstance(ty, (BuiltinType, StructType, EnumType))
-                                            and not type_is_contested(validator, ty))
+    return isinstance(ty, (FunctionType, IteratorType)) or (
+        isinstance(ty, (BuiltinType, StructType, EnumType))
+        and not type_is_contested(validator, ty))
 
 
 def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
@@ -575,6 +582,7 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     MAYBE_FAMILY: _check_maybe_method,
     CLONE_FAMILY: _check_derived_clone,
     FUNCTION_FAMILY: check_function_clone,
+    ITERATOR_FAMILY: check_iterator_method,
     **dict.fromkeys(CONTRACT_FAMILIES, check_contract_method),
 })
 

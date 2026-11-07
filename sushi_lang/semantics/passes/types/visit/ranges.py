@@ -6,8 +6,8 @@ its range with `check_range_iterable`: the range is no value, so its loop is a
 `CountedRange`. A run is no value either (`check_range_run`), and the reader of the runs
 says when it goes down. A slice has no `Range` node, and its arm checks its two bounds with
 `check_bounds`. A range in any other position comes to the arm of the table,
-`check_range`: a position that expects an `Iterator@(i32)` stops the walk (`Range`, the
-iterators group), and any other position is CE2122. Each bound is an i32 position
+`check_range`: in a position that expects an `Iterator@(i32)` the range is a value, and any
+other position is CE2122. Each bound is an i32 position
 (`semantics/passes/types/arrays.py`): a bound that is no number is CE2072, and a number of
 another type is CE2121. Readable bounds of a `foreach` range must go up (CE2125,
 `semantics/ranges.py`).
@@ -37,9 +37,7 @@ def check_range_iterable(validator: TypeValidator, node: e.Range) -> None:
     """The range of a `foreach`: its bounds, then CE2125 when readable bounds go down. The
     range is no value, and its type row is `Iterator@(i32)`."""
     check_range_run(validator, node)
-    plan = validator.folder.read(node, None)
-    reject_a_range_that_goes_down(plan if isinstance(plan, RangePlan) else None,
-                                  validator.reporter)
+    _reject_going_down(validator, node)
 
 
 def check_range_run(validator: TypeValidator, node: e.Range) -> None:
@@ -52,16 +50,25 @@ def check_range_run(validator: TypeValidator, node: e.Range) -> None:
 
 def check_range(validator: TypeValidator, node: e.Range,
                 expected: Optional[Type]) -> Optional[Type]:
-    """A range in a position that is no `foreach`: CE2122, then its bounds. A position
-    that expects an iterator stops the walk."""
-    if isinstance(expected, IteratorType):
-        visit.stop_at(validator, node)
+    """A range in a position that is no `foreach`: a value where an iterator is expected,
+    else CE2122, then its bounds."""
+    if expected == RANGE_TYPE:
+        check_bounds(validator, (node.start, node.end))
+        _reject_going_down(validator, node)
+        validator.body_answers().record_range_value(node.shir_id, True)
+        return RANGE_TYPE
     er.emit_with(validator.reporter, er.ERR.CE2122, node.loc) \
         .help("walk it with `foreach`, spell it into an array (`from([a..b])`), or give "
               "it to a position of the type `Iterator@(i32)`") \
         .emit()
     check_bounds(validator, (node.start, node.end))
     return None
+
+
+def _reject_going_down(validator: TypeValidator, node: e.Range) -> None:
+    plan = validator.folder.read(node, None)
+    reject_a_range_that_goes_down(plan if isinstance(plan, RangePlan) else None,
+                                  validator.reporter)
 
 
 def check_bounds(validator: TypeValidator, bounds: tuple[e.ShirExpr, e.ShirExpr]) -> None:

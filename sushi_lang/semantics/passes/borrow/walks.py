@@ -1,5 +1,9 @@
 """The direct walks of the borrow pass over SHIR (docs/design/ir.md 7.7, 7.9).
 
+An `IteratorValue` walk reads an iterator value on each round: it has its own arm. A lent
+iterator freezes its owners for the loop in the same way, and its items are read-only views.
+Any other item is owned by the round.
+
 A `Cursor` or a `HashMapCursor` makes no value. The walk reads the storage of its container
 on each round, so it is a `let`-borrow of the container with a key that no source can spell:
 a change that can move or free that storage and that reaches the next round is CE2412 at
@@ -16,6 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, cast
 
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.ownership import Provenance
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Builtin
@@ -24,8 +29,9 @@ from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
 from . import arms
 from .bindings import declare_bare_binders, release_binding_borrow
 from .borrows import clear_borrows
-from .consume import value_owners
-from .diagnostics import emit_change_under_iterator
+from .consume import consume, decide, source_class, value_owners
+from .diagnostics import emit_change_under_iterator, spelled
+from .iterators import lent_owners, owns_its_items, walks_in_place
 from .reads import borrow_owner, names_an_owner
 from .references import freeze_reference
 from .regions import note_binder
@@ -66,6 +72,73 @@ def check_direct_walk(checker: 'BorrowChecker', node: s.Loop, source: s.Items) -
             release_binding_borrow(checker.borrow_state.get(owner), binding)
         if walk is not None:
             checker.borrow_state.pop(walk.local, None)
+
+
+def check_value_walk(checker: 'BorrowChecker', node: s.Loop, source: s.Items) -> None:
+    """The iterable, the freeze of what it lends, the binder, then the body."""
+    from .statements import check_loop_body
+
+    iterable = source.iterable
+    arms.check(checker, iterable)
+    owners = lent_owners(checker, iterable)
+    if walks_in_place(checker, node, iterable):
+        reject_readonly_write(checker, borrow_owner(checker, iterable), iterable.loc,
+                              f"walk '{spelled(checker, iterable)}'", receiver=iterable)
+    elif owners is None:
+        consume(checker, iterable)
+    else:
+        decide(checker, iterable, Provenance.FRESH, source_class(checker, iterable))
+    clear_borrows(checker)
+    frame: list[tuple[Owner, Owner]] = []
+    walk = _freeze_owners(checker, node, iterable, owners or (), frame)
+    item = () if isinstance(source.binder, s.Discard) else (source.binder,)
+    if item:
+        _declare_value_item(checker, node, source, owners or (), frame)
+        if walk is not None:
+            checker.borrow_state[source.binder].covered_by = walk.local
+
+    def at_the_back_edge() -> None:
+        if walk is not None and walk.invalidated_at is not None:
+            emit_change_under_iterator(checker, walk, iterable, node.loc)
+
+    try:
+        check_loop_body(checker, node.body, at_the_back_edge, per_round=frozenset(item),
+                        walk=walk)
+    finally:
+        for owner, binding in frame:
+            release_binding_borrow(checker.borrow_state.get(owner), binding)
+        if walk is not None:
+            checker.borrow_state.pop(walk.local, None)
+
+
+def _freeze_owners(checker: 'BorrowChecker', node: s.Loop, iterable: e.ShirExpr,
+                   owners: tuple['Owner', ...], frame: list[tuple['Owner', 'Owner']]
+                   ) -> Optional[BorrowState]:
+    """The state of a walk that lends: it freezes each owner for the whole loop."""
+    held = tuple(owner for owner in owners if checker.borrow_state.get(owner) is not None)
+    if not held:
+        return None
+    walk = BorrowState(name=f"<walk {node.shir_id.index}>", local=f"<walk {node.shir_id.index}>",
+                       bound_at_span=iterable.loc)
+    checker.declare(walk)
+    record_owners(checker.borrow_state, walk, held, iterable.loc, frame)
+    return walk
+
+
+def _declare_value_item(checker: 'BorrowChecker', node: s.Loop, source: s.Items,
+                        owners: tuple['Owner', ...],
+                        frame: list[tuple['Owner', 'Owner']]) -> None:
+    """The binder of a value walk: a read-only view of a lent item, else an owned local of
+    the body."""
+    binder = checker.locals.get(source.binder)
+    at = node.loc if binder is None or binder.loc is None else binder.loc
+    if owns_its_items(checker.answers().type_of(source.iterable.shir_id)):
+        checker.declare(BorrowState(name=checker.name_of(source.binder), local=source.binder,
+                                    var_type=checker.local_type(source.binder),
+                                    declared_at_span=at))
+        return
+    declare_bare_binders(checker, [(source.binder, at)], {source.binder: owners}, node.body,
+                         frame)
 
 
 def _receiver(checker: 'BorrowChecker', iterable: e.Call) -> e.ShirExpr:

@@ -302,6 +302,9 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
     if isinstance(kind, r.AggClosure):
         return emit_closure_value(state, rvalue,
                                   [operand_value(state, part) for part in rvalue.parts[1:]])
+    if isinstance(kind, r.AggIterator):
+        from sushi_lang.backend.slir.iterators import emit_iterator_value
+        return emit_iterator_value(state, rvalue, kind)
     if not isinstance(kind, (r.AggVariant, r.AggStruct, r.AggTuple)):
         state.stop(kind)
     parts = [type_of_operand(state, part) for part in rvalue.parts]

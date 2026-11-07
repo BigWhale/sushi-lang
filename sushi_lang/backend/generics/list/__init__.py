@@ -53,7 +53,7 @@ from .methods_search import (
 
 
 def _iter(*_operands: Any) -> ir.Value:
-    """The `iter()` producer takes no operands yet: the borrow pass stops its call."""
+    """SLIR lowering makes `iter()` an `AggIterator`, so no call reaches this row."""
     raise_internal_error("CE0000", detail="a call of iter() on a List reached the emitter")
 
 

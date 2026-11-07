@@ -22,7 +22,7 @@ condition once, then its body in two rounds (`check_loop_body`): the paths of a
 `continue` and of the end of the body go round the back edge, and the paths of a `break`
 leave the loop. A counted loop reads the bounds of its range once, and declares its binder
 as a read-only view before its body. A direct walk has its own arm (`walks.py`). A loop over
-any other iterable is checked by the iterators group, and it stops the walk. The end of a block that the path
+an `IteratorValue` too. A loop over any other iterable stops the walk. The end of a block that the path
 reaches, a `return`, a `break` and a `continue` are exits of the blocks that they leave
 (`flow.record_exit`), and a rebind is an exit of the old value of its local
 (`flow.record_rebind`).
@@ -39,7 +39,8 @@ from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.loop_kind import CountedRange, Cursor, HashMapCursor
+from sushi_lang.semantics.shir.loop_kind import (
+    CountedRange, Cursor, HashMapCursor, IteratorValue)
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.paths import reached_statements, terminates
 from sushi_lang.semantics.shir.walk import walk
@@ -71,7 +72,7 @@ from .reads import borrow_owner, read_type
 from .references import check_let_reference, declare_reference_binders
 from .regions import note_part_view, note_view
 from .state import BorrowState, record_owners
-from .walks import check_direct_walk
+from .walks import check_direct_walk, check_value_walk
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
 if TYPE_CHECKING:
@@ -151,7 +152,8 @@ def _check_rebind(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> N
     # No "rebind while borrowed" check here, deliberately: this runs BEFORE the value
     # walk, and moving it after would reject `x := f(peek x)`. CE2401 lives at the
     # consuming use instead.
-    _reject_readonly_rebind(checker, node.target, node.loc, node.value)
+    if _reject_readonly_rebind(checker, node.target, node.loc, node.value):
+        return
     arms.check(checker, node.value)
     # Replacing what the owner holds invalidates every binding reading out of it (#242).
     check_owner_not_borrowed(checker, local, node.loc, "assign", place=node.target)
@@ -170,18 +172,21 @@ def _check_storage_rebind(checker: 'BorrowChecker', node: s.Assign) -> None:
 
 
 def _reject_readonly_rebind(checker: 'BorrowChecker', target: e.LocalRef,
-                            span: Optional[Span], value: Optional[e.ShirExpr]) -> None:
+                            span: Optional[Span], value: Optional[e.ShirExpr]) -> bool:
     """The gates of a rebind of a local, before its value. `value` is None for a place of a
-    destructure, which takes an element and never a literal."""
+    destructure, which takes an element and never a literal. True when the rebind of a lent
+    iterator is refused: that is the one fault, and the pass does not judge its value."""
     state = checker.borrow_state.get(target.local)
     if state is None:
-        return
+        return False
     # THE gate, in the rebind position: a name that is a view of another value's storage
     # cannot be rebound, a name with storage of its own can. A `poke` reference is the
     # middle case and stays legal -- the store goes through the pointer, which is what
     # the mode is for.
     refused = reject_readonly_write(checker, target.local, span, "rebind the name",
                                     rebind=True)
+    if refused and state.is_lent_iterator:
+        return True
     # The store goes through the pointer, so it is a USE of the reference: after a change
     # of its owner it writes into storage the owner no longer holds.
     if not refused and isinstance(state.var_type, ReferenceType):
@@ -189,6 +194,7 @@ def _reject_readonly_rebind(checker: 'BorrowChecker', target: e.LocalRef,
     # Option B: RE-DERIVE, never inherit. A rebind can only CLEAR this flag, never set it
     # on a value that owns heap.
     state.owns_no_heap = binds_a_bare_literal_string(state.var_type, value)
+    return False
 
 
 def _reinitialize(checker: 'BorrowChecker', local: LocalId) -> None:
@@ -514,8 +520,8 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     fixed point, and each view that the condition reads is read again at the back edge: a
     change of its owner in the body is CE2412 there. A counted loop reads the bounds of its range once, at the entry,
     and its binder is a read-only view, as a bare binder of a match is. A direct walk has
-    its own arm (`walks.py`). A loop over any other iterable stops the walk: the iterators
-    group checks it."""
+    its own arm (`walks.py`), and so does an `IteratorValue` walk. A loop over any other
+    iterable stops the walk: the iterators group checks it."""
     source = node.source
     again: Optional[Callable[[], None]] = None
     kind = checker.answers().loop_kind_of(node.shir_id)
@@ -524,6 +530,9 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
         again = partial(_read_views_again, checker, source.cond)
     elif isinstance(kind, (Cursor, HashMapCursor)):
         check_direct_walk(checker, node, source)
+        return
+    elif isinstance(kind, IteratorValue):
+        check_value_walk(checker, node, source)
         return
     elif isinstance(kind, CountedRange) and isinstance(source.iterable, e.Range):
         arms.check(checker, source.iterable.start)
@@ -645,7 +654,7 @@ def _check_round(checker: 'BorrowChecker', body: ShirBlock,
     frame = LoopFrame(len(checker.block_locals))
     checker.loop_frames.append(frame)
     try:
-        check_block(checker, body)
+        check_block(checker, body, declared=tuple(per_round))
     finally:
         checker.loop_frames.pop()
     if leaves_to_outer:

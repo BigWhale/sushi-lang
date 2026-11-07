@@ -65,7 +65,7 @@ from sushi_lang.semantics.passes.types.visit.arrays import reject_wrong_size
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.passes.types.visit.ranges import check_range_iterable
 from sushi_lang.semantics.passes.types.visit.walks import (
-    check_direct_walk, unwraps_a_try_binder)
+    check_iterator_walk, unwraps_a_try_binder)
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, is_get_call, walk_place
 from sushi_lang.semantics.shir import exprs as e
@@ -343,7 +343,7 @@ def check_loop(validator: TypeValidator, node: s.Loop) -> None:
         if not isinstance(source.binder, s.Discard):
             answers.record_local(source.binder, BuiltinType.I32)
         answers.record_loop_kind(node.shir_id, CountedRange())
-    elif not check_direct_walk(validator, node, source):
+    elif not check_iterator_walk(validator, node, source):
         return
     check_block(validator, node.body)
 

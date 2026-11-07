@@ -1,0 +1,27 @@
+# `break` and `return` in a walk of an iterator over a temporary reach the drop of the
+# hidden iterator, and of an item that the walk owns.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a\nb\nb\n0\n"
+use <collections/iter>
+
+fn words() Iterator@(peek string):
+    return from(["a", "b", "c"]).iter()
+
+fn second() string:
+    foreach(w in words()):
+        if (w == "b"):
+            return w.clone()
+    return "none"
+
+fn main() i32:
+    foreach(w in words()):
+        println(w)
+        if (w == "b"):
+            break
+    println(second())
+    let Iterator@(i32) r = 0..3
+    foreach(x in r):
+        println(x)
+        break
+    return 0

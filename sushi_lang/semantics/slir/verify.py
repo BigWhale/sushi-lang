@@ -65,7 +65,8 @@ from sushi_lang.semantics.slir.verify_arrays import (
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
-from sushi_lang.semantics.slir.verify_values import capture_places, copies_with_no_transfer
+from sushi_lang.semantics.slir.verify_values import (
+    capture_places, copies_with_no_transfer, stack_iterators)
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
@@ -119,6 +120,7 @@ def verify_function(function: SlirFunction, *, drops: frozenset[str],
     check = Check(function, drops, declared, filename)
     check.structure()
     capture_places(check, function)
+    stack_iterators(check, function)
     check_regions(function, check.fail)
     Flow(check).run()
 
@@ -429,10 +431,13 @@ class Check:
     def no_copy_into_return_slot(self, stmt: st.Assign) -> None:
         """A `Copy` of an owning value goes into `_0` only when `_0` is a view: the
         declaration returns `peek`. A `string` is the carve-out of `OWNED_COPY`: a string
-        bound from a literal is adopted, and it owns no heap."""
+        bound from a literal is adopted, and it owns no heap. A lent iterator reads its
+        container in its state, and it copies no value."""
         if stmt.place != p.Local(LocalId(0)) or self.function.locals[0].view:
             return
         value = stmt.rvalue
+        if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggIterator):
+            return
         parts = (value.operand,) if isinstance(value, r.Use) else (
             value.parts if isinstance(value, r.Aggregate) else ())
         for part in parts:

@@ -651,7 +651,8 @@ class IteratorMethodInferrer:
         if instance is None:
             return None
         instance = settle_adapter_instance(self.validator, self.call, instance)
-        return adapter_result(self.validator, self.call, receiver, instance, report=False)
+        return adapter_result(self.validator, self.call, self.call.method, receiver, instance,
+                              report=False)
 
 
 def _answers_foreign_ptr(receiver_type, method_name, derived_methods):

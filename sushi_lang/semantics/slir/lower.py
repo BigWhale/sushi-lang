@@ -65,6 +65,7 @@ from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.generics.iterators import answers_an_iterator
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
@@ -192,7 +193,8 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     while True:
         lowering = Lowering(answers, decls, drops, shir_locals, learned, label, tables,
                             unit=unit if home is None else home)
-        lowering.new_local(ret, None, None, view=borrows and lowering.owns(ret))
+        lowering.new_local(ret, None, None, view=(borrows and lowering.owns(ret)
+                                                  and not answers_an_iterator(ret)))
         params = lowering.parameters()
         lowering.lower_block(ret)
         found = lowering.all_learned()
@@ -410,6 +412,7 @@ class Lowering:
             value = self.value(stmt.value)
             ident = self.declare_binder(target.local, stmt.loc)
             self.emit([st.StorageLive(ident, stmt.loc)])
+            self.emit(views.lent_region(self, target.local, ident, stmt.loc))
             self.write(p.Local(ident), value, stmt.loc)
             self.declared = ident
         else:
@@ -587,6 +590,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.ArrayInit: arrays.array_init,
     e.Call: calls.call,
     e.Interp: calls.interp,
+    e.Range: iterators.range_value,
     e.Try: ctl.try_,
     e.Take: takes.take_value,
 }

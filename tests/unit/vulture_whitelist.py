@@ -107,12 +107,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
     # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
-    ("sushi_lang/semantics/shir/ownership.py", "record_lent*",
-     "kept for the iterators group C3: the borrow pass on SHIR writes the lent or owned "
-     "state and the heap decision of an iterator, also of one that a peek return answers"),
-    ("sushi_lang/semantics/shir/ownership.py", "record_in_place",
-     "kept for the iterators group C3: the borrow pass on SHIR writes the walk in place of "
-     "a loop over an iterator value or a next() type"),
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
@@ -139,16 +133,8 @@ def _ast_probe(group: str) -> str:
 
 WHITELIST += (
     (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
-    (_BORROW + "calls.py", "settle_receiver", _kept("C", "C3: a lent iterator receiver")),
     (_BORROW + "bindings.py", "BindingScope", _kept("C", "C3: iterators, the scope of a loop")),
     (_BORROW + "bindings.py", "bind_item", _kept("C", "C3: iterators")),
-    (_BORROW + "bindings.py", "bind_lent_walk", _kept("C", "C3: iterators")),
-    (_BORROW + "iterators.py", "settle_walk", _kept("C", "C3: iterators")),
-    (_BORROW + "iterators.py", "is_lent_name",
-     _kept("C", "C3: a lent iterator that leaves through a peek return")),
-    (_BORROW + "state.py", "lent_value",
-     _kept("C", "C3: a lent iterator that leaves through a peek return")),
-    (_BORROW + "iterators.py", "settle_iterator_source", _kept("C", "C3: iterators")),
     (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),
     (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
 )
@@ -166,22 +152,12 @@ def _family(group: str, what: str) -> str:
 
 
 WHITELIST += (
-    (_BACKEND + "generics/list/methods_iter.py", "emit_list_iter",
-     _family("C3", "the iter() producer of a List")),
-    (_BACKEND + "generics/hashmap/methods/iterators.py", "_emit_bucket_iterator",
-     _family("C3", "the four producers of a HashMap")),
     (_BACKEND + "runtime/iterator_adapters.py", "emit_adapter_call",
      _family("C3", "the iterator adapters")),
     (_BACKEND + "runtime/iterator_adapters.py", "owned_parts",
      _family("C3", "the parts of an owned iterator that a loop destroys")),
-    (_BACKEND + "runtime/iterators.py", "emit_range_iterator",
-     _family("C3", "a range as an Iterator@(i32) value")),
-    (_BACKEND + "runtime/iterators.py", "emit_new_iterator",
-     _family("C3", "Iterator.new over a next() type")),
     (_BACKEND + "runtime/strings.py", "emit_cstr_to_owned_fat_pointer",
      _family("D5", "the string that an extern returns")),
-    (_BACKEND + "types/arrays/methods/iterators.py", "emit_*_array_iter",
-     _family("C3", "the iter() producer of an array")),
 )
 
 # -- AST facts whose last reader P2.13 deleted ----------------------------------------
@@ -200,9 +176,12 @@ _TYPES_PASS = "passes/types/"
 # (field, the module of its writer, group, what it holds). The field is declared in
 # semantics/ast.py, and vulture reports the declaration and the write.
 _FACTS = (
-    ("walks_in_place", "passes/borrow/iterators.py", "C3",
-     "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py reads its "
-     "writer"),
+    ("callee_borrows", _TYPES_PASS + "borrowed_returns.py", "C3",
+     "the source row of a borrowed call, in the AST inference that the iterators group ports; "
+     "a SHIR call reads TypeckResults.sources_of"),
+    ("callee_self_mode", _TYPES_PASS + "calls/methods.py", "C3",
+     "the receiver mode of a method call, in the AST inference that the iterators group ports; "
+     "a SHIR call reads the Method callee"),
     ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "C3",
      "the declaring unit of an extension callee, in the AST inference that the iterators "
      "group ports; a SHIR call reads ResolvedCall.unit"),

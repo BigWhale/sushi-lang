@@ -16,8 +16,10 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
+from sushi_lang.semantics.generics.iterators import (
+    ITERATOR_BASE, answers_an_iterator, produces_from_a_container)
 from sushi_lang.semantics.method_effects import (
-    CONTRACT_FAMILIES, answers_view, receiver_convention)
+    CONTRACT_FAMILIES, ITERATOR_FAMILY, answers_view, receiver_convention)
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
@@ -28,6 +30,7 @@ from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_copies as copies
+from sushi_lang.semantics.slir import lower_iterators as iters
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
@@ -50,6 +53,18 @@ def call(low: Lowering, node: e.Call) -> Value:
                                 detail="a call with no callee reached SLIR")
     if isinstance(resolved.callee, Builtin) and copies.lowers_inline(resolved.callee.method):
         return copies.lower(low, node, resolved.callee)
+    if isinstance(resolved.callee, Builtin):
+        method = resolved.callee.method
+        if produces_from_a_container(method.family, method.name, len(node.args)):
+            return iters.producer_value(low, node, resolved.callee)
+        if method.family == ITERATOR_FAMILY:
+            raise StageStop(STAGE, f"Call(method iterator) {method.name}", node.loc)
+    if isinstance(resolved.callee, BuiltinStatic) and is_iterator_static(resolved.callee):
+        next_row = low.typeck.iterator_next_of(node.shir_id)
+        if next_row is None:
+            er.raise_internal_error("CE0000", span=node.loc,
+                                    detail="an Iterator.new with no next() reached SLIR")
+        return iters.new_value(low, node, callee(low, node, next_row))
     target = callee(low, node, resolved)
     value = CallValue(target, receiver(low, resolved.callee, node)
                       + tuple(argument(low, node, index, arg)
@@ -58,9 +73,14 @@ def call(low: Lowering, node: e.Call) -> Value:
             and low.owns(low.type_of(node))):
         return views.view_of(value, value.args[0][0])
     sources = low.typeck.sources_of(node.shir_id)
-    if sources is not None and low.owns(low.type_of(node)):
+    if (sources is not None and low.owns(low.type_of(node))
+            and not answers_an_iterator(low.type_of(node))):
         return views.view_of_sources(value, sources, isinstance(resolved.callee, Method))
     return value
+
+
+def is_iterator_static(callee: BuiltinStatic) -> bool:
+    return generic_base_of(callee.ty) == ITERATOR_BASE or callee.method.family == ITERATOR_FAMILY
 
 
 def receiver(low: Lowering, callee: Callee,

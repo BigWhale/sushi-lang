@@ -1,4 +1,4 @@
-"""SHIR to SLIR: the direct walks (docs/design/ir.md 7.7, 8.6, 8.9).
+"""SHIR to SLIR: the direct walks and the iterator values (docs/design/ir.md 7.7, 8.6, 8.7, 8.9).
 
 A `Cursor` is `Len` into a local, then the shape of a counted loop: the binder reads the
 element at the counter. A `HashMapCursor` has a hidden cursor local, and each round a `Call`
@@ -10,6 +10,13 @@ A bare binder of an owning item is a view local, and a `peek` or a `poke` binder
 local (`lower_control._bind`), in a region over the root of the container. The container
 is the place of its receiver, or a new value in a temporary of the loop statement, which
 drops at the end of the statement. The loop statement holds the cursor and the counter too.
+
+A producer, a range and `Iterator.new` as a value are ONE `Aggregate(AggIterator)`, with the
+row of the source and the heap decision of `borrow`. An `IteratorValue` walk holds the iterator
+in a temporary of the loop statement, which drops by the rules of a temporary (8.10, rule 7),
+or walks it where it is. Each round is an `Indirect` call, a switch on the tag of the `Maybe`,
+and the body. An item that the walk owns moves into the binder, and the `None` edge drops the
+`Maybe`. A lent item is a view of the `Maybe`.
 """
 from __future__ import annotations
 
@@ -23,8 +30,10 @@ from sushi_lang.semantics.method_effects import CURSOR_NEXT
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.callee import Builtin
-from sushi_lang.semantics.shir.loop_kind import Cursor, HashMapCursor
+from sushi_lang.semantics.shir.callee import Builtin, Method
+from sushi_lang.semantics.shir.loop_kind import (
+    HASHMAP_VIEWS, Cursor, HashMapCursor, IteratorValue)
+from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_views as views
@@ -32,7 +41,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.typesys import (
-    BuiltinType, EnumType, IteratorType, PointerType, deref_type,
+    BuiltinType, EnumType, IteratorType, PointerType, Type, deref_type,
 )
 
 if TYPE_CHECKING:
@@ -48,6 +57,8 @@ def loop(low: Lowering, stmt: s.Loop) -> None:
         _cursor(low, stmt, source)
     elif isinstance(source, s.Items) and isinstance(kind, HashMapCursor):
         _map_cursor(low, stmt, source, kind)
+    elif isinstance(source, s.Items) and isinstance(kind, IteratorValue):
+        _value_walk(low, stmt, source)
     else:
         ctl.loop(low, stmt)
 
@@ -119,10 +130,97 @@ def _step_answer(low: Lowering, source: s.Items, span: Span) -> tuple[EnumType, 
     """The type of the answer of a step, and the tag of its `Some`: `Maybe@(item)`, or
     `Maybe@(item*)` for a binder that points into the slot (ir.md 8.6)."""
     item = cast(IteratorType, deref_type(low.type_of(source.iterable))).element_type
-    payload = PointerType(item) if isinstance(source.by, s.Ref) else item
+    return _maybe_of(low, PointerType(item) if isinstance(source.by, s.Ref) else item, span)
+
+
+def _maybe_of(low: Lowering, payload: Type, span: Span) -> tuple[EnumType, int]:
     answer = ensure_maybe_type_in_table(low.tables.enums, payload,
                                         struct_table=low.tables.structs.by_name)
     some = answer.get_variant_index("Some") if isinstance(answer, EnumType) else None
     if not isinstance(answer, EnumType) or some is None:
         er.raise_internal_error("CE0000", span=span, detail="the answer of a step is no Maybe")
     return answer, some
+
+
+def producer_value(low: Lowering, node: e.Call, callee: Builtin) -> r.Aggregate:
+    """A producer as a value. A lent one reads the place of its container, and an owned one
+    moves the temporary into its state."""
+    ownership = low.answers.ownership
+    lent = ownership.lent_of(node.shir_id)
+    if lent is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="an iterator producer with no state reached SLIR")
+    heap = not lent or bool(ownership.lent_on_heap(node.shir_id))
+    part = (p.Copy(views.reference_place(low, callee.recv)) if lent
+            else low.operand(callee.recv))
+    container = cast(Type, deref_type(low.type_of(callee.recv)))
+    view = HASHMAP_VIEWS.get(callee.method.name)
+    source: r.IterSource = (r.IterElements(container, lent) if view is None
+                            else r.IterMapView(container, view.name, lent))
+    return r.Aggregate(r.AggIterator(low.type_of(node), source, heap), (part,))
+
+
+def range_value(low: Lowering, node: e.Range) -> r.Aggregate:
+    """A range as a value (ir.md 8.9): an owned iterator, with its first value and its count."""
+    if not low.typeck.range_value_of(node.shir_id):
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="a range that is no value reached SLIR as a value")
+    start, end = ctl.bound(low, node.start), ctl.bound(low, node.end)
+    first, count = ctl.range_operands(low, node, start, end)
+    source = r.IterRange(-1 if node.reverse else 1)
+    return r.Aggregate(r.AggIterator(low.type_of(node), source, True), (first, count))
+
+
+def new_value(low: Lowering, node: e.Call, next_: st.SlirCallee) -> r.Aggregate:
+    """`Iterator.new(nom x)`: an owned iterator, with the `next()` of `x`."""
+    next_row = low.typeck.iterator_next_of(node.shir_id)
+    if next_row is None or not isinstance(next_, st.Direct):
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="an Iterator.new with no next() reached SLIR")
+    value = node.args[0].value
+    source = r.IterNew(cast(Type, deref_type(low.type_of(value))), next_.symbol,
+                       cast(Method, next_row.callee).receiver)
+    return r.Aggregate(r.AggIterator(low.type_of(node), source, True), (low.operand(value),))
+
+
+def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items) -> None:
+    """The iterator, then a header that calls `next_fn` and switches on the tag of the answer,
+    the body, and the exit. The blocks are made in the order header, body, the block of the
+    tag on the `None` edge, exit."""
+    span = stmt.loc
+    iterator = _walked_iterator(low, stmt, source.iterable)
+    ty = cast(IteratorType, deref_type(low.type_of(source.iterable)))
+    answer, some = _maybe_of(low, ty.element_type, span)
+    takes_item = low.owns(ty.element_type) and not ty.peeks
+    stepped = low.new_local(answer, None, None,
+                            view=low.owns(ty.element_type) and not takes_item)
+    low.placement.temporary(stepped, False)
+    low.emit([st.StorageLive(stepped, span)])
+    low.walk_owners[stepped] = p.root_of(iterator)
+    header = ctl.enter_header(low, stmt)
+    among, at_header = ctl.header_state(low, stmt)
+    low.placement.open_statement()
+    low.emit([st.Call(p.Local(stepped), st.Indirect(p.Copy(iterator)), (), span)])
+    tag = low.temporary(r.Discriminant(p.Local(stepped)), BuiltinType.I32, span)
+    low.placement.detach(tag)
+    low.emit(low.placement.close_scope(span))
+    body, done, exit_ = low.new_block(), low.new_block(), low.new_block()
+    if takes_item:
+        done.statements.append(st.Drop(p.Local(stepped), span))
+    payload: p.Place = p.Field(p.Downcast(p.Local(stepped), "Some"), 0)
+    binds: tuple[ctl.Binds, ...] = ()
+    if not isinstance(source.binder, s.Discard):
+        read = p.Move(payload) if takes_item else p.Copy(payload)
+        binds = ((None, ((source.binder, r.Use(read)),)),)
+    elif takes_item:
+        body.statements.append(st.Drop(p.Local(stepped), span))
+    ctl.rounds(low, stmt, (p.Copy(p.Local(tag)), tag, span), body, header, done, exit_,
+               (among, at_header), binds, leaves_at=1 - some)
+
+
+def _walked_iterator(low: Lowering, stmt: s.Loop, iterable: e.ShirExpr) -> p.Place:
+    """The place of the iterator of a walk: where it is for a walk in place, else a temporary
+    of the loop statement, which takes the value."""
+    if low.answers.ownership.in_place_of(stmt.shir_id):
+        return agg.place_of(low, cast(e.LocalRef, iterable))
+    return p.Local(low.temporary(r.Use(low.operand(iterable)), low.type_of(iterable), stmt.loc))

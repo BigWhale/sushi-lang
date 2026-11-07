@@ -1,10 +1,11 @@
-"""The direct walks of the typecheck pass over SHIR (docs/design/ir.md 7.7).
+"""The walks of an iterator in the typecheck pass over SHIR (docs/design/ir.md 7.7).
 
 A `foreach` whose iterable is a built-in producer over a container is a direct walk: `iter`
 on a `T[]`, a `T[N]`, a `List@(T)` or a slice is a `Cursor`, and `keys`, `values`, `entries`
 and `pairs` on a `HashMap@(K, V)` are a `HashMapCursor`. The iterable is no value. Its call
 has the rows of any call of its family, and the kind of the loop says what it walks. Any
-other iterable stops the walk (`Loop`).
+other `Iterator@(T)` is a value, and its loop is an `IteratorValue`. An iterable of any other
+type stops the walk (`Loop`).
 
 The binder is the item of the iterator. A written type that the item does not fit is CE2034.
 A `peek` or a `poke` binder points into the storage of the container, and an entry and a
@@ -17,8 +18,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.generics.iterators import (
-    CONTAINER_ITERATORS, produces_from_a_container)
+from sushi_lang.semantics.generics.iterators import produces_from_a_container
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.compatibility import types_compatible
@@ -27,9 +27,10 @@ from sushi_lang.semantics.passes.types.utils import validate_type_name
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Builtin
-from sushi_lang.semantics.shir.loop_kind import HASHMAP_VIEWS, Cursor, HashMapCursor, LoopKind
+from sushi_lang.semantics.shir.loop_kind import (
+    HASHMAP_VIEWS, Cursor, HashMapCursor, IteratorValue, LoopKind)
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.typesys import IteratorType, Type
+from sushi_lang.semantics.typesys import IteratorType, Type, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -38,21 +39,19 @@ if TYPE_CHECKING:
 _ADDRESSABLE = frozenset({"iter", "keys", "values"})
 
 
-def check_direct_walk(validator: TypeValidator, node: s.Loop, source: s.Items) -> bool:
-    """The iterable, the binder and the kind of a direct walk. True when the pass goes on
-    with the body: a fault of the iterable or of the binder leaves the body unread."""
+def check_iterator_walk(validator: TypeValidator, node: s.Loop, source: s.Items) -> bool:
+    """The iterable, the binder and the kind of a walk. True when the pass goes on with the
+    body: a fault of the iterable or of the binder leaves the body unread."""
     iterable = source.iterable
-    if not (isinstance(iterable, e.Call) and isinstance(iterable.target, e.Dotted)
-            and iterable.target.name in CONTAINER_ITERATORS and not iterable.args):
-        visit.stop_at(validator, node)
     ty = visit.check_expr(validator, iterable)
     if ty is None:
         if not validator.reporter.has_errors:
             er.emit(validator.reporter, er.ERR.CE0146, iterable.loc)
         return False
-    kind = _kind_of(validator, iterable)
-    if kind is None or not isinstance(ty, IteratorType):
+    ty = deref_type(ty)
+    if not isinstance(ty, IteratorType):
         visit.stop_at(validator, node)
+    kind = _kind_of(validator, iterable)
     item = _binder_type(validator, source, ty.element_type)
     if item is None:
         return False
@@ -63,7 +62,7 @@ def check_direct_walk(validator: TypeValidator, node: s.Loop, source: s.Items) -
         marker = Span(end.end_line, end.end_col - len("??"), end.end_line, end.end_col)
         er.emit(validator.reporter, er.ERR.CE2517, marker, ty=display_type(item))
         return False
-    if isinstance(source.by, s.Ref) and iterable.target.name not in _ADDRESSABLE:
+    if isinstance(source.by, s.Ref) and not _addressable(iterable, kind):
         er.emit(validator.reporter, er.ERR.CE2423, source.by.loc or node.loc)
         return False
     answers = validator.body_answers()
@@ -82,14 +81,22 @@ def unwraps_a_try_binder(validator: TypeValidator, node: s.Assign) -> bool:
             and validator.body_locals[value.inner.local].name is None)
 
 
-def _kind_of(validator: TypeValidator, iterable: e.Call) -> Optional[LoopKind]:
-    """The kind of the walk that the callee row of the call gives, or None for a callee that
-    is no producer: an extension method can have the name of one."""
-    resolved = validator.body_answers().callee_of(iterable.shir_id)
+def _addressable(iterable: e.ShirExpr, kind: LoopKind) -> bool:
+    """Whether the item of the walk has storage in a container."""
+    return (not isinstance(kind, IteratorValue) and isinstance(iterable, e.Call)
+            and isinstance(iterable.target, e.Dotted) and iterable.target.name in _ADDRESSABLE)
+
+
+def _kind_of(validator: TypeValidator, iterable: e.ShirExpr) -> LoopKind:
+    """The kind of the walk: a direct walk for a producer that the callee row of the call
+    names, and an `IteratorValue` for any other iterator. An extension method can have the
+    name of a producer."""
+    resolved = (validator.body_answers().callee_of(iterable.shir_id)
+                if isinstance(iterable, e.Call) else None)
     callee = resolved.callee if resolved is not None else None
     if not isinstance(callee, Builtin) or not produces_from_a_container(
             callee.method.family, callee.method.name, len(iterable.args)):
-        return None
+        return IteratorValue()
     view = HASHMAP_VIEWS.get(callee.method.name)
     return Cursor() if view is None else HashMapCursor(view)
 

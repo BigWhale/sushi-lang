@@ -11,16 +11,12 @@ from __future__ import annotations
 from typing import Optional, Sequence, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import MethodLike, Name
-from sushi_lang.semantics.generics.iterators import produces_from_a_container
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import effect_of, receiver_convention
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, deref_type
-from sushi_lang.semantics.param_modes import (
-    Convention, receiver_mode,
-)
+from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Extern, Free, Indirect, Intrinsic, Method, Static, Stdlib)
@@ -29,7 +25,7 @@ from . import arms
 from .borrows import (
     BY_ADDRESS, acquire_borrow, borrow_of_constant, check_borrow,
     register_implicit_borrow)
-from .iterators import take_lent_iterator
+from .iterators import settle_borrowed_iterator, settle_iterator_call, take_lent_iterator
 from .consume import StatementTakes, consume, consume_once, decide, read_through_receiver
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
 from .reads import OWNER_STEPS, borrow_owner, owner_state, read_through_call, read_type
@@ -97,10 +93,13 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
             check_borrow(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
     changes_receiver = (isinstance(callee, Method)
                         and check_method_receiver(checker, node, callee))
+    if isinstance(callee, Builtin):
+        settle_iterator_call(checker, node, callee)
     taken: StatementTakes = {}
     for arg, convention, mode in zip(node.args, conventions, modes, strict=True):
         if mode is None and convention is Convention.OWNED:
-            consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
+            if not take_lent_iterator(checker, node, callee, arg.value):
+                consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
         elif mode is None:
             apply_convention(checker, arg.value, convention)
     if isinstance(callee, Method) and callee.receiver is Convention.OWNED:
@@ -114,6 +113,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     reject_borrow_read_by_the_change(checker, node, conventions, unchanged)
     if isinstance(callee, Free):
         apply_destroy_effects(checker, node, callee)
+    settle_borrowed_iterator(checker, node)
 
 
 def check_method_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> bool:
@@ -201,6 +201,8 @@ def _take_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Built
     `REJECT` row is on the receiver, and the call stands only as the operand of a `??`
     (CE2522)."""
     receiver = callee.recv
+    if take_lent_iterator(checker, node, callee, receiver):
+        return
     if read_through_receiver(checker, node) is None:
         take_receiver(checker, node, receiver, callee.method.name)
         return
@@ -229,15 +231,12 @@ def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Buil
     the array) is read too, and the call writes it after its arguments
     (`_write_builtin_receiver`). An `Owned` receiver (a `nom self` method: `map_err`,
     `or_err`) is read too, and the call takes it after its arguments
-    (`_take_builtin_receiver`). A family with no receiver rule stops the walk. An iterator
-    over an array or a List stops (C3), because it makes a lent iterator.
+    (`_take_builtin_receiver`). A family with no receiver rule stops the walk.
     """
     method = callee.method
     convention = receiver_convention(method)
     if convention is None:
         dispatch.stop_at_family(arms.STAGE, node, method.family)
-    if produces_from_a_container(method.family, method.name, len(node.args)):
-        dispatch.stop(arms.STAGE, node, family=method.family, state="iterator")
     arms.check(checker, callee.recv)
     return convention is Convention.INOUT
 
@@ -438,27 +437,6 @@ def _slot_path(checker: 'BorrowChecker', value: e.ShirExpr) -> Optional[tuple]:
                             for step in reversed(walked.path)
                             if isinstance(step, (e.Field, e.Index))
                             or (isinstance(step, e.Call) and get_out(step))))
-
-
-def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """A `nom self` receiver is a consuming use of what the method was called on.
-
-    The mode is DECLARATION-only, so nothing at the call site says `nom` and the
-    diagnostic has to name the method instead (ruling R27). The name is recorded on the
-    state here, beside the span the move already records, and only when this call is
-    that move: a receiver that an earlier move already took keeps that move's facts.
-    """
-    if not receiver_mode(expr.callee_self_mode).consumes:
-        return
-    receiver = expr.receiver
-    if take_lent_iterator(checker, expr, receiver):
-        return
-    state = checker.borrow_state.get(receiver.id) if isinstance(receiver, Name) else None
-    already_moved = state is not None and state.is_moved
-    consume(checker, receiver, CopyUse(f"call '{expr.method}' on the copy",
-                                       f".{expr.method}({_arguments_text(checker, expr.args)})"))
-    if state is not None and state.is_moved and not already_moved:
-        state.consumed_by_method = expr.method
 
 
 def _arguments_text(checker: 'BorrowChecker', args) -> str:

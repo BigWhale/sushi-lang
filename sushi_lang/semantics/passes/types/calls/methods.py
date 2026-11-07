@@ -1308,7 +1308,7 @@ def _validate_iterator_family(validator: 'TypeValidator', call: MethodCall,
     _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
                       solve=solve)
     if solved:
-        call.inferred_return_type = adapter_result(validator, call, receiver_type,
+        call.inferred_return_type = adapter_result(validator, call, call.method, receiver_type,
                                                    solved[0], report=True)
 
 
