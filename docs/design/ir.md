@@ -1105,8 +1105,8 @@ progress, a family with no arm in the table stops the walk with `typecheck, Call
 <family>)`, on a receiver of any type (`Call(method iterator)`), so the stops of each
 family are counted apart. A receiver that is not of a built-in type and that no family
 claims, and no extension method of a plain type answers (see below), stops the walk with
-the label of the call target (`Call(method)`, `Call(stdlib method)`), and a perk method that
-is no contract method stops with `Call(perk method)`. An opaque type parameter that a
+the label of the call target (`Call(method)`, `Call(stdlib method)`). A perk method that is
+no contract method is a `Method` callee (7.6). An opaque type parameter that a
 constraint gives `Clone` has the family of the derived `clone`, and a contract constraint the
 family of the contract (`promised_contract_family`). In an instance, the same call is the
 family of the concrete type.
@@ -1160,9 +1160,8 @@ the `Result` of the instance. The receiver of each is `Owned` (8.3), and the rea
 of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
 arm too (see "An array" above). The hash of an array is the `array_hash` family, which a
 `Hashable` implementation overrides. Its call is a contract call, which SLIR lowering makes
-the intrinsic `hash` (7.6, 8.6). The arm of the family is not built yet, and the call stops
-the walk (`Call(method array_hash)`), as a call of the `derived_hash` and the `contract`
-families does.
+the intrinsic `hash` (7.6, 8.6). The arm of the family is in `visit/contract_calls.py`,
+with the arms of the `derived_hash` and the `contract` families.
 
 **A reference `let`.** The local of `let peek T x = <place>` and of `let poke T x = <place>`
 gets the type of its place (8.2), and the `Borrow` value is checked at that type: a place
@@ -1209,10 +1208,12 @@ one argument goes through the one argument check at the type and the mode of its
 `PRIMITIVE_STATICS`. A static of a built-in container (`List.new`, `List.with_capacity`,
 `HashMap.new`, `Own.alloc`) is the callee row `BuiltinStatic` too: its instance is the one
 that its position gives, and each argument goes through the one argument check at the
-convention of `argument_conventions` (8.3). These calls still stop the walk with their
-label: a perk method (its callee row is the `Method` of 7.6, not built yet), a receiver of a
-kind that takes no user method (an iterator), and a call through a field of a function type
-that no method of the struct names.
+convention of `argument_conventions` (8.3). A perk method is the `Method` of 7.6
+(`passes/types/visit/perk_calls.py`): a written call of the `drop` of the predefined `Drop`
+perk is [CE4020](../error-catalog.md#ce4020), a wrong count says no more about the
+arguments, and an opaque receiver has the method that a constraint promises. These calls
+still stop the walk with their label: a receiver of a kind that takes no user method (an
+iterator), and a call through a field of a function type that no method of the struct names.
 
 **A `peek` return.** A free function, an extension method and a static with a `peek T`
 return (`borrow-model.md` S10h) are typed as any other callee of their kind: the type of
@@ -1261,13 +1262,14 @@ and reads no row, and no pass reads an AST stamp for a late instance. The reques
 of the copy whose body makes the call, and the growth rule reads that chain (CE0151). The
 identity of a late copy keys on its unit, its name and its type arguments, as the identity of
 each instance does (8.2). A late copy of a perk implementation for a generic struct or enum
-target comes from a miss hook on the perk-implementation table, on the model of
-`ArrayPerkCopies` (`semantics/generics/array_perk_copies.py`): a hook of a table, and no shape
-of the IR. `typecheck` keeps the path of `infer_lambda_type` that writes no stamp
+target comes from the miss hook of the perk-implementation table, which also cuts the copy of
+an array target (`on_perk_miss`, `PerkCopies`, `semantics/generics/perk_copies.py`): a hook of
+a table, and no shape of the IR. The first lookup that misses cuts the copy for that perk or
+that method, and the copy fixpoint places its body in the home unit of its template and
+checks it. `typecheck` keeps the path of `infer_lambda_type` that writes no stamp
 (`stamp=False`, `passes/types/visit/helpers.py`). This is not built yet: a generic function as
 a value, whose type row names the instance that its position gives (the SHIR walk stops at the
-`GlobalRef`), and a miss hook of the perk-implementation table for a target that is no array
-(`on_array_miss` is the hook of an array target).
+`GlobalRef`).
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
@@ -1279,8 +1281,8 @@ the SHIR node and from the call facts that the stop site gives it
 (`passes/types/call_facts.py`). A stage that stops on a `Call` with no facts is an internal
 error, so no stage prints a label that another stage would print in another way. The labels
 are `Call(<kind>)`: `method` (a method that no built-in family claims and that no
-extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension), `perk method` (a perk method that is no contract method; `dispatch.stop_at_perk_method` makes it), `stdlib method` (a `public extend`
-or perk method of a bundled Sushi-source stdlib unit), `static` (a user static),
+extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension), `stdlib method` (a `public extend`
+of a bundled Sushi-source stdlib unit), `static` (a user static),
 `builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a function of a registry stdlib
 module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function that `typecheck` does not type yet, 7.6, and `errno`), `alias` (a function of a
 user unit behind a `use ... as` alias), `function` (a user function), `generic` (a generic
@@ -1741,9 +1743,9 @@ its own. Its symbol is the perk symbol of `extension_symbol`
 concrete (Q1), so the call names one implementation. A contract call (`x.hash()`,
 `x.eq(y)`, `x.compare(y)`, `x.to_str()`) is the `Builtin` callee of its family
 (`derived_hash`, `array_hash`, `contract`), and SLIR lowering makes it a contract
-intrinsic (8.6), as it makes `x.clone()` the rvalue `Clone`. This is not built yet: a call
-of a perk implementation method stops at the perk rung of the ladder
-(`passes/types/visit/calls.py`), and a contract call stops at its family (7.3).
+intrinsic (8.6), as it makes `x.clone()` the rvalue `Clone`. An override of `Hashable`,
+`Eq`, `Ord` or `Display` is a perk rung answer at a written call, and each contract seam
+takes the implementation first (terminal).
 
 The emitter reads the answer: one row of `CALL_EMITTERS` (`backend/slir/emit.py`) for
 each callee kind, and no decision at emit time.
@@ -2708,11 +2710,10 @@ of the `Drop` set goes to the destroy seam, which calls that symbol FIRST and th
 owning fields (`drops_of`, the one reader of the `Drop` set in the backend). The verifier
 needs no new rule for it. The body of every other perk method lowers in the same way (see
 below).
-As built: the stage finds the implementation of a `drop` body in the `Drop` set of the perk
-table (`drop_impl_of`, `semantics/slir/lower_signature.py`), and the symbol is
+As built: the stage finds the implementation of the body in the perk table
+(`perk_impl_of`, `semantics/slir/lower_signature.py`), and the symbol is
 `method_symbol` of the target with no unit, the symbol that the declaration round of the
-backend gives the method. No row of the function table names it: the verifier reads that
-table only for a callee, and no statement calls it. The SLIR of a body that holds a value of
+backend gives the method. The SLIR of a body that holds a value of
 the type has a `Drop(_n)` of the value at each point where a value of any other owning type
 drops: the scope exit in reverse declaration order, the path that does not move it, the old
 value of a rebind. A value that a call takes drops in the callee, and a field take spends
@@ -2723,16 +2724,14 @@ the body of `drop` does: a method body, its receiver `_1` with the convention of
 (8.3), its declared parameters after it, and the perk symbol of `extension_symbol` as its
 symbol. A call of it is a `Method` callee (7.6), which lowers to `Direct` with that symbol
 (8.6). The declaration says that a body is a perk method: the stage reads the perk
-implementation that holds the method. It never reads the shape of the body, so the test of
-"a receiver before its declared parameters" (`kind_of` and `symbol_of`,
-`semantics/slir/lower_signature.py`) goes. This is not built yet: such a body stops with
-`perk method`, and the stage finds a perk method by the shape of its body.
+implementation that holds the method (`perk_impl_of`). It never reads the shape of the body.
+The verifier finds the declared parameters of the callee in the same table, by the perk
+symbol, with the receiver first (`declared_params`).
 
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or one of these names: `conversion` and `perk method` for the
-body of a conversion and of a perk method other than
-the `drop` of a `Drop` implementation; `conversion` also for a
+class, or one of these names: `conversion` for the
+body of a conversion, and also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
@@ -2829,8 +2828,8 @@ every operand before the family emits (11.9): `interp` appends each part to one 
 builder (a string part as its bytes, any other part as its string form, `emit_value_fmt`)
 and answers a fresh owned string, also for one string part; `print` and `println` of a
 string, an integer, a float or a `bool` call the print emitter. The print of a value that
-prints by its `Display` form calls `emit_value_to_str` (8.6); this is not built yet, and such
-a print stops. A `Builtin` call of a `BuiltinMethod` goes to one
+prints by its `Display` form calls `emit_value_to_str` (8.6), writes the string and frees it
+through the destroy seam. A `Builtin` call of a `BuiltinMethod` goes to one
 row of `METHOD_FAMILIES` (`backend/slir/methods.py`), by the family of the method. The
 receiver is the first operand, and every operand is evaluated before the family emits. The
 family keeps its emitters and gives them the operand values (Q7). The primitive family, the
@@ -2846,8 +2845,7 @@ While the migration is in progress, a SLIR shape that the emitter does not handl
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
 example `emit, Indirect` or `emit, AggArray`), at the span of its statement or
 terminator. Where one class holds two shapes, the stop names the shape, so that the
-stop-code census counts each one: `emit, Display print` for the print of a value that
-prints by its `Display` form, `emit, intrinsic <name>` for an intrinsic with no row
+stop-code census counts each one: `emit, intrinsic <name>` for an intrinsic with no row
 of `INTRINSICS`, and `emit, <family> method` for a `BuiltinMethod` whose family has no row
 of `METHOD_FAMILIES`. The declaration round of a global stops with one name, at the span of
 the declaration: `emit, constant with no value` (see the initializer body above). Every stop
@@ -2944,8 +2942,7 @@ copy has one seam. The refusal of `.clone()` on a type that declares a resource 
 `typecheck`. The families of the contract calls, `derived_hash`, `array_hash` and
 `contract`, follow the same rule: they leave `NO_RECEIVER_RULE_FAMILIES`, each operand of
 their call is `Guaranteed`, and they have no row of `METHOD_FAMILIES`, because SLIR lowering
-makes each call an intrinsic (8.6). This is not built yet: the three families are in
-`NO_RECEIVER_RULE_FAMILIES`.
+makes each call an intrinsic (8.6).
 
 One function gives the convention of a receiver: `receiver_convention`
 (`semantics/method_effects.py`). One function beside it gives the convention of each
@@ -3217,9 +3214,7 @@ too. The print of a value that prints by its `Display` form is a call of the int
 `emit_value_eq`, `emit_value_compare` and `emit_value_to_str` (the print calls
 `emit_value_to_str`). Each seam takes an implementation of the perk first (terminal), then
 the derived function, then the primitive rule. So no contract call is a `Builtin` call of a
-`BuiltinMethod` in SLIR (8.3). This is not built yet: `typecheck` stops at each such call
-(`Call(method derived_hash)`, `Call(method array_hash)`, `Call(method contract)`), and the
-emitter stops at the print of a `Display` value (`emit, Display print`).
+`BuiltinMethod` in SLIR (8.3).
 
 A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod, [])`: a
 method has no operand types in the callee, because each operand is a place or a constant
