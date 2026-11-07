@@ -1,0 +1,19 @@
+# A generic that calls a generic: the copy names the instance of the inner template at
+# the type argument of the copy, and the type arguments can also be written.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "[4]\n[x]\n[5]\n"
+fn inst_show@(T: Display)(T x) string:
+    return "[{x}]"
+
+fn inst_outer@(T: Display)(T x) string:
+    return inst_show(x)
+
+fn inst_named@(U: Display)(U x) string:
+    return inst_show@(U)(x)
+
+fn main() i32:
+    println(inst_outer(4))
+    println(inst_outer("x"))
+    println(inst_named@(i32)(5))
+    return 0

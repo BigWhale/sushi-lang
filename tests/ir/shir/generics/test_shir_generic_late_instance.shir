@@ -8,10 +8,10 @@ ShirBody twice (TemplateCheck("test_shir_generic_late_instance.twice"))
 
 ShirBody main
   params : []
-  locals : [_0 "i"]
+  locals : [_0 "i": i32]
   block  :
-    Loop(Items(Range(Lit(0), Lit(2), inclusive: false, reverse: false), _0, Bare), [ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@twice)), [LocalRef(_0)])]))])
-    Return(Lit(0))
+    Loop(Items(Range(Lit(0), Lit(2), inclusive: false, reverse: false), _0, Bare), [ExprStmt(Call(Intrinsic("println"), [(Call(Free(@twice__i32), [(LocalRef(_0), Guaranteed)]), Guaranteed)]))])
+    Return(adopt Lit(0))
 
 ShirBody twice__i32
   params : [(_0 "x": i32, Guaranteed)]

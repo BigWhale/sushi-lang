@@ -428,8 +428,8 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
     if node.field_names is not None:
         return lw.error_hole(node, "CE6104", named=node.field_names[0])
     ident = lw.ident()
-    return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
-                  _arguments(lw, node.args))
+    return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node),
+                                                node.type_args_loc), _arguments(lw, node.args))
 
 
 def _constructed_type(lw: BodyLowerer, found: Optional[bd.Resolution]) -> Optional[str]:
@@ -475,8 +475,7 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
                   _arguments(lw, node.args))
 
 
-def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
-                    alias: str) -> e.ShirExpr:
+def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall, alias: str) -> e.ShirExpr:
     """`ns.f(...)`: the alias folds into the written name of the function that it holds.
 
     The written type arguments stand on the callee, as on a direct call
@@ -504,9 +503,10 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
         return lw.error_hole(node, "CE6104", named=named)
     if kind not in CALLABLE_KINDS:
         return lw.hole(node)
-    ident = lw.ident()
-    ref = e.GlobalRef(lw.ident(), lw.span(node), lw.decls.refer(f"{alias}.{node.method}"))
-    return e.Call(ident, lw.span(node), e.Named(ref, _type_args(node)), _arguments(lw, node.args))
+    ident, name = lw.ident(), lw.decls.refer(f"{alias}.{node.method}")
+    target = e.Named(e.GlobalRef(lw.ident(), lw.span(node), name), _type_args(node),
+                     getattr(node, "type_args_loc", None))
+    return e.Call(ident, lw.span(node), target, _arguments(lw, node.args))
 
 
 def _static_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,

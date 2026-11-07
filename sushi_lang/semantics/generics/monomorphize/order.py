@@ -4,7 +4,8 @@ from __future__ import annotations
 from typing import Callable, Iterable, List, Tuple, TypeVar
 
 from sushi_lang.internals.report import Diagnostic
-from sushi_lang.semantics.generics.extension_targets import instantiation_key
+from sushi_lang.semantics.generics.extension_targets import (
+    function_instance_key, instantiation_key)
 
 Item = TypeVar("Item")
 
@@ -53,7 +54,8 @@ def functions_in_site_order(instantiations: Iterable[Tuple[object, str, tuple]],
     def name(item: Tuple[object, str, tuple]) -> str:
         return instantiation_key(item[1], item[2])
 
-    return in_site_order(instantiations, sites, lambda item: ("fn", name(item)),
+    return in_site_order(instantiations, sites,
+                         lambda item: function_instance_key(item[0], item[1], item[2]),
                          lambda item: (name(item), str(item[0])))
 
 

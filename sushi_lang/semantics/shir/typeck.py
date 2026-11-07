@@ -38,11 +38,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedCall:
-    """The callee of a call, with the type arguments of a generic method and, for a free
-    function or an extension method, the name of the unit that declares it (C5). SLIR
-    lowering makes the symbol of a free function from it."""
+    """The callee of a call, with the type arguments of a generic function or method and,
+    for a free function or an extension method, the name of the unit that declares it (C5).
+    SLIR lowering makes the symbol of a free function from it."""
     callee: Callee
-    method_type_args: tuple[Type, ...] = ()
+    type_args: tuple[Type, ...] = ()
     unit: Optional[str] = None
 
 

@@ -40,10 +40,9 @@ that a back edge brings. The walk finds such a local only at the join, after the
 that must make the flag. So a walk records what it finds (`_Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
-The construct of a stop is the SHIR class of the node, or one of these names: `generic
-instance`, `conversion` and `perk method` for the body of a monomorphized generic instance,
-of a conversion and of a perk method; `conversion` also for a `??` that calls a
-declared conversion,
+The construct of a stop is the SHIR class of the node, or one of these names: `conversion`
+and `perk method` for the body of a conversion and of a perk method; `conversion` also for a
+`??` that calls a declared conversion,
 `library function` for a function, a method or a static whose declaring unit the typecheck
 row does not name, `bloom` for a bloom argument, `StructInit reference field`
 (`lower_aggregate.py`), `Match owning alternatives` (`lower_match.py`), and `ConstRef out of range` for a name

@@ -25,7 +25,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.spelling import spell_pattern
-from sushi_lang.semantics.shir.stmts import Bare, Ref
+from sushi_lang.semantics.shir.stmts import Ref
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -131,8 +131,9 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
     its `Downcast`, the parts of a tuple at the `Field` projections of the tuple, or at the
     operand of each part of a tuple literal that owns, which builds no tuple. The pointee of
     an `Own(...)` is at the `Deref` of the pointer field of the `Own@(T)`. A bare binder
-    copies its place, a `nom` binder of an owning payload moves it, and a `peek` or `poke`
-    binder writes the `Ref` of it."""
+    and a `nom`
+    binder of a plain payload copy their place, a `nom` binder of an owning payload moves
+    it, and a `peek` or `poke` binder writes the `Ref` of it."""
     if isinstance(operand, tuple):
         if isinstance(pattern, pt.Tuple):
             return _product(low, [_Path()], pattern.elements, operand, tuple_elements(ty))
@@ -147,9 +148,6 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
             return [_Path(binds=((pattern.local, r.Ref(_place(operand), pattern.by.mode)),))]
         if isinstance(pattern.by, pt.Nom) and low.owns(ty):
             return [_Path(binds=((pattern.local, r.Use(p.Move(_place(operand)))),))]
-        if not isinstance(pattern.by, Bare):
-            er.raise_internal_error("CE0000", detail="a binder that borrow does not check "
-                                                     "reached SLIR")
         return [_Path(binds=((pattern.local, r.Use(p.Copy(_place(operand)))),))]
     if isinstance(pattern, pt.Own):
         pointee = own_payload_type(ty)

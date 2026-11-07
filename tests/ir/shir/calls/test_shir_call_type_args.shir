@@ -10,25 +10,25 @@ ShirBody empty (TemplateCheck("test_shir_call_type_args.empty"))
   params : []
   locals : []
   block  :
-    Return(Call(Static(List, "new"), []))
+    Return(adopt Call(BuiltinStatic(List@(T), "new"), []))
 
 ShirBody main
   params : []
   locals : [_0 "total": i32, _1 "xs": List@(i32)]
   block  :
-    Assign(LocalRef(_0), Binary(+, Lit(40), Lit(2)), is_init: true)
-    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@identity), type_args: [i32]), [(Lit(5), Owned)]), Guaranteed)]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@identity), type_args: [i32]), [(LocalRef(_0), Owned)])]))
-    Assign(LocalRef(_1), Call(Named(GlobalRef(@empty), type_args: [i32]), []), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_1), "len"), [])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@identity)), [(Lit("Mostly Harmless"), Owned)])]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt Binary(+, Lit(40), Lit(2)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@identity__i32), [(adopt Lit(5), Owned)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@identity__i32), [(adopt LocalRef(_0), Owned)]), Guaranteed)]))
+    Assign(LocalRef(_1), adopt Call(Free(@empty__i32), []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_1), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@identity__string), [(adopt Lit("Mostly Harmless"), Owned)]), Guaranteed)]))
+    Return(adopt Lit(0))
 
 ShirBody empty__i32
   params : []
   locals : []
   block  :
-    Return(Call(Static(List, "new"), []))
+    Return(adopt Call(BuiltinStatic(List@(i32), "new"), []))
 
 ShirBody identity__i32
   params : [(_0 "x": i32, Owned)]

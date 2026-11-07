@@ -13,6 +13,8 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   fault of its own. A name that is a function of a registry stdlib module, bare or behind
   an alias, is a call of that function (`Stdlib`, `calls/user_defined.py`). A C function
   behind the alias of its `unsafe external` block is an `Extern` (`visit/extern_calls.py`).
+  A generic function has the instance of `visit/generic_calls.py`, and its call is the call
+  of that function.
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
 - `Dotted` is a method call. The receiver is typed first, and the ladder of the call
@@ -38,7 +40,7 @@ the channel of the method, or its bare return value.
 
 A plain type is a primitive, or a struct or an enum that is no instance of a generic type
 and whose name the unit did not lose. Every other target, and a call that another group
-types (a generic function, a function of a stdlib module other than `<math>` and
+types (a function of a stdlib module other than `<math>` and
 `<time>`, a C function that `visit/extern_calls.py` does not type, a variadic function, a
 method of a type that is not plain, a method or a static with a method-level type
 parameter, a perk method), stops the walk of its body. A call of a function or a method
@@ -69,6 +71,7 @@ from sushi_lang.semantics.method_effects import (
     ARRAY_FAMILY, CLONE_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY,
     PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.passes.collect.externals import ExternalSig
+from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
@@ -100,6 +103,7 @@ from sushi_lang.semantics.passes.types.visit.constructions import (
 from sushi_lang.semantics.passes.types.visit.container_statics import (
     check_container_static, container_static_base)
 from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_call
+from sushi_lang.semantics.passes.types.visit.generic_calls import resolve_generic_call
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.passes.types.visit.hashmap_methods import check_hashmap_method
 from sushi_lang.semantics.passes.types.visit.list_methods import check_list_method
@@ -109,6 +113,7 @@ from sushi_lang.semantics.passes.types.visit.signature_methods import check_sign
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Free, Intrinsic, Method, Static)
+from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.stdlib_registry import StdlibFunction
@@ -131,8 +136,7 @@ def check_call(validator: TypeValidator, node: e.Call,
         return _check_print(validator, node, target.name)
     if isinstance(target, e.Dotted):
         return _check_method_call(validator, node, target)
-    if (isinstance(target, e.Named) and isinstance(target.ref, e.GlobalRef)
-            and not target.type_args):
+    if isinstance(target, e.Named) and isinstance(target.ref, e.GlobalRef):
         return _check_free_call(validator, node, target.ref)
     if isinstance(target, e.Static):
         if reject_unknown_variant(validator, node, target, expected):
@@ -150,6 +154,8 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
     alias, dot, name = written.rpartition(".")
     sig = (_function_behind_alias(validator, node, alias, name) if dot
            else _function_of_scope(validator, node, ref, written))
+    if isinstance(sig, GenericFuncDef):
+        return _check_generic_call(validator, node, ref, sig, written)
     if isinstance(sig, StdlibFunction):
         return check_stdlib_call(validator, node, ref, sig)
     if sig is None:
@@ -158,10 +164,29 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
         return check_extern_call(validator, node, ref, sig)
     if reject_private_call(validator, "function", sig, ref.loc):
         return call_yield(validator, sig.ret_type, sig.err_type)
-    if any(p.is_variadic or p.is_pack or p.ty is None for p in sig.params):
+    return _check_function_call(validator, node, ref, sig, written, ref.decl)
+
+
+def _check_generic_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
+                        template: GenericFuncDef, written: str) -> Optional[Type]:
+    """A call of a generic function: the callee of `resolve_generic_call`, then the call of
+    a concrete function. No call of a type with no instance goes on."""
+    callee = resolve_generic_call(validator, node, ref, template, written)
+    if callee is None:
+        return None
+    return _check_function_call(validator, node, ref, callee.sig, written, callee.decl,
+                                callee.type_args, callee.typed)
+
+
+def _check_function_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRef, sig: FuncSig,
+                         written: str, decl: DeclId, type_args: tuple[Type, ...] = (),
+                         typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> Optional[Type]:
+    """The callee row, the source row of a `peek` return, the type of the reference, and the
+    arguments through the one argument check. The call yields what the function yields."""
+    if any(p.is_variadic or p.ty is None for p in sig.params):
         visit.stop_at(validator, node)
     answers = validator.body_answers()
-    answers.record_callee(node.shir_id, ResolvedCall(Free(ref.decl), unit=sig.unit_name))
+    answers.record_callee(node.shir_id, ResolvedCall(Free(decl), type_args, sig.unit_name))
     record_call_sources(validator, node, sig)
     function_type = function_type_of_sig(sig)
     if function_type is not None:
@@ -170,7 +195,8 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
     declared = Parameters(node.shir_id, declared_modes(sig.params),
                           [param.name for param in sig.params])
     check_arguments(validator, written, params, node.args, ref.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared)
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared,
+                    typed=typed)
     return call_yield(validator, sig.ret_type, sig.err_type)
 
 
@@ -525,17 +551,20 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
-                       name: str) -> Optional[FuncSig | StdlibFunction]:
-    """The concrete function that a bare name calls in this unit, or None after its error.
+                       name: str) -> Optional[FuncSig | GenericFuncDef | StdlibFunction]:
+    """The function that a bare name calls in this unit, or None after its error.
 
-    A name that no function of the unit's scope takes is the function of a registry
-    stdlib module that the unit imports, when one has it. A generic function and `errno()`
-    are not typed here, and their call stops the walk of its body. A bare call that
-    constructs a struct is a `StructInit` (lowering, #1076), never a call.
+    The own concrete function of the unit wins over a generic function of the scope. A name
+    that no function of the unit's scope takes is the function of a registry stdlib module
+    that the unit imports, when one has it. `errno()` is not typed here, and its call stops
+    the walk of its body. A bare call that constructs a struct is a `StructInit` (lowering,
+    #1076), never a call.
     """
     own = own_concrete_function(validator.func_table, name, validator.current_unit_name)
-    if ((own is None and validator.generic_sig(name) is not None)
-            or type_name_is_contested(validator, name)):
+    template = None if own is not None else validator.generic_sig(name)
+    if template is not None:
+        return template
+    if type_name_is_contested(validator, name):
         visit.stop_at(validator, node)
     sig = validator.func_sig(name)
     if sig is None:
@@ -555,12 +584,12 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
 
 
 def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
-                           name: str) -> FuncSig | StdlibFunction | ExternalSig:
+                           name: str) -> FuncSig | GenericFuncDef | StdlibFunction | ExternalSig:
     """The function that `alias.name` names: what the namespace holds under the name, a
-    function of a unit or of a registry stdlib module, or a C function of an `unsafe
-    external` block."""
+    function of a unit or of a registry stdlib module, a generic function, or a C function of
+    an `unsafe external` block."""
     binding = validator.namespaces.lookup(alias, name)
-    if binding is None or binding.kind not in ("function", "extern"):
+    if binding is None or binding.kind not in ("function", "generic function", "extern"):
         visit.stop_at(validator, node)
     return binding.record
 

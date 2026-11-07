@@ -32,8 +32,9 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         return
 
     if binding.kind == "generic function":
-        _validate_generic_call(validator, node, binding)
-        return
+        er.raise_internal_error(
+            "CE0000", span=node.loc,
+            detail="a generic call behind a dot is a call on SHIR (ir.md 7.3)")
 
     if binding.kind == "struct":
         er.raise_internal_error(
@@ -74,29 +75,6 @@ def _constructed_struct(validator: 'TypeValidator', node: 'DotCall',
         return stamped
     from .structs import untyped_struct_instance
     return untyped_struct_instance(validator, binding.name, node.args, node.field_names)
-
-
-def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
-                           binding: 'Binding') -> None:
-    """A generic function behind a dot.
-
-    The generic rules are read through a stand-in `Call`, the same device the enum
-    arm of `visit_dotcall` uses: `validate_generic_function_call` rewrites its callee
-    to the monomorphized name, and that name is what the alias then points at. The
-    DECLARATION comes from the alias's provider, so two units' generics of one name
-    cannot cross here (#495).
-    """
-    from .generics import validate_generic_function_call
-
-    name = binding.name
-    stand_in = _generic_stand_in(node, name)
-    validate_generic_function_call(validator, stand_in, name,
-                                   generic_func=binding.record,
-                                   written_name=_written(node.receiver, node.method))
-    instance = getattr(stand_in.callee, "id", name)
-    if instance != name:
-        _stamp(node, binding, name=instance)
-        _stamp_param_modes(node, validator.func_table.by_name.get(instance), validator)
 
 
 def _generic_stand_in(node: 'DotCall', name: str) -> 'Call':

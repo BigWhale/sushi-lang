@@ -164,6 +164,14 @@ def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:
     return interned_name(base_name, type_args)
 
 
+def function_instance_key(unit: Optional[str], name: str,
+                          type_args: Tuple[Type, ...]) -> tuple:
+    """The key of an instance of a generic function, for its site, its parent and its
+    refusal. The identity of an instance is its declaring unit, its name and its type
+    arguments (#495), so two units' private generics of one name have two keys."""
+    return ("fn", unit, instantiation_key(name, tuple(type_args)))
+
+
 # What the AST builder read at each top-level argument of a target
 # (`ExtendDef.target_params`): one declaration, for the builder and the collect pass.
 TargetParams = Tuple[Optional[BoundedTypeParam], ...]

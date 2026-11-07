@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n42\n"
+# EXPECT_DUMP_SLIR: test_slir_instance_body.slir
+#
+# The body of an instance is a function of the unit: its symbol is the instance name with
+# the unit. The written bodies keep source order, and the instances follow by symbol.
+
+fn zeta_pass@(T)(nom T x) T:
+    return x
+
+fn alpha_pass@(T)(nom T x) T:
+    return zeta_pass(nom x)
+
+fn main() i32:
+    println(alpha_pass(nom "Mostly Harmless"))
+    println(alpha_pass(nom 42))
+    return 0

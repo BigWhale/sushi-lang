@@ -1,0 +1,9 @@
+# Two faults of generic calls in one body: each one is reported.
+# EXPECT_ERROR_CODES_EXACT: CE2009, CE2062
+fn inst_one@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let i32 a = inst_one(nom 1, 2)
+    let i32 b = inst_one@(i32, i32)(nom 1)
+    return a + b

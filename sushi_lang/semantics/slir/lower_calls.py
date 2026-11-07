@@ -30,6 +30,7 @@ from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
+from sushi_lang.semantics.slir.lower_generics import free_callee_name
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
 from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.type_predicates import generic_base_of
@@ -89,7 +90,7 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     if isinstance(callee, Free):
         if resolved.unit is None:
             raise StageStop(STAGE, "library function", node.loc)
-        name = low.decls.name_of(callee.decl).rpartition(".")[2]
+        name = free_callee_name(low.decls, node, callee)
         return st.Direct(function_symbol(name, resolved.unit), name)
     if isinstance(callee, (Method, Static)):
         if resolved.unit is None:

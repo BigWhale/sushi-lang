@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x\n42\n1\n7\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_call_row.shir
+#
+# The callee row of a generic call names the instance, also with written type arguments.
+
+fn keep@(T: Display)(T x, peek i32 n) i32:
+    println("{x}")
+    return n
+
+fn main() i32:
+    let i32 a = 42
+    println(keep("x", peek a))
+    let i32 b = 7
+    println(keep@(i32)(1, peek b))
+    return 0

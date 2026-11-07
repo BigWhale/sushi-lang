@@ -602,6 +602,23 @@ class SemanticAnalyzer:
             reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
             self._merge_unit(unit_reporter)
 
+    def _check_late_instance_clash(self, compilation_order: list[Unit],
+                                   placed: list[tuple[Unit, FuncDef]]) -> None:
+        """ffi-clash, the instance half, over the late copies that a round placed (CE5013)."""
+        from sushi_lang.semantics.passes.types.externals import (
+            reject_external_naming_an_instance,
+        )
+        instances = [(sig, fn) for _home, fn in placed
+                     if (sig := self.tables.funcs.declared(fn.name, fn.home_unit)) is not None]
+        if not instances:
+            return
+        for unit in compilation_order:
+            if unit.ast is None or not unit.ast.externals:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
+            self._merge_unit(unit_reporter)
+
     def _collect_instantiations(self, compilation_order: list[Unit],
                                 libraries: LibraryRegistration) -> 'InstantiationCollector':
         """instantiate: every generic instantiation the program asks for."""
@@ -954,6 +971,7 @@ class SemanticAnalyzer:
             perk_copies = self._place_array_perk_copies(monomorphizer, compilation_order)
             batch = self.monomorphized_extensions[checked:]
             functions = self._place_late_functions(monomorphizer, compilation_order)
+            self._check_late_instance_clash(compilation_order, functions)
             if not batch and not functions and not perk_copies:
                 break
             checked = len(self.monomorphized_extensions)
@@ -979,12 +997,17 @@ class SemanticAnalyzer:
     MAX_ARRAY_EXPANSION_ROUNDS = 8
 
     def _refuse_pending_copies(self, monomorphizer) -> None:
-        """CE0151 at the call of each copy still in the queue when the fixpoint stops."""
+        """CE0151 at the call of each copy still in the queue when the fixpoint stops: an
+        extension copy, and a late function copy that waits for its place."""
         pending = self.tables.pending_extension_instantiations
         self.tables.pending_extension_instantiations = []
         for request in pending:
             self._record_copy_request(monomorphizer, request)
             self._refuses_copy(monomorphizer, request, force=True)
+        waiting = monomorphizer.late_bodies or []
+        monomorphizer.late_bodies = []
+        for _ast, funcdef in waiting:
+            monomorphizer.function_monomorphizer.refuse_at_the_bound(funcdef)
 
     @staticmethod
     def _record_copy_request(monomorphizer, request) -> None:
@@ -1076,25 +1099,27 @@ class SemanticAnalyzer:
         """
         monomorphizer.late_bodies = []
         self.tables.request_function_instance = (
-            lambda key, site: self._request_function_instance(
-                monomorphizer, compilation_order, key, site))
+            lambda key, site, parent: self._request_function_instance(
+                monomorphizer, compilation_order, key, site, parent))
 
     def _request_function_instance(self, monomorphizer, compilation_order: list[Unit],
-                                   key, site) -> bool:
-        """Cut the function instance a call asks for. True when a constraint refused it.
+                                   key, site, parent) -> bool:
+        """Cut the function instance a call asks for. True when a rule refused it.
 
-        `key` is (declaring unit, name, type arguments) and `site` the (span, file) of
-        the call, which is where a constraint refusal points. The copy goes through the
-        monomorphizer as an early instance does: its signature is declared now, so the
+        `key` is (declaring unit, name, type arguments), `site` the (span, file) of the
+        call, which is where a refusal points, and `parent` the key of the copy whose body
+        makes the call: the growth rule reads that chain (CE0151). The copy goes through
+        the monomorphizer as an early instance does: its signature is declared now, so the
         call has it, and every instance its body names is cut with it.
         """
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
         from sushi_lang.semantics.passes.finite_types import table_marks
 
-        _unit, name, type_args = key
-        site_key = ("fn", instantiation_key(name, type_args))
+        site_key = function_instance_key(*key)
         if site[0] is not None:
             monomorphizer.sites.setdefault(site_key, site)
+        if parent is not None:
+            monomorphizer.parents.setdefault(site_key, parent)
         marks = table_marks(self.tables.structs, self.tables.enums)
         monomorphizer.monomorphize_all_functions({key}, compilation_order)
         self._settle_new_instances(marks)

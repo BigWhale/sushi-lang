@@ -1,0 +1,19 @@
+# A pass-through generic over an owning `T`: the value moves through `nom T`, and the
+# caller owns the answer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3\nHarmless\n"
+fn inst_pass@(T)(nom T x) T:
+    return x
+
+struct InstNote:
+    string text
+
+fn main() i32:
+    let string s = inst_pass(nom "Mostly Harmless".clone())
+    println(s)
+    let i32[] xs = inst_pass(nom from([1, 2, 3]))
+    println(xs.len())
+    let InstNote n = inst_pass(nom InstNote("Harmless"))
+    println(n.text)
+    return 0

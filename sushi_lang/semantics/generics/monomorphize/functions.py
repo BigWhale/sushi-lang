@@ -153,10 +153,10 @@ class FunctionMonomorphizer:
         `params` are every type parameter and `args` every argument; a trailing pack
         parameter binds the rest of `args`, and the check judges each element (#797).
         """
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
         return self.monomorphizer._validate_type_constraints(
             params, args,
-            key=("fn", instantiation_key(generic.name, tuple(args))),
+            key=function_instance_key(getattr(generic, "unit_name", None), generic.name, args),
             template_file=getattr(generic, "filename", None),
             error_params=callable_error_parameters(
                 generic.ret, generic.err_type, generic.err_span or generic.ret_span,
@@ -209,14 +209,24 @@ class FunctionMonomorphizer:
 
     def _grows_without_end(self, generic, type_args) -> bool:
         """CE0151 when this instantiation makes its chain of copies grow without end."""
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
         from sushi_lang.semantics.generics.type_display import display_type
         unit_name = getattr(generic, "unit_name", None)
         instance = f"{generic.name}@({', '.join(display_type(arg) for arg in type_args)})"
         return self.monomorphizer.refuses_growth(
-            ("fn", instantiation_key(generic.name, tuple(type_args))),
+            function_instance_key(unit_name, generic.name, type_args),
             ("fn", unit_name, generic.name),
             tuple(type_args), "function", generic.name, instance)
+
+    def refuse_at_the_bound(self, copy: 'GenericFuncDef') -> None:
+        """CE0151 with no count for a late copy that waits when the copy fixpoint stops at its
+        bound. The call that asked for it has its signature and no body may follow."""
+        from sushi_lang.semantics.generics.type_display import display_type
+        unit, name, type_args = next(key for key, cut in self.monomorphizer.func_cache.items()
+                                     if cut is copy)
+        instance = f"{name}@({', '.join(display_type(arg) for arg in type_args)})"
+        self.monomorphizer.refuses_growth(copy.instance_key, ("fn", unit, name), type_args,
+                                          "function", name, instance, force=True)
 
     def monomorphize_function(
         self,
@@ -235,8 +245,8 @@ class FunctionMonomorphizer:
         if substitution is None:
             return None
 
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        key = ("fn", instantiation_key(generic.name, tuple(type_args)))
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
+        key = function_instance_key(getattr(generic, "unit_name", None), generic.name, type_args)
         with self.monomorphizer.cutting(getattr(generic, "filename", None), key):
             concrete_func, pack_param_fanout = self._cut(generic, substitution)
 
@@ -450,7 +460,7 @@ class FunctionMonomorphizer:
         self._collect_block_instantiations(body, var_types)
         self._asking_unit, self._asking_file, self._asking_key = saved
 
-    def _record_site(self, name: str, type_args, loc) -> None:
+    def _record_site(self, unit: Optional[str], name: str, type_args, loc) -> None:
         """The first site that names a nested function instantiation (#579, #1070).
 
         A written site stays first. A new site records the instance of the walked copy as
@@ -458,8 +468,8 @@ class FunctionMonomorphizer:
         """
         if loc is None or self._asking_file is None:
             return
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        key = ("fn", instantiation_key(name, tuple(type_args)))
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
+        key = function_instance_key(unit, name, type_args)
         if key in self.monomorphizer.sites:
             return
         self.monomorphizer.sites[key] = (loc, self._asking_file)
@@ -732,7 +742,7 @@ class FunctionMonomorphizer:
                         # Instead, we add to a worklist that will be processed by monomorphize_all_functions
                         cache_key = (getattr(generic_func, "unit_name", None),
                                      function_name, type_args)
-                        self._record_site(function_name, type_args, expr.loc)
+                        self._record_site(cache_key[0], function_name, type_args, expr.loc)
                         if cache_key not in self.monomorphizer.func_cache and hasattr(self.monomorphizer, 'pending_instantiations'):
                             self.monomorphizer.pending_instantiations.add(cache_key)
 

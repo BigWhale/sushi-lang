@@ -18,6 +18,6 @@ ShirBody main
   params : []
   locals : [_0 "b": i32]
   block  :
-    Assign(LocalRef(_0), Call(Named(GlobalRef(@Crate)), [(Lit(4), Owned)]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt Call(Free(@Crate__i32), [(adopt Lit(4), Owned)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt Lit(0))

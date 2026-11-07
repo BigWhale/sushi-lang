@@ -76,7 +76,7 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
 #: holds the written type arguments of the call (`identity@(i32)(5)`). An `Arg` holds
 #: the span of its written marker, for a diagnostic of the marker.
 EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
-    "Named": ("ref", "type_args"),
+    "Named": ("ref", "type_args", "type_args_loc"),
     "Dotted": ("recv", "name"),
     "Static": ("ty", "name"),
     "BuiltinFn": ("name",),

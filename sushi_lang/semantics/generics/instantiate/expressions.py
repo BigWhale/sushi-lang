@@ -355,16 +355,18 @@ class ExpressionScanner:
         # comes from the definition the ladder resolved for THIS unit (#495).
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), function_name, type_args))
-        self._record_function_site(function_name, type_args, getattr(call, "loc", None))
+        self._record_function_site(generic_func, function_name, type_args,
+                                   getattr(call, "loc", None))
         self._collect_substituted_signature(generic_func, type_args, function_name)
 
-    def _record_function_site(self, name: str, type_args, loc) -> None:
+    def _record_function_site(self, generic_func, name: str, type_args, loc) -> None:
         """The first site naming a function instantiation, for CE4006's caret (#579)."""
         if loc is None:
             return
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        self.sites.setdefault(("fn", instantiation_key(name, tuple(type_args))),
-                              (loc, self.file_of()))
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
+        self.sites.setdefault(
+            function_instance_key(getattr(generic_func, "unit_name", None), name, type_args),
+            (loc, self.file_of()))
 
     def _stdlib_row(self, function_name: str, generic_func=None):
         """The stdlib row a bare call reaches in this unit, or None (#798).
@@ -507,7 +509,7 @@ class ExpressionScanner:
         So a refusal of the instance stands where the template writes the type, with a
         note at the call.
         """
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
         from sushi_lang.semantics.generics.types import (
             substitute_type_params, substituted_call_result, type_param_substitution)
 
@@ -516,7 +518,7 @@ class ExpressionScanner:
             return
 
         template_file = getattr(generic_func, "filename", None)
-        parent = ("fn", instantiation_key(name, tuple(type_args)))
+        parent = function_instance_key(getattr(generic_func, "unit_name", None), name, type_args)
 
         def collect(ty, span) -> None:
             if span is None or template_file is None:
@@ -835,7 +837,7 @@ class ExpressionScanner:
 
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), name, type_args))
-        self._record_function_site(name, type_args, loc)
+        self._record_function_site(generic_func, name, type_args, loc)
         self._collect_substituted_signature(generic_func, type_args, name)
 
     def _collect_from_type(self, ty: "Type", site=None, file=None, parent=None) -> None:

@@ -23,7 +23,7 @@ def function_type_of_sig(sig) -> Optional[Type]:
     if sig is None:
         return None
     for p in sig.params:
-        if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
+        if getattr(p, "is_variadic", False):
             return None
     param_types = tuple(p.ty for p in sig.params)
     if any(pt is None for pt in param_types):

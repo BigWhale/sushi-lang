@@ -59,7 +59,8 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     callee: st.Direct, *,
                     externals: Optional[ExternalTable] = None) -> Optional[DeclaredParams]:
     """The declared parameters of the function that `callee` names. A free function is the
-    function of its name in the unit whose symbol is the symbol of the callee. A method or
+    function of its name in the unit whose symbol is the symbol of the callee; the name of a
+    pack instance has a dot too. A method or
     a static has the written name `<type>.<method>`: it is the extension of that name whose
     symbol is the symbol of the callee, and an instance method has its receiver first. A
     function of a registry stdlib module is the row of its module, and each of its
@@ -69,6 +70,10 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
     if callee.module is not None:
         arity = stdlib_arity(callee.module, callee.name)
         return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
+    for unit, own in funcs.by_unit.items():
+        sig = own.get(callee.name)
+        if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
+            return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
     _, dot, method = callee.name.rpartition(".")
     if dot:
         for by_name in extensions.by_type.values():
@@ -79,10 +84,6 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     return DeclaredParams(receiver + tuple(
                         mode.convention for mode in declared_modes(record.params)))
         return None
-    for unit, own in funcs.by_unit.items():
-        sig = own.get(callee.name)
-        if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
-            return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
     extern = None if externals is None else externals.by_link_name(callee.symbol, callee.name)
     if extern is not None:
         return DeclaredParams(tuple(mode_of_type(ty).convention for ty in extern.param_types),

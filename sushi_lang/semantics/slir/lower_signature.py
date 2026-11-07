@@ -30,12 +30,15 @@ def symbol_of(decl: object, home: Optional[str], body: ShirBody,
               drop_impl: Optional[ExtendWithDef]) -> str:
     """The symbol of the function in its module: `function_symbol` for a free function,
     `extension_decl_symbol` for an extension method or a static, and the perk symbol of
-    the target for the `drop` of the `Drop` implementation `drop_impl` (ir.md 8.2). Any
-    other body stops with the name of its kind."""
+    the target for the `drop` of the `Drop` implementation `drop_impl` (ir.md 8.2). The
+    copy of a generic function is a free function: its name is the instance name, and `home`
+    is the unit that declares the template. Any other body stops with the name of its kind."""
     if isinstance(decl, ExtendDef) and not decl.is_conversion:
         return extension_decl_symbol(decl, home)
     if drop_impl is not None and isinstance(decl, FuncDef):
         return method_symbol(drop_impl.target_type, decl.name, None)
+    if isinstance(decl, GenericFuncDef) and not decl.type_params:
+        return function_symbol(decl.name, home)
     if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
         raise StageStop(STAGE, kind_of(decl, body), body.block.loc)
     return function_symbol(decl.name, home)
@@ -59,8 +62,6 @@ def kind_of(decl: object, body: ShirBody) -> str:
     its declared parameters."""
     if isinstance(decl, FuncDef):
         return "perk method"
-    if isinstance(decl, GenericFuncDef):
-        return "generic instance"
     if isinstance(decl, ExtendDef):
         return "conversion"
     er.raise_internal_error("CE0000", span=body.block.loc,

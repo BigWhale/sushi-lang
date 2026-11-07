@@ -11,9 +11,9 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@keep)), [(Lit(3), Owned)]), Guaranteed)]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@keep)), [(Lit("Mostly Harmless"), Owned)])]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@keep__i32), [(adopt Lit(3), Owned)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@keep__string), [(adopt Lit("Mostly Harmless"), Owned)]), Guaranteed)]))
+    Return(adopt Lit(0))
 
 ShirBody keep__i32
   params : [(_0 "x": i32, Owned)]

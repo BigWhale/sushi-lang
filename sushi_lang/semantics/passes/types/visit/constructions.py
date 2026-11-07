@@ -109,22 +109,25 @@ def solve_arguments(validator: TypeValidator, names: Sequence[str],
     waiting = []
     for index in indexes:
         if stands_alone(validator, args[index].value):
-            typed[index] = _typed(validator, args[index])
+            typed[index] = typed_alone(validator, args[index])
         else:
             waiting.append(index)
     for index in waiting:
-        known = {**(given or {}), **_unified(validator, names, params, indexes, typed).solved}
+        known = {**(given or {}), **unify_arguments(validator, names, params, indexes, typed).solved}
         if names_a_parameter(substitute_type_params(params[index], known), names):
-            typed[index] = _typed(validator, args[index])
-    return _unified(validator, names, params, indexes, typed)
+            typed[index] = typed_alone(validator, args[index])
+    return unify_arguments(validator, names, params, indexes, typed)
 
 
-def _typed(validator: TypeValidator, arg: e.Arg) -> Optional[Type]:
+def typed_alone(validator: TypeValidator, arg: e.Arg) -> Optional[Type]:
+    """The answer of an argument that no type of a position types."""
     return marked_type(arg, visit.check_expr(validator, arg.value))
 
 
-def _unified(validator: TypeValidator, names: Sequence[str], params: Sequence[Optional[Type]],
-             indexes: Sequence[int], typed: dict[int, Optional[Type]]) -> ArgumentSolution:
+def unify_arguments(validator: TypeValidator, names: Sequence[str],
+                    params: Sequence[Optional[Type]], indexes: Sequence[int],
+                    typed: dict[int, Optional[Type]]) -> ArgumentSolution:
+    """What the answers `typed` at `indexes` give through the one leading solver."""
     why: list[str] = []
     misses: list[int] = []
     solved, _unsolved = solve_leading_type_args(

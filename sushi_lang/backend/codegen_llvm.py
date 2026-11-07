@@ -66,6 +66,14 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
     )
 
 
+def _functions_in_module_order(unit: Unit) -> list[FuncDef]:
+    """The functions that the module of `unit` holds: the written functions in source order,
+    then the instances by name, never in the order of the copy fixpoint (ir.md 8.2)."""
+    concrete = [fn for fn in unit.ast.functions if not fn.type_params]
+    return ([fn for fn in concrete if not fn.is_synthesized]
+            + sorted((fn for fn in concrete if fn.is_synthesized), key=lambda fn: fn.name))
+
+
 class LLVMCodegen:
     """Main LLVM backend orchestrator for the Sushi language compiler."""
 
@@ -359,8 +367,8 @@ class LLVMCodegen:
             if unit.ast is None:
                 continue
             private = declares_private(unit)
-            for fn in unit.ast.functions:
-                if fn.type_params or not (private or fn.is_public):
+            for fn in _functions_in_module_order(unit):
+                if not (private or fn.is_public):
                     continue
                 self.functions.emit_func_decl(fn, unit.name)
 
@@ -389,8 +397,7 @@ class LLVMCodegen:
             # Each body as the emitter named it. A snapshot cannot find these: the
             # declaration round above already put every function in the module.
             emitted: list[ir.Function] = []
-            bodies: list[FuncDef | ExtendDef] = [
-                fn for fn in unit.ast.functions if not fn.type_params]
+            bodies: list[FuncDef | ExtendDef] = list(_functions_in_module_order(unit))
             bodies.extend(unit.ast.extensions)
             bodies.extend(method for perk_impl in unit.ast.perk_impls
                           for method in perk_impl.methods)

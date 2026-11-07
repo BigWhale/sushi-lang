@@ -131,10 +131,12 @@ class Named:
     """A name that `scope` resolved, or any expression that can be called.
 
     `type_args` are the type arguments that the source writes on the call, as written
-    (`identity@(i32)(5)`, `geo.nothing@(i32)()`); empty when it writes none.
+    (`identity@(i32)(5)`, `geo.nothing@(i32)()`); empty when it writes none. `type_args_loc`
+    is the span of that list.
     """
     ref: ShirExpr
     type_args: tuple[TypeRef, ...] = ()
+    type_args_loc: Optional[Span] = None
 
 
 @dataclass(frozen=True, slots=True)

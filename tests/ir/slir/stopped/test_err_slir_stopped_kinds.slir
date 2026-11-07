@@ -1,5 +1,13 @@
 unit test_err_slir_stopped_kinds
 
+fn main() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = call @keep__i32(const 0_i32 @owned)
+    return
+}
+
 fn Dog.paws(_1: Dog @guaranteed) -> i32 {
     let _0: i32
 
@@ -12,4 +20,10 @@ fn Small.as: stopped (slir, conversion)
 
 fn Dog.label: stopped (slir, perk method)
 
-fn keep__i32: stopped (slir, generic instance)
+fn keep__i32(_1: i32 @owned) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy _1
+    return
+}

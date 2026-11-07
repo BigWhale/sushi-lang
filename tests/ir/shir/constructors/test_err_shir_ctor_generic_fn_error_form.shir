@@ -18,5 +18,5 @@ ShirBody main
   params : []
   locals : [_0 "c": Crate]
   block  :
-    Assign(LocalRef(_0), Call(Named(GlobalRef(@Crate)), [Lit(true)]), is_init: true)
+    Assign(LocalRef(_0), Call(Free(@Crate__bool), [Lit(true)]), is_init: true)
     Return(Lit(0))

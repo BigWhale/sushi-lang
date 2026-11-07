@@ -2,7 +2,7 @@
 
 The check copy of a template names instances over an opaque type parameter. Each writer
 that cuts or queues a copy, or that writes a program signature, asks the check first:
-`in_template_check`, or one of the two flags that `TemplateValidator` sets to False. A
+`in_template_check`, or the flag that `TemplateValidator` sets to False. A
 writer that does not ask would put an opaque instance into the program, where the
 backend has no layout for it (the CE0148 backstop catches that at run time; this scan
 catches it at review time). A scan of the compiler's Python source.
@@ -14,9 +14,10 @@ import inspect
 import pytest
 
 from sushi_lang.semantics.passes.types import TypeValidator
-from sushi_lang.semantics.passes.types.calls import generics, methods, statics
+from sushi_lang.semantics.passes.types.calls import methods, statics
 from sushi_lang.semantics.passes.types import templates, utils
 from sushi_lang.semantics.passes.types.templates import TemplateValidator
+from sushi_lang.semantics.passes.types.visit import generic_calls
 
 # (function, the write it guards, the question it must ask before that write)
 WRITERS = [
@@ -31,7 +32,7 @@ WRITERS = [
     (methods.instantiate_target_extension, "_queue_extension_instantiation",
      "queues_late_copies"),
     (statics._interned_static_target, "_add_late_static_copy", "queues_late_copies"),
-    (generics._request_late_instance, "request(", "requests_late_instances"),
+    (generic_calls.resolve_generic_call, "_instance_callee(", "in_template_check"),
     (utils.validate_and_register_parameters, "sig_param.ty =", "in_template_check"),
 ]
 
@@ -48,7 +49,6 @@ def test_each_writer_asks_before_it_writes(function, write, question):
 def test_the_template_validator_answers_every_question():
     assert TemplateValidator.in_template_check is True
     assert TemplateValidator.queues_late_copies is False
-    assert TemplateValidator.requests_late_instances is False
     assert TypeValidator.in_template_check is False
 
 

@@ -70,12 +70,11 @@ class TemplateValidator(TypeValidator):
 
     A check copy names instances over an opaque parameter, and none of them may reach a
     program table or a queue. Every writer that cuts or queues a copy asks
-    `in_template_check` (or one of the two flags) and answers the substituted signature
+    `in_template_check` (or the flag of the queue) and answers the substituted signature
     alone.
     """
 
     queues_late_copies = False
-    requests_late_instances = False
     in_template_check = True
 
     def __init__(self, *args: Any, scope: 'TemplateScope', opaque: Mapping[str, Any],

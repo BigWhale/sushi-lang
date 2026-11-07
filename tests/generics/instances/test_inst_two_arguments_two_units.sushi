@@ -1,0 +1,15 @@
+# One generic at two type arguments in two units (#495). Each type argument is one
+# instance in the declaring unit, and the callers of each unit reach it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6\nuser\nlib\n7\nmain\n"
+use "helpers/inst_lib"
+use "helpers/inst_user"
+
+fn main() i32:
+    println(inst_number())
+    println(inst_text())
+    println(inst_from_lib())
+    println(inst_echo(nom 7))
+    println(inst_echo(nom "main"))
+    return 0

@@ -59,10 +59,6 @@ class TypeValidator:
     # table and its body in the copy queue. An inference before it does not (#1153).
     queues_late_copies = True
 
-    # The typecheck pass may ask the analyzer for a function instance that the early
-    # collection did not make (#1155). An early pass only reads, so its inferrer may not.
-    requests_late_instances = True
-
     # True only over the check copy of a template (`templates.TemplateValidator`, #1070).
     in_template_check = False
     # The element type of each `expand`, over the check copy of a pack template only.
@@ -459,7 +455,6 @@ class ReadOnlyInferrer(TypeValidator):
     """
 
     queues_late_copies = False
-    requests_late_instances = False
 
     def __init__(self, tables: 'SymbolTables',
                  namespaces: Optional['NamespaceTable'] = None) -> None:
