@@ -1,0 +1,12 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS
+
+fn inc(i32 x) i32:
+    return x + 1
+
+const Maybe@(fn(i32) -> i32) X = Maybe.Some(inc)
+
+fn main() i32:
+    println(7)
+    return 0

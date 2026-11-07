@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
 
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import FunctionType, StructType
 from sushi_lang.backend.memory.heap import emit_malloc
@@ -43,13 +42,16 @@ def _env_prepended_signature(codegen: "LLVMCodegen", fn_type: FunctionType) -> i
     return ir.FunctionType(result_ll, [codegen.types.str_ptr] + param_ll)
 
 
+_THUNK_SUFFIX = ".__closure_thunk"
+
+
 def synthesize_thunk(codegen: "LLVMCodegen", target: ir.Function) -> ir.Function:
     """Return (creating once, cached) the adapter thunk for a bare top-level fn."""
     target_ret = target.function_type.return_type
     target_params = list(target.function_type.args)
     thunk_ty = ir.FunctionType(target_ret, [codegen.types.str_ptr] + target_params)
 
-    thunk_name = f"{target.name}.__closure_thunk"
+    thunk_name = target.name + _THUNK_SUFFIX
     existing = codegen.module.globals.get(thunk_name)
     if isinstance(existing, ir.Function) and existing.function_type == thunk_ty:
         return existing
@@ -75,14 +77,26 @@ def materialize_function_ref(
 
 
 def closure_constant(codegen: "LLVMCodegen", symbol: str) -> ir.Constant:
-    """The constant `{thunk, null, null, null}` of a function-typed constant. The module of
-    another unit does not declare a private function, so its constant stops."""
+    """The constant `{thunk, null, null, null}` of a function-typed constant.
+
+    The function can be private to its unit, and a constant of its unit goes into the module
+    of every unit. So the module that holds the private function exports its thunk, and every
+    other module declares the thunk. A constant takes only the address of the thunk, so the
+    declaration does not repeat its signature.
+    """
     target = codegen.module.globals.get(symbol)
-    if not isinstance(target, ir.Function):
-        raise StageStop("emit", "constant of a private function", None)
+    if isinstance(target, ir.Function):
+        thunk = synthesize_thunk(codegen, target)
+        if target.linkage == "internal":
+            thunk.linkage = "external"
+    else:
+        thunk = codegen.module.globals.get(symbol + _THUNK_SUFFIX)
+        if thunk is None:
+            thunk = ir.Function(codegen.module, ir.FunctionType(ir.VoidType(), []),
+                                name=symbol + _THUNK_SUFFIX)
     nul = null_ptr(codegen)
-    fn_ptr = synthesize_thunk(codegen, target).bitcast(codegen.types.str_ptr)
-    return ir.Constant(codegen.types.closure_struct, [fn_ptr, nul, nul, nul])
+    return ir.Constant(codegen.types.closure_struct,
+                       [thunk.bitcast(codegen.types.str_ptr), nul, nul, nul])
 
 
 def env_owns_field(codegen: "LLVMCodegen", field_type) -> bool:

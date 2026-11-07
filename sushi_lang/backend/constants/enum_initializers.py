@@ -40,6 +40,9 @@ if TYPE_CHECKING:
 # bytes placed in the module.
 StringFinisher = Callable[[str, str], ir.Constant]
 
+# A function symbol -> the `{thunk, null, null, null}` constant of its value.
+FunctionFinisher = Callable[[str], ir.Constant]
+
 # The internal error of a caller, with the detail of the fault.
 Fault = Callable[[str], NoReturn]
 
@@ -157,7 +160,7 @@ def semantic_type_of(constant: k.Constant, fault: Fault) -> Type:
 def constant_initializer(value: k.Aggregate, types, finish_string: Optional[StringFinisher],
                          data_name: str, *, span: Optional[Span] = None,
                          filename: Optional[str] = None,
-                         finish_function: Optional[Callable[[str], ir.Constant]] = None
+                         finish_function: Optional[FunctionFinisher] = None
                          ) -> ir.Constant:
     """The LLVM constant of an aggregate constant: an enum variant through
     `enum_initializer`, a struct or a tuple as one constant for each field, an array as one
@@ -171,7 +174,7 @@ def constant_initializer(value: k.Aggregate, types, finish_string: Optional[Stri
         return finish_function(part.symbol)
     if value.variant is not None:
         return enum_initializer(value, types, finish_string, data_name, span=span,
-                                filename=filename)
+                                filename=filename, finish_function=finish_function)
 
     def fault(detail: str) -> NoReturn:
         raise_internal_error("CE0000", span=span, filename=filename,
@@ -212,7 +215,8 @@ def scalar_initializer(constant: k.Constant, types, fault: Fault) -> ir.Constant
 def enum_initializer(value: k.Aggregate, types,
                      finish_string: Optional[StringFinisher],
                      data_name: str, *, span: Optional[Span] = None,
-                     filename: Optional[str] = None) -> ir.Constant:
+                     filename: Optional[str] = None,
+                     finish_function: Optional[FunctionFinisher] = None) -> ir.Constant:
     """The `{i32 tag, [K x i64] data}` constant for an enum variant constant. A value that
     the check of its variants refuses, or that the converter cannot write, is an internal
     error at `span`: a string payload with no finisher is one."""
@@ -232,7 +236,7 @@ def enum_initializer(value: k.Aggregate, types,
     else:
         blob = _PayloadBytes(data_type.count * WORD_BYTES)
         if not _write_fields(blob, 0, variant.associated_types, value.parts, types,
-                             finish_string, data_name):
+                             finish_string, data_name, finish_function):
             fault("a payload value has no constant bytes")
         data = ir.Constant(data_type, blob.words(types.i64))
     return ir.Constant(llvm_enum, [ir.Constant(types.i32, tag), data])
@@ -240,7 +244,8 @@ def enum_initializer(value: k.Aggregate, types,
 
 def _write_fields(blob: _PayloadBytes, base: int, field_types: Sequence[Type],
                   values: Sequence[k.Constant], types,
-                  finish_string: Optional[StringFinisher], data_name: str) -> bool:
+                  finish_string: Optional[StringFinisher], data_name: str,
+                  finish_function: Optional[FunctionFinisher]) -> bool:
     """Write a naturally aligned field sequence -- a payload, or a struct's fields."""
     if len(values) != len(field_types):
         return False
@@ -248,20 +253,29 @@ def _write_fields(blob: _PayloadBytes, base: int, field_types: Sequence[Type],
     for index, (field_type, field_value, offset) in enumerate(
             zip(field_types, values, offsets, strict=True)):
         if not _write(blob, base + offset, field_type, field_value, types, finish_string,
-                      f"{data_name}.{index}"):
+                      f"{data_name}.{index}", finish_function):
             return False
     return True
 
 
 def _write(blob: _PayloadBytes, offset: int, ty: Type, value: k.Constant, types,
-           finish_string: Optional[StringFinisher], data_name: str) -> bool:
+           finish_string: Optional[StringFinisher], data_name: str,
+           finish_function: Optional[FunctionFinisher]) -> bool:
     """Write one constant value of the type `ty` at `offset`; False when it needs a module
-    and has none, or when the value is no value of `ty`."""
+    and has none, or when the value is no value of `ty`. A function value fills its first
+    word with a pointer, and its other three words stay null."""
+    if isinstance(value, k.Aggregate) and isinstance(value.ty, FunctionType):
+        part = value.parts[0]
+        if finish_function is None or not isinstance(part, k.FnRef):
+            return False
+        blob.pointers[offset // WORD_BYTES] = finish_function(part.symbol).constant[0]
+        return True
+
     if isinstance(value, k.Aggregate):
         if isinstance(ty, StructType):
             return _write_fields(blob, offset,
                                  [field_type for _name, field_type in ty.fields],
-                                 value.parts, types, finish_string, data_name)
+                                 value.parts, types, finish_string, data_name, finish_function)
 
         if isinstance(ty, EnumType) and value.variant is not None:
             tag = ty.get_variant_index(value.variant)
@@ -273,13 +287,13 @@ def _write(blob: _PayloadBytes, offset: int, ty: Type, value: k.Constant, types,
                 return True
             return _write_fields(blob, offset + ENUM_TAG_SIZE_BYTES,
                                  variant.associated_types, value.parts, types,
-                                 finish_string, data_name)
+                                 finish_string, data_name, finish_function)
 
         if isinstance(ty, ArrayType):
             stride = types.get_type_size_bytes(ty.base_type)
             for index, element in enumerate(value.parts):
                 if not _write(blob, offset + index * stride, ty.base_type, element, types,
-                              finish_string, f"{data_name}.{index}"):
+                              finish_string, f"{data_name}.{index}", finish_function):
                     return False
             return True
 
