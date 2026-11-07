@@ -22,7 +22,7 @@ from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 
 from . import arms
-from .borrows import check_borrow as borrow_place
+from .borrows import BY_ADDRESS, check_borrow as borrow_place
 from .consume import StatementTakes, consume, consume_once, unwrap_place
 from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
@@ -166,11 +166,19 @@ def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
 
 def _take_args(checker: 'BorrowChecker', args: Sequence[e.Arg]) -> None:
     """The fields or the payloads that a construction takes by position: each is read
-    first, then each is consumed, and a `nom` one is a take."""
+    first, then each is consumed, and a `nom` one is a take. A `peek` or `poke` one
+    (`Box(peek x)`, whose type argument is a reference type) borrows its place and takes
+    nothing."""
+    owned = []
     for arg in args:
-        arms.check(checker, arg.value)
+        mode = None if arg.marker is None else BY_ADDRESS.get(arg.marker)
+        if mode is not None:
+            borrow_place(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
+        else:
+            arms.check(checker, arg.value)
+            owned.append(arg)
     taken: StatementTakes = {}
-    for arg in args:
+    for arg in owned:
         consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
 
 

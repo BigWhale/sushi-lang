@@ -1,0 +1,11 @@
+# A `Display` pack is printed, one element at a time, with its own type in each copy.
+# EXPECT_STDOUT_EXACT: "7\nMostly Harmless\ntrue\n"
+# EXPECT_NO_LEAKS: true
+
+fn show_all@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        println("{a}")
+
+fn main() i32:
+    show_all(7, "Mostly Harmless", true)
+    return 0

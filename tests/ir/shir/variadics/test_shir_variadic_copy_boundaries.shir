@@ -2,20 +2,20 @@ unit test_shir_variadic_copy_boundaries
 
 ShirBody tally (TemplateCheck("test_shir_variadic_copy_boundaries.tally"))
   params : [(_0 "args": Ts, Guaranteed, pack: true)]
-  locals : [_1 "n": i32, _2 "a", _3 "round": i32, _4]
+  locals : [_1 "n": i32, _2 "a": Ts, _3 "round": i32, _4: Ts]
   block  :
-    Assign(LocalRef(_1), Lit(0), is_init: true)
-    Expand(_2, "args", [ExprStmt(Call(BuiltinFn("println"), [Interp(["", LocalRef(_2), ""])])), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
-    Assign(LocalRef(_3), Lit(0), is_init: true)
-    Loop(Cond(Binary(<, LocalRef(_3), Lit(2))), [Expand(_4, "args", [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(10)), is_init: false)]), Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1)), is_init: false)])
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Expand(_2, "args", [ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_2), ""]), Guaranteed)])), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Assign(LocalRef(_3), adopt Lit(0), is_init: true)
+    Loop(Cond(Binary(<, LocalRef(_3), Lit(2))), [Expand(_4, "args", [Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(10)), is_init: false)]), Assign(LocalRef(_3), adopt Binary(+, LocalRef(_3), Lit(1)), is_init: false)])
+    Return(adopt LocalRef(_1))
 
 ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@tally)), [Lit(7), Lit("Mostly Harmless")]), Guaranteed)]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@tally__i32_string.pack2), [(Lit(7), Guaranteed), (Lit("Mostly Harmless"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))
 
 ShirBody tally__i32_string.pack2
   params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed)]

@@ -150,9 +150,10 @@ class BorrowChecker:
         located = not (isinstance(body.origin, TemplateCheck)
                        and isinstance(decl, GenericFuncDef))
         try:
-            for param in body.params:
+            params = [param for param in body.params if not param.pack]
+            for param in params:
                 self._declare_param(param, has_receiver=has_receiver, located=located)
-            self.block_locals.append([param.local for param in body.params])
+            self.block_locals.append([param.local for param in params])
             check_block(self, body.block)
             if not terminates(body.block):
                 record_exit(self)

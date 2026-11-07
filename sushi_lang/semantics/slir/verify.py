@@ -88,6 +88,12 @@ _TERMINATORS = get_args(tm.SlirTerminator)
 TRAP_OPERAND_TYPES: dict[str, Type] = {"%d": BuiltinType.I32, "%.*s": BuiltinType.STRING}
 
 
+def _of_a_part(held: Type) -> Type:
+    """The type of the part that a field or a payload of the type `held` takes: the operand
+    of a place, when `held` is a reference type (ir.md 8.7)."""
+    return held.referenced_type if isinstance(held, ReferenceType) else held
+
+
 @dataclass(slots=True)
 class SlirVerifier:
     """The pipeline entry of the verifier: the SLIR stage of a unit gives it each function
@@ -289,7 +295,7 @@ class Check:
         if info is None:
             self.fail(ENUM_VALUE, f"{display_type(ty)} declares no variant '{variant}'", span)
         self.parts_fit(ENUM_VALUE, f"the variant {variant} of {display_type(ty)}",
-                       info.associated_types, parts, span)
+                       [_of_a_part(payload) for payload in info.associated_types], parts, span)
 
     def struct_value(self, ty: Type, parts: list[Optional[Type]], span: Span) -> None:
         """`ty` is a struct or a tuple with a field for each part."""
@@ -297,7 +303,7 @@ class Check:
             self.fail(STRUCT_VALUE, f"a struct value of {display_type(ty)}, which is no "
                                     f"struct", span)
         self.parts_fit(STRUCT_VALUE, display_type(ty),
-                       [field_ty for _, field_ty in ty.fields], parts, span)
+                       [_of_a_part(field_ty) for _, field_ty in ty.fields], parts, span)
 
     def parts_fit(self, rule: str, what: str, wanted: Sequence[Type],
                   parts: list[Optional[Type]], span: Span) -> None:

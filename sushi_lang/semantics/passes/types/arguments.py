@@ -325,13 +325,3 @@ def names_a_type_pack(validator: 'TypeValidator', expr: Any) -> bool:
     func = validator.current_function
     return (isinstance(expr, Name) and func is not None
             and expr.id in func.pack_names and expr.id not in validator.variable_types)
-
-
-def reject_type_pack_value(validator: 'TypeValidator', expr: Any) -> bool:
-    """CE0144 for a type-pack name used as a value. True when it was refused."""
-    if not names_a_type_pack(validator, expr):
-        return False
-    er.emit_with(validator.reporter, er.ERR.CE0144, expr.loc, name=expr.id).help(
-        f"walk a pack with `expand(a in {expr.id}):`; pack forwarding and pack "
-        "indexing are not supported").emit()
-    return True

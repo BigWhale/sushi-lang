@@ -33,7 +33,6 @@ from functools import partial
 from typing import TYPE_CHECKING, Callable, Optional, Sequence
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 
 from sushi_lang.semantics.ownership import Provenance, TypeClass
@@ -43,7 +42,7 @@ from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.loop_kind import CountedRange, Cursor, HashMapCursor
 from sushi_lang.semantics.shir.nodes import ShirBlock
-from sushi_lang.semantics.shir.paths import terminates
+from sushi_lang.semantics.shir.paths import reached_statements, terminates
 from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import ReferenceType
 
@@ -90,22 +89,18 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock,
     `frozen` are the owners that the binders of an arm froze, which the end of the arm
     releases.
 
-    A statement of an unrolled `expand` copy that ends every path, with more statements
-    after it, leaves the rest of the block on no path (ir.md 7.2): the group of the
-    unrolled copies checks such a block, and the walk of the body stops there.
+    The walk reads each statement that a path reaches (`reached_statements`).
     """
-    copies = checker.body.copies if checker.body is not None else None
+    if checker.body is None:
+        er.raise_internal_error("CE0000", span=block.loc,
+                                detail="the borrow pass walks a block of no body")
     checker._scope_binding_borrows.append(list(frozen))
     checker.block_locals.append(list(declared))
     checker.statement_at.append((block, 0))
     try:
-        for index, statement in enumerate(block.statements):
+        for index, statement in reached_statements(block, checker.body):
             checker.statement_at[-1] = (block, index)
             arms.check(checker, statement)
-            if (copies is not None and copies.holding(block.shir_id, index)
-                    and index + 1 < len(block.statements)
-                    and terminates(statement, leaves_round=True)):
-                raise StageStop(arms.STAGE, "Expand", statement.loc)
         if not terminates(block, leaves_round=True):
             record_exit(checker, len(checker.block_locals) - 1)
     finally:
@@ -543,6 +538,21 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     check_loop_body(checker, node.body, again)
 
 
+def check_expand(checker: 'BorrowChecker', node: s.Expand) -> None:
+    """An `expand` of a template check, one time for every length of the pack (ir.md 4.5).
+
+    The body runs zero or more times, as the body of a loop does, so a move of an outer value
+    in it is a move in a loop. It is no loop of its own: a `break` or a `continue` in it goes
+    to the enclosing loop. The binder is one element of the value pack, a borrow of the value
+    of the caller, because a value pack has no `nom` form."""
+    binder = checker.locals[node.binder]
+    checker.declare(BorrowState(name=binder.name, local=node.binder,
+                                var_type=checker.local_type(node.binder),
+                                declared_at_span=binder.loc or node.loc,
+                                is_borrow_param=True))
+    check_loop_body(checker, node.body, per_round=frozenset({node.binder}), leaves_to_outer=True)
+
+
 def _read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
     """The condition of a `while` loop at the back edge: each local that it reads is a use
     again, so a view whose owner the body changed is CE2412, one time for each view."""
@@ -556,7 +566,8 @@ def _read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
 def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
                     again: Optional[Callable[[], None]] = None,
                     *, per_round: frozenset[LocalId] = frozenset(),
-                    walk: Optional[BorrowState] = None) -> None:
+                    walk: Optional[BorrowState] = None,
+                    leaves_to_outer: bool = False) -> None:
     """Check a loop body to a fixed point, so that the back edge is honoured.
 
     The first round discovers the facts that come round the back edge: it reports no
@@ -566,14 +577,16 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
     `again` reads the condition of the loop at the back edge of the second round.
     `per_round` holds the locals that each round makes again, so their facts do not go round
     the back edge. `walk` is the state of a direct walk (`walks.py`): when a move of its
-    owner comes round the back edge, the walk reports it, one time.
+    owner comes round the back edge, the walk reports it, one time. With `leaves_to_outer`
+    (the body of an `expand`) a `break` and a `continue` belong to the enclosing loop.
     """
+    outer = checker.loop_frames[-1] if leaves_to_outer and checker.loop_frames else None
     entry = snapshot_flow(checker)
     suppressed = checker.err.suppressed
     checker.err.suppressed = True
     checker.discovery_rounds += 1
     try:
-        first_back, _first_breaks = _check_round(checker, body, per_round)
+        first_back, _first_breaks = _check_round(checker, body, per_round, leaves_to_outer)
     finally:
         checker.discovery_rounds -= 1
         checker.err.suppressed = suppressed
@@ -584,7 +597,7 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
     if reported is not None and walk is not None:
         reported.move_reported_by = walk.local
     try:
-        back, breaks = _check_round(checker, body, per_round)
+        back, breaks = _check_round(checker, body, per_round, leaves_to_outer, outer)
     finally:
         if reported is not None:
             reported.move_reported_by = None
@@ -621,17 +634,25 @@ def _move_reported_by_walk(checker: 'BorrowChecker', walk: Optional[BorrowState]
 
 
 def _check_round(checker: 'BorrowChecker', body: ShirBlock,
-                 per_round: frozenset[LocalId] = frozenset()
+                 per_round: frozenset[LocalId] = frozenset(),
+                 leaves_to_outer: bool = False, outer: Optional[LoopFrame] = None
                  ) -> tuple[FlowFacts | None, FlowFacts | None]:
     """Check one round of a loop body: the join of the paths to the back edge, and the
     join of the `break` paths, with no fact about `per_round`. Each is None when no path of
-    that kind exists, because `FlowFacts.join` of no path is no identity."""
+    that kind exists, because `FlowFacts.join` of no path is no identity. With
+    `leaves_to_outer`, the `break` and `continue` paths go to `outer` (none in a discovery
+    round), and the round has only the path to its end."""
     frame = LoopFrame(len(checker.block_locals))
     checker.loop_frames.append(frame)
     try:
         check_block(checker, body)
     finally:
         checker.loop_frames.pop()
+    if leaves_to_outer:
+        if outer is not None:
+            outer.breaks.extend(path.without(per_round) for path in frame.breaks)
+            outer.continues.extend(path.without(per_round) for path in frame.continues)
+        frame = LoopFrame(frame.blocks)
     back = list(frame.continues)
     if not terminates(body, leaves_round=True):
         back.append(snapshot_flow(checker))

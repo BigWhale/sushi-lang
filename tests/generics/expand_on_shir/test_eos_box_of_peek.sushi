@@ -1,0 +1,19 @@
+# A construction of a generic struct over a `peek` argument gives the type argument the
+# reference type, and the field holds the address of the place. The value is dropped, and
+# the place stays usable: a marked part borrows, so it takes nothing.
+# EXPECT_STDOUT_EXACT: "42\ntowel\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+struct Box@(T):
+    T item
+
+fn main() i32:
+    let i32 x = 42
+    let string s = "tow".concat("el")
+    Box(peek x)
+    Box(peek s)
+    println(x)
+    println(s)
+    return 0

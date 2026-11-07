@@ -2,27 +2,27 @@ unit test_shir_variadic_expand
 
 ShirBody show_all (TemplateCheck("test_shir_variadic_expand.show_all"))
   params : [(_0 "args": Ts, Guaranteed, pack: true)]
-  locals : [_1 "n": i32, _2 "a", _3 "line": string]
+  locals : [_1 "n": i32, _2 "a": Ts, _3 "line": string]
   block  :
-    Assign(LocalRef(_1), Lit(0), is_init: true)
-    Expand(_2, "args", [Assign(LocalRef(_3), Interp(["[", LocalRef(_2), "]"]), is_init: true), ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)])), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Expand(_2, "args", [Assign(LocalRef(_3), adopt Interp(["[", LocalRef(_2), "]"]), is_init: true), ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)])), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Return(adopt LocalRef(_1))
 
 ShirBody count (TemplateCheck("test_shir_variadic_expand.count"))
   params : [(_0 "args": Ts, Guaranteed, pack: true)]
-  locals : [_1 "n": i32, _2]
+  locals : [_1 "n": i32, _2: Ts]
   block  :
-    Assign(LocalRef(_1), Lit(0), is_init: true)
-    Expand(_2, "args", [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Expand(_2, "args", [Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Return(adopt LocalRef(_1))
 
 ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@show_all)), [Lit(1), Lit("Mostly Harmless")]), Guaranteed)]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@count)), [Lit(1), Lit("a"), Lit(true)])]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@show_all__i32_string.pack2), [(Lit(1), Guaranteed), (Lit("Mostly Harmless"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@count__i32_string_bool.pack3), [(Lit(1), Guaranteed), (Lit("a"), Guaranteed), (Lit(true), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))
 
 ShirBody count__i32_string_bool.pack3
   params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed), (_2 "#pack_args_2": bool, Guaranteed)]

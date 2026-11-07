@@ -50,7 +50,8 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.type_predicates import is_instance_of, is_numeric_type
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, StructType, Type,
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
+    StructType, Type,
 )
 
 
@@ -300,11 +301,24 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
     parts = [type_of_operand(state, part) for part in rvalue.parts]
     if isinstance(kind, r.AggVariant):
         enum_type, info = checked_variant(kind.ty, kind.variant, parts, state.fault)
-        values = [operand_value(state, part) for part in rvalue.parts]
+        values = [_part(state, part, payload)
+                  for part, payload in zip(rvalue.parts, info.associated_types, strict=True)]
         return emit_enum_variant_value(state.codegen, enum_type, info, values)
     struct_type = checked_struct(kind.ty, parts, state.fault)
+    fields = [field_ty for _name, field_ty in struct_type.fields]
     return emit_struct_value(state.codegen, struct_type,
-                             [operand_value(state, part) for part in rvalue.parts])
+                             [_part(state, part, field_ty)
+                              for part, field_ty in zip(rvalue.parts, fields, strict=True)])
+
+
+def _part(state: FunctionState, part: p.Operand, ty: Type) -> ir.Value:
+    """The value of a part of a struct or of a variant: the address of its place when the
+    field or the payload has a reference type (ir.md 8.7)."""
+    if not isinstance(ty, ReferenceType):
+        return operand_value(state, part)
+    if not isinstance(part, (p.Copy, p.Move)):
+        state.fault(f"a part of a reference field that reads no place: {part}")
+    return place_address(state, part.place)
 
 
 def _clone(state: FunctionState, rvalue: r.Clone) -> ir.Value:

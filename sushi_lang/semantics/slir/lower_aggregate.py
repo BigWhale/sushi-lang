@@ -12,8 +12,9 @@ safe at import time.
 
 A construction moves each owning part. A write of an owning field or element drops the old
 part between the new value and the store (`part_write`). A destructure of a value that owns
-is the arm of `lower_takes.py`. A struct with a field of a reference type is CE2415 at its declaration,
-so its construction stops (`StructInit reference field`).
+is the arm of `lower_takes.py`. A declaration cannot write a field of a reference type
+(CE2415), and an instance over a borrow has one (`Box(peek x)`): its part is the operand of
+the place, and the emitter stores the address of that place (ir.md 8.7).
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.lower_values import ShortCircuit, Value
-from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
+from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Lowering
@@ -63,9 +64,6 @@ def _instance(low: Lowering, node: e.StructInit | e.TupleInit) -> Type:
     if ty is None:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"a {type(node).__name__} with no type reached SLIR")
-    if isinstance(ty, StructType) and any(isinstance(field_ty, ReferenceType)
-                                          for _, field_ty in ty.fields):
-        dispatch.stop(STAGE, node, state="reference field")
     return ty
 
 

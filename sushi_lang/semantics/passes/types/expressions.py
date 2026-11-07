@@ -34,19 +34,19 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
     """The arm of `as` (docs/design/ir.md 4.8, 7.3): it answers the target type.
 
     A cast between two numeric types, and a cast to the type of its operand, call nothing:
-    the conversion row is `NoConversion`. Any other pair is CE2014. In the body of a
-    conversion, a cast of the pair of that conversion is CE2523. Three casts are not typed
-    yet, and the walk of the body stops there: a cast to an opaque type parameter of a
-    template check (C1), a cast to or from `ptr` (D5), and a cast between two error types
-    that a declared conversion joins (D2).
+    the conversion row is `NoConversion`. Any other pair is CE2014, and the cast still
+    answers the target type. In the body of a conversion, a cast of the pair of that
+    conversion is CE2523. Two casts are not typed
+    yet, and the walk of the body stops there: a cast to or from `ptr` (D5), and a cast
+    between two error types that a declared conversion joins (D2).
     """
     target = validator.written_type(node.target)
     resolved = resolve_variable_type(validator, target, node.loc)
     source = _check_cast_operand(validator, node.operand, resolved)
     if source is None:
         return None
-    from sushi_lang.semantics.generics.opaque import holds_opaque, note_opaque
-    if holds_opaque(target) or any(isinstance(ty, ForeignPtrType) for ty in (source, resolved)):
+    from sushi_lang.semantics.generics.opaque import note_opaque
+    if any(isinstance(ty, ForeignPtrType) for ty in (source, resolved)):
         visit.stop_at(validator, node)
     conversion = find_conversion(validator.tables, source, resolved)
     if conversion is not None:
@@ -59,7 +59,7 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
         if is_error_type(source) and is_error_type(resolved):
             diag.help(conversion_help(source, resolved, at_try=False))
         note_opaque(diag, source, resolved).emit()
-        return None
+        return resolved
     validator.body_answers().record_conversion(node.shir_id, NoConversion())
     return resolved
 

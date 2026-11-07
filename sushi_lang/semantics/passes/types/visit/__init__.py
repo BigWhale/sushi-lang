@@ -130,7 +130,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Assert: st.check_assert,
     s.Break: st.check_jump,
     s.Continue: st.check_jump,
-    s.Expand: stop_at,
+    s.Expand: st.check_expand,
     Hole: rs.check_hole,
     # -- expressions -----------------------------------------------------------------
     e.Lit: ex.check_lit,

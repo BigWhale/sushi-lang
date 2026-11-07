@@ -83,9 +83,12 @@ if TYPE_CHECKING:
 
 
 def check_params(validator: TypeValidator, body: ShirBody) -> None:
-    """The type of each parameter: its written type, resolved."""
+    """The type of each parameter: its written type, resolved. A value pack is no value, so
+    it has no type: a use of it is CE0144 (`expressions.check_local_ref`)."""
     answers = validator.body_answers()
     for param in body.params:
+        if param.pack:
+            continue
         ty = validator.written_type(param.ty)
         answers.record_local(param.local, resolve_variable_type(validator, ty, param.loc))
 
@@ -94,6 +97,20 @@ def check_block(validator: TypeValidator, block: ShirBlock) -> None:
     """Check each statement of `block`, in the written order."""
     for statement in block.statements:
         visit.check(validator, statement)
+
+
+def check_expand(validator: TypeValidator, node: s.Expand) -> None:
+    """`expand(a in args):` of a template check, one time for every element of the pack: the
+    binder has the opaque element type of this `expand` (ir.md 4.5). The pack is no value, so
+    it is not checked as an expression. No other body holds an `Expand`."""
+    elements = validator.pack_elements
+    if elements is None:
+        er.raise_internal_error("CE0015", message="an `expand` reached the typecheck pass "
+                                                  "outside a template check")
+    local = validator.body_locals[node.binder]
+    element = elements.element_of(node.shir_id, local.name, local.loc)
+    validator.body_answers().record_local(node.binder, element)
+    check_block(validator, node.body)
 
 
 def check_assign(validator: TypeValidator, node: s.Assign) -> None:

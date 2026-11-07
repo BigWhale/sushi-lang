@@ -70,8 +70,7 @@ def arm(low: Lowering, block: Block, body: ShirBlock, binds: Sequence[Binds] = (
     _bind(low, block, binds, span or body.loc)
     if branch is not None:
         views.enter_arm(low, branch, body)
-    for stmt in body.statements:
-        low.statement(stmt)
+    low.statements_of(body)
     if not low.alive:
         low.placement.leave_scope()
         return []

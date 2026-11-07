@@ -29,7 +29,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
-    BuiltinType, StructType, EnumType, EnumVariantInfo, ArrayType, Type)
+    BuiltinType, StructType, EnumType, EnumVariantInfo, ArrayType, Type, deref_type)
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ def checked_variant(ty: Type, variant: str, parts: Sequence[Type],
     `variant` is a variant of the enum `ty`, and the semantic type of each part is the type
     of its payload field."""
     enum_type, info = variant_of(ty, variant, fault)
-    if tuple(parts) != tuple(info.associated_types):
+    if tuple(parts) != tuple(deref_type(payload) for payload in info.associated_types):
         fault(f"the payload of {enum_type}.{variant} is "
               f"({', '.join(map(str, parts))}), not "
               f"({', '.join(map(str, info.associated_types))})")
@@ -118,7 +118,7 @@ def checked_struct(ty: Type, parts: Sequence[Type], fault: Fault) -> StructType:
     field."""
     if not isinstance(ty, StructType):
         fault(f"{ty} is no struct")
-    fields = tuple(field_type for _name, field_type in ty.fields)
+    fields = tuple(deref_type(field_type) for _name, field_type in ty.fields)
     if tuple(parts) != fields:
         fault(f"the fields of {ty} are ({', '.join(map(str, fields))}), not "
               f"({', '.join(map(str, parts))})")

@@ -203,10 +203,14 @@ def misses_an_answer(answers: TypeckResults, value: ShirNode) -> bool:
 
 
 def _locals(body: ShirBody) -> Iterator[tuple[LocalId, str, Optional[Span]]]:
-    """Each local of the body, by its id, with its text and its span: a parameter first."""
+    """Each local of the body, by its id, with its text and its span: a parameter first. A
+    value pack of a template check is no value, so it has no type (ir.md 4.5)."""
     by_id = {local.id: local for local in body.locals}
     params = {param.local: param for param in body.params}
+    packs = {param.local for param in body.params if param.pack}
     for ident in [*params, *sorted(set(by_id) - set(params))]:
+        if ident in packs:
+            continue
         local = by_id.get(ident)
         name = None if local is None else local.name
         text = f"local _{ident.index}" if name is None else f'local _{ident.index} "{name}"'

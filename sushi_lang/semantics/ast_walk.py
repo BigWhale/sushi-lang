@@ -648,21 +648,3 @@ def terminates(node, *, leaves_round: bool = False) -> bool:
                                       for arm in arms)
         case _:
             return False
-
-
-def ends_unrolled_run(stmt) -> bool:
-    """Is `stmt` a statement of an unrolled `expand` element that ends every path?
-
-    A copy of a pack template holds each element in place in its block (#1070, R6), so
-    a `break`, a `continue` or a `return` of an element can stand before more statements
-    of that block. No path reaches them, as no path leaves the element in the template
-    check. The AST body emitter asked here, and it is deleted; SHIR lowering of an
-    instance asks here in the generic instances group. The borrow pass reads SHIR and
-    asks `semantics/shir/paths.py`, which holds the same rule.
-
-    Only an element statement ends the run. A WRITTEN block can hold statements after
-    one that `terminates` accepts: the dead-statement rule (CE0140, #854) reads an `if`
-    or a `match` whose arms all break or continue as one that falls through, so it does
-    not refuse the statements after it, and the backend emits them.
-    """
-    return bool(stmt.expand_copies) and terminates(stmt, leaves_round=True)

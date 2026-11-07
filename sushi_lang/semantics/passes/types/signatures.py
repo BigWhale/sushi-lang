@@ -144,60 +144,6 @@ def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozen
     reject_borrowed_return_faults(self, node)
 
 
-def check_template_statements(self, program, checked) -> None:
-    """The statement rules that need no type, on each template body AS WRITTEN (#1070).
-
-    A generic function, a generic extension (a `T[]` template included) and each method
-    of a perk implementation on a generic target. The body is read once, whether a call
-    instantiates the template or not, and a copy of it repeats none of these rules: a
-    statement after the path ends (CE0140), a fall off the end (CE0107), and a `return`
-    in a channel body that spells no constructor (CE2030). A rule that needs the type of
-    an expression waits for the copy.
-
-    `checked` holds the templates that a check copy read (#1070): the copy takes these
-    rules with the stamps of the typecheck pass, so a `match` that is not exhaustive is
-    its own fault and makes no statement after it dead.
-    """
-    bodies = [(func, "function") for func in program.functions
-              if func.type_params and id(func) not in checked]
-    bodies += [(ext, "method") for ext in program.generic_extensions
-               if id(ext) not in checked]
-    bodies += [(method, "method")
-               for impl in program.generic_perk_impls if id(impl) not in checked
-               for method in impl.methods]
-    for node, kind in bodies:
-        self.reporter.leave_body()
-        self.body_name = callable_text(node.name, kind)
-        self.in_template_copy = False
-        body = self.shir.body_of(node)
-        _reject_path_faults(self, node, body)
-        if has_channel(node):
-            _reject_unspelled_returns(self, body)
-        _leave_body(self)
-
-
-def _reject_unspelled_returns(self, body) -> None:
-    """CE2030 at each `return` of a channel body that spells no `Result` constructor.
-
-    A lambda is a callable of its own, with the channel of its own type, so the walk does
-    not enter one.
-    """
-    from sushi_lang.semantics.shir import exprs as e
-    from sushi_lang.semantics.shir import stmts as s
-    from sushi_lang.semantics.shir.walk import walk
-    from .result_validation import spells_a_result
-    from .statements import reject_unspelled_result
-
-    lambdas: list[str] = []
-    for path, value in walk(body.block, "block"):
-        if any(path.startswith(inside) for inside in lambdas):
-            continue
-        if isinstance(value, e.Lambda):
-            lambdas.append(f"{path}.")
-        elif isinstance(value, s.Return) and not spells_a_result(self, value.value):
-            reject_unspelled_result(self, value.value)
-
-
 def validate_function(self, func: FuncDef) -> None:
     """Validate the header of a function, then walk its SHIR body (`check_body`)."""
     with in_body_scope(self, "namespaces", func, unit_tables(self)):

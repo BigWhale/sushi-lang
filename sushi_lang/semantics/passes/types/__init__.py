@@ -94,6 +94,8 @@ class TypeValidator:
         # The locals of the body whose `let` the pass refused (CE2002, an unhandled
         # `Result`): a method call on one reports no CE2008 (#1128). `_check_let` writes it.
         self.refused_locals: set['LocalId'] = set()
+        # The value pack parameters of the body of a template check (ir.md 4.5).
+        self.value_packs: set['LocalId'] = set()
         # The matches of the body whose arms miss a value (CE2040, CE2074): the
         # dead-statement rule does not take one as the end of a path (#886).
         self.uncovered_matches: set['ShirId'] = set()
@@ -303,6 +305,7 @@ class TypeValidator:
         self.body = body
         self.answers = answers = self.shir.typeck_of(body)
         self.body_locals = {local.id: local for local in body.locals}
+        self.value_packs = {param.local for param in body.params if param.pack}
         self.refused_locals = set()
         self.uncovered_matches = set()
         self.folder = Folder(self._constant_value, self.written_type)
@@ -324,6 +327,7 @@ class TypeValidator:
             uncovered = self.uncovered_matches
             self.body = self.answers = self.folder = None
             self.body_locals = {}
+            self.value_packs = set()
             self.refused_locals = set()
             self.uncovered_matches = set()
         if path_faults is not None:

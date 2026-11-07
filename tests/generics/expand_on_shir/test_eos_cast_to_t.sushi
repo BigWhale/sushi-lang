@@ -1,0 +1,14 @@
+# `v as T` with `v` of the type `T` is the one cast to an opaque type parameter that the
+# template check takes: it calls nothing, in the template and in each instance.
+# EXPECT_STDOUT_EXACT: "42\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn same@(T)(nom T v) T:
+    return v as T
+
+fn main() i32:
+    println(same(nom 42))
+    println(same(nom "Mostly ".concat("Harmless")))
+    return 0

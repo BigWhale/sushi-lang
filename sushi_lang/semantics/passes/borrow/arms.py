@@ -66,7 +66,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Assert: st.check_assert,
     s.Break: st.check_break,
     s.Continue: st.check_continue,
-    s.Expand: stop_at,
+    s.Expand: st.check_expand,
     Hole: stop_at,
     # -- expressions -----------------------------------------------------------------
     e.Lit: ex.check_leaf,

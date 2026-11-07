@@ -139,6 +139,8 @@ if TYPE_CHECKING:
 def check_call(validator: TypeValidator, node: e.Call,
                expected: Optional[Type]) -> Optional[Type]:
     target = node.target
+    if _rejects_a_pack_bloom(validator, node):
+        return None
     if isinstance(target, e.BuiltinFn):
         return _check_print(validator, node, target.name)
     if isinstance(target, e.Dotted):
@@ -153,6 +155,15 @@ def check_call(validator: TypeValidator, node: e.Call,
             return check_container_static(validator, node, target, base, expected)
         return _check_static_call(validator, node, target, expected)
     visit.stop_at(validator, node)
+
+
+def _rejects_a_pack_bloom(validator: TypeValidator, node: e.Call) -> bool:
+    """`f(args...)` of a value pack is the one CE0144 at the pack name, for each kind of call."""
+    blooms = [arg.value for arg in node.args if arg.bloom and isinstance(arg.value, e.LocalRef)
+              and arg.value.local in validator.value_packs]
+    for value in blooms:
+        visit.check_expr(validator, value)
+    return bool(blooms)
 
 
 def _check_free_call(validator: TypeValidator, node: e.Call,
@@ -193,7 +204,9 @@ def _check_function_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRe
     if any(p.is_variadic or p.ty is None for p in sig.params):
         visit.stop_at(validator, node)
     answers = validator.body_answers()
-    answers.record_callee(node.shir_id, ResolvedCall(Free(decl), type_args, sig.unit_name))
+    # A private function of a binary library has its own link symbol (D6).
+    unit = None if sig.link_symbol else sig.unit_name
+    answers.record_callee(node.shir_id, ResolvedCall(Free(decl), type_args, unit))
     record_call_sources(validator, node, sig)
     function_type = function_type_of_sig(sig)
     if function_type is not None:

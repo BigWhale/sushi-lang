@@ -1,0 +1,16 @@
+# An `expand` body that holds a `return`: each copy returns, and a call with no pack
+# argument reaches the statement after the `expand`.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n-1\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn first_or@(...Ts: Display)(...Ts args) i32:
+    expand(a in args):
+        println("{a}")
+        return 1
+    return -1
+
+fn main() i32:
+    if (first_or("Mostly Harmless", 2) != 1):
+        return 1
+    println(first_or())
+    return 0

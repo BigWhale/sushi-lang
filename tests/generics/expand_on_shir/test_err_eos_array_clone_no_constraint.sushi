@@ -1,0 +1,9 @@
+# `.clone()` of a `T[]` needs `Clone` on `T`, as the `.clone()` of a `T` and of a `List@(T)`.
+# EXPECT_ERROR_CODES_EXACT: CE4018
+
+fn d@(T)(T[] x) T[]:
+    return x.clone()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

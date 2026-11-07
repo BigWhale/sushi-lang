@@ -96,7 +96,8 @@ def _call(node: e.Call, typeck: TypeckResults,
 def _fields(node: e.StructInit | e.EnumInit, _typeck: TypeckResults,
             _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
     yield from (arg.value for arg in (node.fields if isinstance(node, e.StructInit)
-                                      else node.payload))
+                                      else node.payload)
+                if arg.marker not in (Convention.IN_GUARANTEED, Convention.INOUT))
 
 
 def _parts(node: e.TupleInit, _typeck: TypeckResults,
@@ -160,9 +161,9 @@ def consuming_uses(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> list[e.ShirExpr]:
     """Each consuming use of `body` that is a node, in the order of the walk."""
     found: list[e.ShirExpr] = []
-    scrutinees = {value.scrutinee.shir_id for _path, value in walk(body.block, "block")
+    scrutinees = {value.scrutinee.shir_id for _path, value in walk(body.block, "block", body)
                   if isinstance(value, s.Match) and isinstance(value.scrutinee, e.TupleInit)}
-    for _path, value in walk(body.block, "block"):
+    for _path, value in walk(body.block, "block", body):
         consumed = CONSUMED.get(type(value))
         if consumed is not None and not (isinstance(value, e.TupleInit)
                                          and value.shir_id in scrutinees):
@@ -172,7 +173,7 @@ def consuming_uses(body: ShirBody, typeck: TypeckResults,
 
 def _direct_iterables(body: ShirBody, typeck: TypeckResults) -> set[ShirId]:
     """The iterable of each direct walk: it makes no iterator value, so it has no state."""
-    return {value.source.iterable.shir_id for _path, value in walk(body.block, "block")
+    return {value.source.iterable.shir_id for _path, value in walk(body.block, "block", body)
             if isinstance(value, s.Loop) and isinstance(value.source, s.Items)
             and isinstance(typeck.loop_kind_of(value.shir_id), (Cursor, HashMapCursor))}
 
@@ -211,7 +212,7 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
                 if param.convention is not Convention.OWNED}
     borrowed |= {local.id for local in body.locals
                  if isinstance(typeck.local_type(local.id), ReferenceType)}
-    for _path, value in walk(body.block, "block"):
+    for _path, value in walk(body.block, "block", body):
         if (isinstance(value, s.Assign) and value.is_init
                 and isinstance(value.target, e.LocalRef)
                 and ownership.ownership_of(value.value.shir_id) is Ownership.REJECT):
@@ -235,7 +236,7 @@ def borrowed_views(body: ShirBody, typeck: TypeckResults,
     over one (a nested `??`)."""
     borrowed = _borrowed_locals(body, typeck, ownership)
     views: set[ShirId] = set()
-    for _path, value in walk(body.block, "block"):
+    for _path, value in walk(body.block, "block", body):
         if (isinstance(value, s.Assign) and value.is_init) or isinstance(value, s.Destructure):
             views.add(value.value.shir_id)
         elif isinstance(value, e.Try) and (
@@ -274,7 +275,7 @@ def missing_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,
     views = borrowed_views(body, typeck, ownership)
     direct = _direct_iterables(body, typeck)
     gaps: list[MissingAnswer] = []
-    for _path, value in walk(body.block, "block"):
+    for _path, value in walk(body.block, "block", body):
         if not isinstance(value, (e.ExprNode, s.Loop)):
             continue
         node = type(value).__name__

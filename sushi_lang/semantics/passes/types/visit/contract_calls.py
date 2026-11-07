@@ -16,8 +16,10 @@ from sushi_lang.semantics.generics.contracts import (
     CONTRACT_METHOD, CONTRACT_METHOD_ARITY, CONTRACT_METHOD_RETURN)
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.types import TypeParameter
-from sushi_lang.semantics.method_effects import CONTRACT_FAMILY, DERIVED_HASH_FAMILY
+from sushi_lang.semantics.method_effects import (
+    CLONE_FAMILY, CONTRACT_FAMILY, DERIVED_HASH_FAMILY)
 from sushi_lang.semantics.param_modes import ParamMode
+from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.passes.types.arguments import Parameters, check_arguments
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY, MethodFamily
 from sushi_lang.semantics.shir import exprs as e
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
 
 _HASH = "hash"
 _HASHABLE = "Hashable"
+_CLONE = "clone"
 
 
 def promised_contract_family(validator: TypeValidator, receiver: Type,
@@ -39,6 +42,8 @@ def promised_contract_family(validator: TypeValidator, receiver: Type,
     perk = validator.perk_impl_table.providing_perk(receiver, name)
     if perk == _HASHABLE and name == _HASH:
         return METHOD_TYPE_REGISTRY.family(DERIVED_HASH_FAMILY)
+    if perk == PerkCollector.CLONE_PERK and name == _CLONE:
+        return METHOD_TYPE_REGISTRY.family(CLONE_FAMILY)
     if perk is not None and CONTRACT_METHOD.get(perk) == name:
         return METHOD_TYPE_REGISTRY.family(CONTRACT_FAMILY)
     return None

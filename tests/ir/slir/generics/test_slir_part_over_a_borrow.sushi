@@ -1,0 +1,13 @@
+# A construction of a generic struct over a `peek` argument: the part is the operand of the
+# place, and no address local holds it.
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_DUMP_SLIR: test_slir_part_over_a_borrow.slir
+
+struct Box@(T):
+    T item
+
+fn main() i32:
+    let i32 x = 42
+    Box(peek x)
+    println(x)
+    return 0

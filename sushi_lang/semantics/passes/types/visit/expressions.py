@@ -127,8 +127,15 @@ def type_float_literal(validator: TypeValidator, value: float, expected: Optiona
 
 def check_local_ref(validator: TypeValidator, node: e.LocalRef,
                     _expected: Optional[Type]) -> Optional[Type]:
-    """The type of the local; none when its binder has an error."""
-    return validator.body_answers().local_type(node.local)
+    """The type of the local; none when its binder has an error. A value pack of a template
+    check has no type and no use outside `expand` (CE0144)."""
+    ty = validator.body_answers().local_type(node.local)
+    if ty is None and node.local in validator.value_packs:
+        name = validator.body_locals[node.local].name
+        er.emit_with(validator.reporter, er.ERR.CE0144, node.loc, name=name).help(
+            f"walk a pack with `expand(a in {name}):`; pack forwarding and pack "
+            "indexing are not supported").emit()
+    return ty
 
 
 def check_const_ref(validator: TypeValidator, node: e.ConstRef,

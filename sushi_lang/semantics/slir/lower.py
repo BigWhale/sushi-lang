@@ -68,6 +68,8 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.paths import reached_statements
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
@@ -332,13 +334,17 @@ class Lowering:
         """The body block, then the end of a bare `~` body that reaches it."""
         block = self.answers.body.block
         self.placement.open_scope()
-        for stmt in block.statements:
-            self.statement(stmt)
+        self.statements_of(block)
         if self.alive:
             if ret != BuiltinType.BLANK:
                 er.raise_internal_error("CE0000", span=block.loc,
                                         detail="a body that answers a value reaches its end")
             self.finish(r.Use(p.Const(k.Blank())), block.loc)
+
+    def statements_of(self, block: ShirBlock) -> None:
+        """Each statement of `block` that a path reaches."""
+        for _index, stmt in reached_statements(block, self.answers.body):
+            self.statement(stmt)
 
     def statement(self, stmt: s.ShirStmt) -> None:
         """One statement, in a scope of its own that holds its temporaries (L12). The flags

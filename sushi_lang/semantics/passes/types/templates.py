@@ -3,28 +3,28 @@
 A generic function body, an extension template and a perk template are checked with each
 type parameter OPAQUE: the body knows what the constraints of the parameter promise,
 and nothing more. A receiver parameter of an extension or a perk template has the
-bounds its base declares and the bounds its target adds (R1). The check cuts a CHECK COPY
-of the template in an overlay of the program tables (`semantics/template_scope.py`),
-with each type parameter replaced by its opaque form. The typecheck pass checks the
-header of that copy, and it walks the SHIR body of the template as written, whose origin
-is `TemplateCheck` (docs/design/ir.md 4.3). A body that the typecheck pass finished with
-no error goes on to the lift pass and the borrow pass, in the overlay, as every body does.
-Then the compiler discards the copy and the overlay. A fault of the template is reported
+bounds its base declares and the bounds its target adds (R1). The check makes a HEADER of
+the template in an overlay of the program tables (`semantics/template_scope.py`), with each
+type parameter replaced by its opaque form and with no body. The typecheck pass checks that
+header, and it walks the SHIR body of the template as written, whose origin is
+`TemplateCheck` (docs/design/ir.md 4.3). A body that the typecheck pass finished with no
+error goes on to the lift pass and the borrow pass, in the overlay, as every body does.
+Then the compiler discards the header and the overlay. A fault of the template is reported
 one time, at the template's spans, and the copies of a refused template report nothing
 (the reporter mutes them).
 """
 from __future__ import annotations
 
-import copy
 import dataclasses
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Optional, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Sequence, TypeVar, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import (
-    BoundedTypeParam, Expand, ExtendDef, ExtendWithDef, FuncDef)
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.ast import Block, BoundedTypeParam, ExtendDef, ExtendWithDef, FuncDef
 from sushi_lang.semantics.generics.types import TemplateId, TypeParameter
 from sushi_lang.semantics.passes.collect.perks import reject_second_homes
+from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.typesys import DynamicArrayType
 
 from . import TypeValidator
@@ -34,12 +34,15 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.template_scope import TemplateScope
 
 
+_Decl = TypeVar("_Decl")
+
+
 class PackElements:
     """The element type of each `expand` of one check copy (#1070, R6).
 
-    One element type per `expand` node, numbered in the order the check meets them.
-    The number only has to be unique in one template check: the check copy, the overlay
-    and every instance that names an element type are discarded after it.
+    One element type per `expand` node of the SHIR body, numbered in the order the check
+    meets them. The number only has to be unique in one template check: the overlay and
+    every instance that names an element type are discarded after it.
     """
 
     def __init__(self, record: 'GenericFuncDef', unit: Optional[str]) -> None:
@@ -48,10 +51,10 @@ class PackElements:
         self._pack = packs[-1] if packs else None
         self._unit = unit
         self._template = record.name
-        self._memo: Dict[int, TypeParameter] = {}
+        self._memo: Dict[ShirId, TypeParameter] = {}
 
-    def element_of(self, node: Expand) -> TypeParameter:
-        found = self._memo.get(id(node))
+    def element_of(self, node: ShirId, binder: str, binder_span: Optional[Span]) -> TypeParameter:
+        found = self._memo.get(node)
         if found is not None:
             return found
         if self._pack is None:
@@ -59,16 +62,15 @@ class PackElements:
                 "CE0015", message=f"an `expand` in '{self._template}', which has no pack")
         from sushi_lang.semantics.passes.collect.functions import opaque_pack_element
         element = opaque_pack_element(cast(BoundedTypeParam, self._pack), self._unit,
-                                      self._template, len(self._memo), node.var,
-                                      node.var_span)
-        self._memo[id(node)] = element
+                                      self._template, len(self._memo), binder, binder_span)
+        self._memo[node] = element
         return element
 
 
 class TemplateValidator(TypeValidator):
-    """The typecheck pass over a check copy: it reads, and it cuts no copy.
+    """The typecheck pass over a template check: it reads, and it cuts no copy.
 
-    A check copy names instances over an opaque parameter, and none of them may reach a
+    A check names instances over an opaque parameter, and none of them may reach a
     program table or a queue. Every writer that cuts or queues a copy asks
     `in_template_check` (or the flag of the queue) and answers the substituted signature
     alone.
@@ -81,8 +83,8 @@ class TemplateValidator(TypeValidator):
                  pack_elements: Optional[PackElements] = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.pack_elements = pack_elements
-        # The declaration of the check copy -> the template as written, whose SHIR body
-        # is the body of the check.
+        # The header of the check -> the template as written, whose SHIR body is the body
+        # of the check.
         self.written: Dict[int, Any] = {}
         # The overlay of the check, and the opaque form of each type parameter by name.
         self._scope = scope
@@ -97,11 +99,11 @@ class TemplateValidator(TypeValidator):
 
 
 def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
-    """Check one function template on a check copy. Answers whether it was checked.
+    """Check one function template. Answers whether it was checked.
 
     A refused redeclaration is not checked here, because its record is another body.
-    The check copy of a pack template holds no value pack: each `expand` binds an
-    element type (`PackElements`), and a use of the pack name elsewhere is CE0144.
+    The header of a pack template holds no value pack: each `expand` binds an element type
+    (`PackElements`), and a use of the pack name elsewhere is CE0144.
     """
     record = validator.generic_func_table.lookup(func.name, validator.current_unit_name)
     if (record is None or record.body is not func.body or not _checkable(record)
@@ -112,35 +114,28 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
     reject_second_homes(validator.reporter, validator.perk_table, record.type_params)
     scope = check.scope
 
-    def cut() -> FuncDef:
-        # The deep copy comes FIRST: the cut shares every node it does not visit with
-        # its source, and a stamp on the template would reach every later copy of it.
-        check_copy = scope.monomorphizer.function_monomorphizer.cut_body(
-            copy.deepcopy(record), cast(Dict[str, Any], record.opaque))
-        # The fields a copy carries, as the monomorphize stage sets them. The check copy
-        # is no copy of a template for the reporter and the statement rules: it IS the
-        # template, under its own name, so CE0107 and every other message names it.
-        check_copy.name = func.name
-        check_copy.instance_of = None
-        # The value pack is not a value in the check copy: no parameter holds it, and
-        # its name stays in `pack_names`, so a use of it is CE0144.
-        check_copy.params = [p for p in check_copy.params if not p.is_pack]
-        check_copy.pack_names = tuple(p.name for p in record.params if p.is_pack)
-        check_copy.is_synthesized = False
-        return check_copy
-
-    # The cut interns what the copy names itself.
-    check_copy = _cut_and_settle(scope, cut, lambda _copy: ())
+    marks = _table_marks(scope)
+    header = scope.monomorphizer.function_monomorphizer.cut_body(
+        _with_no_body(record), cast(Dict[str, Any], record.opaque))
+    # The fields a copy carries, as the monomorphize stage sets them. The header is no
+    # copy of a template for the reporter and the statement rules: it IS the template,
+    # under its own name, so CE0107 and every other message names it.
+    header.name = func.name
+    header.instance_of = None
+    # The value pack is not a value: no parameter holds it.
+    header.params = [p for p in header.params if not p.is_pack]
+    header.is_synthesized = False
+    _settle(scope, marks, ())
     elements = PackElements(record, validator.current_unit_name)
     checker = _checker(check, record.opaque, elements)
-    checker.written[id(check_copy)] = func
-    checker._validate_function(check_copy)
+    checker.written[id(header)] = func
+    checker._validate_function(header)
     _close(check, TemplateId(record.unit_name, record.name))
     return True
 
 
 def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
-    """Check one extension template on a check copy. Answers whether it was checked.
+    """Check one extension template. Answers whether it was checked.
 
     A generic target, an array target and a method-level type parameter on any target
     (#1070). Each receiver parameter is opaque with its receiver bounds (R1: what the
@@ -169,29 +164,26 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     target: Any = (_receiver_instance(scope, record.base_type_name, receiver_args)
                    if record.type_params else ext.target_type)
 
-    def cut() -> ExtendDef:
-        # The deep copy comes FIRST, for the reason of a function template.
-        check_copy = monomorphize_extension_method(
-            dataclasses.replace(record, decl=copy.deepcopy(record.decl)), target,
-            receiver_args, scope.monomorphizer.substitutor, method_args)
-        # The check copy IS the template: written, in the unit that declares it, and no
-        # copy of a template for the mute. Its target is then validated as a written
-        # type, which is the R1 check of the target against the bounds of its base.
-        check_copy.home_unit = None
-        check_copy.scope_unit = None
-        check_copy.template_id = None
-        return check_copy
-
-    check_copy = _cut_and_settle(scope, cut, lambda ext_copy: [ext_copy])
+    marks = _table_marks(scope)
+    header = monomorphize_extension_method(
+        dataclasses.replace(record, decl=_with_no_body(record.decl)), target, receiver_args,
+        scope.monomorphizer.substitutor, method_args)
+    # The header IS the template: written, in the unit that declares it, and no copy of a
+    # template for the mute. Its target is then validated as a written type, which is the
+    # R1 check of the target against the bounds of its base.
+    header.home_unit = None
+    header.scope_unit = None
+    header.template_id = None
+    _settle(scope, marks, [header])
     checker = _checker(check, opaque)
-    checker.written[id(check_copy)] = ext
-    checker._validate_extension_method(check_copy)
+    checker.written[id(header)] = ext
+    checker._validate_extension_method(header)
     _close(check, template_id)
     return True
 
 
 def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
-    """Check one perk template on a check copy. Answers whether it was checked.
+    """Check one perk template. Answers whether it was checked.
 
     `extend Box@(T) with P:` and `extend T[] with P:` (#1070). Each parameter of the
     target is opaque with its receiver bounds (R1). The header was judged on the written
@@ -212,24 +204,22 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
     scope = check.scope
     target = _receiver_instance(scope, template.base_type_name, args)
 
-    def cut() -> ExtendWithDef:
-        # The deep copy comes FIRST, for the reason of a function template.
-        check_copy = monomorphize_perk_impl(
-            dataclasses.replace(template, impl=copy.deepcopy(template.impl)), target,
-            args, scope.monomorphizer.substitutor)
-        # The check copy IS the template: written, and no copy of a template for the mute.
-        check_copy.is_synthesized = False
-        for method in check_copy.methods:
-            method.instance_of = None
-            method.template_id = None
-        return check_copy
-
-    check_copy = _cut_and_settle(scope, cut, lambda impl_copy: impl_copy.methods)
+    marks = _table_marks(scope)
+    header = monomorphize_perk_impl(
+        dataclasses.replace(template, impl=dataclasses.replace(
+            template.impl, methods=[_with_no_body(method) for method in template.impl.methods])),
+        target, args, scope.monomorphizer.substitutor)
+    # The header IS the template: written, and no copy of a template for the mute.
+    header.is_synthesized = False
+    for method in header.methods:
+        method.instance_of = None
+        method.template_id = None
+    _settle(scope, marks, header.methods)
     checker = _checker(check, opaque)
     checker.written.update((id(copied), written) for copied, written
-                           in zip(check_copy.methods, impl.methods, strict=True))
+                           in zip(header.methods, impl.methods, strict=True))
     from .signatures import validate_perk_template_bodies
-    validate_perk_template_bodies(checker, target, check_copy)
+    validate_perk_template_bodies(checker, target, header)
     _close(check, template_id)
     return True
 
@@ -272,24 +262,24 @@ def _receiver_instance(scope: 'TemplateScope', base: str, args: tuple):
                                     scope.tables.enums.by_name)
 
 
-_Copy = TypeVar("_Copy")
+def _with_no_body(decl: _Decl) -> _Decl:
+    """`decl` with an empty body: a check makes a header of it, and walks the SHIR body."""
+    return dataclasses.replace(decl, body=Block(None, []))  # type: ignore[type-var]
 
 
-def _cut_and_settle(scope: 'TemplateScope', cut: Callable[[], _Copy],
-                    callables: Callable[[_Copy], Sequence[Any]]) -> _Copy:
-    """Cut the check copy, intern what its `callables` name, and settle the new instances.
+def _table_marks(scope: 'TemplateScope') -> Any:
+    """The marks of the tables of the overlay, just before a header is made, after the
+    receiver instance is interned, so no instance is settled twice."""
+    from sushi_lang.semantics.passes.finite_types import table_marks
+    return table_marks(scope.tables.structs, scope.tables.enums)
 
-    The marks are taken just before the cut, after the receiver instance is interned, so
-    no instance is settled twice.
-    """
+
+def _settle(scope: 'TemplateScope', marks: Any, callables: Sequence[Any]) -> None:
+    """Intern what the signatures of `callables` name, and settle the new instances."""
     from sushi_lang.semantics.generics.late_interning import (
         intern_copy_signatures, settle_new_instances)
-    from sushi_lang.semantics.passes.finite_types import table_marks
-    marks = table_marks(scope.tables.structs, scope.tables.enums)
-    check_copy = cut()
-    intern_copy_signatures(scope.tables, scope.monomorphizer, callables(check_copy))
+    intern_copy_signatures(scope.tables, scope.monomorphizer, callables)
     settle_new_instances(scope.tables, scope.reporter, marks)
-    return check_copy
 
 
 @dataclass
@@ -312,7 +302,7 @@ def _open(validator: TypeValidator) -> _Check:
 
 def _checker(check: _Check, opaque: Mapping[str, Any],
              pack_elements: Optional[PackElements] = None) -> 'TemplateValidator':
-    """The typecheck pass over the check copy: the one construction of it. `opaque` is the
+    """The typecheck pass over a template check: the one construction of it. `opaque` is the
     opaque form of each type parameter. A pack template gives the element type of each
     `expand`."""
     validator = check.validator

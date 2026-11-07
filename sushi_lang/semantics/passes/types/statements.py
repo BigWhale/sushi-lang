@@ -17,7 +17,6 @@ from sushi_lang.semantics.generics.type_display import display_type
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
-    from sushi_lang.semantics.ast import Expand
 
 
 def reject_unspelled_result(validator: 'TypeValidator', value) -> None:
@@ -144,22 +143,6 @@ def _validate_bound_body(validator: 'TypeValidator', name: str, ty: 'Optional[Ty
     finally:
         validator.variable_types.pop(name, None)
         validator.variable_types.update(saved)
-
-
-def validate_expand_statement(validator: 'TypeValidator', stmt: 'Expand') -> None:
-    """The body of an `expand`, checked once, with the binder an element type (#1070).
-
-    Only the check copy of a pack template holds an `expand` here: the collect pass
-    refused every misplaced one, and a copy holds the unrolled body. The iterable is the
-    value pack, which is not a value (CE0144), so it is not checked as an expression.
-    """
-    elements = validator.pack_elements
-    if elements is None:
-        er.raise_internal_error(
-            "CE0015", message="an `expand` reached the typecheck pass outside a "
-                              "template check")
-        return
-    _validate_bound_body(validator, stmt.var, elements.element_of(stmt), stmt.body)
 
 
 # One counter for the whole process, for the same reason the AST builder keeps one: the

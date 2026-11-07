@@ -18,7 +18,7 @@ Every other statement goes on to the next.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Collection, Optional
+from typing import Any, Callable, Collection, Iterator, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import stmts as s
@@ -82,6 +82,17 @@ def first_dead_statement(block: ShirBlock, body: ShirBody, *,
         if ends_the_path(ender, uncovered=uncovered):
             return ender, dead
     return None
+
+
+def reached_statements(block: ShirBlock, body: ShirBody) -> Iterator[tuple[int, s.ShirStmt]]:
+    """Each statement of `block`, a block of `body`, that a path reaches, with its index. A statement of a copy
+    of an unrolled `expand` that ends every path can stand before more statements of the
+    block (ir.md 7.2): no path reaches them, so `borrow` and SLIR lowering do not read them."""
+    for index, statement in enumerate(block.statements):
+        yield index, statement
+        if (body.copies.holding(block.shir_id, index)
+                and terminates(statement, leaves_round=True)):
+            return
 
 
 def _returns(_node: s.Return, _question: _Question) -> bool:

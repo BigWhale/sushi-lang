@@ -615,6 +615,9 @@ def check_array_method(validator: 'TypeValidator', node: e.Call, receiver: Type,
     if (effect_of(name).mutates and recv is not None
             and reject_write_into_constant(validator, recv, f"call '{name}()' on", node.loc)):
         return answer
+    from .calls.methods import reject_uncloneable
+    if name == "clone" and reject_uncloneable(validator, node, array_type):
+        return answer
     if not _receiver_is_accepted(spec.receiver, array_type):
         er.emit(validator.reporter, er.ERR.CE2023, node.loc, part="receiver", method=name,
                 expected=spec.receiver.value, got=display_type(array_type))
