@@ -13,9 +13,9 @@ unit declares a method `m`, the dot of the enum holds no such member: CE2045. Th
 `T.m` is an error hole that keeps the member, and it is CE2045 too. The hole of a bare
 call with written type arguments on a type name (`Pair@(i32, i32)(1, 2)`) is CE6102.
 
-A wrapper variant whose position gives no instance, a variant of a generic enum of the
-program, and a variant of an enum whose name the unit lost (D2) are not typed yet, and stop
-the walk of their body.
+A variant of a generic enum (`Maybe`, `Result`, one of the program) takes the instance of its
+position, else the instance that its payload solves (`visit/constructions.py`). A variant of
+an enum whose name the unit lost (D2) is not typed yet, and stops the walk of its body.
 """
 from __future__ import annotations
 
@@ -26,24 +26,25 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
+from sushi_lang.semantics.passes.types.arguments import check_arguments
 from sushi_lang.semantics.passes.types.calls.enums import (
+    declared_position_answer, intern_constructed_instance, refuse_untyped_variant,
     reject_missing_variant, validate_constructor_arguments)
 from sushi_lang.semantics.passes.types.calls.namespaced import reject_unknown_namespace_call
 from sushi_lang.semantics.passes.types.utils import (
-    reject_named_argument, reject_unpromised_arguments)
+    names_no_type, reject_named_argument, reject_unpromised_arguments)
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
+from sushi_lang.semantics.passes.types.visit.constructions import (
+    Constructed, solve_arguments, solved_type_args, walk_unchecked)
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.nodes import Hole
 from sushi_lang.semantics.source_text import source_text
-from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.type_predicates import is_abstract_type, is_instance_of
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
-
-#: The predefined generic enums whose variant takes the instance of its position.
-WRAPPERS = ("Result", "Maybe")
 
 #: The codes of an error hole whose error a pass before typecheck reports: a name with no
 #: declaration, a jump outside a loop and a `self` in a static method.
@@ -58,14 +59,21 @@ REPORTED_TO_THE_PROGRAM = frozenset({"CE0134"})
 def check_enum_init(validator: TypeValidator, node: e.EnumInit,
                     expected: Optional[Type]) -> Optional[Type]:
     offered = validator.errors_offered()
-    instance = _instance(validator, node, expected)
+    built = _instance(validator, node, expected)
+    instance = built.instance
+    if not isinstance(instance, EnumType):
+        return instance
     variant = instance.get_variant(node.variant)
+    if variant is None and not instance.variants:
+        # The instance of a type that CE0122 refused holds no variant.
+        reject_missing_variant(validator, node.loc, node.variant, display_type(instance))
+        return None
     if variant is None:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"lowering made a construction of '{node.variant}', "
                                        f"which '{instance.name}' does not declare")
     reject_unpromised_arguments(validator, instance, node.loc)
-    validate_constructor_arguments(validator, node, variant, instance)
+    validate_constructor_arguments(validator, node, variant, instance, built.typed)
     if validator.errors_offered() != offered:
         return None
     validator.body_answers().record_instance(node.shir_id, instance)
@@ -168,24 +176,60 @@ def _reject_member(validator: TypeValidator, written: str, member: str, loc: Spa
 
 
 def _instance(validator: TypeValidator, node: e.EnumInit,
-              expected: Optional[Type]) -> EnumType:
-    """The enum that the construction builds; the walk stops where it is not typed yet."""
+              expected: Optional[Type]) -> Constructed:
+    """The enum that the construction builds, or no instance after its error. The walk
+    stops where the name of the enum is lost."""
     written = validator.decl_name(node.decl)
-    if written in WRAPPERS:
-        if isinstance(expected, EnumType) and is_instance_of(expected, written):
-            return expected
-        visit.stop_at(validator, node)
     name = _enum_name(validator, written)
-    if (name is None or name in validator.generic_enum_table.by_name
-            or name_is_contested(validator, "enum", name)):
+    if name is None or name_is_contested(validator, "enum", name):
         visit.stop_at(validator, node)
-    instance = validator.enum_table.by_name.get(name)
-    if instance is None:
+    generic = name in validator.generic_enum_table.by_name
+    instance = None if generic else validator.enum_table.by_name.get(name)
+    if instance is None and not generic:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"the enum '{written}' of a construction has no record")
     if name != written:
         reject_private_type(validator, name, node.decl_loc)
-    return instance
+    if generic:
+        return _generic_instance(validator, node, name, expected)
+    return Constructed(instance)
+
+
+def _generic_instance(validator: TypeValidator, node: e.EnumInit, name: str,
+                      expected: Optional[Type]) -> Constructed:
+    """The instance of a variant of the generic enum `name`: from the position, else from
+    the payload (#1005). A wrong count is CE2050. With no instance, a position that declares
+    another type reports the one mismatch, and every other position is CE2112. A declared
+    type that was refused (CE2001) is the one fault."""
+    if isinstance(expected, EnumType) and is_instance_of(expected, name):
+        return Constructed(expected)
+    template = validator.generic_enum_table.by_name[name]
+    types = next(v.associated_types for v in template.variants if v.name == node.variant)
+    if len(types) != len(node.payload):
+        check_arguments(validator, node.variant, [None] * len(types), node.payload, node.loc,
+                        mismatch_code=er.ERR.CE2049, arity_code=er.ERR.CE2050,
+                        stop_on_arity=True)
+        return Constructed(None)
+    names = [tp.name for tp in template.type_params]
+    solution = solve_arguments(validator, names, list(types), node.payload)
+    type_args = solved_type_args(validator, names, solution.solved)
+    if all(arg is not None for arg in type_args):
+        return Constructed(intern_constructed_instance(validator, name, type_args),
+                           solution.typed)
+    walk_unchecked(validator, node.payload, solution.typed)
+    if expected is not None and names_no_type(validator, expected):
+        return Constructed(None)
+    if _declares_a_type(validator, expected):
+        return Constructed(declared_position_answer(template, type_args))
+    if not any(ty is None for ty in solution.typed.values()):
+        refuse_untyped_variant(validator, node, template, name, type_args)
+    return Constructed(None)
+
+
+def _declares_a_type(validator: TypeValidator, expected: Optional[Type]) -> bool:
+    return expected is not None and not is_abstract_type(
+        expected, validator.struct_table.by_name, validator.enum_table.by_name,
+        opaque_bound=validator.struct_table.admits_opaque)
 
 
 def _enum_name(validator: TypeValidator, written: str) -> Optional[str]:

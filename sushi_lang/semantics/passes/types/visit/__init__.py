@@ -18,7 +18,8 @@ destructure, `expressions.py` the expression arms of the leaves and of a struct
 construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms
 of the operators and the check of a condition, `calls.py` the arms of a call, an
 interpolated string and a borrow, `container_statics.py` the arm of a static of a built-in
-container, `results.py` the arm of an enum construction,
+container, `results.py` the arm of an enum construction, `constructions.py` the instance of
+a construction and of a static of a generic type,
 `ranges.py` the arms of a range, and `arrays.py` the arms of an array construction, an
 index and a slice. The pattern arms are in `passes/types/matching.py`. The
 arms of `??` and of `as` are `check_try` and `check_cast` of

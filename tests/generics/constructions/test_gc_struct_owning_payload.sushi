@@ -1,0 +1,21 @@
+# An owning payload moves into a generic struct by position, and the instance drops it.
+# A field of the struct takes the payload out with a marked take.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3\nDeep Thought\n"
+
+struct Box@(T):
+    T value
+
+fn open_box(nom Box@(string) b) string:
+    return nom b.value
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let Box@(string) a = Box(s.clone())
+    println(a.value)
+    let Box@(i32[]) b = Box(from([1, 2, 3]))
+    println(b.value.len())
+    let string t = "Deep Thought"
+    println(open_box(nom Box(t.clone())))
+    return 0

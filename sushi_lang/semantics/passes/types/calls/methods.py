@@ -78,7 +78,8 @@ def instantiate_array_extension(validator: 'TypeValidator',
 
 
 def instantiate_target_extension(validator: 'TypeValidator', receiver_type, template,
-                                 call=None, report: bool = True):
+                                 call=None, report: bool = True,
+                                 static_site: Optional[Span] = None):
     """Resolve a call on an instance of a generic type against one generic-target template.
 
     The `T[]` rung is the model (#1196). The substituted signature answers the call. The
@@ -86,7 +87,8 @@ def instantiate_target_extension(validator: 'TypeValidator', receiver_type, temp
     the next call and the backend find it, and queues the body copy for the analyzer's
     fixpoint round. A question with no call node (the `foreach` protocol asks for
     `next()`) gets the signature and writes nothing; the call that `foreach` then
-    validates writes it. A template check and an early inference write nothing either.
+    validates writes it. A template check and an early inference write nothing either. A
+    static call over SHIR gives `static_site` and no AST call, and writes it too.
 
     An instance that fails a target bound gets no copy, and the last rung refuses the
     call (CE4006). A type argument in an `E` position of the template is CE2084 at the
@@ -98,13 +100,13 @@ def instantiate_target_extension(validator: 'TypeValidator', receiver_type, temp
     if args is None or not bounds_hold_for(template, args, validator.tables):
         return None
     substitution = target_copy_substitution(template, receiver_type)
-    site = call.loc if call is not None else None
-    report = report and call is not None
+    site = call.loc if call is not None else static_site
+    report = report and site is not None
     if _refuses_non_error_arguments(validator, template, receiver_type, substitution,
                                     site, report):
         return RESOLUTION_REPORTED if report else None
     concrete = target_copy_signature(validator, template, receiver_type)
-    if call is not None and validator.queues_late_copies:
+    if site is not None and validator.queues_late_copies:
         validator.extension_table.add_method(concrete)
         _queue_extension_instantiation(validator, template, receiver_type, args, (), site)
     return concrete
@@ -292,7 +294,7 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
                                                  call.loc if call is not None else None)
         else:
             method = instantiate_target_extension(validator, receiver_type, chosen, call,
-                                                  report)
+                                                  report, site if static else None)
             if method is RESOLUTION_REPORTED:
                 return method
         if method is not None:

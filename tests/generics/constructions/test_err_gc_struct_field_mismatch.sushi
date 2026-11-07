@@ -1,0 +1,10 @@
+# A declared instance gives each field its type: a field that does not fit is CE2028.
+# EXPECT_ERROR_CODES_EXACT: CE2028
+
+struct Box@(T):
+    T value
+
+fn main() i32:
+    let Box@(i32) b = Box("x")
+    println(b.value)
+    return 0

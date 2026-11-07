@@ -38,12 +38,15 @@ from sushi_lang.semantics.passes.types.visibility import (
     name_was_refused, reject_ambiguous_name, reject_private_kept, reject_private_name,
     reject_private_type, type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.calls import reject_undefined_function
+from sushi_lang.semantics.passes.types.visit.constructions import (
+    Constructed, generic_struct_instance)
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
 from sushi_lang.semantics.unit_symbols import global_symbol
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import GenericStructType
     from sushi_lang.semantics.passes.types import TypeValidator
     from sushi_lang.semantics.stdlib_registry import StdlibFunction
 
@@ -195,23 +198,24 @@ def constant_record(validator: TypeValidator,
 
 
 def check_struct_init(validator: TypeValidator, node: e.StructInit,
-                      _expected: Optional[Type]) -> Optional[Type]:
+                      expected: Optional[Type]) -> Optional[Type]:
     """The struct that the construction builds, with its fields checked; none after an
     error of the construction or of a field."""
     offered = validator.errors_offered()
-    struct = _constructed_struct(validator, node)
-    if struct is not None:
-        check_struct_fields(validator, node, struct)
+    built = _constructed_struct(validator, node, expected)
+    struct = built.instance
+    if isinstance(struct, StructType):
+        check_struct_fields(validator, node, struct, built.typed)
     if struct is None or validator.errors_offered() != offered:
         return None
     validator.body_answers().record_instance(node.shir_id, struct)
     return struct
 
 
-def _constructed_struct(validator: TypeValidator,
-                        node: e.StructInit) -> Optional[StructType]:
-    """The struct that the written type of a construction names, or None after its error;
-    the walk stops where the construction is not typed yet."""
+def _constructed_struct(validator: TypeValidator, node: e.StructInit,
+                        expected: Optional[Type]) -> Constructed:
+    """The struct that the written type of a construction names, or no instance after its
+    error; the walk stops where the name is contested."""
     written = validator.decl_name(node.decl)
     alias, dot, name = written.rpartition(".")
     if dot:
@@ -219,11 +223,11 @@ def _constructed_struct(validator: TypeValidator,
         if binding is None or binding.kind != "struct":
             visit.stop_at(validator, node)
         name = binding.name
-    if (name in validator.generic_struct_table.by_name
-            or type_name_is_contested(validator, name)):
+    if type_name_is_contested(validator, name):
         visit.stop_at(validator, node)
-    struct = validator.struct_table.by_name.get(name)
-    if struct is None:
+    generic = name in validator.generic_struct_table.by_name
+    struct = None if generic else validator.struct_table.by_name.get(name)
+    if struct is None and not generic:
         reject_undefined_function(validator, name, node.decl_loc)
         if node.names:
             reject_named_argument(validator, node.names[0], node.loc)
@@ -231,15 +235,18 @@ def _constructed_struct(validator: TypeValidator,
             validator.refused_before = True
         for arg in node.fields:
             visit.check_expr(validator, arg.value)
-        return None
+        return Constructed(None)
     if dot and reject_private_type(validator, name, node.decl_loc):
         if node.named:
-            reject_named_argument(validator, _first_written_name(node, struct), node.loc)
-        return None
-    return struct
+            declared = struct or validator.generic_struct_table.by_name[name]
+            reject_named_argument(validator, _first_written_name(node, declared), node.loc)
+        return Constructed(None)
+    if generic:
+        return generic_struct_instance(validator, node, name, written, expected)
+    return Constructed(struct)
 
 
-def _first_written_name(node: e.StructInit, struct: StructType) -> str:
+def _first_written_name(node: e.StructInit, struct: StructType | GenericStructType) -> str:
     """The name of the field that a named construction writes first."""
     if node.names is not None:
         return node.names[0]

@@ -139,10 +139,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # in the migration plan, and that stage deletes the entry.
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
-    (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),
-    (_TYPES + "calls/structs.py", "_refuse_unsolved_struct_constructor", _port("C1")),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
-    (_TYPES + "calls/statics.py", "_refuse_unstamped_generic", _port("C1")),
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
     (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _port("C2")),
     (_TYPES + "signatures.py", "check_template_statements", _TIER_C),

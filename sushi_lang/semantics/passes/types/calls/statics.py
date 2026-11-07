@@ -93,7 +93,7 @@ def _generic_static_target(validator: 'TypeValidator', call, base: str):
     type_args, unsolved = _solve_static(validator, call, template, stamped)
     if type_args is None:
         return None
-    return _interned_static_target(validator, call, template, base, type_args)
+    return _interned_static_target(validator, call.method, call.loc, template, base, type_args)
 
 
 def _solve_static(validator: 'TypeValidator', call, template, stamped):
@@ -118,8 +118,8 @@ def _solve_static(validator: 'TypeValidator', call, template, stamped):
     return resolved, ()
 
 
-def _interned_static_target(validator: 'TypeValidator', call, template, base: str,
-                            type_args) -> Optional[Type]:
+def _interned_static_target(validator: 'TypeValidator', method: str, site: Optional[Span],
+                            template, base: str, type_args) -> Optional[Type]:
     """The interned instantiation for the solved type arguments, with its static's copy.
 
     The instantiate pass collected the instantiation when it could infer the same
@@ -153,9 +153,9 @@ def _interned_static_target(validator: 'TypeValidator', call, template, base: st
     if (interner is not None and validator.queues_late_copies
             and not any(record.is_static and record.unit_name == template.unit_name
                         for record in validator.extension_table.declarations(
-                            target, call.method))
+                            target, method))
             and bounds_hold_for(template, tuple(type_args), validator.tables)):
-        _add_late_static_copy(validator, template, target, type_args, call.loc)
+        _add_late_static_copy(validator, template, target, type_args, site)
     return target
 
 
@@ -221,68 +221,36 @@ def infer_static_call(validator: 'TypeValidator', call) -> Optional[Type]:
     return inferred
 
 
-def _refuse_unstamped_generic(validator: 'TypeValidator', call) -> bool:
+def emit_no_source(validator: 'TypeValidator', loc: Optional[Span], name: str, reason: str,
+                   help_text: str) -> None:
+    """CE2060: the static `name` reads no type argument from its source."""
+    er.emit_with(validator.reporter, er.ERR.CE2060, loc, name=name, reason=reason) \
+        .help(help_text).emit()
+
+
+def reject_unreached_type_params(validator: 'TypeValidator', loc: Optional[Span], base: str,
+                                 method: str, unsolved, declarations) -> None:
     """CE2060: a GENERIC static with a type parameter neither source reaches (#542, #573).
 
-    Two sources, in order: an argument whose parameter names the type parameter, then
-    the propagation stamp at the binding site. A position that has neither -- a bare
-    `println(Box.empty().len())` -- has no answer, and the text names both sources and
-    the parameters it could not reach, only those.
-
-    The test is deliberately narrow: it fires only when the base name declares a
-    static of THIS name. Otherwise the node is a variant construction whose stamp the
-    surrounding statement supplies (`Result.Ok(0)` in a return), or a plain unknown,
-    and both belong to the paths below.
+    Two sources, in order: an argument whose parameter names the type parameter, then the
+    declared type of the position. The text names both sources and the parameters that it
+    could not reach, only those.
     """
-    receiver = call.receiver
-    if not isinstance(receiver, Name):
-        return False
-    base = receiver.id
-    if (base not in validator.generic_struct_table.by_name
-            and base not in validator.generic_enum_table.by_name):
-        return False
-    declarations = validator.generic_extension_table.declarations(base, call.method)
-    if not any(getattr(d, "is_static", False) for d in declarations):
-        return False
-    # The declared type of this position was refused (CE2001): that is the one fault.
-    from sushi_lang.semantics.passes.types.propagation import holds_declared_type
-    if holds_declared_type(validator, call):
-        return True
-
-    unsolved = _unreached_type_params(validator, call, base)
     spelled = spell_names(unsolved)
-    reason = f"no argument names {spelled}, and this position declares no type"
-    diag = er.emit_with(validator.reporter, er.ERR.CE2060, call.loc,
-                        name=f"{base}.{call.method}", reason=reason)
     if _returns_the_target(declarations, base):
-        diag.help(f"bind the result to a declared type "
-                  f"('let {base}@(...) x = {base}.{call.method}(...)'), or name "
-                  f"{spelled} in a parameter so the argument solves it")
+        help_text = (f"bind the result to a declared type "
+                     f"('let {base}@(...) x = {base}.{method}(...)'), or name "
+                     f"{spelled} in a parameter so the argument solves it")
     else:
-        # The return does not name the target, so no binding could stamp it and a
-        # method has no call-site `@(...)` slot at all (Known Limitation 7). A
-        # parameter that names the type parameter, or the signature, is what has to
-        # change.
-        diag.help(f"a static whose return does not name '{base}' has no declared type "
-                  f"to read from -- name {spelled} in a parameter, or make it a "
-                  f"generic free function ('fn {call.method}@(T)(...)'), which takes "
-                  f"explicit type arguments")
-    diag.emit()
-    return True
-
-
-def _unreached_type_params(validator: 'TypeValidator', call, base: str) -> tuple:
-    """The target type parameters neither the arguments nor the stamp reached."""
-    template = static_template_for(validator, base, call.method)
-    if template is not None:
-        _args, unsolved = _solve_static(validator, call, template,
-                                        _stamped_instantiation(call, base))
-        if unsolved:
-            return unsolved
-    generic = (validator.generic_struct_table.by_name.get(base)
-               or validator.generic_enum_table.by_name.get(base))
-    params = getattr(generic, "type_params", None) or ()
-    return tuple(p.name if hasattr(p, "name") else str(p) for p in params) or ("T",)
+        # The return does not name the target, so no binding can give the type, and a
+        # method has no call-site `@(...)` slot (Known Limitation 7).
+        help_text = (f"a static whose return does not name '{base}' has no declared type "
+                     f"to read from -- name {spelled} in a parameter, or make it a "
+                     f"generic free function ('fn {method}@(T)(...)'), which takes "
+                     f"explicit type arguments")
+    emit_no_source(validator, loc, f"{base}.{method}",
+                   f"no argument names {spelled}, and this position declares no type",
+                   help_text)
 
 
 def spell_names(names) -> str:

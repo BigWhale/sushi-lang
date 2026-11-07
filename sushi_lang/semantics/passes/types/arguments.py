@@ -38,7 +38,7 @@ CE2027 and CE2028 or CE2083. The gate is
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Collection, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Collection, Dict, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -84,6 +84,7 @@ def check_arguments(
     also_accepts: Sequence[Sequence[Type]] = (),
     field_names: Sequence[str] = (),
     compares_nom: bool = True,
+    typed: Mapping[int, Optional[Type]] = {},
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
@@ -93,7 +94,8 @@ def check_arguments(
 
     The answer is the arity alone, for the callers that stop there. A caller that wants
     every fault reported ignores it. `compares_nom` False gives no CE2427: a C function
-    takes nothing from Sushi, so its `nom` marker is inert.
+    takes nothing from Sushi, so its `nom` marker is inert. `typed` holds, by index, the
+    answer of each argument that the caller checked to solve the parameter types.
     """
     arity_ok = (len(args) >= len(params) if minimum_arity
                 else len(args) == len(params))
@@ -109,8 +111,13 @@ def check_arguments(
             continue
         others = also_accepts[index - 1] if index <= len(also_accepts) else ()
         field = field_names[index - 1] if index <= len(field_names) else None
-        fits = check_argument(validator, callee_name, arg, index, expected,
-                              mismatch_code=mismatch_code, others=others, field=field)
+        if index - 1 in typed:
+            fits = compare_argument(validator, callee_name, arg, index, typed[index - 1],
+                                    expected, mismatch_code=mismatch_code, others=others,
+                                    field=field)
+        else:
+            fits = check_argument(validator, callee_name, arg, index, expected,
+                                  mismatch_code=mismatch_code, others=others, field=field)
         if declared is not None and index <= len(declared.modes):
             mode = declared.modes[index - 1]
             if compares_nom and reject_nom_marker(validator, arg, mode,

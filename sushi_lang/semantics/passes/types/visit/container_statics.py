@@ -24,7 +24,7 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     argument_span, check_argument, marked_type, record_builtin_conventions)
 from sushi_lang.semantics.passes.types.arrays import reject_non_i32
-from sushi_lang.semantics.passes.types.calls.statics import spell_names
+from sushi_lang.semantics.passes.types.calls.statics import emit_no_source, spell_names
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.passes.types.utils import names_no_type
 from sushi_lang.semantics.passes.types.visibility import reject_out_of_scope_type
@@ -105,12 +105,12 @@ def _reject_no_position(validator: TypeValidator, node: e.Call, base: str, name:
     names the type parameters of the container."""
     generic = validator.generic_struct_table.by_name.get(base)
     params = tuple(getattr(p, "name", str(p)) for p in getattr(generic, "type_params", ()))
-    er.emit_with(validator.reporter, er.ERR.CE2060, node.loc, name=name,
-                 reason="the built-in static reads its type from the binding alone, and "
-                        "this position declares no type").help(
-        f"bind the result to a declared type ('let {base}@(...) x = {name}(...)'), or "
-        f"name {spell_names(params or ('T',))} in a parameter so the argument solves "
-        f"it").emit()
+    emit_no_source(validator, node.loc, name,
+                   "the built-in static reads its type from the binding alone, and "
+                   "this position declares no type",
+                   f"bind the result to a declared type ('let {base}@(...) x = {name}(...)'), "
+                   f"or name {spell_names(params or ('T',))} in a parameter so the argument "
+                   f"solves it")
 
 
 def _type_name_span(call: Span, name: str) -> Span:

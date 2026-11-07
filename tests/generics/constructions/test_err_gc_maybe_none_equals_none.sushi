@@ -1,0 +1,6 @@
+# Two `Maybe.None` operands give no instance to each other: CE2112 for each one.
+# EXPECT_ERROR_CODES_EXACT: CE2112, CE2112
+
+fn main() i32:
+    println(Maybe.None == Maybe.None)
+    return 0

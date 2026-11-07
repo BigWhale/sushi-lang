@@ -59,7 +59,6 @@ def test_a_construction_of_a_plain_struct_is_an_instance_of_it(written: str) -> 
 
 
 @pytest.mark.parametrize("written, lost", [
-    ("Box", None),
     ("Crate", "Crate"),
     ("geo.Sign", None),
 ])

@@ -1,0 +1,18 @@
+# A plain local reads into a generic struct, an array literal gives the element type, and
+# a call gives the instance.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n2\n9\n"
+
+struct Box@(T):
+    T value
+
+fn nine() i32:
+    return 9
+
+fn main() i32:
+    let i32 n = 3
+    println(Box(n).value)
+    let i32[2] pair = [1, 2]
+    println(Box(pair).value[1])
+    println(Box(nine()).value)
+    return 0

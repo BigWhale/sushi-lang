@@ -1,0 +1,25 @@
+# A construction as an argument takes the type of the parameter; a construction as a
+# temporary takes its arguments and drops at the end of its statement.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "42\nMostly Harmless\n15\n1\n"
+
+struct Box@(T):
+    T value
+
+fn read(Box@(i32) b) i32:
+    return b.value
+
+fn length(Box@(string) b) i32:
+    return b.value.len()
+
+fn make() Box@(i32):
+    return Box(1)
+
+fn main() i32:
+    println(read(Box(42)))
+    let string s = "Mostly Harmless"
+    println(Box(s.clone()).value)
+    println(length(Box(s.clone())))
+    println(make().value)
+    return 0

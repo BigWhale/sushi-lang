@@ -28,7 +28,8 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   the callee row `Static`, and a type whose dot holds no static of the name is CE2102. A
   static of a primitive type name (`f64.from_bits`, `string.from_bytes`) is the callee
   row `BuiltinStatic`, with the one parameter of its row of `PRIMITIVE_STATICS`. A static
-  of a built-in container (`List.new`, `Own.alloc`) has the arm of `container_statics.py`.
+  of a built-in container (`List.new`, `Own.alloc`) has the arm of `container_statics.py`,
+  and a static of a generic type has the instance of `constructions.py`.
 
 An extension method and a static resolve through `resolve_extension_method`, which
 chooses the one that the calling unit may call (R4 to R7, C3 to C5). The arguments go
@@ -39,7 +40,7 @@ A plain type is a primitive, or a struct or an enum that is no instance of a gen
 and whose name the unit did not lose. Every other target, and a call that another group
 types (a generic function, a function of a stdlib module other than `<math>` and
 `<time>`, a C function that `visit/extern_calls.py` does not type, a variadic function, a
-method or a static of a type that is not plain, a method or a static with a method-level type
+method of a type that is not plain, a method or a static with a method-level type
 parameter, a perk method), stops the walk of its body. A call of a function or a method
 with a `peek` return has the source row of the call (`record_call_sources`).
 
@@ -81,6 +82,7 @@ from sushi_lang.semantics.passes.types.calls.methods import (
     RESOLUTION_REPORTED, extension_call_result_type, reject_uncloneable,
     reject_unhandled_channel_chain, resolve_extension_method)
 from sushi_lang.semantics.passes.types.calls.statics import reject_missing_static
+from sushi_lang.semantics.passes.types.calls.structs import template_shape
 from sushi_lang.semantics.passes.types.borrowed_returns import record_call_sources
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     check_stdlib_call, own_concrete_function)
@@ -93,6 +95,8 @@ from sushi_lang.semantics.passes.types.visibility import (
     name_is_contested, name_was_refused, out_of_scope_help, reject_ambiguous_name,
     reject_private_call, reject_private_kept_call, reject_private_type, type_is_contested,
     type_name_is_contested)
+from sushi_lang.semantics.passes.types.visit.constructions import (
+    Constructed, generic_static_owner)
 from sushi_lang.semantics.passes.types.visit.container_statics import (
     check_container_static, container_static_base)
 from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_call
@@ -136,7 +140,7 @@ def check_call(validator: TypeValidator, node: e.Call,
         base = container_static_base(validator, target)
         if base is not None:
             return check_container_static(validator, node, target, base, expected)
-        return _check_static_call(validator, node, target)
+        return _check_static_call(validator, node, target, expected)
     visit.stop_at(validator, node)
 
 
@@ -225,19 +229,21 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     return _check_user_method(validator, node, receiver, target.name, method, callee)
 
 
-def _check_static_call(validator: TypeValidator, node: e.Call,
-                       target: e.Static) -> Optional[Type]:
-    """`T.m(args)`: the static method `m` of the plain type `T` (#542).
+def _check_static_call(validator: TypeValidator, node: e.Call, target: e.Static,
+                       expected: Optional[Type]) -> Optional[Type]:
+    """`T.m(args)`: the static method `m` of the type `T` (#542).
 
     A type whose dot holds no static `m` is CE2102, and an enum CE2045. A static of a
-    primitive type name (`f64.from_bits`) is a `BuiltinStatic`. `Iterator.new` and a static
-    of a type that is not plain stop the walk.
+    primitive type name (`f64.from_bits`) is a `BuiltinStatic`. A static of a generic type
+    has the instance that its arguments and its position solve (`generic_static_owner`).
+    `Iterator.new` and a static of a type whose name the unit lost stop the walk.
     """
     primitive = (PRIMITIVE_STATICS.get((target.ty.value, target.name))
                  if isinstance(target.ty, BuiltinType) else None)
     if primitive is not None:
         return _check_primitive_static(validator, node, target, primitive)
-    owner = _static_owner(validator, node, target)
+    built = _static_owner(validator, node, target, expected)
+    owner = built.instance
     if owner is None:
         return None
     method = _user_method(validator, node, owner, target.name, static=True)
@@ -250,7 +256,7 @@ def _check_static_call(validator: TypeValidator, node: e.Call,
             reject_missing_static(validator, owner, target.name, node.loc)
         return None
     callee = Static(owner, validator.method_decl(owner, target.name))
-    return _check_user_method(validator, node, owner, target.name, method, callee)
+    return _check_user_method(validator, node, owner, target.name, method, callee, built.typed)
 
 
 def _check_primitive_static(validator: TypeValidator, node: e.Call, target: e.Static,
@@ -269,28 +275,50 @@ def _check_primitive_static(validator: TypeValidator, node: e.Call, target: e.St
     return static.returns
 
 
-def _static_owner(validator: TypeValidator, node: e.Call,
-                  target: e.Static) -> Optional[Type]:
-    """The plain type that a static call names, or None after its error: behind an alias
+def _static_owner(validator: TypeValidator, node: e.Call, target: e.Static,
+                  expected: Optional[Type]) -> Constructed:
+    """The type that a static call names, or no instance after its error: behind an alias
     (`geo.Vec.at()`), the type that the namespace holds. Any other type stops the walk."""
     if isinstance(target.ty, BuiltinType):
         if is_builtin_static(target.ty.value, target.name):
             visit.stop_at(validator, node)
-        return target.ty
+        return Constructed(target.ty)
     alias, dot, name = written_name(target.ty).rpartition(".")
     if dot:
         binding = validator.namespaces.lookup(alias, name)
         if binding is None or binding.kind not in ("struct", "enum"):
             visit.stop_at(validator, node)
         name = binding.name
-    owner = (validator.struct_table.by_name.get(name)
-             or validator.enum_table.by_name.get(name))
-    if (owner is None or is_builtin_static(name, target.name)
-            or not _is_plain(validator, owner)):
+    if is_builtin_static(name, target.name) or type_name_is_contested(validator, name):
         visit.stop_at(validator, node)
     if dot and reject_private_type(validator, name, node.loc):
-        return None
-    return owner
+        return Constructed(None)
+    if (name in validator.generic_struct_table.by_name
+            or name in validator.generic_enum_table.by_name):
+        built = generic_static_owner(validator, node, target, name, expected)
+        if built is None:
+            _reject_generic_member(validator, node, target, name)
+            return Constructed(None)
+        return built
+    owner = (validator.struct_table.by_name.get(name)
+             or validator.enum_table.by_name.get(name))
+    if owner is None or not _is_plain(validator, owner):
+        visit.stop_at(validator, node)
+    return Constructed(owner)
+
+
+def _reject_generic_member(validator: TypeValidator, node: e.Call, target: e.Static,
+                           name: str) -> None:
+    """The dot of a generic type with no instance holds no static of the name: CE2045 on
+    an enum and CE2102 on a struct. The arguments are still checked."""
+    if name in validator.generic_enum_table.by_name:
+        reject_missing_variant(validator, node.loc, target.name, name)
+    else:
+        reject_missing_static(validator,
+                              template_shape(validator.generic_struct_table.by_name[name], ()),
+                              target.name, node.loc)
+    for arg in node.args:
+        visit.check_expr(validator, arg.value)
 
 
 def _is_plain(validator: TypeValidator, ty: Type) -> bool:
@@ -362,7 +390,8 @@ def _user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
 
 
 def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
-                       method: ExtensionMethod, callee: Method | Static) -> Optional[Type]:
+                       method: ExtensionMethod, callee: Method | Static,
+                       typed: Mapping[int, Optional[Type]] = {}) -> Optional[Type]:
     """The arguments of an extension method or a static through the one argument check,
     with the declared mode of each parameter. The call yields the `Result` of the channel
     of the method, or its bare return value, also after an error of an argument. A method
@@ -375,7 +404,8 @@ def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name
     declared = Parameters(node.shir_id, modes_for(method.params, kind),
                           [param.name for param in method.params])
     check_arguments(validator, f"{display_type(owner)}.{name}", params, node.args, node.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared)
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared,
+                    typed=typed)
     return extension_call_result_type(validator, method)
 
 

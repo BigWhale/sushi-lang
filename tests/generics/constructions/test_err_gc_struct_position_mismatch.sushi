@@ -1,0 +1,13 @@
+# The arguments solve the instance, and the position that wants another type reports it.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+struct Box@(T):
+    T value
+
+struct Cat:
+    i32 n
+
+fn main() i32:
+    let Cat c = Box(1)
+    println(c.n)
+    return 0

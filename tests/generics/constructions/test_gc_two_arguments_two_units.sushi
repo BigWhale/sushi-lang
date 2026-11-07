@@ -1,0 +1,18 @@
+# One generic type at two type arguments in two units. The instance is one type, and the
+# alias holds the type and each variant.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n6\n7\neight\n9\n"
+use "helpers/gc_box" as gb
+use "helpers/gc_user"
+
+fn main() i32:
+    println(gc_text())
+    println(gc_number())
+    let gb.GcBox@(i32) a = gb.GcBox(7)
+    println(a.value)
+    println(gb.GcBox("eight").value)
+    match gb.GcSlot.Full(9):
+        gb.GcSlot.Full(v) -> println(v)
+        gb.GcSlot.Empty -> println(0)
+    return 0

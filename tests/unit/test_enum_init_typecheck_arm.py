@@ -22,7 +22,7 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import DeclId, ShirId
 from sushi_lang.semantics.shir.typeck import TypeckResults
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, EnumVariantInfo, UnknownType
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, EnumVariantInfo
 
 SPAN = Span(3, 5, 3, 20)
 I32 = BuiltinType.I32
@@ -86,9 +86,6 @@ def test_a_maybe_variant_takes_the_instance_of_its_position() -> None:
 
 
 @pytest.mark.parametrize("written, lost, expected", [
-    ("Maybe", None, None),
-    ("Maybe", None, SIGN),
-    ("Slot", None, None),
     ("Sign", "Sign", None),
 ])
 def test_a_construction_that_is_not_typed_yet_stops(written: str, lost: Optional[str],
@@ -96,9 +93,3 @@ def test_a_construction_that_is_not_typed_yet_stops(written: str, lost: Optional
     validator = _validator(written, lost=lost)
     assert _stop(validator, _init("None" if written != "Sign" else "Plus"), expected) == {
         "stage": "typecheck", "construct": "EnumInit"}
-
-
-def test_a_static_call_on_a_generic_enum_with_a_method_of_its_name_stops() -> None:
-    validator = _validator("Slot", methods=("flip",))
-    node = e.Call(ShirId(1), SPAN, e.Static(UnknownType("Slot"), "flip"), [])
-    assert _stop(validator, node) == {"stage": "typecheck", "construct": "Call(static)"}

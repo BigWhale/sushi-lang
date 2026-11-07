@@ -33,7 +33,7 @@ from sushi_lang.semantics.passes.types.expressions import (
     reject_zero_divisor)
 from sushi_lang.semantics.passes.types.visit.expressions import (
     type_float_literal, type_int_literal)
-from sushi_lang.semantics.passes.types.visit.results import WRAPPERS
+from sushi_lang.semantics.passes.types.visit.constructions import stands_alone
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_numeric_type
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
@@ -150,6 +150,8 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
                 visit.check_expr(validator, rhs, BuiltinType.BOOL))
     if node.op in COMPARISON_OPS:
         wrapped = _takes_the_other(validator, lhs), _takes_the_other(validator, rhs)
+        if wrapped == (True, True):
+            wrapped = (not stands_alone(validator, lhs), not stands_alone(validator, rhs))
         if wrapped == (False, True):
             left = visit.check_expr(validator, lhs)
             return left, visit.check_expr(validator, rhs, left)
@@ -187,7 +189,8 @@ def check_operand_pair(validator: TypeValidator, lhs: e.ShirExpr, rhs: e.ShirExp
 def _takes_the_other(validator: TypeValidator, operand: e.ShirExpr) -> bool:
     """Is the operand a `Maybe` or a `Result` variant, which takes the instance of its
     position: in a comparison, the type of the other operand (`m == Maybe.None`)?"""
-    return isinstance(operand, e.EnumInit) and validator.decl_name(operand.decl) in WRAPPERS
+    return (isinstance(operand, e.EnumInit) and validator.decl_name(operand.decl).rpartition(".")[2]
+            in validator.generic_enum_table.by_name)
 
 
 def _rejects_a_pointer(validator: TypeValidator, node: e.Unary | e.Binary,

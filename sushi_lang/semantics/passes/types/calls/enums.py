@@ -1,17 +1,16 @@
 """Enum constructor validation.
 
-Port template: `_refuse_untyped_constructor` calls `TypeValidator.validate_expression`,
-and that API is deleted. No pass reaches it today. The generic instances group (C1) ports
-it to SHIR inputs with the construction of a generic enum.
+A variant of a generic enum that no position and no payload solves is CE2112
+(`refuse_untyped_variant`). The AST solver (`untyped_constructor_instance`) is the answer
+that the early passes read.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, NamedTuple, Optional, Sequence
+from typing import TYPE_CHECKING, Mapping, NamedTuple, Optional, Sequence
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
-from sushi_lang.semantics.ast import EnumConstructor
 from ..arguments import check_arguments
 from ..propagation import holds_declared_type
 from sushi_lang.semantics.generics.type_display import display_type
@@ -25,7 +24,6 @@ if TYPE_CHECKING:
 class PayloadSolution(NamedTuple):
     """What the arguments of an unstamped generic enum constructor give (#1005)."""
     type_args: tuple
-    has_untyped_argument: bool
 
 
 def solve_constructor_payload(validator: 'TypeValidator', enum_name: str, variant_name: str,
@@ -54,7 +52,7 @@ def solve_constructor_payload(validator: 'TypeValidator', enum_name: str, varian
         param_types=list(variant.associated_types), type_param_names=names)
     type_args = tuple(resolve_unknown_type(solved[name], structs, enums)
                       if name in solved else None for name in names)
-    return PayloadSolution(type_args, any(t is None for t in arg_types))
+    return PayloadSolution(type_args)
 
 
 def untyped_constructor_instance(validator: 'TypeValidator', enum_name: str,
@@ -129,46 +127,24 @@ def declared_position_shape(validator: 'TypeValidator', node: 'Expr', enum_name:
                           solution.type_args)
 
 
-def _refuse_untyped_constructor(validator: 'TypeValidator', constructor: EnumConstructor, *,
-                                declared: bool) -> None:
-    """Report why an unstamped generic enum constructor has no instance (#1005).
-
-    With a declared type that does not fit, the position's mismatch check is the one
-    diagnostic, so CE2112 is not reported there.
-    """
-    template = validator.generic_enum_table.by_name[constructor.enum_name]
-    variant = next((v for v in template.variants if v.name == constructor.variant_name), None)
-    if variant is None:
-        reject_missing_variant(validator, constructor.variant_name_span or constructor.loc,
-                               constructor.variant_name, template.name)
-        for arg in constructor.args:
-            validator.validate_expression(arg)
-        return
-
-    if not check_arguments(validator, constructor.variant_name,
-                           [None] * len(variant.associated_types), constructor.args,
-                           constructor.loc, mismatch_code=er.ERR.CE2049,
-                           arity_code=er.ERR.CE2050, stop_on_arity=True):
-        return
-
-    if declared:
-        return
-    solution = solve_constructor_payload(validator, constructor.enum_name,
-                                         constructor.variant_name, constructor.args)
-    if solution is None or solution.has_untyped_argument:
-        return
+def refuse_untyped_variant(validator: 'TypeValidator', node: 'e.EnumInit', template,
+                           name: str, type_args: tuple) -> None:
+    """CE2112: no position and no payload gives a type parameter of a generic enum (#1005)."""
     names = [tp.name for tp in template.type_params]
-    missing = [name for name, t in zip(names, solution.type_args, strict=True) if t is None]
-    if not missing:
-        return
-    spelled = f"{constructor.enum_name}.{constructor.variant_name}"
-    spelled += "(...)" if constructor.args else "()"
-    example = display_type(_partial_shape(template, names, solution.type_args))
-    er.emit_with(validator.reporter, er.ERR.CE2112, constructor.loc,
-                 constructor=spelled,
-                 params=", ".join(f"'{name}'" for name in missing)) \
+    missing = [each for each, ty in zip(names, type_args, strict=True) if ty is None]
+    spelled = f"{name}.{node.variant}" + ("(...)" if node.payload else "()")
+    example = display_type(_partial_shape(template, names, type_args))
+    er.emit_with(validator.reporter, er.ERR.CE2112, node.loc, constructor=spelled,
+                 params=", ".join(f"'{each}'" for each in missing)) \
         .help(f"declare the type first, e.g. 'let {example} v = {spelled}', "
               "then use 'v'").emit()
+
+
+def declared_position_answer(template, type_args: tuple):
+    """The type that a variant with no instance answers where a declared type does not fit
+    it. The mismatch check of the position reads it (`got Maybe@(T)`) and reports the one
+    diagnostic. It is never an instance: the program does not reach the backend."""
+    return _partial_shape(template, [tp.name for tp in template.type_params], type_args)
 
 
 def reject_missing_variant(validator: 'TypeValidator', loc: Optional[Span], variant: str,
@@ -184,7 +160,8 @@ def reject_missing_variant(validator: 'TypeValidator', loc: Optional[Span], vari
 
 
 def validate_constructor_arguments(
-    validator: 'TypeValidator', init: 'e.EnumInit', variant: 'EnumVariant', enum_type: EnumType
+    validator: 'TypeValidator', init: 'e.EnumInit', variant: 'EnumVariant', enum_type: EnumType,
+    typed: Mapping[int, Optional[Type]] = {}
 ) -> None:
     """The payload of a variant construction against the types of the variant.
 
@@ -198,4 +175,4 @@ def validate_constructor_arguments(
         return
 
     check_arguments(validator, init.variant, expected_types, init.payload, init.loc,
-                    mismatch_code=er.ERR.CE2049, arity_code=er.ERR.CE2050)
+                    mismatch_code=er.ERR.CE2049, arity_code=er.ERR.CE2050, typed=typed)

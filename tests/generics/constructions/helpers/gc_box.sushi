@@ -1,0 +1,6 @@
+public struct GcBox@(T):
+    T value
+
+public enum GcSlot@(T):
+    Full(T)
+    Empty

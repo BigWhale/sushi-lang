@@ -18,7 +18,9 @@ def reject_unhandled_result(validator: 'TypeValidator', got: Optional[Type], exp
     """CE2505 when a value of a `Result` type goes where a type that is no `Result` is
     declared (#535). Asked before CE2002, which refuses the same value and names no fix."""
     from sushi_lang.semantics.generics.results import is_result_enum
-    if not is_result_enum(got) or is_result_enum(expected):
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    unsolved = isinstance(got, GenericTypeRef) and got.base_name == "Result"
+    if not (is_result_enum(got) or unsolved) or is_result_enum(expected):
         return False
     er.emit(validator.reporter, er.ERR.CE2505, span)
     return True

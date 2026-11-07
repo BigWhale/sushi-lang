@@ -1,0 +1,12 @@
+# A wrong count of a payload with no position is CE2050, and CE2112 does not follow.
+# EXPECT_ERROR_CODES_EXACT: CE2050
+
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn main() i32:
+    match Slot.Full():
+        Slot.Full(v) -> println(v)
+        Slot.Empty -> println(0)
+    return 0

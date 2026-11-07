@@ -1,0 +1,17 @@
+# A generic struct takes its instance from the position or from its arguments, written
+# by position or by name. A named construction evaluates in the written order.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 x\n2 y\n3\nw\n"
+
+struct Pair@(A, B):
+    A first
+    B second
+
+fn main() i32:
+    let Pair@(i32, string) a = Pair(1, "x")
+    let Pair@(i32, string) b = Pair(second: "y", first: 2)
+    println("{a.first} {a.second}")
+    println("{b.first} {b.second}")
+    println(Pair(3, "z").first)
+    println(Pair(second: "w", first: 4).second)
+    return 0

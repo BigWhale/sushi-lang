@@ -1,0 +1,11 @@
+# A wrong count with no position names the instance that the arguments solve: CE2027.
+# EXPECT_ERROR_CODES_EXACT: CE2027
+# EXPECT_STDERR_CONTAINS: "Pair@(A, B)"
+
+struct Pair@(A, B):
+    A first
+    B second
+
+fn main() i32:
+    println(Pair(1).first)
+    return 0
