@@ -1,0 +1,12 @@
+# A private template of one name in two units: each unit calls its own copy (C5).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a\nb\n"
+use "helpers/tc_private_a"
+use "helpers/tc_private_b"
+
+fn main() i32:
+    let Tag@(i32) t = Tag(1)
+    println(who_a(t))
+    println(who_b(t))
+    return 0
+

@@ -235,8 +235,6 @@ _FACTS = (
     ("walks_in_place", "passes/borrow/iterators.py", "C3",
      "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py reads its "
      "writer"),
-    ("callee_method_type_args", _TYPES_PASS + "calls/methods.py", "C1",
-     "the method type arguments of an extension call"),
     ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "C1 and C3",
      "the declaring unit of an extension callee"),
     ("iterator_next", _TYPES_PASS + "calls/methods.py", "C3", "the next() call of a protocol loop"),

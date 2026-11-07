@@ -99,3 +99,9 @@ def stop_at_family(stage: str, node: Any, family: str) -> NoReturn:
     found, where the pass does not have the arm of the family yet
     (`<stage>, Call(method <family>)`)."""
     stop(stage, node, family=family)
+
+
+def stop_at_perk_method(stage: str, node: Any) -> NoReturn:
+    """The stop of the pass `stage` at a call of a method of a perk implementation
+    (`<stage>, Call(perk method)`)."""
+    raise StageStop(stage, "Call(perk method)", node.loc)

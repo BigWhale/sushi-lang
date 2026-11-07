@@ -54,8 +54,12 @@ class Hole(ShirNode):
     codes of that error (ir.md 7.4); a hole with no codes is no error hole. The error hole of
     a member of a type that is no variant, and of a name that a namespace does not hold,
     keeps that `member`. The error hole of a named argument keeps the first name, `named`.
+    The error hole of written type arguments after a dot keeps the `call` with no type
+    arguments, and `type_args_loc`.
     """
     ast_class: str
     codes: tuple[str, ...] = ()
     member: Optional[UnknownMember] = None
     named: Optional[str] = None
+    call: Optional[ShirNode] = None
+    type_args_loc: Optional[Span] = None

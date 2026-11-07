@@ -91,10 +91,11 @@ def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Sta
 
 
 def check_hole(validator: TypeValidator, node: Hole,
-               expected: Optional[Type] = None) -> None:
+               expected: Optional[Type] = None) -> Optional[Type]:
     """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
     the member, the `Call` hole of written type arguments on a type name
-    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, the `RangeExpr` hole of a slice
+    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, the hole of written type arguments
+    after a dot is CE6102 at the type arguments and answers its `call`, the `RangeExpr` hole of a slice
     with a reversed range is CE2122 at the range, the hole of a named argument is CE6104
     at the hole, and the hole of a name that a namespace does not hold is CE2008 at the
     call, then CE6104 when the call names an argument (ir.md 7.4). An error hole whose error a pass before typecheck reported
@@ -106,9 +107,13 @@ def check_hole(validator: TypeValidator, node: Hole,
                  or any(validator.reporter.errors_offered.get(code) for code in node.codes))):
         validator.refused_before = True
         return
+    if node.call is not None:
+        er.emit_with(validator.reporter, er.ERR.CE6102, node.type_args_loc or node.loc) \
+            .help("call the generic function directly, e.g. foo@(i32)(x)").emit()
+        return visit.check_expr(validator, node.call, expected)
     if node.ast_class == "Call" and "CE6102" in node.codes:
         _reject_construction_type_args(validator, node)
-        return
+        return None
     reported = False
     if "CE2008" in node.codes and "CE2045" not in node.codes and node.member is not None:
         alias = node.member.written

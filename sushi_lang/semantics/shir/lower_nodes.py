@@ -215,9 +215,8 @@ class BodyLowerer:
                                     construct=type(node).__name__)
         return self._record(node, ())
 
-    def error_hole(self, node: Any, *codes: str,
-                   member: Optional[UnknownMember] = None,
-                   named: Optional[str] = None) -> Hole:
+    def error_hole(self, node: Any, *codes: str, member: Optional[UnknownMember] = None,
+                   named: Optional[str] = None, call: Optional[e.ShirExpr] = None) -> Hole:
         """The hole of a program that always has an error. It never stops the compile.
 
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
@@ -239,12 +238,12 @@ class BodyLowerer:
         reads, and the hole of a named argument the first name that its CE6104 reads.
         """
         return self._record(node, (*codes, "CE0108") if self.in_initializer else codes,
-                            member, named)
+                            member, named, call)
 
-    def _record(self, node: Any, codes: tuple[str, ...],
-                member: Optional[UnknownMember] = None,
-                named: Optional[str] = None) -> Hole:
-        made = Hole(self.ident(), self.span(node), type(node).__name__, codes, member, named)
+    def _record(self, node: Any, codes: tuple[str, ...], member: Optional[UnknownMember] = None,
+                named: Optional[str] = None, call: Optional[e.ShirExpr] = None) -> Hole:
+        made = Hole(self.ident(), self.span(node), type(node).__name__, codes, member, named,
+                    call, getattr(node, "type_args_loc", None))
         self.holes.append(made)
         return made
 
@@ -455,24 +454,22 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     gives a variant or a static, also behind an alias (`hm.HashMap.new()`). Any other
     receiver is a value, and the target is `Dotted`: which method it calls is an answer of
     the typecheck pass (ir.md 7.4). A named argument outside a struct construction is an
-    error hole (CE6104), as in `_call`. Written type arguments stand only on the function
-    behind a namespace: on a type or a value receiver (`Vec.at@(i32)(1)`,
-    `xs.get@(i32)(0)`) the program has an error (CE6102), `Static` and `Dotted` have no
-    field for them, and the form is an error hole.
+    error hole (CE6104), as in `_call`. Written type arguments on a type or a value receiver
+    (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`) are an error hole (CE6102) at the type arguments,
+    which keeps the call with no type arguments.
     """
     found = lw.bindings.resolution_of(node.receiver)
     if isinstance(found, bd.Namespace):
         return _qualified_call(lw, node, found.name)
     if node.field_names is not None:
         return lw.error_hole(node, "CE6104", named=node.field_names[0])
-    if _type_args(node):
-        return lw.error_hole(node, "CE6102")
     ty = lw.type_before_dot(node.receiver)
-    if ty is not None:
-        return _static_call(lw, node, ty)
-    ident = lw.ident()
-    return e.Call(ident, lw.span(node), e.Dotted(lw.expr(node.receiver), node.method),
-                  _arguments(lw, node.args))
+    call = _static_call(lw, node, ty) if ty is not None else e.Call(
+        lw.ident(), lw.span(node), e.Dotted(lw.expr(node.receiver), node.method),
+        _arguments(lw, node.args))
+    if not _type_args(node):
+        return call
+    return lw.error_hole(node, "CE6102", call=call)
 
 
 def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall, alias: str) -> e.ShirExpr:

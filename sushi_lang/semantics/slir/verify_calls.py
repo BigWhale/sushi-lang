@@ -76,13 +76,13 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
             return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
     _, dot, method = callee.name.rpartition(".")
     if dot:
-        for by_name in extensions.by_type.values():
-            for record in by_name.get(method, ()):
-                if method_symbol(record.target_type, method, record.unit_name) == callee.symbol:
-                    receiver = () if record.is_static else (
-                        receiver_mode(record.self_mode).convention,)
-                    return DeclaredParams(receiver + tuple(
-                        mode.convention for mode in declared_modes(record.params)))
+        for record in extensions.signatures_named(method):
+            if method_symbol(record.target_type, method, record.unit_name,
+                             record.method_type_args) == callee.symbol:
+                receiver = () if record.is_static else (
+                    receiver_mode(record.self_mode).convention,)
+                return DeclaredParams(receiver + tuple(
+                    mode.convention for mode in declared_modes(record.params)))
         return None
     extern = None if externals is None else externals.by_link_name(callee.symbol, callee.name)
     if extern is not None:

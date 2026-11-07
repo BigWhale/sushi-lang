@@ -104,8 +104,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         owner = (callee.ty if isinstance(callee, Static)
                  else deref_type(low.type_of(callee.recv)))
         name = low.decls.name_of(callee.decl)
-        return st.Direct(method_symbol(owner, name.rpartition(".")[2], resolved.unit),
-                         name)
+        return st.Direct(method_symbol(owner, name.rpartition(".")[2], resolved.unit,
+                                       resolved.type_args), name)
     if isinstance(callee, Stdlib):
         name = low.decls.name_of(callee.decl).rpartition(".")[2]
         types = [low.type_of(arg.value) for arg in node.args]

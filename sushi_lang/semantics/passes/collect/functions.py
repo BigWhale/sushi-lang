@@ -429,6 +429,8 @@ class ExtensionMethod:
     template_target: Optional[str] = None
     # A `peek T` return (#1229); a copy of a template shares the record of the template.
     borrowed_return: Optional['BorrowedReturn'] = None
+    # The solved method-level type arguments of a copy of a method-generic template.
+    method_type_args: tuple = ()
 
 
 @dataclass
@@ -440,6 +442,22 @@ class ExtensionTable:
     keeps both, and method resolution chooses through `visibility.extension_reach`.
     """
     by_type: Dict[Type, Dict[str, List[ExtensionMethod]]] = field(default_factory=dict)
+    # The copies of the method-generic templates, by (target, name, method arguments, unit).
+    # A copy is no answer of (type, name), so only a reader by symbol reads it.
+    method_generic_copies: Dict[tuple, ExtensionMethod] = field(default_factory=dict)
+
+    def add_method_generic_copy(self, method: ExtensionMethod) -> None:
+        """File the signature of the copy of a method-generic template."""
+        key = (method.target_type, method.name, method.method_type_args, method.unit_name)
+        self.method_generic_copies.setdefault(key, method)
+
+    def signatures_named(self, method_name: str) -> Iterator[ExtensionMethod]:
+        """Every signature of one method name that has a symbol, on any type."""
+        for by_name in self.by_type.values():
+            yield from by_name.get(method_name, ())
+        for copy in self.method_generic_copies.values():
+            if copy.name == method_name:
+                yield copy
 
     def add_method(self, method: ExtensionMethod) -> None:
         """File a method. A second record from the same unit replaces the first.

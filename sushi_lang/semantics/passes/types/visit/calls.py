@@ -25,8 +25,8 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   contract method that a constraint of an opaque receiver promises
   (`visit/contract_calls.py`). A family with no arm stops with the label
   `Call(method <family>)`, for a receiver of any type. A method is never variadic, so a
-  bloom argument is CE0120. An extension method of a receiver of a plain type is the
-  callee row `Method`.
+  bloom argument is CE0120. An extension method is the callee row `Method`. The copy of a
+  template is one body (`visit/method_templates.py`).
 - `Static` is a call on a type name. On an enum whose dot holds no such member it is
   CE2045 (`visit/results.py:reject_unknown_variant`). A static method of a plain type is
   the callee row `Static`, and a type whose dot holds no static of the name is CE2102. A
@@ -44,9 +44,8 @@ A plain type is a primitive, or a struct or an enum that is no instance of a gen
 and whose name the unit did not lose. Every other target, and a call that another group
 types (a function of a stdlib module other than `<math>` and
 `<time>`, a C function that `visit/extern_calls.py` does not type, a variadic function, a
-method of a type that is not plain, a method or a static with a method-level type
-parameter, a perk method), stops the walk of its body. A call of a function or a method
-with a `peek` return has the source row of the call (`record_call_sources`).
+method of a type whose name the unit lost, a perk method), stops the walk of its body. A
+call of a function or a method with a `peek` return has the source row of the call (`record_call_sources`).
 
 An `Interp` is a `string`, and each hole has a string form; the display type of each hole
 is an answer. A `Borrow` (`peek x`, `poke x` outside a call argument) is a value of a
@@ -82,12 +81,11 @@ from sushi_lang.semantics.passes.types.arguments import (
     NOTHING_TYPED, Parameters, check_arguments, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.arrays import check_array_method
 from sushi_lang.semantics.passes.types.calls.dotcall import (
-    PRIMITIVE_STATICS, MethodAnswer, MethodRung, PrimitiveStatic, reject_unknown_method,
-    resolve_dotted)
+    PRIMITIVE_STATICS, MethodRung, PrimitiveStatic, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
 from sushi_lang.semantics.passes.types.calls.methods import (
-    RESOLUTION_REPORTED, extension_call_result_type, reject_uncloneable,
-    reject_unhandled_channel_chain, resolve_extension_method)
+    RESOLUTION_REPORTED, extension_call_result_type, find_method_generic_template,
+    reject_uncloneable, reject_unhandled_channel_chain, resolve_extension_method)
 from sushi_lang.semantics.passes.types.calls.statics import reject_missing_static
 from sushi_lang.semantics.passes.types.calls.structs import template_shape
 from sushi_lang.semantics.passes.types.borrowed_returns import record_call_sources
@@ -114,6 +112,8 @@ from sushi_lang.semantics.passes.types.visit.helpers import (
     fn_field_call_type, function_type_of_sig)
 from sushi_lang.semantics.passes.types.visit.hashmap_methods import check_hashmap_method
 from sushi_lang.semantics.passes.types.visit.list_methods import check_list_method
+from sushi_lang.semantics.passes.types.visit.method_templates import (
+    UserMethod, resolve_user_method)
 from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.passes.types.visit.signature_methods import check_signature_method
@@ -128,7 +128,7 @@ from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ReferenceType, StructType, Type,
-    deref_type, owns_resource)
+    deref_type)
 from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
@@ -216,10 +216,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     the label of the family, on a receiver of any type. A contract method that a constraint
     of an opaque receiver promises has the arm of its family. Any other perk method stops
     the walk (C6), and so does any other method of a receiver that
-    takes no user method yet (`_takes_user_methods`). An extension method of a concrete
-    target is a `Method` callee. A method of a `T[]` that no concrete target declares is the
-    copy of a template (`extend T[]`, `xs.map(f)`), and it stops the walk before the copy is
-    made (C1); so does the copy of any other template.
+    takes no user method yet (`_takes_user_methods`). An extension method is a `Method`
+    callee: of a concrete target, or the copy of a template (`visit/method_templates.py`).
     A method that nothing answers on a local whose `let` the pass refused reports nothing
     more.
     """
@@ -244,30 +242,25 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if answer.rung is not MethodRung.PERK and _rejects_a_chain(validator, node, target,
                                                                receiver):
         return None
-    if (answer.rung is MethodRung.PERK
-            or not (_takes_user_methods(validator, receiver)
-                    or _answers_nothing(answer, receiver))):
+    if answer.rung is MethodRung.PERK:
+        dispatch.stop_at_perk_method(visit.STAGE, node)
+    if not _takes_user_methods(validator, receiver):
         visit.stop_at(validator, node)
     if target.name == "clone" and reject_uncloneable(validator, node, receiver):
         return None
-    method = None
+    found = UserMethod(None)
     if answer.rung is MethodRung.EXTENSION:
-        if (isinstance(receiver, DynamicArrayType)
-                and not validator.extension_table.declarations(receiver, target.name)):
-            visit.stop_at(validator, node)
-        method = _user_method(validator, node, receiver, target.name, static=False)
-        if method is RESOLUTION_REPORTED:
-            return None
-        if getattr(method, "template_id", None) is not None:
-            visit.stop_at(validator, node)
-    if method is None:
+        found = resolve_user_method(validator, node, receiver, target.name, static=False)
+    if found.method is RESOLUTION_REPORTED:
+        return None
+    if found.method is None:
         if not (isinstance(target.recv, e.LocalRef)
                 and target.recv.local in validator.refused_locals):
             reject_unknown_method(validator, receiver, target.name, node.loc)
         return None
-    convention = receiver_mode(method.self_mode).convention
+    convention = receiver_mode(found.method.self_mode).convention
     callee = Method(target.recv, validator.method_decl(receiver, target.name), convention)
-    return _check_user_method(validator, node, receiver, target.name, method, callee)
+    return _check_user_method(validator, node, receiver, target.name, found, callee)
 
 
 def _check_static_call(validator: TypeValidator, node: e.Call, target: e.Static,
@@ -287,17 +280,19 @@ def _check_static_call(validator: TypeValidator, node: e.Call, target: e.Static,
     owner = built.instance
     if owner is None:
         return None
-    method = _user_method(validator, node, owner, target.name, static=True)
-    if method is RESOLUTION_REPORTED:
+    found = resolve_user_method(validator, node, owner, target.name, static=True)
+    if found.method is RESOLUTION_REPORTED:
         return None
-    if method is None:
+    if found.method is None:
         if isinstance(owner, EnumType):
             reject_missing_variant(validator, node.loc, target.name, display_type(owner))
         else:
             reject_missing_static(validator, owner, target.name, node.loc)
         return None
     callee = Static(owner, validator.method_decl(owner, target.name))
-    return _check_user_method(validator, node, owner, target.name, method, callee, built.typed)
+    typed = {**built.typed, **found.typed}
+    return _check_user_method(validator, node, owner, target.name, found._replace(typed=typed),
+                              callee)
 
 
 def _check_primitive_static(validator: TypeValidator, node: e.Call, target: e.Static,
@@ -378,8 +373,10 @@ def _rejects_a_chain(validator: TypeValidator, node: e.Call, target: e.Dotted,
     if not (isinstance(receiver, EnumType)
             and (is_instance_of(receiver, "Result") or is_instance_of(receiver, "Maybe"))):
         return False
-    if resolve_extension_method(validator, receiver, target.name, report=False,
-                                site=node.loc) is not None:
+    if (resolve_extension_method(validator, receiver, target.name, report=False,
+                                 site=node.loc) is not None
+            or find_method_generic_template(validator, receiver, target.name, node.loc,
+                                            False)[0] is not None):
         return False
     return reject_unhandled_channel_chain(validator, target.name, receiver, node.loc,
                                           target.recv.loc, _called_name(validator,
@@ -400,44 +397,29 @@ def _called_name(validator: TypeValidator, recv: e.ShirExpr) -> Optional[str]:
     return None
 
 
-def _answers_nothing(answer: MethodAnswer, receiver: Type) -> bool:
-    """No rung answers a method of a struct, an enum or an array, so its call is CE2008."""
-    return (answer.rung is MethodRung.UNANSWERED
-            and isinstance(receiver, (StructType, EnumType, ArrayType, DynamicArrayType)))
-
-
 def _takes_user_methods(validator: TypeValidator, ty: Type) -> bool:
-    """A receiver whose extension methods the pass types: a plain type, an opaque type
-    parameter (no extension method answers it, so its call is CE2008), and an array of a
-    plain element that owns nothing (`extend i32[]`). A method of an instance of a generic
-    type (`extend Maybe@(i32)`) is the copy of a template, and stops (C1)."""
-    if _is_plain(validator, ty) or (isinstance(ty, TypeParameter) and ty.is_opaque):
-        return True
-    return (isinstance(ty, (ArrayType, DynamicArrayType)) and _is_plain(validator, ty.base_type)
-            and not owns_resource(ty.base_type, validator.drop_type_names))
-
-
-def _user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str, *,
-                 static: bool):
-    """The extension method or the static `name` of the plain type `owner` that the
-    calling unit calls, None when the type has none, or `RESOLUTION_REPORTED` after a
-    visibility error (CE3005, CE3022, CE3023). A method with a method-level type parameter
-    stops the walk (C1)."""
-    if validator.generic_extension_table.declarations(display_type(owner), name):
-        visit.stop_at(validator, node)
-    return resolve_extension_method(validator, owner, name, report=True, static=static,
-                                    site=node.loc)
+    """A receiver whose extension methods the pass types: a primitive, a struct or an enum
+    (an instance of a generic type too), an array of one, and an opaque type parameter (no
+    extension method answers it, so its call is CE2008). A type whose name the unit lost
+    and a receiver of any other kind stop."""
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return _takes_user_methods(validator, ty.base_type)
+    if isinstance(ty, TypeParameter):
+        return ty.is_opaque
+    return (isinstance(ty, (BuiltinType, StructType, EnumType))
+            and not type_is_contested(validator, ty))
 
 
 def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
-                       method: ExtensionMethod, callee: Method | Static,
-                       typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> Optional[Type]:
+                       found: UserMethod, callee: Method | Static) -> Optional[Type]:
     """The arguments of an extension method or a static through the one argument check,
-    with the declared mode of each parameter. The call yields the `Result` of the channel
+    with the declared mode of each parameter. The callee row holds the solved method
+    arguments and the unit of the declaration. The call yields the `Result` of the channel
     of the method, or its bare return value, also after an error of an argument. A method
     with a `peek` return has the source row of the call."""
+    method: ExtensionMethod = found.method
     validator.body_answers().record_callee(
-        node.shir_id, ResolvedCall(callee, unit=method.unit_name))
+        node.shir_id, ResolvedCall(callee, method.method_type_args, method.unit_name))
     record_call_sources(validator, node, method)
     params = [_parameter_type(validator, param) for param in method.params]
     kind = CalleeKind.STATIC_METHOD if isinstance(callee, Static) else CalleeKind.METHOD
@@ -445,7 +427,7 @@ def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name
                           [param.name for param in method.params])
     check_arguments(validator, f"{display_type(owner)}.{name}", params, node.args, node.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared,
-                    typed=typed)
+                    typed=found.typed)
     return extension_call_result_type(validator, method)
 
 

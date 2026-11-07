@@ -1,0 +1,29 @@
+# A template over an owning `T`, with `nom` at the receiver and at the argument. No leak.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "new\nold\n2\n"
+struct Slot@(T):
+    T v
+
+extend Slot@(T) swapped(nom self, nom T next) Slot@(T):
+    return Slot(next)
+
+extend Slot@(T) take(nom self) T:
+    return nom self.v
+
+extend List@(T) with_one(poke self, nom T x) i32:
+    self.push(nom x)
+    return self.len()
+
+fn main() i32:
+    let Slot@(string) a = Slot("old")
+    let Slot@(string) b = a.swapped(nom "new")
+    let string s = b.take()
+    println(s)
+    let Slot@(string) c = Slot("old")
+    println(c.take())
+    let List@(string) xs = List.new()
+    xs.push("x")
+    println(xs.with_one(nom "y"))
+    return 0
+

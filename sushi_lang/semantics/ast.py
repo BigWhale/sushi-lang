@@ -1002,9 +1002,6 @@ class MethodCall(Node):
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    # The SOLVED method-level type arguments of a method-generic extension call
-    # (`name@(U)`); the backend composes them into the callee symbol.
-    callee_method_type_args: Optional[Tuple] = None
     # The unit that declares the extension method the call resolved to; the backend
     # composes it into the callee symbol (`docs/design/extension-visibility.md` C5).
     callee_extension_unit: Optional[str] = None
@@ -1058,9 +1055,6 @@ class DotCall(Node):
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    # The SOLVED method-level type arguments of a method-generic extension call; see
-    # MethodCall.
-    callee_method_type_args: Optional[Tuple] = None
     callee_extension_unit: Optional[str] = None  # see MethodCall
     iterator_state: Optional[str] = None  # see MethodCall
     iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall

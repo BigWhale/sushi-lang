@@ -79,21 +79,19 @@ def instantiate_array_extension(validator: 'TypeValidator',
 
 
 def instantiate_target_extension(validator: 'TypeValidator', receiver_type, template,
-                                 call=None, report: bool = True,
-                                 static_site: Optional[Span] = None):
+                                 report: bool = True, site: Optional[Span] = None):
     """Resolve a call on an instance of a generic type against one generic-target template.
 
     The `T[]` rung is the model (#1196). The substituted signature answers the call. The
     first call that reaches the method files the signature in the extension table, so
     the next call and the backend find it, and queues the body copy for the analyzer's
-    fixpoint round. A question with no call node (the `foreach` protocol asks for
-    `next()`) gets the signature and writes nothing; the call that `foreach` then
-    validates writes it. A template check and an early inference write nothing either. A
-    static call over SHIR gives `static_site` and no AST call, and writes it too.
+    fixpoint round. A question with no `site` (the `foreach` protocol asks for `next()`)
+    gets the signature and writes nothing; the call that `foreach` then validates writes
+    it. A template check and an early inference write nothing either.
 
     An instance that fails a target bound gets no copy, and the last rung refuses the
     call (CE4006). A type argument in an `E` position of the template is CE2084 at the
-    call (E3), told only with `report` and a call to point at.
+    call (E3), told only with `report` and a site to point at.
     """
     from sushi_lang.semantics.generics.extensions import (
         bounds_hold_for, target_copy_args, target_copy_substitution)
@@ -101,7 +99,6 @@ def instantiate_target_extension(validator: 'TypeValidator', receiver_type, temp
     if args is None or not bounds_hold_for(template, args, validator.tables):
         return None
     substitution = target_copy_substitution(template, receiver_type)
-    site = call.loc if call is not None else static_site
     report = report and site is not None
     if _refuses_non_error_arguments(validator, template, receiver_type, substitution,
                                     site, report):
@@ -274,7 +271,8 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     Whatever a rung answers, the calling unit must be allowed to call it
     (`docs/design/extension-visibility.md`): `_choose_visible` reads the one predicate.
     A refusal stands at `site`, else at the call. A SHIR call gives `site` and no AST
-    call, so the rungs that read the arguments of the call do not run.
+    call, so the method-generic rung does not run here: the arm of the call asks it after
+    this answer (`visit/method_templates.py`).
     """
     if site is None and call is not None:
         site = call.loc
@@ -291,11 +289,10 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
         if not isinstance(chosen, GenericExtensionMethod):
             return chosen
         if isinstance(receiver_type, DynamicArrayType):
-            method = instantiate_array_extension(validator, receiver_type, chosen,
-                                                 call.loc if call is not None else None)
+            method = instantiate_array_extension(validator, receiver_type, chosen, site)
         else:
-            method = instantiate_target_extension(validator, receiver_type, chosen, call,
-                                                  report, site if static else None)
+            method = instantiate_target_extension(validator, receiver_type, chosen, report,
+                                                  site)
             if method is RESOLUTION_REPORTED:
                 return method
         if method is not None:
@@ -309,9 +306,8 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
         method = resolved
 
     if method is None:
-        method = _answer_from_template(
-            validator, receiver_type, method_name, call.loc if call is not None else None,
-            report=report and call is not None, static=static)
+        method = _answer_from_template(validator, receiver_type, method_name, site,
+                                       report=report and site is not None, static=static)
         if method is RESOLUTION_REPORTED:
             return RESOLUTION_REPORTED
 
@@ -475,8 +471,8 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
     return ResolvedMethod(method=method)
 
 
-def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
-                                  method_name: str, call, report: bool):
+def find_method_generic_template(validator: 'TypeValidator', receiver_type,
+                                 method_name: str, site: Optional[Span], report: bool):
     """The method-generic template a receiver answers to, plus its receiver substitution.
 
     Three receiver shapes: a `T[]` (the `$array` templates, element substitution), an
@@ -496,8 +492,7 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
                 and not (t.target_key and t.target_key != target_key)]
 
     def choose(templates):
-        return _choose_visible(validator, receiver_type, method_name, templates,
-                               call.loc if call is not None else None, report)
+        return _choose_visible(validator, receiver_type, method_name, templates, site, report)
 
     table = validator.generic_extension_table
     if isinstance(receiver_type, DynamicArrayType):
@@ -534,10 +529,16 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
 
 
 def _unsolved_margs_help(args, count: int) -> str:
-    """The help of CE2063, from its cause: a bare-param lambda, or no argument at all."""
+    """The help of CE2063 for the arguments of an AST call."""
     from sushi_lang.semantics.ast import Lambda
-    if any(isinstance(arg, Lambda) and any(p.ty is None for p in arg.params)
-           for arg in args):
+    bare = any(isinstance(arg, Lambda) and any(p.ty is None for p in arg.params)
+               for arg in args)
+    return unsolved_margs_help(bare, count)
+
+
+def unsolved_margs_help(bare_lambda: bool, count: int) -> str:
+    """The help of CE2063, from its cause: a bare-param lambda, or no argument at all."""
+    if bare_lambda:
         return ("annotate the lambda's parameter types ('|i32 x| ...'), or pass a named "
                 "function -- a bare-param lambda has no type of its own to infer from")
     pronoun = "them" if count > 1 else "it"
@@ -547,23 +548,17 @@ def _unsolved_margs_help(args, count: int) -> str:
 
 def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, call,
                                      report: bool = True):
-    """Resolve a call against a method-generic template (`name@(U)`, Phase 4).
-
-    The receiver substitution and the method-parameter unification COMPOSE: the
-    receiver names T, the arguments solve U. The substituted signature is returned as
-    a synthetic ExtensionMethod -- never added to the ExtensionTable, which keys on
-    (type, name) alone -- the solved margs are stamped on the call (the backend's half
-    of the symbol identity), and the instantiation is queued for the analyzer's
-    fixpoint round. Returns None (no template), RESOLUTION_REPORTED (CE2063 emitted),
-    or the synthetic method.
+    """Resolve an AST call against a method-generic template (`name@(U)`, Phase 4), for the
+    inference of the early passes. The arm of a call over SHIR is
+    `visit/method_templates.py`. Returns None (no template), RESOLUTION_REPORTED (CE2063
+    emitted), or the signature of `method_generic_copy`.
     """
     from sushi_lang.semantics.generics.pack_inference import (
         infer_call_arg_type, solve_leading_type_args)
     from sushi_lang.semantics.generics.types import substitute_type_params
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-    template, receiver_subst = _find_method_generic_template(
-        validator, receiver_type, call.method, call, report)
+    template, receiver_subst = find_method_generic_template(
+        validator, receiver_type, call.method, call.loc, report)
     if template is None or template is RESOLUTION_REPORTED:
         return template
 
@@ -579,16 +574,39 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
         partial=True, param_types=expected_params, type_param_names=margs_names)
     if unsolved:
         if report:
-            names = ", ".join(f"'{n}'" for n in unsolved)
-            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
-                         plural="s" if len(unsolved) > 1 else "",
-                         names=names, method=call.method) \
-                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
+            reject_unsolved_margs(validator, call.method, unsolved, call.loc,
+                                  _unsolved_margs_help(call.args, len(unsolved)))
             return RESOLUTION_REPORTED
         return None
+    return method_generic_copy(validator, template, receiver_type, receiver_subst,
+                               type_param_map, call.loc, report)
 
+
+def reject_unsolved_margs(validator: 'TypeValidator', method: str, unsolved, site,
+                          help_text: str) -> None:
+    """CE2063: the arguments of the call solve no method-level type parameter of `unsolved`."""
+    names = ", ".join(f"'{n}'" for n in unsolved)
+    er.emit_with(validator.reporter, er.ERR.CE2063, site,
+                 plural="s" if len(unsolved) > 1 else "", names=names, method=method) \
+        .help(help_text).emit()
+
+
+def method_generic_copy(validator: 'TypeValidator', template, receiver_type, receiver_subst,
+                        solved, site, report: bool):
+    """The signature of the copy of a method-generic template at the solved method arguments.
+
+    The receiver substitution and the method-parameter unification COMPOSE: the receiver
+    names T, the arguments solve U. The signature is never added to the ExtensionTable,
+    which keys on (type, name) alone. It holds the method arguments (the half of the symbol
+    identity that a call reads), and the copy is queued for the analyzer's fixpoint round.
+    A type argument that a rule refuses answers RESOLUTION_REPORTED, or None with no
+    `report`.
+    """
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+    margs_names = list(template.method_type_param_names)
     margs = tuple(
-        resolve_unknown_type(type_param_map[n], validator.struct_table.by_name,
+        resolve_unknown_type(solved[n], validator.struct_table.by_name,
                              validator.enum_table.by_name)
         for n in margs_names)
 
@@ -597,23 +615,24 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
 
     # E3 at the call, which is the instance: no copy is cut for a refused argument.
     if _refuses_non_error_arguments(validator, template, receiver_type, full_subst,
-                                    call.loc, report):
+                                    site, report):
         return RESOLUTION_REPORTED if report else None
 
     receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
     receiver_args = tuple(receiver_subst[n] for n in receiver_names)
     if _refuses_unmet_bounds(validator, template, template.name, receiver_type,
-                             receiver_args, margs, call.loc, report=report):
+                             receiver_args, margs, site, report=report):
         return RESOLUTION_REPORTED if report else None
 
     concrete = substituted_extension_signature(validator, template, receiver_type,
                                                full_subst)
-    call.callee_method_type_args = margs
+    concrete.method_type_args = margs
 
     # A template check cuts no copy (#1070).
     if not validator.in_template_check:
+        validator.extension_table.add_method_generic_copy(concrete)
         _queue_extension_instantiation(validator, template, receiver_type,
-                                       receiver_args, margs, call.loc)
+                                       receiver_args, margs, site)
     return concrete
 
 

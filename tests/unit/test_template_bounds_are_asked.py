@@ -32,7 +32,7 @@ ASKERS = {
         "the late copy of a static",
     ("semantics/passes/types/calls/methods.py", "instantiate_array_extension"):
         "the array extension copy, queued at a call",
-    ("semantics/passes/types/calls/methods.py", "resolve_method_generic_extension"):
+    ("semantics/passes/types/calls/methods.py", "method_generic_copy"):
         "the method-generic copy, queued at a call",
     ("semantics/passes/types/calls/methods.py", "instantiate_target_extension"):
         "the generic-target extension copy, queued at a call",

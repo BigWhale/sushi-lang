@@ -25,7 +25,7 @@ WRITERS = [
      "in_template_check"),
     (methods.instantiate_array_extension, "_queue_extension_instantiation",
      "in_template_check"),
-    (methods.resolve_method_generic_extension, "_queue_extension_instantiation",
+    (methods.method_generic_copy, "_queue_extension_instantiation",
      "in_template_check"),
     (methods.instantiate_target_extension, "extension_table.add_method",
      "queues_late_copies"),

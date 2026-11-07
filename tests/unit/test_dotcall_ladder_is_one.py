@@ -34,7 +34,6 @@ LADDER = TYPES_PASS / "calls" / "dotcall.py"
 #: holds it now: a field of the callee row, or a row kind of `TypeckResults`.
 SHIR_HOMES = {
     "callee_builtin_family": (BuiltinMethod, "family"),
-    "callee_method_type_args": (ResolvedCall, "type_args"),
     "callee_extension_unit": (ResolvedCall, "unit"),
     "callee_param_modes": (TypeckResults, "convention_of"),
     "resolved_enum_type": (TypeckResults, "type_of"),

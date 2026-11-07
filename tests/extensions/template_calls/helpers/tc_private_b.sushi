@@ -1,0 +1,8 @@
+use "helpers/tc_private_a"
+
+extend Tag@(T) who() string:
+    return "b"
+
+public fn who_b(Tag@(i32) t) string:
+    return t.who()
+

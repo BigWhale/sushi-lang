@@ -4,10 +4,16 @@ ShirBody pair_of (TemplateCheck("helpers/shir_gen_pair.pair_of"))
   params : [(_0 "a": T, Owned), (_1 "b": T, Owned)]
   locals : []
   block  :
-    Return(StructInit(@Pair, [(LocalRef(_0), Owned), (LocalRef(_1), Owned)], written_order: [0, 1]))
+    Return(adopt StructInit(@Pair, [(move LocalRef(_0), Owned), (move LocalRef(_1), Owned)], written_order: [0, 1]))
 
 ShirBody Pair@(T).count (TemplateCheck("helpers/shir_gen_pair.Pair.count"))
   params : [(_0 "self": Pair@(T), Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Lit(2))
+
+ShirBody Pair@(i32).count
+  params : [(_0 "self": Pair@(i32), Guaranteed)]
   locals : []
   block  :
     Return(adopt Lit(2))
@@ -16,7 +22,7 @@ ShirBody pair_of__i32
   params : [(_0 "a": i32, Owned), (_1 "b": i32, Owned)]
   locals : []
   block  :
-    Return(StructInit(@Pair, [(LocalRef(_0), Owned), (LocalRef(_1), Owned)], written_order: [0, 1]))
+    Return(adopt StructInit(@Pair, [(adopt LocalRef(_0), Owned), (adopt LocalRef(_1), Owned)], written_order: [0, 1]))
 
 unit test_shir_generic_second_unit
 
@@ -24,7 +30,7 @@ ShirBody main
   params : []
   locals : [_0 "p": Pair@(i32)]
   block  :
-    Assign(LocalRef(_0), Call(Named(GlobalRef(@pair_of)), [(Lit(1), Owned), (Lit(2), Owned)]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Binary(+, Field(LocalRef(_0), "left"), Field(LocalRef(_0), "right"))]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_0), "count"), [])]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt Call(Free(@pair_of__i32), [(adopt Lit(1), Owned), (adopt Lit(2), Owned)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, Field(LocalRef(_0), "left"), Field(LocalRef(_0), "right")), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Method(LocalRef(_0), @Pair@(i32).count, Guaranteed), []), Guaranteed)]))
+    Return(adopt Lit(0))
