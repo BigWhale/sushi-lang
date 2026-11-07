@@ -801,6 +801,7 @@ the value of a pattern (7.8, ruling R-AE). That covers more than types:
 | the field INDEX of a `Field` (the node carries only the name) | the `Field`'s `shir_id` |
 | the `LoopKind` of a loop (7.7), with the `next()` callee of a protocol walk | the loop's `shir_id` |
 | whether a `Range` is an `Iterator@(i32)` value | the `Range`'s `shir_id` |
+| the `next()` that the state of an `Iterator.new` calls | the call's `shir_id` |
 | the conversion that a `Cast` or a `Try` calls | the node's `shir_id` |
 | the success tag, the payload types and the function's return type of a `Try` | the `Try`'s `shir_id` |
 | the display type of each hole of an `Interp`, and of a `print` argument | the node's `shir_id`, per part |
@@ -3477,10 +3478,12 @@ has no `env`, and takes its thunk: it has no environment in its own signature.
 
 **An iterator value.** The kind of an iterator producer or a lazy adapter is
 `AggIterator(ty, source, heap)`. `ty` is the `Iterator@(T)` of the value. `source` names one
-row of a CLOSED table of the producers and the adapters: a contiguous cursor, each view of a
-`HashMap`, a range, `Iterator.new`, and each lazy adapter. Its parts are the operands that
-the row reads (the source place, the bounds, the inner iterator, the function of an
-adapter). `heap` is the answer of `OwnershipResults` (7.9), and the kind carries it, so the
+row of a CLOSED table of the producers and the adapters: `IterElements(container, lent)` for a
+contiguous cursor, `IterMapView(container, view, lent)` for each view of a `HashMap`,
+`IterRange(step)`, `IterNew(value, next)`, and each lazy adapter. Its parts are the operands
+that the row reads: the container (a read of its place when `lent`, else its move), the first
+value and the count of a range, the value of `Iterator.new`, the inner iterator and the
+function of an adapter. `heap` is the answer of `OwnershipResults` (7.9), and the kind carries it, so the
 emitter decides nothing: a LENT iterator that no `peek` return takes out of the function has
 its state on the stack (`heap: false`), and an OWNED iterator, or a LENT iterator that
 leaves through a `peek` return, has its state in a heap block (`heap: true`). The emitter of
@@ -3490,7 +3493,8 @@ the adapters of `backend/runtime/iterator_adapters.py` are that table, over oper
 SLIR writes no glue. The `peek` return of a lent iterator (4.4, `borrow-model.md` S10h)
 moves the WHOLE chain to the heap: each adapter of the chain reads the same `heap` answer.
 The drop of an iterator value is a `Drop(place)` that calls its `drop_fn` (8.10, rule 7).
-This shape is not built yet: `AggIterator` holds only `ty`, and no lowering makes it.
+The answer of a `peek` return whose type holds an iterator is an owned value, and it has no
+view local: it borrows its sources, and it owns its state (`answers_an_iterator`).
 
 ### 8.8 Terminators
 
@@ -4022,7 +4026,7 @@ Runs after lowering, before the backend. It checks:
   when it owns (`verify_values.capture_places`)
 - a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
   `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
-  the operand of an `Owned` argument (8.7). This rule is not built yet
+  the operand of an `Owned` argument (8.7)
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
