@@ -60,13 +60,12 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     externals: Optional[ExternalTable] = None) -> Optional[DeclaredParams]:
     """The declared parameters of the function that `callee` names. A free function is the
     function of its name in the unit whose symbol is the symbol of the callee; the name of a
-    pack instance has a dot too. A method or
-    a static has the written name `<type>.<method>`: it is the extension of that name whose
-    symbol is the symbol of the callee, and an instance method has its receiver first. A
-    function of a registry stdlib module is the row of its module, and each of its
-    parameters borrows. A C function is the declaration of `externals` whose link name is
-    the symbol of the callee: each parameter has the convention of its declared mode, and a
-    variadic one has `var_arg`."""
+    pack instance has a dot too. A method or a static has the written name `<type>.<method>`:
+    it is the extension of that name whose symbol is the symbol of the callee, and an instance
+    method has its receiver first. A function of a registry stdlib module is the row of its
+    module, and each of its parameters borrows. A C function is the declaration of `externals`
+    whose link name is the symbol of the callee: each parameter has the convention of its
+    declared mode, and a variadic one has `var_arg`."""
     if callee.module is not None:
         arity = stdlib_arity(callee.module, callee.name)
         return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
