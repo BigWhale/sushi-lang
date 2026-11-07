@@ -420,7 +420,7 @@ correct on both paths.
 Sushi needs none of it. This is a permanent simplification and it belongs to the language,
 not to the implementation. See ruling R3.
 
-### 4.3 A template is checked as one more copy, at opaque type arguments
+### 4.3 A template is checked as one more body, at opaque type arguments
 
 A generic body is checked where it is written (`checked-generics.md`). Each type parameter
 is OPAQUE, and an operation on it is legal only when a constraint promises it: `Eq` gives
@@ -431,7 +431,7 @@ with each type parameter replaced by its opaque form and with no body, inside an
 the program tables. `typecheck` checks that header and walks the SHIR body of the template
 as written, whose origin is `TemplateCheck`; each type that the body writes is read at the
 opaque parameters (`TemplateValidator.written_type`). `lift` and `borrow` read that body in
-the overlay. No pass copies, cuts or stamps the AST of a template. The written template is
+the overlay. No pass copies or stamps the body of a template. The written template is
 then skipped by the ordinary passes.
 
 The real instances are still cut by `monomorphize` and still checked one by one, but each
@@ -1072,7 +1072,8 @@ target type. A cast between two numeric types, and a cast to the type of its ope
 nothing: the conversion row is `NoConversion`. Any other pair is
 [CE2014](../error-catalog.md#ce2014). In the body of a conversion, a cast of the pair of
 that conversion is [CE2523](../error-catalog.md#ce2523), with a note at the conversion. A
-refused cast still answers its target type, so the node that reads it is checked too. An
+refused cast still answers its target type and has the row `NoConversion`, so the node that
+reads it and `borrow` check it too. An
 opaque type parameter has no other rule: `v as T` with `v` of the type `T` calls nothing, and
 each other cast to or from `T` is CE2014 with a note at the parameter. Two
 casts are not typed yet, and each one stops the walk of the body with `typecheck, Cast`: a
