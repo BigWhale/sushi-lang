@@ -9,9 +9,7 @@ yet stops the compile with CE0155. The numbers in sections 1 to 5 describe the t
 `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
-test passes before and after, unchanged. There is ONE exception: the failure text of
-`expect` is `Runtime Error RE2029: expect failed at <file:line:col>: <msg>`, with exit code 1
-(8.8, 11).
+test passes before and after, unchanged. There are the exceptions that N4 names.
 
 Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bodies), 6.4
 (the gate reads the body modules), 7.4 (evaluation order, recorded values, `expect`), 10.3
@@ -370,8 +368,14 @@ not change. When somebody proposes to finish the job, the answer is section 6.
 Expect a small slowdown until the optimization work starts.
 
 **N4. New language features.** No user-visible change. Every behaviour test passes before
-and after, unchanged. There is ONE exception: the failure text of `expect` is `Runtime Error
-RE2029: expect failed at <file:line:col>: <msg>`, with exit code 1 (8.8, 11).
+and after, unchanged. There are these exceptions. The failure text of `expect` is `Runtime
+Error RE2029: expect failed at <file:line:col>: <msg>`, with exit code 1 (8.8, 11). Ruling
+R-AY keeps three changes, each a fault of the old pipeline that the new one does not have: a
+valid program with a perk method on an instance that only `typecheck` names compiles, where the
+old pipeline refused it with CE2008 (7.3); on such an instance an override of `Display`, `Eq` or
+`Hashable` runs, where the old pipeline used the derived form with no diagnostic (7.3); and
+the receiver of a perk method with a `peek self` or a `poke self` is evaluated one time, where
+the old pipeline evaluated it two times (8.3).
 
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.
@@ -1089,7 +1093,10 @@ the callee in one order: the family of `METHOD_TYPE_REGISTRY` that claims the re
 the name (the claim puts a perk implementation before a family that yields to it), then a
 perk implementation, then an extension method of the name in any unit, and else nothing. A
 call that nothing answers is [CE2008](../error-catalog.md#ce2008), except when the collect
-pass refused an extension of that name on that type. A family answer is the callee row
+pass refused an extension of that name on that type. A perk template that gives the method and
+whose target bound fails for the receiver has no copy, and its call is
+[CE4006](../error-catalog.md#ce4006) with a note at the bound (`_answer_from_template`,
+`calls/methods.py`). A family answer is the callee row
 `Builtin(recv, BuiltinMethod)`, and only `MethodFamily.callee` makes the `BuiltinMethod`,
 so its family is always a row of the table (gate:
 `tests/unit/test_dotcall_ladder_is_one.py`). The AST ladder put its answer in a set of
@@ -1267,7 +1274,7 @@ target comes from the miss hook of the perk-implementation table, which also cut
 an array target (`on_perk_miss`, `PerkCopies`, `semantics/generics/perk_copies.py`): a hook of
 a table, and no shape of the IR. The first lookup that misses cuts the copy for that perk or
 that method, and the copy fixpoint places its body in the home unit of its template and
-checks it. `typecheck` keeps the path of `infer_lambda_type` that writes no stamp
+checks it. This hook gives two of the changes that N4 names. `typecheck` keeps the path of `infer_lambda_type` that writes no stamp
 (`stamp=False`, `passes/types/visit/helpers.py`). This is not built yet: a generic function as
 a value, whose type row names the instance that its position gives (the SHIR walk stops at the
 `GlobalRef`).
@@ -2705,8 +2712,8 @@ has no code yet: a lambda stops the walk of its body. The body of a pack instanc
 
 **The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
 receiver is `_1` with the convention `Inout`, its symbol is the perk symbol of
-`extension_symbol` (`semantics/generics/name_mangling.py`), and it has a `Direct` row in
-the function table (`funcs.by_unit`). No SLIR statement calls it. A `Drop(place)` of a type
+`extension_symbol` (`semantics/generics/name_mangling.py`). No row of the function table
+names it. No SLIR statement calls it. A `Drop(place)` of a type
 of the `Drop` set goes to the destroy seam, which calls that symbol FIRST and then drops the
 owning fields (`drops_of`, the one reader of the `Drop` set in the backend). The verifier
 needs no new rule for it. The body of every other perk method lowers in the same way (see
