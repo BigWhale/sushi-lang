@@ -1354,7 +1354,7 @@ the source; no pass fills it (S5). The error hole of a call of a name that the n
 does not hold (`m.nope(1)`, CE2008) carries a `member` too: the alias, the name and the span
 of the call. The error hole of a named argument (CE6104) carries `named`, the first name
 that the call writes (`dy` in `p.shifted(dy: 5, dx: 0)`). Every other hole has
-`member: None` and `named: None`. `typecheck` reads it:
+`member: None` and `named: None`. `typecheck` reads a `member`:
 when the written type names an enum, the hole is [CE2045](../error-catalog.md#ce2045) at
 `name_loc`, and the diagnostic names the instance that the position gives to a generic
 enum, as for a `Static` call (7.3). A static of the name does not change it, because a
@@ -1364,9 +1364,13 @@ prints the member (`<hole: MemberAccess, error: CE2045 | ..., member: Sign.Nope>
 2026-10-28 (R20). The error hole of a bare call with written type arguments on a type name
 (`Pair@(i32, i32)(1, 2)`, the `Call` hole of CE6102) is [CE6102](../error-catalog.md#ce6102)
 at the hole: `typecheck` reports it (note 108). Its help names the construction as the
-source writes it (`let Pair@(i32, i32) v = Pair(1, 2)`), from the text of the hole. Each
-other hole of CE6102 is a `DotCall` or a
-`MethodCall` hole, which is not typed yet, and it stops the walk of its body. At
+source writes it (`let Pair@(i32, i32) v = Pair(1, 2)`), from the text of the hole. The hole
+of written type arguments after a type or a value and a dot (`xs.get@(i32)(0)`,
+`Vec.at@(i32)(1)`, `Sign.Plus@(i32)(1)`) carries `call`, the call or the construction with no
+type arguments, and `type_args_loc`. Lowering sets both. `typecheck` reports CE6102 at
+`type_args_loc` and then types `call`, so the later faults of the call are reported too, and
+the hole answers what `call` answers. A struct behind an alias with written
+type arguments (`geo.Box@(i32)(1)`) has no `call`, and it stops the walk of its body. At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. The error hole of a name with no declaration, of a jump outside a loop and of
 a `self` in a static is the error of a pass before `typecheck` (`REPORTED_BEFORE`,
