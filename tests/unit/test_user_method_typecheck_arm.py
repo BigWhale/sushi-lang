@@ -14,6 +14,7 @@ from typing import Optional
 import pytest
 
 from sushi_lang.semantics.passes.types.visit import calls
+from sushi_lang.semantics.passes.types.visit.helpers import fn_field_call_type
 from sushi_lang.semantics.typesys import (
     BuiltinType, EnumType, EnumVariantInfo, FunctionType, StructType)
 
@@ -44,13 +45,13 @@ def test_a_plain_type_is_a_primitive_or_a_declared_struct_or_enum(ty, lost, plai
 
 
 def test_a_call_through_a_function_field_is_no_method_call() -> None:
-    assert calls._calls_a_function_field(_validator(), HANDLER, "op")
+    assert fn_field_call_type(_validator(), HANDLER, "op") is not None
 
 
 def test_a_method_of_the_name_wins_over_the_field() -> None:
-    assert not calls._calls_a_function_field(_validator(methods=("op",)), HANDLER, "op")
+    assert fn_field_call_type(_validator(methods=("op",)), HANDLER, "op") is None
 
 
 def test_a_field_of_another_type_is_no_function_call() -> None:
-    assert not calls._calls_a_function_field(_validator(), HANDLER, "id")
-    assert not calls._calls_a_function_field(_validator(), I32, "op")
+    assert fn_field_call_type(_validator(), HANDLER, "id") is None
+    assert fn_field_call_type(_validator(), I32, "op") is None

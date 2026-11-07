@@ -83,8 +83,9 @@ STRING_FAMILY = "string"
 RESULT_FAMILY = "result"
 MAYBE_FAMILY = "maybe"
 
-# The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` but the clone
-# family and the contract families is in exactly one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
+# The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` is in exactly
+# one of the four sets below (ruling R-V, docs/design/ir.md 8.3). The clone family and the
+# contract families are in no set.
 # Only reads: no method of the family changes or consumes its receiver.
 RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 # The one row of the string family that writes its receiver: the call of the concat

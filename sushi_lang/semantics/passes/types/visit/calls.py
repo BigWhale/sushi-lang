@@ -230,7 +230,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if received is None:
         return None
     receiver = deref_type(received)
-    if _calls_a_function_field(validator, receiver, target.name):
+    if fn_field_call_type(validator, receiver, target.name) is not None:
         visit.stop_at(validator, node)
     answer = resolve_dotted(validator, receiver, target.name)
     family = answer.family or promised_contract_family(validator, receiver, target.name)
@@ -398,11 +398,6 @@ def _called_name(validator: TypeValidator, recv: e.ShirExpr) -> Optional[str]:
         _, dot, name = validator.decl_name(called.ref.decl).rpartition(".")
         return name if dot else None
     return None
-
-
-def _calls_a_function_field(validator: TypeValidator, receiver: Type, name: str) -> bool:
-    """`h.op(v)` through a field of a function type: a call of a function value (C2)."""
-    return fn_field_call_type(validator, receiver, name) is not None
 
 
 def _answers_nothing(answer: MethodAnswer, receiver: Type) -> bool:
