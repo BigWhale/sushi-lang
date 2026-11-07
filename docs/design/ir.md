@@ -2785,7 +2785,8 @@ for each field, and the place `Field(p, i)` of a struct or a tuple is the GEP of
 The emitter reads the semantic type of the place, never a layout match. One check holds
 each `Aggregate`: a variant is a variant of its enum, a struct value is of a struct type
 with one part for each field, and the semantic type of each part is the type of its
-payload field or its field (not only the LLVM type). A part that does not agree is an
+payload field or its field (not only the LLVM type); at a field of a reference type it is
+the referenced type, because the part is a place (8.9). A part that does not agree is an
 internal error. The check is one function for each kind (`checked_variant`,
 `checked_struct`, `backend/constants/enum_initializers.py`): the rvalue calls it, and the
 converter of 8.5 calls it for each variant and each struct of a constant, at every depth,
@@ -3536,9 +3537,15 @@ and that the terminator of that block alone reads gets no storage marker: the lo
 follow the same rule: the `u32` casts of the index and of the length, and the `bool` that
 the switch reads, are written and read in their own block alone.
 
-A struct with a field of a
-reference type is [CE2415](../error-catalog.md#ce2415) at its declaration, and a body that
-constructs one still reaches SLIR, so the construction stops (`StructInit reference field`).
+A declaration cannot write a field of a reference type
+([CE2415](../error-catalog.md#ce2415)), and a generic instance over a borrow has one:
+`Box(peek x)` gives `T` the type `peek i32`, and `Maybe.Some(peek x)` gives a payload that
+type. A marked part is no consuming position: `borrow` borrows its place for the statement,
+and a part that is no place is [CE2404](../error-catalog.md#ce2404). In SLIR the part of an
+`Aggregate` at such a field or payload is the operand of the place, at the type of the place,
+and the emitter stores the address of the place (`_part`, `backend/slir/values.py`). No
+address local holds it, because a `Copy` of an address local reads the value behind it. A
+read of the field through a method or an operator has no arm, as on `main`.
 
 A `Match` evaluates its scrutinee in the scope of the match statement. A place (a local, a
 field, an element) is read where it is, with `Copy` in each test. A new value, and a scrutinee that the match takes (`consumes`), go into a
