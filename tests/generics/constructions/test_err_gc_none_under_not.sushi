@@ -1,0 +1,7 @@
+# The bool of `not` gives `Maybe.None` no instance.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "nothing gives"
+
+fn main() i32:
+    println(not Maybe.None)
+    return 0

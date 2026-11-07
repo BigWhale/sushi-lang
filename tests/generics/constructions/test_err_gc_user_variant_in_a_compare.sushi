@@ -1,0 +1,11 @@
+# A number gives a variant of a generic enum of the program no instance.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "nothing gives"
+
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn main() i32:
+    println(3 == Slot.Empty)
+    return 0

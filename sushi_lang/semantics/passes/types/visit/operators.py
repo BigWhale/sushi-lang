@@ -35,7 +35,7 @@ from sushi_lang.semantics.passes.types.visit.expressions import (
     type_float_literal, type_int_literal)
 from sushi_lang.semantics.passes.types.visit.constructions import stands_alone
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.type_predicates import is_numeric_type
+from sushi_lang.semantics.type_predicates import is_instance_of, is_numeric_type
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ _TYPE_KEEPING = ("neg", "~")
 
 def check_condition(validator: TypeValidator, cond: e.ShirExpr) -> bool:
     """Check a condition: a `bool` and nothing else. Answers whether it is one."""
-    ty = visit.check_expr(validator, cond, BuiltinType.BOOL)
+    ty = visit.check_expr(validator, cond, _offered(validator, cond, BuiltinType.BOOL))
     if reject_non_bool_condition(validator, cond, ty):
         return False
     return ty == BuiltinType.BOOL
@@ -60,7 +60,7 @@ def check_unary(validator: TypeValidator, node: e.Unary,
                 expected: Optional[Type]) -> Optional[Type]:
     operand = node.operand
     if node.op == "not":
-        ty = visit.check_expr(validator, operand, BuiltinType.BOOL)
+        ty = visit.check_expr(validator, operand, _offered(validator, operand, BuiltinType.BOOL))
         if _rejects_a_pointer(validator, node, ty):
             return None
         if ty is None or reject_non_bool_condition(validator, operand, ty):
@@ -146,18 +146,18 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
     """The types of the two operands, each checked at the type of its position."""
     lhs, rhs = node.lhs, node.rhs
     if node.op in _LOGICAL:
-        return (visit.check_expr(validator, lhs, BuiltinType.BOOL),
-                visit.check_expr(validator, rhs, BuiltinType.BOOL))
+        return (visit.check_expr(validator, lhs, _offered(validator, lhs, BuiltinType.BOOL)),
+                visit.check_expr(validator, rhs, _offered(validator, rhs, BuiltinType.BOOL)))
     if node.op in COMPARISON_OPS:
         wrapped = _takes_the_other(validator, lhs), _takes_the_other(validator, rhs)
         if wrapped == (True, True):
             wrapped = (not stands_alone(validator, lhs), not stands_alone(validator, rhs))
         if wrapped == (False, True):
             left = visit.check_expr(validator, lhs)
-            return left, visit.check_expr(validator, rhs, left)
+            return left, visit.check_expr(validator, rhs, _offered(validator, rhs, left))
         if wrapped == (True, False):
             right = visit.check_expr(validator, rhs)
-            return visit.check_expr(validator, lhs, right), right
+            return visit.check_expr(validator, lhs, _offered(validator, lhs, right)), right
     position = _numeric(expected)
     left_at = _given(lhs, position) if node.op in _SAME_TYPE + SHIFT_OPS else None
     right_at = _given(rhs, position) if node.op in _SAME_TYPE else None
@@ -186,11 +186,26 @@ def check_operand_pair(validator: TypeValidator, lhs: e.ShirExpr, rhs: e.ShirExp
     return visit.check_expr(validator, lhs, left_at), visit.check_expr(validator, rhs, right_at)
 
 
+def _variant_enum(validator: TypeValidator, operand: e.ShirExpr) -> Optional[str]:
+    """The generic enum whose variant the operand builds, or None."""
+    if not isinstance(operand, e.EnumInit):
+        return None
+    name = validator.decl_name(operand.decl).rpartition(".")[2]
+    return name if name in validator.generic_enum_table.by_name else None
+
+
 def _takes_the_other(validator: TypeValidator, operand: e.ShirExpr) -> bool:
-    """Is the operand a `Maybe` or a `Result` variant, which takes the instance of its
+    """Is the operand a variant of a generic enum, which takes the instance of its
     position: in a comparison, the type of the other operand (`m == Maybe.None`)?"""
-    return (isinstance(operand, e.EnumInit) and validator.decl_name(operand.decl).rpartition(".")[2]
-            in validator.generic_enum_table.by_name)
+    return _variant_enum(validator, operand) is not None
+
+
+def _offered(validator: TypeValidator, operand: e.ShirExpr, ty: Optional[Type]) -> Optional[Type]:
+    """The type that an operator offers its operand. An operator declares no type: it gives
+    a variant of a generic enum an instance of that enum, and nothing else, so that
+    `not Maybe.None` and `3 == Maybe.None` are CE2112."""
+    enum = _variant_enum(validator, operand)
+    return ty if enum is None or is_instance_of(ty, enum) else None
 
 
 def _rejects_a_pointer(validator: TypeValidator, node: e.Unary | e.Binary,

@@ -13,10 +13,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Mapping, NamedTuple, Optional, Sequence
 
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
 from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.passes.types import visit
-from sushi_lang.semantics.passes.types.arguments import marked_type, reject_misplaced_spread
+from sushi_lang.semantics.passes.types.arguments import (
+    NOTHING_TYPED, marked_type, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.calls.enums import intern_constructed_instance
 from sushi_lang.semantics.passes.types.calls.statics import (
     _interned_static_target, reject_unreached_type_params, static_template_for)
@@ -50,7 +53,7 @@ class Constructed(NamedTuple):
     """The instance of a construction, and the arguments that the pass has checked. The
     instance is None after a refusal."""
     instance: Optional[Type]
-    typed: TypedArguments = {}
+    typed: TypedArguments = NOTHING_TYPED
 
 
 def names_a_parameter(ty: Optional[Type], names: Sequence[str]) -> bool:
@@ -140,6 +143,17 @@ def solved_type_args(validator: TypeValidator, names: Sequence[str],
                  for name in names)
 
 
+def interned_instance(validator: TypeValidator, loc: Span, name: str,
+                      type_args: tuple[Optional[Type], ...]) -> Type:
+    """The instance that the solved type arguments name. The typecheck pass always has the
+    interner, so an instance that does not come back is an internal error."""
+    instance = intern_constructed_instance(validator, name, type_args)
+    if instance is None:
+        er.raise_internal_error("CE0000", span=loc,
+                                detail=f"the interner gave no instance of '{name}'")
+    return instance
+
+
 def walk_unchecked(validator: TypeValidator, args: Sequence[e.Arg], typed: TypedArguments,
                    order: Optional[Sequence[int]] = None) -> None:
     """Check at no type each argument that the solver left, after a refusal, so that an
@@ -173,7 +187,7 @@ def generic_struct_instance(validator: TypeValidator, node: e.StructInit, name: 
         refuse_unsolved_struct(validator, node, template, written, params, solution, type_args,
                                had_error=validator.errors_offered() != offered)
         return Constructed(None)
-    instance = intern_constructed_instance(validator, name, type_args)
+    instance = interned_instance(validator, node.loc, name, type_args)
     reject_unpromised_arguments(validator, instance, node.loc)
     return Constructed(instance, solution.typed)
 

@@ -38,6 +38,7 @@ CE2027 and CE2028 or CE2083. The gate is
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Collection, Dict, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
@@ -58,6 +59,10 @@ if TYPE_CHECKING:
 
 #: The type that a `peek x` or a `poke x` argument gives to the value of `x`.
 _BORROWS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
+
+
+#: The default of `typed`: the caller checked no argument.
+NOTHING_TYPED: Mapping[int, Optional[Type]] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -84,7 +89,7 @@ def check_arguments(
     also_accepts: Sequence[Sequence[Type]] = (),
     field_names: Sequence[str] = (),
     compares_nom: bool = True,
-    typed: Mapping[int, Optional[Type]] = {},
+    typed: Mapping[int, Optional[Type]] = NOTHING_TYPED,
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 

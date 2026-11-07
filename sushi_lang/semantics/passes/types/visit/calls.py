@@ -73,7 +73,7 @@ from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
-    Parameters, check_arguments, reject_misplaced_spread)
+    NOTHING_TYPED, Parameters, check_arguments, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.arrays import check_array_method
 from sushi_lang.semantics.passes.types.calls.dotcall import (
     PRIMITIVE_STATICS, MethodRung, PrimitiveStatic, reject_unknown_method, resolve_dotted)
@@ -391,7 +391,7 @@ def _user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
 
 def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name: str,
                        method: ExtensionMethod, callee: Method | Static,
-                       typed: Mapping[int, Optional[Type]] = {}) -> Optional[Type]:
+                       typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> Optional[Type]:
     """The arguments of an extension method or a static through the one argument check,
     with the declared mode of each parameter. The call yields the `Result` of the channel
     of the method, or its bare return value, also after an error of an argument. A method

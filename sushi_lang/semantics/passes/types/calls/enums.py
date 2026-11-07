@@ -11,7 +11,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
-from ..arguments import check_arguments
+from ..arguments import NOTHING_TYPED, check_arguments
 from ..propagation import holds_declared_type
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -161,7 +161,7 @@ def reject_missing_variant(validator: 'TypeValidator', loc: Optional[Span], vari
 
 def validate_constructor_arguments(
     validator: 'TypeValidator', init: 'e.EnumInit', variant: 'EnumVariant', enum_type: EnumType,
-    typed: Mapping[int, Optional[Type]] = {}
+    typed: Mapping[int, Optional[Type]] = NOTHING_TYPED
 ) -> None:
     """The payload of a variant construction against the types of the variant.
 

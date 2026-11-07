@@ -28,14 +28,14 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
 from sushi_lang.semantics.passes.types.arguments import check_arguments
 from sushi_lang.semantics.passes.types.calls.enums import (
-    declared_position_answer, intern_constructed_instance, refuse_untyped_variant,
-    reject_missing_variant, validate_constructor_arguments)
+    declared_position_answer, refuse_untyped_variant, reject_missing_variant,
+    validate_constructor_arguments)
 from sushi_lang.semantics.passes.types.calls.namespaced import reject_unknown_namespace_call
 from sushi_lang.semantics.passes.types.utils import (
     names_no_type, reject_named_argument, reject_unpromised_arguments)
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
 from sushi_lang.semantics.passes.types.visit.constructions import (
-    Constructed, solve_arguments, solved_type_args, walk_unchecked)
+    Constructed, interned_instance, solve_arguments, solved_type_args, walk_unchecked)
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.nodes import Hole
 from sushi_lang.semantics.source_text import source_text
@@ -214,7 +214,7 @@ def _generic_instance(validator: TypeValidator, node: e.EnumInit, name: str,
     solution = solve_arguments(validator, names, list(types), node.payload)
     type_args = solved_type_args(validator, names, solution.solved)
     if all(arg is not None for arg in type_args):
-        return Constructed(intern_constructed_instance(validator, name, type_args),
+        return Constructed(interned_instance(validator, node.loc, name, type_args),
                            solution.typed)
     walk_unchecked(validator, node.payload, solution.typed)
     if expected is not None and names_no_type(validator, expected):

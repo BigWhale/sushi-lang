@@ -1,0 +1,8 @@
+# The bool of an `if` gives `Maybe.None` no instance.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "nothing gives"
+
+fn main() i32:
+    if (Maybe.None):
+        println(1)
+    return 0

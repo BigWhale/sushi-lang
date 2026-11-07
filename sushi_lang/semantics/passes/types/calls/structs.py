@@ -18,7 +18,7 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Expr
-from ..arguments import check_arguments, reject_misplaced_spread
+from ..arguments import NOTHING_TYPED, check_arguments, reject_misplaced_spread
 from ..utils import intern_declared_wrapper, resolve_declared_type
 
 if TYPE_CHECKING:
@@ -157,7 +157,7 @@ def template_shape(template, type_args: tuple):
 
 
 def check_struct_fields(validator: 'TypeValidator', node: e.StructInit, struct: StructType,
-                        typed: Mapping[int, Optional[Type]] = {}) -> None:
+                        typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> None:
     """The fields of a construction of `struct` against the types of its fields.
 
     A bloom argument is CE0120, and the fields are then not checked: a struct is never
