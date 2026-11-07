@@ -866,8 +866,9 @@ of the node, its position and the body. Each expression node needs a type, the r
 a call target too. An integer literal and a `ConstRef` need a value too. A `ConstRef` of a
 constant that has no value stops the walk of its body with `typecheck, ConstRef with no
 value`, and an initializer with no value that is no empty container stops with `typecheck,
-Return with no value`: a function-typed constant (`const fn() -> i32 F = area`) has no value
-and no error yet. When the initializer has an error, that error is the diagnostic, and the
+Return with no value`. A function-typed constant (`const fn() -> i32 F = area`) has a
+`ScalarConstant` whose type is the function type and whose value is the symbol of the
+function; a generic function has no value there. When the initializer has an error, that error is the diagnostic, and the
 stop does not show. A `var` whose initializer is an empty container has no value, and it
 does not stop: its global is zero. The captures of a lambda are in `Bindings` and not in the
 body, so the check cannot count them.
@@ -1678,7 +1679,7 @@ Callee = Free(decl: DeclId)
        | Extern(decl: DeclId, symbol: str)    # a C function: libc.snprintf
        | Stdlib(decl: DeclId, module: str)      # a function of a registry stdlib module
        | Intrinsic(name: str)
-       | Indirect(value: Expr)                   # a closure or a fn-typed local
+       | Indirect(value: Expr, field: str?)      # a closure, a fn-typed local, or a fn-typed field of `value`
 ```
 
 This is the closed `CalleeKind` of `param_modes.py` read as an answer, with two
@@ -1742,8 +1743,11 @@ the callee row and not a row of `TypeckResults`, as `BuiltinMethod.nom_self` is 
 
 An `Indirect` callee takes the conventions of its arguments from the parameter modes of the
 function type of `value` (`CalleeKind.INDIRECT` of `param_modes.py`), and `typecheck`
-writes them as convention rows, as for a `Free` callee (8.6). This is not built yet: the
-walk stops at a call of a function value (`typecheck, Call(fn value)`).
+writes them as convention rows, as for a `Free` callee (8.6). A call through a field of a
+function type (`h.run(1)`) has a `Dotted` target and no `Field` node, so `value` is the
+receiver and `field` is the name of the field; the field index row of the `Call` gives its
+position. A named function used as a value has the callee row `Free` keyed by its
+`GlobalRef`, so that SLIR lowering makes the symbol as for a call.
 
 A call of a perk implementation method is a `Method` callee too: there is no callee kind of
 its own. Its symbol is the perk symbol of `extension_symbol`
@@ -2766,8 +2770,7 @@ symbol that the module does not hold is an internal error. A body reads a consta
 never reads its global. The round makes a global for each constant and each `var`, or it
 stops the compile; it never drops one. A struct value and an enum value go through the
 converter of 8.5, and so does an array value, also in a payload or a field. A constant
-that the evaluator gives no value (a function-typed constant) stops with
-`emit, constant with no value`.
+that the evaluator gives no value stops with `emit, constant with no value`.
 Every other fault of the round is an internal error: a constant with no type, a scalar of
 a type that has no LLVM constant, and a value that the converter of 8.5 cannot write.
 
@@ -3054,7 +3057,8 @@ Constant = Int(value: int, ty: Type)
          | Str(bytes: bytes)                      # a literal; owns no heap
          | Aggregate(ty: Type, parts: [Constant], variant: str | None)
                                                   # a const array, struct or enum variant
-         | FnRef(symbol: str)
+         | FnRef(symbol: str)                     # alone as an operand of `AggClosure`, or as
+                                                  # the one part of a function-typed `Aggregate`
 ```
 
 Produced by the constant evaluator on the AST (ruling Q5) and carried through unchanged.
@@ -3926,12 +3930,13 @@ Runs after lowering, before the backend. It checks:
   mode of the row of the method for each argument: `map_err` and `or_err` take the
   receiver `Owned`, the error value of `or_err` is `Owned`, and the function of `map_err`
   is `Guaranteed`. For an `Indirect` callee, they are the parameter modes of the
-  `FunctionType` of the operand (8.6); this part is not built yet. For the
+  `FunctionType` of the operand (8.6). For the
   `concat_in_place` row of the string family (8.3, 8.9), the receiver is `Inout` and the
   one argument is `Guaranteed`. For the `cursor_next` row of the
   `hashmap` family (8.6, 8.9), the map is `InGuaranteed` and the cursor is `Inout`; this
   part is not built yet
-- no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
+- no `Copy` of an owning value into an `Owned` argument, except a `string` and a function
+  value: a named function owns no heap, and `borrow` adopts it (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
 - a switch on an integer: the operand of a `SwitchInt` is an integer or a `bool`, and each
