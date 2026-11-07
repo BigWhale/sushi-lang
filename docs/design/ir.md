@@ -1279,7 +1279,7 @@ the SHIR node and from the call facts that the stop site gives it
 (`passes/types/call_facts.py`). A stage that stops on a `Call` with no facts is an internal
 error, so no stage prints a label that another stage would print in another way. The labels
 are `Call(<kind>)`: `method` (a method that no built-in family claims and that no
-extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension or perk method), `stdlib method` (a `public extend`
+extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension), `perk method` (a perk method that is no contract method; `dispatch.stop_at_perk_method` makes it), `stdlib method` (a `public extend`
 or perk method of a bundled Sushi-source stdlib unit), `static` (a user static),
 `builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a function of a registry stdlib
 module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function that `typecheck` does not type yet, 7.6, and `errno`), `alias` (a function of a

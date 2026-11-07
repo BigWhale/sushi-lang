@@ -10,9 +10,10 @@ row reads them.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from sushi_lang.semantics.generics.types import substitute_type_params
+from sushi_lang.semantics.passes.collect.functions import ExtensionMethod
 from sushi_lang.semantics.passes.types.arguments import NOTHING_TYPED
 from sushi_lang.semantics.passes.types.calls.methods import (
     RESOLUTION_REPORTED, find_method_generic_template, method_generic_copy,
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 class UserMethod(NamedTuple):
     """The answer of the rungs: the signature, None when no rung answers, or
     `RESOLUTION_REPORTED` after an error. `typed` holds what the solver checked."""
-    method: Any
+    method: Optional[ExtensionMethod | object]
     typed: TypedArguments = NOTHING_TYPED
 
 

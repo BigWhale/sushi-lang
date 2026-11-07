@@ -430,7 +430,7 @@ class ExtensionMethod:
     # A `peek T` return (#1229); a copy of a template shares the record of the template.
     borrowed_return: Optional['BorrowedReturn'] = None
     # The solved method-level type arguments of a copy of a method-generic template.
-    method_type_args: tuple = ()
+    method_type_args: tuple[Type, ...] = ()
 
 
 @dataclass
