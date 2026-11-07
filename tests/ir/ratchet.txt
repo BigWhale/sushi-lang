@@ -3958,6 +3958,8 @@ tests/perks/pack_constraint/test_err_pack_constraint_explicit.sushi
 tests/perks/pack_constraint/test_err_pack_constraint_inferred.sushi
 tests/perks/pack_constraint/test_pack_constraint_satisfied.sushi
 tests/perks/perk_calls/test_err_perk_call_arguments.sushi
+tests/perks/perk_calls/test_err_perk_call_bound_fails_early_instance.sushi
+tests/perks/perk_calls/test_err_perk_call_bound_fails_late_instance.sushi
 tests/perks/perk_calls/test_perk_call_across_units.sushi
 tests/perks/perk_calls/test_perk_call_constraint_in_an_instance.sushi
 tests/perks/perk_calls/test_perk_call_error_channel.sushi

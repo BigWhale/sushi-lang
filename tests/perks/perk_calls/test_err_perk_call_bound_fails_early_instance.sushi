@@ -1,0 +1,20 @@
+# A method of a perk template whose target bound fails for the instance: the template has no
+# copy, and the call is CE4006 with the note at the bound. It is not CE2008.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "test_err_perk_call_bound_fails_early_instance.sushi:19:13: error [CE4006]"
+# EXPECT_STDERR_CONTAINS: "test_err_perk_call_bound_fails_early_instance.sushi:14:13"
+perk Named:
+    fn name() string
+perk Show:
+    fn show() string
+struct Box@(T):
+    T v
+struct Pt:
+    i32 x
+extend Box@(T: Named) with Show:
+    fn show() string:
+        return "box"
+fn main() i32:
+    let Box@(Pt) b = Box(Pt(1))
+    println(b.show())
+    return 0

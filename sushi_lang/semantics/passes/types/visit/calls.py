@@ -232,7 +232,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     `Method` callee (`visit/perk_calls.py`). Any other method of a receiver that takes no user
     method yet stops the walk (`_takes_user_methods`). An extension method is a `Method`
     callee: of a concrete target, or the copy of a template (`visit/method_templates.py`).
-    A method that nothing answers on a local whose `let` the pass refused reports nothing
+    Those rungs also judge a perk template whose target bound fails (CE4006). A method that
+    nothing answers on a local whose `let` the pass refused reports nothing
     more.
     """
     refused = [reject_misplaced_spread(validator, arg) for arg in node.args]
@@ -262,9 +263,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         visit.stop_at(validator, node)
     if target.name == "clone" and reject_uncloneable(validator, node, receiver):
         return None
-    found = UserMethod(None)
-    if answer.rung is MethodRung.EXTENSION:
-        found = resolve_user_method(validator, node, receiver, target.name, static=False)
+    found = resolve_user_method(validator, node, receiver, target.name, static=False)
     if found.method is RESOLUTION_REPORTED:
         return None
     if found.method is None:
