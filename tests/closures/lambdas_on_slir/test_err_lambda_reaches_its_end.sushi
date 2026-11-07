@@ -1,0 +1,7 @@
+# A body with a value that reaches its end is CE0107, for a lambda too.
+# EXPECT_ERROR_CODES_EXACT: CE0107
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 x|:
+        println(x)
+    println(f(1))
+    return 0

@@ -56,7 +56,7 @@ from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
-from sushi_lang.semantics.shir.lift import Capture, LiftResults
+from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef, UnknownMember
 from sushi_lang.semantics.shir.ownership import OwnershipResults, Region
 from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -225,7 +225,7 @@ def _lambda(pr: ShirPrinter, lam: e.Lambda) -> str:
 
 
 def _lifted(pr: ShirPrinter, lam: e.Lambda) -> tuple[str, ...]:
-    """The symbol of the lifted function and its environment, each capture with its mode."""
+    """The symbol of the lifted function and its environment, each capture with its row."""
     if pr.lift is None:
         return ()
     symbol = pr.lift.symbol_of(lam.shir_id)
@@ -235,12 +235,11 @@ def _lifted(pr: ShirPrinter, lam: e.Lambda) -> tuple[str, ...]:
             *_optional("env", slots))
 
 
-def _capture(pr: ShirPrinter, lam: e.Lambda, capture: Capture) -> str:
+def _capture(pr: ShirPrinter, lam: e.Lambda, capture: LocalId) -> str:
     decided = (None if pr.ownership is None
-               else pr.ownership.capture_ownership_of(lam.shir_id, capture.local))
-    local = _local(capture.local)
-    text = local if decided is None else f"{_OWNERSHIPS[decided]} {local}"
-    return f"({text}, {'Move' if capture.moves else 'Copy'})"
+               else pr.ownership.capture_ownership_of(lam.shir_id, capture))
+    local = _local(capture)
+    return f"({local})" if decided is None else f"({_OWNERSHIPS[decided]} {local})"
 
 
 # -- the parts of a statement --------------------------------------------------------

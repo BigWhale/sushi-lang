@@ -1,0 +1,12 @@
+# A plain capture copies into the environment, and an owning capture moves into it.
+# EXPECT_STDOUT_EXACT: "42\n3\n45\n"
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let i32 base = 40
+    let i32[] xs = from([1, 2, 3])
+    let fn(i32) -> i32 add = |i32 x| x + base
+    let fn() -> i32 size = |~| xs.len()
+    println(add(2))
+    println(size())
+    println(add(2) + size())
+    return 0

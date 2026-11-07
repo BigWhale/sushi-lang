@@ -8,7 +8,7 @@ The answers that the dump shows, where the table has a row:
 - LENT or OWNED for an iterator call (`iterator: lent`) and its heap decision
   (`heap: false`), after the arguments of the `Call`;
 - the walk in place of a loop (`in_place: true`), after the body of the `Loop`;
-- the symbol and the environment of a `Lambda` (`symbol: "..."`, `env: [(adopt _4, Copy)]`),
+- the symbol and the environment of a `Lambda` (`symbol: "..."`, `env: [(adopt _4)]`),
   after its fields, each capture with its ownership and its mode.
 
 With no table, or with an empty table, the dump is the text of today, so every golden stays
@@ -46,7 +46,7 @@ heap: false), "map"), [(adopt GlobalRef(@double), Owned)], iterator: lent, heap:
 [], in_place: false)
     Loop(Items(LocalRef(_3), _11, Bare), [], in_place: true)
     Assign(LocalRef(_12), adopt Lambda([(_13, Guaranteed)], [Return(adopt Binary(+, LocalRef(_13), \
-LocalRef(_4)))], expr_body: true, symbol: "sample$lambda_0", env: [(adopt _4, Copy)]), is_init: true)
+LocalRef(_4)))], expr_body: true, symbol: "sample$lambda_0", env: [(adopt _4)]), is_init: true)
     Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 """
 
@@ -76,7 +76,7 @@ def test_a_capture_with_no_ownership_prints_its_local_and_its_mode() -> None:
     made = sample()
     text = print_body(made.body, made.decls, made.typeck,
                       ownership=ownership(made, skip="capture"), lift=lift(made))
-    assert "env: [(_4, Copy)]" in text
+    assert "env: [(_4)]" in text
 
 
 def test_a_program_prints_each_body_with_its_tables() -> None:

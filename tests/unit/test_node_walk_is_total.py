@@ -119,7 +119,7 @@ def test_the_walk_takes_a_blank_slot():
 
 
 def test_children_answers_in_field_declaration_order():
-    """The order names `__lambda_<n>`; a rearrangement renames every lifted function."""
+    """A reader gets its answers in the order of the declared fields."""
     first, second = a.IntLit(None, 1), a.IntLit(None, 2)
     node = a.BinaryOp(None, "+", first, second)
     declared = [name for name, _ in node_fields(node)]

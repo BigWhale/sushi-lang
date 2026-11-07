@@ -3,15 +3,20 @@
 Each `Convention` of an `Indirect` call matches the parameter modes of the `FunctionType` of
 its operand, because the modes are part of the type. A function value is the one owning value
 beside a `string` that may come as a copy: a named function owns no heap, and `borrow` adopts
-it (`copies_with_no_transfer`).
+it (`copies_with_no_transfer`). In a function that lowering cut from a lambda, a capture place
+is never moved out of, and the environment is never written as a whole: a caller can call the
+closure two times or more (`capture_places`).
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
+from sushi_lang.semantics.slir import places as p
+from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
-from sushi_lang.semantics.slir.verify_rules import CONVENTIONS
+from sushi_lang.semantics.slir.function import SlirFunction
+from sushi_lang.semantics.slir.verify_rules import CAPTURE_PLACES, CONVENTIONS
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, Type, deref_type
 
 if TYPE_CHECKING:
@@ -40,3 +45,25 @@ def indirect_conventions(check: Check, stmt: st.Call, callee: st.Indirect) -> No
         if have is not want:
             check.fail(CONVENTIONS, f"argument {index} of the indirect call is @{have.value}, "
                                     f"and its parameter is @{want.value}", stmt.span)
+
+
+def capture_places(check: Check, function: SlirFunction) -> None:
+    """No `Move` has its root in the environment, and no statement writes the environment."""
+    env = function.environment
+    if env is None:
+        return
+    root = p.Local(env)
+    for block in function.blocks:
+        for stmt in block.statements:
+            if isinstance(stmt, st.Assign):
+                operands, written = r.operands_of(stmt.rvalue), stmt.place
+            elif isinstance(stmt, st.Call):
+                operands, written = tuple(operand for operand, _ in stmt.args), stmt.dest
+            else:
+                continue
+            if written == root:
+                check.fail(CAPTURE_PLACES, f"writes the environment _{env.index}", stmt.span)
+            for operand in operands:
+                if isinstance(operand, p.Move) and p.locals_read(operand.place)[:1] == (env,):
+                    check.fail(CAPTURE_PLACES, f"moves {operand.place} out of the environment",
+                               stmt.span)

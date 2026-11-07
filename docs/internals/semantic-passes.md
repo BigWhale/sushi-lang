@@ -718,8 +718,8 @@ argument (`v + 1` on a `T`) is the template's: it is reported one time, at the t
 It is not a general de-duplicator. A repeat anywhere else is a bug to be fixed where it is
 made, and stays visible.
 
-A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
-`instance_of` onto what it lifts. The `borrow` pass checks a template on its check copy
+A lambda in a generic body is cut once for each instance, with the symbol of the instance
+as its prefix. The `borrow` pass checks a template on its check copy
 (see "The template check"), and its per-unit walk skips a written template that the
 `typecheck` pass checked (`BorrowChecker.run(..., skip=)` reads `checked_template_ids`). A
 written template that the driver did not check (a constraint that names no perk, a
@@ -1321,30 +1321,11 @@ let i32 y = get_value().realise(0)
 **On SHIR** ([the IR design](../design/ir.md), 7.9, ruling Q8), `LiftPass` runs between
 `typecheck` and `borrow`, per body. It rewrites no node: the symbol of each lambda and its
 environment layout are rows of the `LiftResults` of the body, and SLIR lowering cuts the
-function from them. A `Lambda` stops the walk of its body with
-[CE0155](../error-catalog.md#ce0155) (`lift, Lambda`) until the closures group, and
-`borrow` does not get that body. Today `typecheck` stops at a `Lambda` first. A body that
-the pass ends with no stop has its table checked (`check_lift`,
+function from them. The pass stops at nothing. A body has its table checked (`check_lift`,
 [CE0157](../error-catalog.md#ce0157)), and goes on to `borrow`.
 
-The rest of this section is the AST pass `LambdaLifter`, which no stage runs since the
-switch to SHIR; the closures group takes the symbol and the environment layout from it.
-Each lambda literal becomes a top-level function plus a captured environment. Before the
-switch, it ran BETWEEN `typecheck` and `borrow`, per unit: the lifted body needed the types
-that `typecheck` stamped, and the lifted function was borrow-checked like any other.
-
-**This pass owns the lambda BODY.** A lifted lambda is a function, so its body goes
-through `_validate_function` -- the `annotate` hook -- like every other function's, and
-the `typecheck` pass does not descend into a lambda body at all. `visit_lambda` keeps
-only what no lifted function carries: the function TYPE the enclosing expression needs,
-and the capture rules ([CE2094](../error-catalog.md#ce2094)), because lift consumes the capture list into the
-environment struct. So the body is checked once, and a fault in it is reported once.
-
-The annotation of one lifted body comes BEFORE the search for a lambda nested in it. The
-hook is what types a `Lambda` node, so a nested lambda lifted first would carry no parameter
-types, no captures and no channel, and its own body would not be checked.
-
-The environment parameter is a `poke` borrow, never a `peek` one. See
+`typecheck` and `borrow` walk the body of a lambda where the lambda stands, and SLIR lowering
+cuts one function for it. The environment is `_1`, and a capture is a field of it. See
 `docs/design/closures.md`.
 
 ## The `borrow` pass: borrow checking

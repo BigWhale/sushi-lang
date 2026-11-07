@@ -217,6 +217,7 @@ SHAPES: list[tuple[object, str]] = [
     # places and operands (ir.md 8.4, L8)
     (p.Copy(p.Global("test$counter", BuiltinType.I32)), "copy @test$counter"),
     (p.Move(p.Field(_local(3), 1)), "move (_3.1)"),
+    (p.Copy(p.Capture(_local(1), 0)), "copy (_1.0)"),
     (p.Copy(p.Index(_local(3), _copy(4))), "copy (_3[copy _4])"),
     (p.Copy(p.Deref(_local(2))), "copy (*_2)"),
     (p.Copy(p.Downcast(_local(3), "Err")), "copy (_3 as Err)"),

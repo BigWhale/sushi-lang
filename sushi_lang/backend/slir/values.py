@@ -300,7 +300,8 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
         return emit_array_value(state.codegen, kind.ty, kind.runs,
                                 [operand_value(state, part) for part in rvalue.parts])
     if isinstance(kind, r.AggClosure):
-        return emit_closure_value(state, rvalue)
+        return emit_closure_value(state, rvalue,
+                                  [operand_value(state, part) for part in rvalue.parts[1:]])
     if not isinstance(kind, (r.AggVariant, r.AggStruct, r.AggTuple)):
         state.stop(kind)
     parts = [type_of_operand(state, part) for part in rvalue.parts]

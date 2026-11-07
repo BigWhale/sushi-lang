@@ -294,19 +294,6 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 # the address of the receiver place, so no receiver is left with no address. The number is
 # not reused.
 
-_add(ErrorMessage("CE0137", Severity.ERROR,
-    "lifted lambda name '{name}' is already registered",
-    Category.INTERNAL,
-    "The lambda lifter claims its index before it builds anything: it steps past every "
-    "__lambda_<n> already in the function table and every __closure_env_<n> already in the "
-    "struct table, so the name it then registers is free in both. A registration that "
-    "fails anyway means the name entered a table between that search and the "
-    "registration, and the closure that loses the race silently aliases another unit's "
-    "body and environment layout -- which is the #402 fault the search exists to prevent. "
-    "It is fatal ON PURPOSE. It was a bare RuntimeError, so it reached the user as CE0000 "
-    "with no explanation of what had gone wrong (#687). Same treatment derive.py gives an "
-    "unsortable struct cycle with CE0128."))
-
 _add(ErrorMessage("CE0139", Severity.ERROR,
     "operator '{op}' received integer operands of two widths: {left} and {right}",
     Category.INTERNAL,
@@ -458,8 +445,7 @@ _add(ErrorMessage("CE0155", Severity.ERROR,
     "construct. The typecheck pass walks the SHIR body of each declaration, and the "
     "first construct that it cannot type yet stops the program (the stage is "
     "`typecheck`). The typecheck pass gives each body that it finished with no error to "
-    "the lift pass. A lambda stops the program in the typecheck pass first (`typecheck, "
-    "Lambda`), so no program stops in the lift pass yet (the stage is `lift`). The lift "
+    "the lift pass, which stops at nothing. The lift "
     "pass gives each body that it finished to the borrow pass, and the first construct "
     "that the borrow pass cannot check yet stops the program (the stage is `borrow`). The "
     "borrow pass gives each body that it finished to the SLIR lowering, and the first "

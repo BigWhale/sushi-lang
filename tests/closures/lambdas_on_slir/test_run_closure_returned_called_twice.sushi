@@ -1,0 +1,12 @@
+# A returned closure owns its environment, and a second call reads the same environment.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 1\nMostly Harmless 2\n"
+# EXPECT_NO_LEAKS
+fn make(string word) fn(i32) -> string:
+    let string kept = word.clone()
+    return |i32 n| "{kept} {n}"
+
+fn main() i32:
+    let fn(i32) -> string f = make("Mostly Harmless")
+    println(f(1))
+    println(f(2))
+    return 0

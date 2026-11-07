@@ -251,7 +251,7 @@ class SemanticAnalyzer:
         to `lift` and `borrow` too, for the diagnostics of `borrow`, and never to the SLIR
         stage, which lowers nothing while the program has an error (docs/design/ir.md 7.9).
         A stop of a stage ends the work on its body, and the
-        next stage does not get it. `lift` stops at a `Lambda` until the closures group.
+        next stage does not get it.
         `effects` runs on the AST before the loop, because `borrow` reads its summary. A
         stop of a stage stops the pipeline after the analysis with the stop code CE0155
         (`pipeline_stop`); with no stop, the backend emits the `SlirFunction` of each body
@@ -378,7 +378,7 @@ class SemanticAnalyzer:
     def pipeline_stop(self) -> Optional[StageStop]:
         """The one stop of the program, for an analysis that reported no error.
 
-        The first stop of the typecheck pass, else of the lift pass, else of the borrow
+        The first stop of the typecheck pass, else of the borrow
         pass, else an error hole whose codes no error offered (ir.md 7.4), else of the SLIR
         lowering (`Stops.first`). None when nothing stopped: the backend runs.
         """
@@ -892,7 +892,7 @@ class SemanticAnalyzer:
         borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir, stops=self.stops,
                                next_stage=slir.lower_body,
                                destroy_effects=self.destroy_effects, namespaces=namespaces)
-        lift = LiftPass(self.shir, stops=self.stops, next_stage=borrow.check_body)
+        lift = LiftPass(self.shir, next_stage=borrow.check_body, unit=unit.name)
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,

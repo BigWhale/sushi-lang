@@ -23,6 +23,7 @@ from sushi_lang.semantics.shir.walk import parts
 
 from . import calls as ca
 from . import expressions as ex
+from . import lambdas as lm
 from . import statements as st
 from .reads import unknown
 
@@ -84,7 +85,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Borrow: ex.check_borrow,
     e.Take: ex.check_take,
     e.Try: ex.check_try,
-    e.Lambda: stop_at,
+    e.Lambda: lm.check_lambda,
     e.StructInit: ex.check_struct_init,
     e.EnumInit: ex.check_enum_init,
     e.TupleInit: ex.check_tuple_init,

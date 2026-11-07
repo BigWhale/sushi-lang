@@ -25,10 +25,11 @@ from sushi_lang.semantics.passes.types.arguments import (
     NOTHING_TYPED, check_arguments, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.calls.generics import (
     constraints_hold_in_template, substituted_sig)
+from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_call
 from sushi_lang.semantics.passes.types.visit.constructions import (
-    TypedArguments, is_generic_value, names_a_parameter, solved_type_args, typed_alone,
-    unify_arguments, walk_unchecked)
+    TypedArguments, is_bare_lambda, is_generic_value, names_a_parameter, solved_type_args,
+    type_lambda, typed_alone, unify_arguments, walk_unchecked)
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.typesys import Type
@@ -137,7 +138,17 @@ def _solved(validator: TypeValidator, node: e.Call, template: GenericFuncDef) ->
     names = [tp.name for tp in template.type_params if not tp.is_pack]
     params = [param.ty for param in leading]
     typed = {index: typed_alone(validator, arg) for index, arg in enumerate(node.args)
-             if not is_generic_value(validator, arg.value)}
+             if not is_generic_value(validator, arg.value)
+             and not (isinstance(arg.value, e.Lambda) and index < len(leading))}
+    known = unify_arguments(validator, names, params, range(len(leading)), typed).solved
+    for index, arg in enumerate(node.args[:len(leading)]):
+        if not isinstance(arg.value, e.Lambda):
+            continue
+        if is_bare_lambda(validator, arg.value) and names_a_parameter(params[index], names):
+            typed[index] = None
+        else:
+            type_lambda(validator, typed, index, arg,
+                        substitute_type_params(params[index], known), names)
     solution = unify_arguments(validator, names, params, range(len(leading)), typed)
     reason = solution.why[0] if solution.why else "could not infer type arguments from call site"
     args = solved_type_args(validator, names, solution.solved)

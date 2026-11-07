@@ -107,31 +107,12 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
     # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
-    ("sushi_lang/semantics/shir/typeck.py", "record_capture",
-     "kept for the closures group of Phase 5: the typecheck pass on SHIR writes the type "
-     "of each capture"),
-    ("sushi_lang/semantics/shir/typeck.py", "capture_type",
-     "kept for the closures group of Phase 5: lift and SLIR lowering read the type of each "
-     "capture"),
-    ("sushi_lang/semantics/shir/ownership.py", "record_capture_ownership",
-     "kept for the closures group C2: the borrow pass on SHIR writes the ownership of each "
-     "capture"),
     ("sushi_lang/semantics/shir/ownership.py", "record_lent*",
      "kept for the iterators group C3: the borrow pass on SHIR writes the lent or owned "
      "state and the heap decision of an iterator, also of one that a peek return answers"),
     ("sushi_lang/semantics/shir/ownership.py", "record_in_place",
      "kept for the iterators group C3: the borrow pass on SHIR writes the walk in place of "
      "a loop over an iterator value or a next() type"),
-    ("sushi_lang/semantics/shir/lift.py", "record_*",
-     "kept for the closures group of Phase 5: the lift pass on SHIR writes the symbol and "
-     "the environment of each Lambda, where it stops today"),
-    # -- the AST lift pass, which no stage runs from the switch -----------------------
-    ("sushi_lang/semantics/passes/lift.py", "LambdaLifter",
-     "kept for the closures group of Phase 5: the lift pass on SHIR takes the symbol and "
-     "the environment layout from it"),
-    ("sushi_lang/semantics/passes/lift.py", "lift_perk_impl",
-     "kept for the closures group of Phase 5: the lift pass on SHIR takes the symbol and "
-     "the environment layout from it"),
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
@@ -189,8 +170,6 @@ WHITELIST += (
      _family("C3", "the iter() producer of a List")),
     (_BACKEND + "generics/hashmap/methods/iterators.py", "_emit_bucket_iterator",
      _family("C3", "the four producers of a HashMap")),
-    (_BACKEND + "runtime/closures.py", "emit_lambda",
-     _family("C2", "the closure value and its environment")),
     (_BACKEND + "runtime/iterator_adapters.py", "emit_adapter_call",
      _family("C3", "the iterator adapters")),
     (_BACKEND + "runtime/iterator_adapters.py", "owned_parts",
@@ -262,6 +241,8 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/compiler_stage_gate.py", "longrepr", "pytest prints the longrepr of a report"),
     ("tests/unit/compiler_stage_gate.py", "exitstatus", "pytest exits with the session exitstatus"),
     ("tests/unit/runner/test_a_skipped_leak_check_is_not_a_pass.py", "no_interposer", _FIXTURE),
+    ("tests/unit/runner/test_bless_writes_the_golden_files.py", "stub", _FIXTURE),
+    ("tests/unit/runner/test_golden_dump_directives.py", "stub", _FIXTURE),
     ("tests/unit/test_diagnostic_spelling_gate.py", "armed", _FIXTURE),
     ("tests/unit/test_diagnostic_spelling_gate.py", "disarmed", _FIXTURE),
     # -- a stand-in for a real object ------------------------------------------------

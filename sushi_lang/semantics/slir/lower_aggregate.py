@@ -132,7 +132,7 @@ def place_of(low: Lowering,
     steps = [cast(e.Field | e.Index | e.Slice, step) for step in reversed(walked.path)]
     place: p.Place
     if isinstance(root, e.LocalRef):
-        place = p.Local(low.local_of(root.local, root.loc))
+        place = low.local_place(root.local, root.loc)
     elif isinstance(root, e.StorageRef):
         place = rebinds.global_place(low, root)
     elif isinstance(root, ShirNode) and steps:

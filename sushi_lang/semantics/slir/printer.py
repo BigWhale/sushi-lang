@@ -166,6 +166,7 @@ PRINTERS: dict[type, Render] = {
     p.Local: lambda n: _local(n.id),
     p.Global: lambda n: f"@{n.symbol}",
     p.Field: lambda n: f"({show(n.base)}.{n.index})",
+    p.Capture: lambda n: f"({show(n.base)}.{n.index})",
     p.Index: lambda n: f"({show(n.base)}[{show(n.index)}])",
     p.Downcast: lambda n: f"({show(n.base)} as {n.variant})",
     p.Deref: lambda n: f"(*{show(n.base)})",
@@ -248,7 +249,8 @@ def print_function(function: SlirFunction) -> str:
         lines.extend(f"    {show(stmt)}" for stmt in block.statements)
         lines.append(f"    {show(block.terminator)}")
     lines.append("}")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n" + "".join("\n" + print_function(each)
+                                             for each in function.lifted)
 
 
 def print_stopped(stopped: SlirStopped) -> str:

@@ -76,8 +76,6 @@ NOT_A_BINDER: dict[str, str] = {
     "LiteralPattern.display": _TEXT,
     "RefBinding.mode": "a borrow marker",
     "Param.self_mode": "a receiver marker",
-    "Lambda.captures": "names that bind in an enclosing scope; Bindings holds them as "
-                       "Capture records",
 }
 
 _ROOTS = (a.FuncDef, a.ExtendDef, a.ConstDef)

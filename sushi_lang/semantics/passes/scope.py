@@ -10,8 +10,7 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
     Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, Assert, While, Foreach, Expand, Match, MatchArm, Break,
     If, Expr, Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
-    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param,
-    TupleLiteral, destructure_binders, pattern_bindings,
+    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, TupleLiteral, destructure_binders, pattern_bindings,
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 from sushi_lang.semantics.ast_walk import is_template_copy
@@ -491,15 +490,13 @@ class ScopeAnalyzer:
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in."""
         for col in self._capture_collectors:
-            if resolved_index < col['boundary'] and name not in col['names']:
-                col['names'][name] = Param(name=name, ty=None, name_span=span, loc=span)
-                col['captures'].append(
-                    Capture(name, self.scopes[resolved_index][name].local))
+            if resolved_index < col['boundary'] and name not in col['captures']:
+                col['captures'][name] = Capture(name, self.scopes[resolved_index][name].local)
 
     def _check_lambda(self, lam: Lambda) -> None:
         """Scope-check a lambda body and record its captured free names."""
         boundary = len(self.scopes)
-        collector: dict = {'boundary': boundary, 'names': {}, 'captures': []}
+        collector: dict = {'boundary': boundary, 'captures': {}}
         self._capture_collectors.append(collector)
         self._push_scope()
         for p in lam.params:
@@ -511,8 +508,7 @@ class ScopeAnalyzer:
             self._check_expression(lam.body)
         self._pop_scope()
         self._capture_collectors.pop()
-        lam.captures = list(collector['names'].values())
-        self._out.captures(lam, tuple(collector['captures']))
+        self._out.captures(lam, tuple(collector['captures'].values()))
 
     def _check_constant(self, const: ConstDef) -> None:
         """Check a constant definition - validate the value expression."""

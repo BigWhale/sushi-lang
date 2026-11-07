@@ -1,0 +1,71 @@
+unit test_slir_lambda_environment
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // base
+    let _2: List@(i32)                     // xs
+    let _3: fn(i32) -> i32                 // add
+    let _4: fn(i32) -> i32                 // push
+    let _5: i32
+    let _6: ~
+    let _7: i32
+    let _8: i32
+    let _9: i32
+    let _10: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 40_i32
+    StorageLive(_2)
+    _2 = call builtin List.new()
+    StorageLive(_3)
+    _3 = closure(const fn user_main.__lambda_0, copy _1)
+    StorageLive(_4)
+    _4 = closure(const fn user_main.__lambda_1, move _2)
+    StorageLive(_5)
+    _5 = call indirect(copy _3)(const 2_i32 @guaranteed)
+    StorageLive(_6)
+    _6 = call builtin println@(i32)(copy _5 @guaranteed)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_7)
+    _7 = call indirect(copy _4)(const 1_i32 @guaranteed)
+    StorageDead(_7)
+    StorageLive(_8)
+    _8 = call indirect(copy _4)(const 2_i32 @guaranteed)
+    StorageDead(_8)
+    StorageLive(_9)
+    _9 = call indirect(copy _4)(const 3_i32 @guaranteed)
+    StorageLive(_10)
+    _10 = call builtin println@(i32)(copy _9 @guaranteed)
+    StorageDead(_10)
+    StorageDead(_9)
+    _0 = const 0_i32
+    Drop(_4)
+    StorageDead(_4)
+    Drop(_3)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}
+
+fn user_main.__lambda_0(_1: __closure_env@(i32) @in_guaranteed, _2: i32 @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy _2 + copy (_1.0)
+    return
+}
+
+fn user_main.__lambda_1(_1: __closure_env@(List@(i32)) @in_guaranteed, _2: i32 @guaranteed) -> i32 {
+    let _0: i32
+    let _3: ~
+
+  bb0:
+    StorageLive(_3)
+    _3 = call builtin list.push(copy (_1.0) @inout, copy _2 @owned)
+    StorageDead(_3)
+    _0 = call builtin list.len(copy (_1.0) @guaranteed)
+    return
+}

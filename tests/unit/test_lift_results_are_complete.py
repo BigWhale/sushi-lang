@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
-from sushi_lang.semantics.shir.ids import LocalId, ShirId
-from sushi_lang.semantics.shir.lift import Capture, LiftResults
+from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.lift_check import check_lift, missing_lift
 from sushi_lang.semantics.shir.side_table import MissingAnswer
 
@@ -65,7 +65,6 @@ def test_a_read_answers_the_row_or_none() -> None:
     table = lift(made)
     lam = made.id_of("lambda")
     assert table.symbol_of(lam) == SYMBOL
-    assert table.environment_of(lam) == (Capture(CAPTURED, moves=False),)
+    assert table.environment_of(lam) == (CAPTURED,)
     assert table.symbol_of(ShirId(999)) is None
     assert table.environment_of(ShirId(999)) is None
-    assert Capture(LocalId(0), moves=True) != Capture(LocalId(0), moves=False)

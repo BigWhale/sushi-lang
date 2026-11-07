@@ -109,7 +109,7 @@ def _owner(low: Lowering, owner: ShirLocalId | str, span: Span) -> p.Place:
     """The place of an owner of a region row: a local. A `var` that owns stops in SLIR."""
     if isinstance(owner, str):
         raise StageStop(STAGE, "StorageRef owning", span)
-    return p.Local(low.local_of(owner, span))
+    return low.local_place(owner, span)
 
 
 def binds_a_view(low: Lowering, local: ShirLocalId) -> bool:

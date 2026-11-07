@@ -6,11 +6,10 @@ the analysis goes on, so it can meet more than one. The pipeline reports ONE, af
 `--dump-shir`, and only when the analysis reported no error. The order:
 
 1. The first stop of the typecheck pass, at the first construct that it cannot type.
-2. Else the first stop of the lift pass, at the first construct that it cannot lift.
-3. Else the first stop of the borrow pass, at the first construct that it cannot check.
-4. Else an error hole whose codes no error offered (`check_error_holes`).
-5. Else the first stop of SLIR lowering, at the first construct that it cannot lower.
-6. Else no stop: every body that reached the SLIR lowering finished, and the program goes
+2. Else the first stop of the borrow pass, at the first construct that it cannot check.
+3. Else an error hole whose codes no error offered (`check_error_holes`).
+4. Else the first stop of SLIR lowering, at the first construct that it cannot lower.
+5. Else no stop: every body that reached the SLIR lowering finished, and the program goes
    on to the backend. A stop at `emit` comes from the emitter, not from this record.
 
 These tests call the record over data. They do not run the compiler.
@@ -27,10 +26,6 @@ _B = Span(2, 1, 2, 4)
 
 def _typecheck(construct: str, span: Span = _A) -> StageStop:
     return StageStop("typecheck", construct, span, "main.sushi")
-
-
-def _lift(construct: str, span: Span = _A) -> StageStop:
-    return StageStop("lift", construct, span, "main.sushi")
 
 
 def _borrow(construct: str, span: Span = _A) -> StageStop:
@@ -62,30 +57,6 @@ def test_a_typecheck_stop_comes_before_a_borrow_stop_and_a_hole() -> None:
     stops.stopped(_typecheck("Call"))
     hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _B)
     assert stops.first(hole).params == {"stage": "typecheck", "construct": "Call"}
-
-
-def test_a_typecheck_stop_comes_before_a_lift_stop() -> None:
-    stops = Stops()
-    stops.lift_stopped(_lift("Lambda"))
-    stops.stopped(_typecheck("Call", _B))
-    assert stops.first(None).params == {"stage": "typecheck", "construct": "Call"}
-
-
-def test_the_first_lift_stop_is_kept() -> None:
-    stops = Stops()
-    stops.lift_stopped(_lift("Lambda"))
-    stops.lift_stopped(_lift("Lambda", _B))
-    stop = stops.first(None)
-    assert stop.params == {"stage": "lift", "construct": "Lambda"}
-    assert stop.span == _A
-
-
-def test_a_lift_stop_comes_before_a_borrow_stop_and_a_hole() -> None:
-    stops = Stops()
-    stops.borrow_stopped(_borrow("If", _B))
-    stops.lift_stopped(_lift("Lambda"))
-    hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _B)
-    assert stops.first(hole).params == {"stage": "lift", "construct": "Lambda"}
 
 
 def test_the_first_borrow_stop_is_kept() -> None:

@@ -158,11 +158,8 @@ def take_lent_iterator(checker: 'BorrowChecker', call: Expr, source: Expr) -> bo
         return False
     if isinstance(source, Name):
         from .consume import consume_named
-        source.ownership_provenance = Provenance.OWNED
         checker.err.meet(source)
         consume_named(checker, source.id, Provenance.OWNED, source.loc)
-    else:
-        source.ownership_provenance = Provenance.FRESH
     return True
 
 

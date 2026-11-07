@@ -241,14 +241,16 @@ class Lambda(ExprNode):
     """`ret` and `err` are the written return type and error type, if any.
 
     `expr_body` is true when the source writes the body as one expression: `body` is then
-    a block of one `Return` of it. The captures are in `Bindings`. The node stays in the
-    tree through `borrow` (ruling Q8).
+    a block of one `Return` of it. `captures` holds the locals of the enclosing body that the
+    lambda reads, as `Bindings` gives them, in the order of their first use. The node stays
+    in the tree through `borrow` (ruling Q8).
     """
     params: list[LambdaParam]
     ret: Optional[TypeRef]
     err: Optional[TypeRef]
     body: ShirBlock
     expr_body: bool
+    captures: tuple[LocalId, ...] = ()
 
 
 # -- constructions -----------------------------------------------------------------

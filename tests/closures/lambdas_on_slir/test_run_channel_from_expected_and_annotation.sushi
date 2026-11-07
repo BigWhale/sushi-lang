@@ -1,0 +1,22 @@
+# A lambda takes its channel from its annotation or from its expected type, and never from
+# its body.
+# EXPECT_STDOUT_EXACT: "2\n3\n4\n"
+# EXPECT_NO_LEAKS
+error Odd:
+    Found
+
+fn half(i32 x) i32 | Odd:
+    if (x % 2 == 1):
+        return Result.Err(Odd.Found)
+    return Result.Ok(x / 2)
+
+fn main() i32:
+    let fn(i32) -> i32 | Odd a = |i32 x| x + 1
+    let fn(i32) -> i32 | Odd b = |i32 x|:
+        let i32 h = half(x)??
+        return Result.Ok(h + 1)
+    let fn(i32) -> Result@(i32, Odd) c = |i32 x| half(x)
+    println(a(1).realise(0))
+    println(b(4).realise(0))
+    println(c(8).realise(0))
+    return 0

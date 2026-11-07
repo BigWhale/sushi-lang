@@ -61,7 +61,7 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
     "Borrow": ("place", "mode"),
     "Take": ("place",),
     "Try": ("inner",),
-    "Lambda": ("params", "ret", "err", "body", "expr_body"),
+    "Lambda": ("params", "ret", "err", "body", "expr_body", "captures"),
     "StructInit": ("decl", "fields", "written_order", "names", "named", "decl_loc"),
     "EnumInit": ("decl", "variant", "payload", "decl_loc"),
     "TupleInit": ("parts",),

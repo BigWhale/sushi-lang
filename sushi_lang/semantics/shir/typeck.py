@@ -30,9 +30,10 @@ from sushi_lang.semantics.shir.callee import Callee, Conversion
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.loop_kind import LoopKind
 from sushi_lang.semantics.shir.side_table import SideTable, row_table, write_once
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import FunctionType, Type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.const_eval import ConstantValue
 
 
@@ -71,6 +72,15 @@ class MatchFacts:
     are read at (None when the scrutinee is not an integer)."""
     scrutinee: Type
     integer: Optional[Type]
+
+
+def lambda_conventions(typeck: TypeckResults, lam: e.Lambda) -> tuple[Convention, ...]:
+    """The convention of each parameter of `lam`. The modes of its function type answer,
+    because a bare parameter takes its mode from the type of its position."""
+    ty = typeck.type_of(lam.shir_id)
+    if not isinstance(ty, FunctionType):
+        return tuple(param.convention for param in lam.params)
+    return tuple(mode.convention for mode in ty.modes)
 
 
 @dataclass(slots=True)

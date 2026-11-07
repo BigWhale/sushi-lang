@@ -1,0 +1,16 @@
+# A closure that owns, in a struct field and in an array. The owner frees the environment.
+# EXPECT_STDOUT_EXACT: "6\n7\n8\n"
+# EXPECT_NO_LEAKS
+struct Holder:
+    fn(i32) -> i32 run
+
+fn main() i32:
+    let string a = "abcde".clone()
+    let string b = "abcdef".clone()
+    let Holder h = Holder(|i32 x| x + a.len())
+    let (fn(i32) -> i32)[] fs = from([|i32 x| x + b.len()])
+    let fn(i32) -> i32 first = fs[0].clone()
+    println(h.run(1))
+    println(first(1))
+    println(fs[0](2))
+    return 0

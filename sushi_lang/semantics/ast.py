@@ -23,11 +23,6 @@ if TYPE_CHECKING:
 @dataclass(slots=True)
 class Node:
     loc: Optional[Span]
-    # The `borrow` pass records here what it proved about this node's ownership, and
-    # `backend/ownership.py` acts on it. A DECLARED field rather than an attribute
-    # written on in passing: see IR.md section 5. kw_only, because `loc` carries no
-    # default and every subclass adds positional fields after it.
-    ownership_provenance: Optional["Provenance"] = field(default=None, kw_only=True)
     # `f(nom x)` is a call-site MARKER, not an operator: the builder flags the argument
     # rather than wrapping it in a node every pass would dispatch on. It can land on any
     # expression, which is why it is declared here and not per class.
@@ -165,11 +160,6 @@ class Param:
                                       # mode bit the type cannot carry -- peek/poke ride on
                                       # ReferenceType. See docs/design/borrow-model.md S6.
     nom_span: Optional[Span] = None   # the `nom` marker itself, for diagnostics
-    # A lambda's captures are Params, and the `borrow` pass stamps each one.
-    ownership_provenance: Optional["Provenance"] = None
-    # A capture of a name that the enclosing lambda captures is a read off the
-    # environment of that lambda; the `lift` pass sets it (#1127). None reads the name.
-    capture_source: Optional["Expr"] = None
 
 
 @dataclass(slots=True)
@@ -926,16 +916,12 @@ class Lambda(Node):
     body: Union["Expr", "Block"]
     ret: Optional[Type] = None
     err_type: Optional[Type] = None
-    captures: Optional[List["Param"]] = None
-    lifted_name: Optional[str] = None
-    # Filled by the type pass: the lambda's resolved FunctionType (params + captures
-    # typed, ok/err resolved). `expected_type` is a FunctionType propagated from the
+    # Filled by the early inference: the lambda's FunctionType (params typed, ok/err
+    # resolved). `expected_type` is a FunctionType propagated from the
     # binding/argument context, used to infer bare-param types (`|x|`).
     resolved_type: Optional[FunctionType] = None
     expected_type: Optional[Type] = None
-    env_struct: Optional[Type] = None
-    # A `peek T` return written on a lambda: refused (CE2439), and kept so that the lifted
-    # body is not judged again.
+    # A `peek T` return written on a lambda: refused (CE2439).
     borrowed_return: Optional["BorrowedReturn"] = None
 
 
@@ -1167,11 +1153,3 @@ __all__ = [
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
-
-
-# `Provenance` annotates Node.ownership_provenance. It lands at the BOTTOM because
-# `ownership` reaches back into this module (through generics.cloning) for MethodCall,
-# so the import can only run once every class above exists. The totality gates resolve
-# the annotation through this module's globals, which is why it must be a real name here
-# and not a TYPE_CHECKING-only one.
-from sushi_lang.semantics.ownership import Provenance  # noqa: E402

@@ -23,16 +23,11 @@ DELETED_BY = {"ownership_provenance": "C3", "iterator_leaves": "C3"}
 
 #: (module path under sushi_lang/, qualified function name) -> the fields it names
 SITES: dict[tuple[str, str], frozenset[str]] = {
-    ("semantics/passes/borrow/iterators.py", "take_lent_iterator"):
-        frozenset({"ownership_provenance"}),
-    ("backend/runtime/closures.py", "emit_lambda"): frozenset({"ownership_provenance"}),
     ("semantics/generics/iterators.py", "state_on_heap"): frozenset({"iterator_leaves"}),
 }
 
 #: The rows of `SITES` at the day of the pin. A row may leave both; none may join.
 PINNED_SITES: frozenset[tuple[str, str]] = frozenset({
-    ("semantics/passes/borrow/iterators.py", "take_lent_iterator"),
-    ("backend/runtime/closures.py", "emit_lambda"),
     ("semantics/generics/iterators.py", "state_on_heap"),
 })
 

@@ -31,6 +31,7 @@ from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
 from sushi_lang.backend.slir import emit as slir_emit
+from sushi_lang.backend.slir.closures import declare_lifted
 from sushi_lang.backend.slir.state import stop
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 # Registers the hash() emitter factories that semantics/generics/hashing.py
@@ -425,6 +426,10 @@ class LLVMCodegen:
             raise_internal_error("CE0000", detail="the backend defines a body with no SLIR "
                                                   "of the program")
         function = self.slir_bodies.function_of(decl)
+        for lifted in function.lifted:
+            declare_lifted(self, lifted)
+        for lifted in function.lifted:
+            slir_emit.emit_function(self, lifted, filename=filename)
         defined = [slir_emit.emit_function(self, function, filename=filename)]
         if function.symbol == USER_MAIN_SYMBOL:
             defined.append(self.functions.main_wrapper.emit_main())

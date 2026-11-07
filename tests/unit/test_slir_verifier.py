@@ -1565,3 +1565,29 @@ def test_a_repeat_run_that_moves_its_value_is_refused():
                          (_move(2), p.Const(k.Int(2, I32))))
     _refused(_function([BLANK, STRINGS, STRING], _block(
         0, _ret(), _live(2), _text(2), _live(1), _set(1, repeat, BAD))), "an array value")
+
+
+_ENV = StructType(name="__closure_env<string, i32>", fields=(("_0", STRING), ("_1", I32)))
+_CAPTURED_TEXT = p.Capture(_local(1), 0)
+
+
+def _lifted(*statements: st.SlirStatement) -> SlirFunction:
+    function = _function([BLANK, _ENV, STRING, I32], _block(0, _ret(), *statements),
+                         params=((1, Convention.IN_GUARANTEED),))
+    return replace(function, environment=LocalId(1))
+
+
+def test_a_copy_and_an_inout_argument_of_a_capture_pass():
+    grown = st.Call(_local(0), st.Builtin(Intrinsic("grow"), ()),
+                    ((p.Copy(_CAPTURED_TEXT), Convention.INOUT),), SPAN)
+    _passes(_lifted(_set(3, r.Use(p.Copy(p.Capture(_local(1), 1)))), grown))
+
+
+def test_a_move_out_of_a_capture_place_is_refused():
+    moved = st.Assign(_local(2), r.Use(p.Move(_CAPTURED_TEXT)), BAD)
+    _refused(_lifted(st.StorageLive(LocalId(2), SPAN), moved), "capture places")
+
+
+def test_a_write_of_the_environment_is_refused():
+    written = st.Assign(_local(1), r.Use(_copy(1)), BAD)
+    _refused(_lifted(written), "capture places")

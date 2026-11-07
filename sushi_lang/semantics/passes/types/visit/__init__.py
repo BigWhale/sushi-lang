@@ -18,7 +18,8 @@ destructure, `expressions.py` the expression arms of the leaves and of a struct
 construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms
 of the operators and the check of a condition, `calls.py` the arms of a call, an
 interpolated string and a borrow, `function_values.py` the arms of a function used as a value
-and of a call of a function value, `container_statics.py` the arm of a static of a built-in
+and of a call of a function value, `lambdas.py` the arm of a lambda,
+`container_statics.py` the arm of a static of a built-in
 container, `results.py` the arm of an enum construction, `constructions.py` the instance of
 a construction and of a static of a generic type,
 `ranges.py` the arms of a range, and `arrays.py` the arms of an array construction, an
@@ -39,6 +40,7 @@ from sushi_lang.semantics.passes.types.visit import destructure as ds
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import fields as fd
 from sushi_lang.semantics.passes.types.visit import function_values as fv
+from sushi_lang.semantics.passes.types.visit import lambdas as lm
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import ranges as rg
 from sushi_lang.semantics.passes.types.visit import results as rs
@@ -150,7 +152,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Borrow: ca.check_borrow,
     e.Take: fd.check_take,
     e.Try: check_try,
-    e.Lambda: stop_at,
+    e.Lambda: lm.check_lambda,
     e.StructInit: ex.check_struct_init,
     e.EnumInit: rs.check_enum_init,
     e.TupleInit: fd.check_tuple_init,

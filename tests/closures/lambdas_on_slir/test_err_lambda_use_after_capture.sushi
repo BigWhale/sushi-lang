@@ -1,0 +1,8 @@
+# An owning capture is a consuming use of the local.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let fn() -> i32 f = |~| xs.len()
+    println(xs.len())
+    println(f())
+    return 0

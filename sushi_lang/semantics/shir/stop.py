@@ -22,20 +22,14 @@ from sushi_lang.internals.errors import REGISTRY
 
 @dataclass(slots=True)
 class Stops:
-    """The first stop of the typecheck pass, of the lift pass, of the borrow pass and of
-    the SLIR lowering."""
+    """The first stop of the typecheck pass, of the borrow pass and of the SLIR lowering."""
     typecheck: Optional[StageStop] = None
-    lift: Optional[StageStop] = None
     borrow: Optional[StageStop] = None
     slir: Optional[StageStop] = None
 
     def stopped(self, stop: StageStop) -> None:
         if self.typecheck is None:
             self.typecheck = stop
-
-    def lift_stopped(self, stop: StageStop) -> None:
-        if self.lift is None:
-            self.lift = stop
 
     def borrow_stopped(self, stop: StageStop) -> None:
         if self.borrow is None:
@@ -46,11 +40,11 @@ class Stops:
             self.slir = stop
 
     def first(self, hole: Optional[StageStop]) -> Optional[StageStop]:
-        """The stop that the pipeline reports: a stop of the typecheck pass, of the lift
-        pass, of the borrow pass, an error hole whose codes no error offered (`hole`), then
+        """The stop that the pipeline reports: a stop of the typecheck pass, of the borrow
+        pass, an error hole whose codes no error offered (`hole`), then
         a stop of the SLIR lowering. None when nothing stopped: the program goes on to the
         backend."""
-        for stop in (self.typecheck, self.lift, self.borrow, hole, self.slir):
+        for stop in (self.typecheck, self.borrow, hole, self.slir):
             if stop is not None:
                 return stop
         return None

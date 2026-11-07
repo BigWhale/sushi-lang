@@ -776,16 +776,6 @@ A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so noth
 
 The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0130](#ce0130) is the same check in the scope checker.
 
-### CE0137 {#ce0137}
-
-**Error** · internal
-
-**Message:** `lifted lambda name '{name}' is already registered`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The lambda lifter claims its index before it builds anything: it steps past every \_\_lambda\_&lt;n> already in the function table and every \_\_closure\_env\_&lt;n> already in the struct table, so the name it then registers is free in both. A registration that fails anyway means the name entered a table between that search and the registration. The closure would then use the body and the environment layout of another closure, so the compiler stops. This is a compiler bug, not a user error.
-
 ### CE0138 {#ce0138}
 
 **Error** · function

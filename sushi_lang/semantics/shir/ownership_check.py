@@ -67,7 +67,7 @@ from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.loop_kind import Cursor, HashMapCursor, IteratorValue, Protocol
 from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
-from sushi_lang.semantics.shir.typeck import TypeckResults
+from sushi_lang.semantics.shir.typeck import TypeckResults, lambda_conventions
 from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import ReferenceType, deref_type
 
@@ -198,9 +198,9 @@ def _iterator_gaps(call: e.Call, ownership: OwnershipResults) -> Iterator[str]:
 
 def _capture_gaps(lam: e.Lambda, lift: LiftResults,
                   ownership: OwnershipResults) -> Iterator[str]:
-    for capture in lift.environment_of(lam.shir_id) or ():
-        if ownership.capture_ownership_of(lam.shir_id, capture.local) is None:
-            yield f"ownership of capture _{capture.local.index}"
+    for local in lift.environment_of(lam.shir_id) or ():
+        if ownership.capture_ownership_of(lam.shir_id, local) is None:
+            yield f"ownership of capture _{local.index}"
 
 
 def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
@@ -213,7 +213,12 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
     borrowed |= {local.id for local in body.locals
                  if isinstance(typeck.local_type(local.id), ReferenceType)}
     for _path, value in walk(body.block, "block", body):
-        if (isinstance(value, s.Assign) and value.is_init
+        if isinstance(value, e.Lambda):
+            borrowed |= set(value.captures)
+            borrowed |= {param.local for param, convention
+                         in zip(value.params, lambda_conventions(typeck, value), strict=True)
+                         if convention is not Convention.OWNED}
+        elif (isinstance(value, s.Assign) and value.is_init
                 and isinstance(value.target, e.LocalRef)
                 and ownership.ownership_of(value.value.shir_id) is Ownership.REJECT):
             borrowed.add(value.target.local)

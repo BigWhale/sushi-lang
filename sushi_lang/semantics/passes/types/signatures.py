@@ -151,7 +151,6 @@ def validate_function(self, func: FuncDef) -> None:
 
 
 def _validate_function_body(self, func: FuncDef) -> None:
-    from sushi_lang.semantics.passes.lift import is_lifted_lambda
     self.current_function = func
     self.in_library_body = (self.in_library_unit
                             or bool(getattr(func, "is_library_template", False)))
@@ -160,9 +159,8 @@ def _validate_function_body(self, func: FuncDef) -> None:
     # of many copies of one source (#648). Set on every entry, so an ordinary body
     # clears what a transplanted or copied one set.
     self.reporter.enter_body(func)
-    kind = "lambda" if is_lifted_lambda(func) else "function"
     header = self.errors_offered()
-    _enter_body(self, func, func.name, kind, func.ret, func.err_type,
+    _enter_body(self, func, func.name, "function", func.ret, func.err_type,
                 func.err_span or func.ret_span)
 
     validate_and_register_parameters(self, func.params)

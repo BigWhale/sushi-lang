@@ -103,6 +103,8 @@ class TypeValidator:
         # True when the body holds an error that an earlier pass reported: the collect
         # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
         self.refused_before = False
+        # The parameters by address of the lambdas around the node that the walk is in.
+        self.lambda_borrows: Set['LocalId'] = set()
         # The initializer that the body half walks: its declaration and the value that the
         # constant evaluator gave it (docs/design/ir.md 7.3), or None.
         self.initializer: Optional['InitializerFacts'] = None
@@ -420,17 +422,6 @@ class TypeValidator:
         validator, so the three that serve one keep their place here.
         """
         validate_function(self, func)
-
-    def annotate_function(self, func: FuncDef) -> None:
-        """Type one function the lambda lifter built (the `Annotator` contract, #687).
-
-        A lifted lambda is an ordinary function from here on, so it is typed by the path
-        an ordinary one takes. Public because the lift pass runs after this one and
-        depends on it: a lifted body carries no parameter types and no channel until
-        this runs over it. The lift pass used to name `_validate_function` instead, so a
-        rename of a PRIVATE method here broke a different pass with no diagnostic.
-        """
-        self._validate_function(func)
 
     def _validate_extension_method(self, ext: ExtendDef) -> None:
         """The pass's surface for the analyzer, which drives the per-unit loop."""

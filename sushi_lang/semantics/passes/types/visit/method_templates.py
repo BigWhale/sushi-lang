@@ -18,7 +18,8 @@ from sushi_lang.semantics.passes.types.arguments import NOTHING_TYPED
 from sushi_lang.semantics.passes.types.calls.methods import (
     RESOLUTION_REPORTED, find_method_generic_template, method_generic_copy,
     reject_unsolved_margs, resolve_extension_method, unsolved_margs_help)
-from sushi_lang.semantics.passes.types.visit.constructions import TypedArguments, solve_arguments
+from sushi_lang.semantics.passes.types.visit.constructions import (
+    TypedArguments, is_bare_lambda, solve_arguments)
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import Type
 
@@ -53,7 +54,7 @@ def _method_generic(validator: TypeValidator, node: e.Call, owner: Type, name: s
     if bool(template.is_static) != static:
         return UserMethod(None)
     names = list(template.method_type_param_names)
-    bare = [_is_bare_lambda(validator, arg.value) for arg in node.args]
+    bare = [is_bare_lambda(validator, arg.value) for arg in node.args]
     params = [None if index < len(bare) and bare[index]
               else substitute_type_params(param.ty, receiver_subst)
               for index, param in enumerate(template.params)]
@@ -66,9 +67,3 @@ def _method_generic(validator: TypeValidator, node: e.Call, owner: Type, name: s
     method = method_generic_copy(validator, template, owner, receiver_subst, solution.solved,
                                  node.loc, True)
     return UserMethod(method, solution.typed)
-
-
-def _is_bare_lambda(validator: TypeValidator, value: e.ShirExpr) -> bool:
-    """A lambda with a parameter of no written type has no type of its own to solve from."""
-    return isinstance(value, e.Lambda) and any(
-        validator.body_locals[param.local].declared is None for param in value.params)

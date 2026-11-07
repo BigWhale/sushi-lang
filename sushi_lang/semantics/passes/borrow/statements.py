@@ -54,8 +54,8 @@ from .pattern_takes import (
 from .borrowed_returns import check_borrowed_return
 from .borrows import clear_borrows
 from .consume import (
-    bind, binds_a_bare_literal_string, consume, decide, settle_function_value, source_provenance,
-    value_owners)
+    bind, binds_a_bare_literal_string, consume, decide, settle_function_value,
+    settle_rebound_function_value, source_provenance, value_owners)
 from .diagnostics import emit_consume_of_borrow, spelled
 from .expressions import reject_a_use_after_the_change
 from .flow import (
@@ -157,6 +157,9 @@ def _check_rebind(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> N
     check_owner_not_borrowed(checker, local, node.loc, "assign", place=node.target)
     consume(checker, node.value)
     _reinitialize(checker, local)
+    state = checker.borrow_state.get(local)
+    if state is not None:
+        settle_rebound_function_value(checker, state, node.value)
 
 
 def _check_storage_rebind(checker: 'BorrowChecker', node: s.Assign) -> None:

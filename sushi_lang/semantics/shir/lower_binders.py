@@ -52,12 +52,12 @@ def lower_lambda(lw: BodyLowerer, node: a.Lambda) -> e.Lambda:
     """`|params| body`: the parameters, the written types, then the body as a block."""
     ident = lw.ident()
     params = [_param(lw, param) for param in node.params]
+    captures = tuple(capture.local for capture in lw.bindings.captures_of(node) or ())
     if isinstance(node.body, a.Block):
         return e.Lambda(ident, lw.span(node), params, node.ret, node.err_type,
-                        lw.block(node.body), expr_body=False)
+                        lw.block(node.body), False, captures)
     body = lw.returned(node.body, lw.span(node.body))
-    return e.Lambda(ident, lw.span(node), params, node.ret, node.err_type, body,
-                    expr_body=True)
+    return e.Lambda(ident, lw.span(node), params, node.ret, node.err_type, body, True, captures)
 
 
 def _param(lw: BodyLowerer, param: a.Param) -> e.LambdaParam:

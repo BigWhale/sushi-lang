@@ -108,7 +108,7 @@ def _place(low: Lowering, target: e.ShirExpr) -> p.Place:
     """The place of a target of a rebind form, its indexes and their checks first: every
     place is evaluated before the first part moves."""
     if isinstance(target, e.LocalRef):
-        return p.Local(low.local_of(target.local, target.loc))
+        return low.local_place(target.local, target.loc)
     return agg.place_of(low, cast(_Place, target))
 
 

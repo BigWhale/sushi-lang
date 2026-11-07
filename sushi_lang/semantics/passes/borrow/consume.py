@@ -46,17 +46,35 @@ def binds_a_bare_literal_string(declared_ty, init) -> bool:
 
 
 def settle_function_value(checker: 'BorrowChecker', state: BorrowState, value: e.ShirExpr) -> None:
-    """A `let` of a function type reads what its value holds. A named function captures
-    nothing, so the local owns nothing and each use copies it. A local of a function type
-    hands on its own answer."""
+    """A `let` of a function type reads what its value holds. A named function and a lambda
+    with no capture hold no environment, so the local owns nothing and each use copies it. A
+    lambda that captures owns. A local of a function type hands on its own answer."""
     if not isinstance(state.var_type, FunctionType):
         return
     if isinstance(value, e.GlobalRef):
         state.var_type = replace(state.var_type, captures=())
+    elif isinstance(value, e.Lambda):
+        written = checker.answers().type_of(value.shir_id)
+        if isinstance(written, FunctionType):
+            state.var_type = replace(state.var_type, captures=written.captures)
     elif isinstance(value, e.LocalRef):
         source = checker.borrow_state.get(value.local)
         if source is not None and isinstance(source.var_type, FunctionType):
             state.var_type = source.var_type
+
+
+def settle_rebound_function_value(checker: 'BorrowChecker', state: BorrowState,
+                                  value: e.ShirExpr) -> None:
+    """A rebind of a function type that holds no environment. The state is one for all paths:
+    a value that can hold an environment makes the local own, on every path after it, so a
+    `let` of it moves and two values never share one environment. A rebind never takes that
+    answer away."""
+    if not isinstance(state.var_type, FunctionType) or state.var_type.captures != ():
+        return
+    held = replace(state.var_type, captures=None)
+    settled = BorrowState(name=state.name, var_type=held)
+    settle_function_value(checker, settled, value)
+    state.var_type = settled.var_type
 
 
 def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:

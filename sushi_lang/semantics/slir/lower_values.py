@@ -8,12 +8,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
+from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
+from sushi_lang.semantics.slir.ids import LocalId
+from sushi_lang.semantics.typesys import ArrayType
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,3 +50,40 @@ class ViewValue:
 
 
 Value: TypeAlias = r.Rvalue | CallValue | ShortCircuit | ViewValue
+
+
+@dataclass(frozen=True, slots=True)
+class Learned:
+    """What a walk found at a join for an earlier point: the locals that get a drop flag,
+    and the locals whose state a loop header does not know, by the loop."""
+    flags: frozenset[ShirLocalId] = frozenset()
+    unknown_at: frozenset[tuple[ShirId, ShirLocalId]] = frozenset()
+
+
+def holds(constant: k.Constant) -> bool:
+    """Whether the type of `constant` holds it, at every depth: each integer is in the
+    range of its type, and each array has the length of its type."""
+    if isinstance(constant, k.Int):
+        return fits_integer_type(constant.value, constant.ty)
+    if not isinstance(constant, k.Aggregate):
+        return True
+    if isinstance(constant.ty, ArrayType) and len(constant.parts) != constant.ty.size:
+        return False
+    return all(holds(part) for part in constant.parts)
+
+
+def moves_of(value: r.Rvalue | CallValue) -> list[p.Place]:
+    """The place of each `move` operand of a value."""
+    parts = (tuple(operand for operand, _ in value.args) if isinstance(value, CallValue)
+             else r.operands_of(value))
+    return [part.place for part in parts if isinstance(part, p.Move)]
+
+
+def root_of_move(place: p.Place) -> LocalId:
+    """The local that a move takes: a local, or a part of a local (the payload of a
+    variant, `move ((_3 as Ok).0)`, or a field that a take moves), which moves the whole
+    local."""
+    root = p.root_of(place)
+    if not isinstance(root, p.Local):
+        er.raise_internal_error("CE0000", detail=f"SLIR lowering moves out of {place}")
+    return root.id

@@ -17,7 +17,8 @@ peephole included), a call statement, a `return`, an
 (`lower_iterators.py`) with their `break` and `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
 of an array, a field read and write, an element read and write with its bounds check, a
-slice, a destructure, a call, a function value and its call (`lower_closures.py`), an
+slice, a destructure, a call, a function value and its call and a lambda
+(`lower_closures.py`), an
 interpolation, a `??`, `clone`, `expect`, `realise` and
 `err` (`lower_copies.py`), a borrowed view in a view local with its region, and a take of an
 owning value (`lower_takes.py`). The
@@ -38,7 +39,7 @@ and every `StorageDead`, and joins the state of the locals at a join.
 A local whose state differs between the paths of a join gets a drop flag right after it
 (ir.md 8.10, rule 4), and so does a local whose state at a loop header is not the state
 that a back edge brings. The walk finds such a local only at the join, after the point
-that must make the flag. So a walk records what it finds (`_Learned`) and goes on, and the
+that must make the flag. So a walk records what it finds (`Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
 The construct of a stop is the SHIR class of the node, or one of these names: `conversion`
@@ -61,7 +62,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span, display_filename
 from sushi_lang.semantics.drop_set import drop_type_names
-from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
@@ -96,9 +96,10 @@ from sushi_lang.semantics.slir.function import (
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
-from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value, ViewValue
+from sushi_lang.semantics.slir.lower_values import (
+    CallValue, Learned, ShortCircuit, Value, ViewValue, holds, moves_of, root_of_move)
 from sushi_lang.semantics.slir.verify import SlirVerifier
-from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type, owns_resource
+from sushi_lang.semantics.typesys import BuiltinType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit
 
 if TYPE_CHECKING:
@@ -145,9 +146,10 @@ class SlirStage:
             self.stops.slir_stopped(stop)
             self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
             return
-        self.verifier.verify(function, funcs=tables.funcs, extensions=tables.extensions,
-                             externals=tables.externals, perk_impls=tables.perk_impls,
-                             drops=drops, filename=filename)
+        for each in (function, *function.lifted):
+            self.verifier.verify(each, funcs=tables.funcs, extensions=tables.extensions,
+                                 externals=tables.externals, perk_impls=tables.perk_impls,
+                                 drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
 
 
@@ -170,14 +172,6 @@ class Block:
 Arrival: TypeAlias = tuple[Optional[Block], FlowState]
 
 
-@dataclass(frozen=True, slots=True)
-class _Learned:
-    """What a walk found at a join for an earlier point: the locals that get a drop flag,
-    and the locals whose state a loop header does not know, by the loop."""
-    flags: frozenset[ShirLocalId] = frozenset()
-    unknown_at: frozenset[tuple[ShirId, ShirLocalId]] = frozenset()
-
-
 def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name: str,
                    unit: str, tables: SymbolTables, drops: frozenset[str],
                    label: str) -> SlirFunction:
@@ -194,20 +188,21 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     ret = return_type_of(decl, tables, body)
     borrows = getattr(decl, "borrowed_return", None) is not None
     shir_locals = {local.id: local for local in body.locals}
-    learned = _Learned()
+    learned = Learned()
     while True:
-        lowering = Lowering(answers, decls, drops, shir_locals, learned, label, tables)
+        lowering = Lowering(answers, decls, drops, shir_locals, learned, label, tables,
+                            unit=unit if home is None else home)
         lowering.new_local(ret, None, None, view=borrows and lowering.owns(ret))
         params = lowering.parameters()
         lowering.lower_block(ret)
-        found = _Learned(learned.flags | lowering.found_flags,
-                         learned.unknown_at | lowering.found_unknown)
+        found = lowering.all_learned()
         if found != learned:
             learned = found
             continue
         blocks = tuple(block.closed() for block in lowering.blocks)
         return SlirFunction(symbol, name, unit if home is None else home, params,
-                            tuple(lowering.locals), blocks, blocks[0].id)
+                            tuple(lowering.locals), blocks, blocks[0].id,
+                            lifted=tuple(sorted(lowering.lifted, key=lambda each: each.symbol)))
 
 
 @dataclass(slots=True)
@@ -217,7 +212,7 @@ class Lowering:
     decls: DeclNames
     drops: frozenset[str]
     shir_locals: dict[ShirLocalId, ShirLocal]
-    learned: _Learned
+    learned: Learned
     label: str
     tables: SymbolTables
     locals: list[SlirLocal] = field(default_factory=list)
@@ -234,6 +229,12 @@ class Lowering:
     takes: dict[p.Place, tuple[p.Field, ...]] = field(default_factory=dict)
     calls: dict[ShirId, bool] = field(default_factory=dict)
     walk_owners: dict[LocalId, p.Place] = field(default_factory=dict)
+    captures: dict[ShirLocalId, p.Capture] = field(default_factory=dict)
+    lifted: list[SlirFunction] = field(default_factory=list)
+    expression_return: Optional[ShirId] = None
+    channel_expression: bool = False
+    unit: str = ""
+    walked: Optional[ShirBlock] = None
 
     def __post_init__(self) -> None:
         self.block = self.blocks[0]
@@ -281,6 +282,20 @@ class Lowering:
         self.placement.declare(ident, owning)
         return ident
 
+    def local_place(self, local: ShirLocalId, span: Span) -> p.Place:
+        """The place of a local: a capture in the function of a lambda is `Field(_1, k)`."""
+        capture = self.captures.get(local)
+        return capture if capture is not None else p.Local(self.local_of(local, span))
+
+    def sibling(self, learned: Learned, block: ShirBlock) -> Lowering:
+        """The lowering of the function of a lambda of this body, over the tables of this body."""
+        return Lowering(self.answers, self.decls, self.drops, self.shir_locals, learned,
+                        self.label, self.tables, unit=self.unit, walked=block)
+
+    def all_learned(self) -> Learned:
+        return Learned(self.learned.flags | self.found_flags,
+                        self.learned.unknown_at | self.found_unknown)
+
     def local_of(self, local: ShirLocalId, span: Span) -> LocalId:
         ident = self.ids.get(local)
         if ident is None:
@@ -297,16 +312,22 @@ class Lowering:
 
     def parameters(self) -> tuple[tuple[LocalId, Convention], ...]:
         """`_1` to `_n`, each with its convention (L2, L4); an `Owned` one owns (L15)."""
-        params = []
         for param in self.answers.body.params:
             if param.pack:
                 raise StageStop(STAGE, "ShirParam", param.loc)
-            ident, ty = self.bind(param.local, param.loc)
-            self.placement.parameter(ident, param.convention, self.owns(ty))
-            params.append((ident, param.convention))
-        for param, (ident, _) in zip(self.answers.body.params, params, strict=True):
+        return self.bound_parameters([(param.local, param.convention, param.loc)
+                                      for param in self.answers.body.params])
+
+    def bound_parameters(self, declared: list[tuple[ShirLocalId, Convention, Span]]
+                         ) -> tuple[tuple[LocalId, Convention], ...]:
+        params = []
+        for local, convention, span in declared:
+            ident, ty = self.bind(local, span)
+            self.placement.parameter(ident, convention, self.owns(ty))
+            params.append((ident, convention))
+        for (_, _, span), (ident, _) in zip(declared, params, strict=True):
             self.give_flag(ident)
-            self.emit(self.placement.flag_declared(ident, param.loc))
+            self.emit(self.placement.flag_declared(ident, span))
         return tuple(params)
 
     # -- statements ----------------------------------------------------------------------
@@ -334,7 +355,7 @@ class Lowering:
 
     def lower_block(self, ret: Type) -> None:
         """The body block, then the end of a bare `~` body that reaches it."""
-        block = self.answers.body.block
+        block = self.answers.body.block if self.walked is None else self.walked
         self.placement.open_scope()
         self.statements_of(block)
         if self.alive:
@@ -399,7 +420,10 @@ class Lowering:
         self.temporary(self.value(stmt.value), self.type_of(stmt.value), stmt.value.loc)
 
     def ret(self, stmt: s.Return) -> None:
-        self.finish(self.value(stmt.value), stmt.loc)
+        if stmt.shir_id == self.expression_return:
+            closures.expression_return(self, stmt)
+        else:
+            self.finish(self.value(stmt.value), stmt.loc)
 
     def finish(self, value: Value, span: Span) -> None:
         """`_0` first, then the drops of the exit, then the `return` (L14)."""
@@ -421,7 +445,7 @@ class Lowering:
                 er.raise_internal_error("CE0000", span=span,
                                         detail="a view into an owning place reached SLIR")
             value = value.value
-        moves = _moves(value)
+        moves = moves_of(value)
         left = dict.fromkeys(part for moved in moves for part in self.takes.pop(moved, ()))
         for part in left:
             if part not in moves:
@@ -430,7 +454,7 @@ class Lowering:
             self.emit([st.Call(place, value.callee, value.args, span)])
         else:
             self.emit([st.Assign(place, value, span)])
-        for root in dict.fromkeys(_root(moved) for moved in moves):
+        for root in dict.fromkeys(root_of_move(moved) for moved in moves):
             self.placement.move(root, span)
 
     def temporary(self, value: Value, ty: Type, span: Span, held: bool = False) -> LocalId:
@@ -499,7 +523,7 @@ class Lowering:
             er.raise_internal_error("CE0000", span=ref.loc,
                                     detail="a constant with no value reached SLIR")
         constant = k.of_value(value)
-        if not _holds(constant):
+        if not holds(constant):
             dispatch.stop(STAGE, ref, state="out of range")
         return constant
 
@@ -550,6 +574,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.ConstRef: Lowering.leaf,
     e.StorageRef: Lowering.leaf,
     e.GlobalRef: closures.function_value,
+    e.Lambda: closures.lambda_value,
     e.Binary: Lowering.binary,
     e.Unary: Lowering.unary,
     e.Cast: Lowering.cast,
@@ -565,32 +590,3 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.Try: ctl.try_,
     e.Take: takes.take_value,
 }
-
-
-def _holds(constant: k.Constant) -> bool:
-    """Whether the type of `constant` holds it, at every depth: each integer is in the
-    range of its type, and each array has the length of its type."""
-    if isinstance(constant, k.Int):
-        return fits_integer_type(constant.value, constant.ty)
-    if not isinstance(constant, k.Aggregate):
-        return True
-    if isinstance(constant.ty, ArrayType) and len(constant.parts) != constant.ty.size:
-        return False
-    return all(_holds(part) for part in constant.parts)
-
-
-def _moves(value: r.Rvalue | CallValue) -> list[p.Place]:
-    """The place of each `move` operand of a value."""
-    parts = (tuple(operand for operand, _ in value.args) if isinstance(value, CallValue)
-             else r.operands_of(value))
-    return [part.place for part in parts if isinstance(part, p.Move)]
-
-
-def _root(place: p.Place) -> LocalId:
-    """The local that a move takes: a local, or a part of a local (the payload of a
-    variant, `move ((_3 as Ok).0)`, or a field that a take moves), which moves the whole
-    local."""
-    root = p.root_of(place)
-    if not isinstance(root, p.Local):
-        er.raise_internal_error("CE0000", detail=f"SLIR lowering moves out of {place}")
-    return root.id

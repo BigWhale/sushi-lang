@@ -43,7 +43,7 @@ PACKAGER_REFERENCE = re.compile(r"""["'](NE\d{4})["']""")
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 447
+REGISTRY_SIZE = 446
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -173,7 +173,6 @@ def test_expect_error_code_directives_are_registered():
 # removes it here. P2.13 deleted the AST body emitter, which alone emitted the three
 # runtime traps; each one comes back with the SLIR Trap of its construct group.
 UNREFERENCED: set[str] = {
-    "CE2094",                                 # Tier C: closures
     "CE5016",                                 # Tier D: a write to a C global
     "RE2025",                                 # Tier D (D5): a null foreign return
 }

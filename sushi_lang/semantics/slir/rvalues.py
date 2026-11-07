@@ -7,12 +7,12 @@ because the backend reads the semantic type and never the layout.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.slir.places import Operand, Place
-from sushi_lang.semantics.typesys import BorrowMode, Type
+from sushi_lang.semantics.typesys import BorrowMode, StructType, Type
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +65,9 @@ class AggArray:
 
 @dataclass(frozen=True, slots=True)
 class AggClosure:
+    """`env` is the type of the environment of a lambda, and None for a named function."""
     ty: Type
+    env: Optional[StructType] = None
 
 
 @dataclass(frozen=True, slots=True)

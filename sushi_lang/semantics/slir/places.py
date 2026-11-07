@@ -34,6 +34,12 @@ class Field:
 
 
 @dataclass(frozen=True, slots=True)
+class Capture(Field):
+    """The slot `index` of the environment `base` of a function that lowering cut from a
+    lambda (`Field(_1, k)`, ir.md 8.4)."""
+
+
+@dataclass(frozen=True, slots=True)
 class Index:
     base: Place
     index: Operand
@@ -51,7 +57,7 @@ class Deref:
     base: Place
 
 
-Place: TypeAlias = Local | Global | Field | Index | Downcast | Deref
+Place: TypeAlias = Local | Global | Field | Capture | Index | Downcast | Deref
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,9 +80,10 @@ class Const:
 Operand: TypeAlias = Copy | Move | Const
 
 
-def root_of(place: Place) -> Local | Global:
-    """The local or the `var` that holds `place`."""
-    while isinstance(place, (Field, Index, Downcast, Deref)):
+def root_of(place: Place) -> Local | Global | Capture:
+    """The local, the `var` or the capture that holds `place`. A capture is a place of its
+    own: a borrow of one capture is no borrow of another."""
+    while isinstance(place, (Field, Index, Downcast, Deref)) and not isinstance(place, Capture):
         place = place.base
     return place
 

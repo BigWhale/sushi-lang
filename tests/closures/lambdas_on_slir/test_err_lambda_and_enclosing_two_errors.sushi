@@ -1,0 +1,11 @@
+# An error in a lambda body and one in the enclosing body are both given.
+# EXPECT_ERROR_CODES_EXACT: CE2002, CE2002
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 x|:
+        let string s = x
+        println(s)
+        return x
+    let string t = 5
+    println(t)
+    println(f(1))
+    return 0

@@ -34,6 +34,11 @@ class BorrowKind:
 # is how a reference parameter with no span still gets the `is_borrow_param` sentence.
 BORROW_KINDS: tuple[BorrowKind, ...] = (
     BorrowKind(
+        matches=lambda state: state.is_capture and state.declared_at_span is not None,
+        note_span=lambda state: state.declared_at_span,
+        note="the closure owns this value and still frees it",
+    ),
+    BorrowKind(
         matches=lambda state: state.bound_at_span is not None,
         note_span=lambda state: state.bound_at_span,
         note="'{name}' borrows here, and the owner keeps the value",

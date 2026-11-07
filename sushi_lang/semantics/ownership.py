@@ -22,14 +22,6 @@ from sushi_lang.semantics.typesys import (
 )
 
 
-class ConsumingUse(Enum):
-    """The consuming position that the closure emitter names. The closed set of the
-    positions is docs/design/ownership-conventions.md 3.1; the `borrow` pass finds each one
-    from its SHIR node (`consuming_uses`, `semantics/shir/ownership_check.py`)."""
-
-    CAPTURE = "capture"                  # a lambda's captured environment slot
-
-
 class Provenance(Enum):
     """Where the value at a consuming use came from."""
 

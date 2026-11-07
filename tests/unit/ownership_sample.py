@@ -43,7 +43,7 @@ from sushi_lang.semantics.shir.body import ExpandCopies, Instance, ShirBody, Shi
 from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Free
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
-from sushi_lang.semantics.shir.lift import Capture, LiftResults
+from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.loop_kind import Cursor, IteratorValue, Protocol
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.ownership import OwnershipResults
@@ -238,5 +238,5 @@ def lift(made: Sample, *, skip: str | None = None) -> LiftResults:
     if skip != "symbol":
         table.record_symbol(lam, SYMBOL)
     if skip != "environment":
-        table.record_environment(lam, (Capture(CAPTURED, moves=False),))
+        table.record_environment(lam, (CAPTURED,))
     return table

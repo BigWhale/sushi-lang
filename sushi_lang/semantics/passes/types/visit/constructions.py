@@ -31,7 +31,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.statics import solve_target_type_args
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
-from sushi_lang.semantics.typesys import BuiltinType, Type, deref_type
+from sushi_lang.semantics.typesys import BuiltinType, FunctionType, Type, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -79,7 +79,7 @@ def is_generic_value(validator: TypeValidator, value: e.ShirExpr) -> bool:
 def stands_alone(validator: TypeValidator, value: e.ShirExpr) -> bool:
     """Does the value have a type with no type from its position? `Maybe.Some(1)` does, and
     `Maybe.None`, `Result.Ok(1)`, `from([])`, `List.new()` and a generic function do not."""
-    if is_generic_value(validator, value):
+    if is_generic_value(validator, value) or isinstance(value, e.Lambda):
         return False
     if isinstance(value, e.EnumInit):
         return _variant_stands_alone(validator, value)
@@ -130,9 +130,44 @@ def solve_arguments(validator: TypeValidator, names: Sequence[str],
             waiting.append(index)
     for index in waiting:
         known = {**(given or {}), **unify_arguments(validator, names, params, indexes, typed).solved}
-        if names_a_parameter(substitute_type_params(params[index], known), names):
+        position = substitute_type_params(params[index], known)
+        if not names_a_parameter(position, names):
+            continue
+        if isinstance(args[index].value, e.Lambda):
+            type_lambda(validator, typed, index, args[index], position, names)
+        else:
             typed[index] = typed_alone(validator, args[index])
     return unify_arguments(validator, names, params, indexes, typed)
+
+
+def is_bare_lambda(validator: TypeValidator, value: e.ShirExpr) -> bool:
+    """A lambda with a parameter of no written type has no type of its own to solve from."""
+    return isinstance(value, e.Lambda) and any(
+        validator.body_locals[param.local].declared is None for param in value.params)
+
+
+def type_lambda(validator: TypeValidator, typed: dict[int, Optional[Type]], index: int,
+                arg: e.Arg, position: Optional[Type], names: Sequence[str]) -> None:
+    """The answer of a lambda argument while its function type `position` names a type
+    parameter that the other arguments do not solve. A bare lambda solves nothing. A lambda
+    whose function type is known is left to the argument check."""
+    if names_a_parameter(position, names) and not is_bare_lambda(validator, arg.value):
+        typed[index] = marked_type(arg, visit.check_expr(
+            validator, arg.value, _known_part(position, names)))
+
+
+def _known_part(position: Optional[Type], names: Sequence[str]) -> Optional[Type]:
+    """What a function type says to a lambda before its call is solved: each part that names
+    no unsolved type parameter. A lambda takes its channel from it."""
+    if not isinstance(position, FunctionType):
+        return None
+
+    def known(part: Optional[Type]) -> Optional[Type]:
+        return None if part is None or names_a_parameter(part, names) else part
+
+    return FunctionType(param_types=tuple(known(part) for part in position.param_types),
+                        ok_type=known(position.ok_type), err_type=known(position.err_type),
+                        param_modes=position.param_modes)
 
 
 def typed_alone(validator: TypeValidator, arg: e.Arg) -> Optional[Type]:

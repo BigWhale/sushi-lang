@@ -49,7 +49,9 @@ class SlirFunction:
     """`symbol` is the name in the module (monomorphic, ruling Q1), `name` the source name
     that the printer writes, and `unit` the declaring unit, whose module holds it.
     `locals[0]` is the return slot, and `params` names each parameter local with its
-    convention."""
+    convention. `environment` is the local of the environment of a function that lowering cut
+    from a lambda. `lifted` holds each function that lowering cut from the lambdas of the
+    body, a lambda in a lambda too, in the order of its symbol."""
     symbol: str
     name: str
     unit: str
@@ -57,6 +59,8 @@ class SlirFunction:
     locals: tuple[SlirLocal, ...]
     blocks: tuple[SlirBlock, ...]
     entry: BlockId
+    environment: Optional[LocalId] = None
+    lifted: tuple[SlirFunction, ...] = ()
 
 
 def address_locals(function: SlirFunction) -> frozenset[LocalId]:

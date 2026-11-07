@@ -69,6 +69,7 @@ class BorrowState:
     is_borrowed_binding: bool = False
     is_let_borrow: bool = False
     is_borrow_param: bool = False
+    is_capture: bool = False            # a capture, in the body of the lambda
     is_method_receiver: bool = False
     is_method_param: bool = False       # CE2422 names the callable: a method or a function
     owns_no_heap: bool = False

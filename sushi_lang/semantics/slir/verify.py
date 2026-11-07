@@ -65,7 +65,7 @@ from sushi_lang.semantics.slir.verify_arrays import (
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
-from sushi_lang.semantics.slir.verify_values import copies_with_no_transfer
+from sushi_lang.semantics.slir.verify_values import capture_places, copies_with_no_transfer
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
@@ -118,6 +118,7 @@ def verify_function(function: SlirFunction, *, drops: frozenset[str],
     """CE0158 at the first rule of ir.md 8.13 that `function` breaks."""
     check = Check(function, drops, declared, filename)
     check.structure()
+    capture_places(check, function)
     check_regions(function, check.fail)
     Flow(check).run()
 
@@ -563,6 +564,7 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
 _PLACES: dict[type, Callable[..., _Typed]] = {
     p.Local: Check.local_place,
     p.Field: Check.field_place,
+    p.Capture: Check.field_place,
     p.Index: Check.index_place,
     p.Downcast: Check.downcast_place,
     p.Deref: Check.deref_place,

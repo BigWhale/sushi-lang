@@ -39,6 +39,10 @@ def rebind(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     the flag (rules 4 and 6). An old value that a move took, or that the caller owns,
     drops nothing. A new value that may still read the old one (a live owning value, `and`,
     `or`) goes into a temporary first."""
+    capture = low.captures.get(target.local)
+    if capture is not None:
+        _rebind_capture(low, stmt, capture)
+        return
     ident = low.local_of(target.local, target.loc)
     if concat_in_place(low, stmt, target, ident):
         return
@@ -50,6 +54,18 @@ def rebind(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
         value = r.Use(p.Move(temp) if low.owns(ty) else p.Copy(temp))
     store_over(low, p.Local(ident), lambda: low.write(p.Local(ident), value, stmt.loc),
                stmt.loc)
+
+
+def _rebind_capture(low: Lowering, stmt: s.Assign, capture: p.Capture) -> None:
+    """A rebind of a capture stays for the next call: the new value into a temporary, the drop
+    of the old value of the slot, then the store (rule 6)."""
+    ty = low.type_of(stmt.value)
+    temp = p.Local(low.temporary(low.value(stmt.value), ty, stmt.value.loc))
+    if low.owns(ty):
+        value = r.Use(p.Move(temp))
+        store_over(low, capture, lambda: low.write(capture, value, stmt.loc), stmt.loc)
+    else:
+        low.write(capture, r.Use(p.Copy(temp)), stmt.loc)
 
 
 def store_over(low: Lowering, place: p.Place, store: Callable[[], None], span: Span) -> None:

@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n3\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_lambda_environment.slir
+#
+# The SLIR of a lambda that captures: a plain capture is a `Copy` part, and an owning capture
+# is a `Move` part. The function of the lambda takes the environment as `_1`, and a capture is
+# a field of it. A mutating method takes the capture as its `Inout` receiver.
+
+fn main() i32:
+    let i32 base = 40
+    let List@(i32) xs = List.new()
+    let fn(i32) -> i32 add = |i32 x| x + base
+    let fn(i32) -> i32 push = |i32 x|:
+        xs.push(x)
+        return xs.len()
+    println(add(2))
+    push(1)
+    push(2)
+    println(push(3))
+    return 0

@@ -61,17 +61,12 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
         if pty is None and isinstance(expected, FunctionType) and idx < len(expected.param_types):
             pty = expected.param_types[idx]
             if stamp:
-                p.ty = pty  # persist the inferred type for the lift pass / backend
+                p.ty = pty
         elif pty is not None and not isinstance(pty, BuiltinType):
             pty = resolve_declared_type(type_validator, pty)
         param_types.append(pty)
         if pty is not None:
             type_validator.variable_types[p.name] = pty
-
-    if stamp:
-        for cap in (lam.captures or []):
-            if cap.ty is None:
-                cap.ty = saved.get(cap.name)
 
     ok_type: Optional[Type]
     if lam.ret is not None:
@@ -99,7 +94,6 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
         param_types=tuple(param_types),
         ok_type=ok_type,
         err_type=err_type,
-        captures=tuple(lam.captures or ()),
         param_modes=declared_modes(lam.params),
     )
     if stamp:
