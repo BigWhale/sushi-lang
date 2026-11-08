@@ -4,17 +4,17 @@ ShirBody pair
   params : []
   locals : []
   block  :
-    Return(TupleInit([Lit(42), Lit("answer")]))
+    Return(adopt TupleInit([adopt Lit(42), adopt Lit("answer")]))
 
 ShirBody main
   params : []
   locals : [_0 "t": (i32, string), _1 "n": ((i32, i32), bool)]
   block  :
-    Assign(LocalRef(_0), Call(Free(@pair), []), is_init: true)
-    Assign(LocalRef(_1), TupleInit([TupleInit([Lit(1), Lit(2)]), Lit(true)]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "0")]))
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "1")]))
-    ExprStmt(Call(BuiltinFn("println"), [Field(Field(LocalRef(_1), "0"), "1")]))
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_1), "1")]))
-    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt Call(Free(@pair), []), is_init: true)
+    Assign(LocalRef(_1), adopt TupleInit([adopt TupleInit([adopt Lit(1), adopt Lit(2)]), adopt Lit(true)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "0"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "1"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(Field(LocalRef(_1), "0"), "1"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_1), "1"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

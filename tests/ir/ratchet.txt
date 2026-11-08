@@ -2773,6 +2773,7 @@ tests/ir/shir/constructors/test_shir_ctor_imported_generic_fn_takes_the_call.sus
 tests/ir/shir/constructors/test_shir_ctor_own_generic_fn_takes_the_call.sushi
 tests/ir/shir/constructors/test_shir_ctor_result_maybe.sushi
 tests/ir/shir/constructors/test_shir_ctor_struct.sushi
+tests/ir/shir/constructors/test_shir_ctor_tuple.sushi
 tests/ir/shir/destructure/test_shir_destructure_call.sushi
 tests/ir/shir/destructure/test_shir_destructure_nested.sushi
 tests/ir/shir/destructure/test_shir_destructure_pair.sushi
@@ -2788,6 +2789,7 @@ tests/ir/shir/error_holes/test_err_error_hole_named_argument.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/expressions/test_err_shir_expr_slice_reversed.sushi
 tests/ir/shir/expressions/test_shir_expr_cast.sushi
+tests/ir/shir/expressions/test_shir_expr_dont_panic.sushi
 tests/ir/shir/expressions/test_shir_expr_index.sushi
 tests/ir/shir/expressions/test_shir_expr_interp.sushi
 tests/ir/shir/expressions/test_shir_expr_range.sushi
