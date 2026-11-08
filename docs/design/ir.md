@@ -135,7 +135,9 @@ function; it lowers to a `Direct` callee with no module, whose row the verifier 
 the external table; the emitter makes the C copy of a `string` argument at the call and
 frees it after the call, so no SLIR local holds it). Amended on 2026-11-07 by ruling R-AZ: 7.9 and 8.13 (a store into one capture slot is
 legal, and the environment as a whole is never written; CE2405 stays for a second capture of
-an owning local and for a use after a move from a rebound function value).
+an owning local and for a use after a move from a rebound function value). Amended on
+2026-11-08 by ruling R-BA: 4.4 and 7.9 (a `let` of a `let` that holds a lent iterator moves
+it).
 
 ## The decisions, in one place
 
@@ -467,6 +469,11 @@ over a place makes a LENT iterator (a stack state) or an OWNED one (a heap state
 whether a lent iterator leaves its function through a `peek` return and so moves its state
 to the heap. Whether a `foreach` walks its value in place, through a `poke` root, is a
 borrow fact too. Ruling S6 puts all three in `OwnershipResults`.
+
+A `let` that holds a lent iterator owns its value and borrows the owners of its source. A
+`let` of such a `let` (`let b = a`) MOVES it (ruling R-BA): `b` holds the value and the
+owners, a later use of `a` is [CE2405](../error-catalog.md#ce2405), and a `peek` return of `b`
+follows `b` to the producer, whose state goes to the heap. No two locals hold one state.
 
 ### 4.5 `expand` dies in `monomorphize`, except in the template check
 
