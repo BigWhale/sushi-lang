@@ -383,7 +383,9 @@ valid program with a perk method on an instance that only `typecheck` names comp
 old pipeline refused it with CE2008 (7.3); on such an instance an override of `Display`, `Eq` or
 `Hashable` runs, where the old pipeline used the derived form with no diagnostic (7.3); and
 the receiver of a perk method with a `peek self` or a `poke self` is evaluated one time, where
-the old pipeline evaluated it two times (8.3).
+the old pipeline evaluated it two times (8.3). A call of a method that two perk templates give one target
+(CE4015 at the second implementation) gets no second error: the old pipeline also gave a
+false CE2008 at the call.
 
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.
@@ -820,7 +822,7 @@ the value of a pattern (7.8, ruling R-AE). That covers more than types:
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
 | the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
 | the symbol of the global of the `var` that a `StorageRef` names (`global_symbol`) | the `StorageRef`'s `shir_id` |
-| the source positions of a call of a function or a method with a `peek` return: the arguments whose owners the answer borrows (`callee_borrows`) | the call's `shir_id` |
+| the source positions of a call of a function or a method with a `peek` return: the arguments whose owners the answer borrows (`sources_of`) | the call's `shir_id` |
 
 A pattern value is not a row: a `Literal` or an `IntRange` has no row of its own (7.8).
 
@@ -870,7 +872,7 @@ global symbol (`global_symbol`, `semantics/unit_symbols.py`): SLIR lowering name
 of a function or a method with a `peek` return (`borrow-model.md` S10h) holds the position
 of each argument in the source set of the declaration, and the receiver as the position
 `-1` (`RECEIVER_POSITION`, `semantics/borrowed_return.py`). It is an answer of `typecheck`,
-so it is a row and not the AST stamp `callee_borrows` (S5). `borrow` reads it: the answer of
+so it is a row and not a stamp on the AST (S5). `borrow` reads it: the answer of
 the call is a view of the owner of each source argument (7.9).
 
 The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks the
@@ -1295,9 +1297,11 @@ that method, and the copy fixpoint places its body in the home unit of its templ
 checks it. This hook gives two of the changes that N4 names. A perk implementation on one
 instantiation (`extend Box@(string) with Show`) whose instance no early pass interned is
 dropped before the per-unit loop; when a late cut interns the instance, the copy fixpoint puts
-the implementation back into its unit and checks it as it checks a perk copy. `typecheck`
-keeps the path of `infer_lambda_type` that writes no stamp
-(`stamp=False`, `passes/types/visit/helpers.py`).
+the implementation back into its unit and checks it as it checks a perk copy. No path of
+`typecheck` types an AST expression: the AST method-call ladder, the AST call of a name
+behind an alias, the AST propagation of a declared type and the `infer` and `validate` hooks
+of `METHOD_TYPE_REGISTRY` are deleted, and a family row holds its claim, its argument
+count and its parameter modes.
 
 **A refusal on the late path** (ruling R-BC). A constraint refusal of a late request goes to
 the reporter of the body that makes the call. It follows rule R7 of #1070: a copy of a
