@@ -968,6 +968,7 @@ class SemanticAnalyzer:
 
         checked = 0
         growing_rounds = 0
+        bound = self.MAX_NEW_TYPE_ROUNDS + self._template_count()
         while True:
             marks = table_marks(self.tables.structs, self.tables.enums)
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
@@ -987,15 +988,27 @@ class SemanticAnalyzer:
             self._check_copies(copies, monomorphizer, libraries)
             if marks != table_marks(self.tables.structs, self.tables.enums):
                 growing_rounds += 1
-            if growing_rounds >= self.MAX_NEW_TYPE_ROUNDS:
+            if growing_rounds >= bound:
                 self._refuse_pending_copies(monomorphizer)
                 break
 
     # Rounds of the call-site copy fixpoint that make a new type, before the copies
-    # still in the queue are refused. The growth rule refuses a chain that grows
-    # without end long before this (`instance_growth.MAX_GROWTH` copies of one
-    # template). This bound is for a chain whose parent link the rule cannot read.
+    # still in the queue are refused, in addition to one round for each template. A finite
+    # chain of different templates makes one new type for each link, so its length is at
+    # most the number of templates. The growth rule refuses a chain that grows without end
+    # (`instance_growth.MAX_GROWTH` copies of one template). This bound is for a chain
+    # whose parent link the rule cannot read.
     MAX_NEW_TYPE_ROUNDS = 64
+
+    def _template_count(self) -> int:
+        """How many generic templates the program declares: functions, extension methods
+        and perk implementations."""
+        funcs = self.tables.generic_funcs
+        function_ids = {id(f) for f in funcs.by_name.values()}
+        function_ids |= {id(f) for unit in funcs.by_unit.values() for f in unit.values()}
+        methods = sum(len(m) for m in self.tables.generic_extensions.by_type.values())
+        impls = sum(len(i) for i in self.tables.generic_perk_impls.by_base.values())
+        return len(function_ids) + methods + impls
 
     # Rounds `_cut_templates_for_late_instantiations` takes before it stops.
     MAX_ARRAY_EXPANSION_ROUNDS = 8
