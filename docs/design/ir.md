@@ -4124,9 +4124,12 @@ arity of its row (`stdlib_arity`). A `Direct` callee with no module whose link n
 name are a declaration of the external table (`ExternalTable.by_link_name`) is a C
 function: each declared parameter has the convention of its declared mode, and a
 variadic extern has `var_arg`, so the rule compares its declared prefix alone. A `Direct`
-callee with no row is CE0158. Today a free function, a method or a static of the build, a
-function of a registry stdlib module and a C function have a row: the first emitter of
-another `Direct` callee (a conversion, a function of a library) adds its row. The verifier does not check a shape that no lowering makes yet,
+callee whose written name is `<source>.as` is a conversion: it has one `Owned` parameter,
+the `nom self` of its body, and its symbol is the symbol of `as` on that source with the
+target after it (`conversion_symbol`). `as` is a reserved word, so no other method has the
+name. A `Direct` callee with no row is CE0158. Today a free function, a method or a static
+of the build, a conversion, a function of a registry stdlib module and a C function have a
+row: the first emitter of another `Direct` callee (a function of a library) adds its row. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
 place that is no local and no element of a local, and a `DropIfSet` of a place that is no
 local.
