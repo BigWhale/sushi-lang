@@ -2790,9 +2790,7 @@ body of a conversion, and also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
-argument, `Match owning alternatives` for an arm with two or more paths that write a
-binder of an owning payload or a `peek` or `poke` binder (the shape of 8.9, not built
-yet), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
+argument, and `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
 progress of each function. The pipeline reports one stop after the analysis: a stop of
@@ -3586,7 +3584,7 @@ backstop of the checker, as on the AST backend.
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field`. An `Own(...)` item tests nothing: its pointee is at `Deref(Field(place, 0))`, and a test or a binder inside it reads that place |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
-| `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A place that owns is read where it is, and a new value is a temporary of the match statement, which drops it at its end. A tuple LITERAL that owns builds no tuple (ruling 3 of `tuples.md`): each part is evaluated once, from left to right, as a scrutinee of its own (a place is read where it is, a new value and a part that the match takes go into a temporary of the statement), and the parts of a tuple pattern are at the operand of each part |
+| `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A place that owns is read where it is, and a new value is a temporary of the match statement, which drops it at its end. A tuple LITERAL that owns, or whose arms have a `peek` or `poke` binder, builds no tuple (ruling 3 of `tuples.md`), so a `poke` binder writes the place of its part: each part is evaluated once, from left to right, as a scrutinee of its own (a place is read where it is, a new value and a part that the match takes go into a temporary of the statement), and the parts of a tuple pattern are at the operand of each part |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit, or for a `Continue` the next round: the header of a `While`, the step of a `CountedRange` |
 | `Loop`, kind `CountedRange` | in the scope of the loop statement: each bound one time, the start first, into an `i32` local (a constant stays a constant), the count `end - start` into a local (plus one when inclusive), and a counter local at 0. The header compares `counter < count` into a `bool` local and switches; a count below one walks nothing, so the count needs no clamp. The body writes the binder first: `start + counter`, or with `.rev()` `last - counter`, where `last` is `end` (less one, into a local, when exclusive). The step block adds one to the counter and goes to the header; the end of the body and a `Continue` go to the step. Two constant bounds take the count and the first value of `plan_range` (`semantics/ranges.py`) as constants. The zero edge goes to a block of its own as for a `While`. The blocks are made in the order header, body, step, the zero block, exit |
@@ -3682,8 +3680,11 @@ body, which is lowered one time. The region row of the binder (7.9) has the same
 scrutinee, on each path: each path writes the `BeginBorrow` of each owner of the region, with
 ONE id for the region on every path, before its write, so the paths that meet at the arm
 body bring the same open regions (8.6). A `nom` binder in an alternative takes the variant
-whole on its path, as a plain arm does. This is not built yet: such an arm stops (`Match
-owning alternatives`). With one path, the block of the body writes the binders first.
+whole on its path, as a plain arm does. Each path writes its binders in the order of the
+first path, with its `nom` binders last, and starts from the state before the paths, so
+each path gives the same ids to its regions and the same state to the body (an internal
+error if two paths give two states). With one path, the block of the body writes the
+binders first.
 With two or more paths that write a binder, each path ends in a
 block of its own that writes the binders of that path and goes to the body. Each arm body is
 a scope of its own, and each arm starts from the state of the locals after the scrutinee.
@@ -4015,12 +4016,14 @@ Runs after lowering, before the backend. It checks:
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
 - a view local (8.2): a `Copy` writes it, ONE time on each path, and no path writes it
-  two times: the check counts the writes on each path with the flow state that it has, and
-  two paths that each wrote it one time can meet (the binder of an alternative, 8.9). The
+  two times: the check knows at each block the statements that each path into it wrote the
+  local with (a dataflow; its storage markers forget them), and a write is refused when
+  another statement wrote the local on a path. Two paths that each wrote it one time can
+  meet (the binder of an alternative, 8.9), and a later round of a loop writes it again
+  with the same statement (the answer of the step of a walk, 8.9). The
   `_0` of a `peek` return is written one time on each path to a `return` (the rule of the
   written return slot). A view local with one write on each path has the regions that name
-  it on each path. The count on each path is not built yet: today the check
-  refuses a second write of a view local anywhere in the function. A view local of an
+  it on each path. A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
   operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it.
   The regions of a view local are the `BeginBorrow`s that name it (`view`, 8.6): the check
@@ -4031,9 +4034,8 @@ Runs after lowering, before the backend. It checks:
   whose view is no view local of the function, are CE0158 of this check (the rule `a view
   local`, `VIEW_LOCAL` of `verify_rules.py`, which `verify_regions.py` reports)
 - an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
-  are counted, and a `Ref` writes a local, never a part of one. The count on each path is
-  not built yet: today the check refuses a second `Ref` of an address local anywhere in the
-  function. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its
+  are counted, and a `Ref` writes a local, never a part of one. Each `Ref` of one address
+  local has the same root (the scrutinee of the alternatives of 8.9). It is never the place of a `DropIfSet` as a whole and never `Move`d, at its
   root or
   at a part; the write of an owning part drops the old part through the address (8.10,
   rule 6). It is the place of a `Drop` as a whole only at a rebind through it: the next
