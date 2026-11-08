@@ -1276,8 +1276,10 @@ reference of the target answers the function type of the row, with the `Result` 
 row as its channel. Only `<math>` and `<time>` are typed: a call of a function of any
 other registry module stops the walk (`Call(stdlib)`).
 
-**A late instance.** The `instantiate` and `monomorphize` passes collect the instances that
-the early passes can see. An instance that they do not collect is a late instance. The arm of
+**A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
+that the program writes: an explicit type argument, a written type, and a generic function
+value against the type of its position. They type no expression (ruling E4, PHASE3.md D9),
+so every call that only its arguments solve is a late instance. The arm of
 a generic call (`visit/generic_calls.py`) makes the late request directly: the analyzer cuts
 the copy at once, and the arm reads the signature of the copy, because the arguments of the
 call are checked against it. The callee row of the call (`ResolvedCall`) records the instance,
@@ -1290,8 +1292,21 @@ target comes from the miss hook of the perk-implementation table, which also cut
 an array target (`on_perk_miss`, `PerkCopies`, `semantics/generics/perk_copies.py`): a hook of
 a table, and no shape of the IR. The first lookup that misses cuts the copy for that perk or
 that method, and the copy fixpoint places its body in the home unit of its template and
-checks it. This hook gives two of the changes that N4 names. `typecheck` keeps the path of `infer_lambda_type` that writes no stamp
+checks it. This hook gives two of the changes that N4 names. A perk implementation on one
+instantiation (`extend Box@(string) with Show`) whose instance no early pass interned is
+dropped before the per-unit loop; when a late cut interns the instance, the copy fixpoint puts
+the implementation back into its unit and checks it as it checks a perk copy. `typecheck`
+keeps the path of `infer_lambda_type` that writes no stamp
 (`stamp=False`, `passes/types/visit/helpers.py`).
+
+**A refusal on the late path** (ruling R-BC). A constraint refusal of a late request goes to
+the reporter of the body that makes the call. It follows rule R7 of #1070: a copy of a
+refused template reports nothing, so a refusal that the template check gives at the same
+site is not given again for the instance. A refusal that a copy names at its cut (a written
+type, a generic function value) is muted by the same rule, through the template of the copy
+that names it (`Monomorphizer.in_refused_copy`). A late refusal does not stop the analysis,
+and a copy whose cut refused an instance gets no check: the refusal stands, as for an
+extension copy.
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
