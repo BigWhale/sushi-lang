@@ -98,6 +98,7 @@ class InstantiationCollector:
             function_instantiations=self.function_instantiations,
             generic_funcs=self.generic_funcs or {},
             type_validator=type_validator,
+            tables=self.tables,
             namespaces=self.namespaces,
             generic_enums=self._generic_enums_by_name(),
             sites=self.sites,

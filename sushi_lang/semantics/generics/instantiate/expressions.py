@@ -23,6 +23,7 @@ class ExpressionScanner:
         function_instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         generic_funcs: dict,
         type_validator=None,
+        tables=None,
         namespaces=None,
         generic_enums=None,
         sites=None,
@@ -42,6 +43,9 @@ class ExpressionScanner:
         self.parents = parents if parents is not None else {}
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
+        # The program tables: name resolution reads them (G.5 item 7). None on the
+        # unit-test paths that drive the scanner directly.
+        self.tables = tables
         self.namespaces = namespaces
         # Templates by name, for reading a variant's payload types off a GenericTypeRef
         # whose interned instance does not exist yet (#539).
@@ -203,8 +207,8 @@ class ExpressionScanner:
             self.collect_type(constructed)
 
     def _generic_struct_names(self):
-        validator = self.type_validator
-        return validator.generic_struct_table.by_name if validator is not None else {}
+        tables = self.tables
+        return tables.generic_structs.by_name if tables is not None else {}
 
     def _names_generic_struct(self, call) -> bool:
         """`Box(args)` constructs an instance of the generic struct `Box` in this unit."""
@@ -283,8 +287,8 @@ class ExpressionScanner:
         base = receiver.id
         if base in self.type_inferrer.variable_types:
             return
-        if (base not in validator.generic_struct_table.by_name
-                and base not in validator.generic_enum_table.by_name):
+        if (base not in self.tables.generic_structs.by_name
+                and base not in self.tables.generic_enums.by_name):
             return
         template = static_template_for(validator, base, call.method)
         if template is None:
@@ -379,7 +383,7 @@ class ExpressionScanner:
 
         if generic_func is not None or function_name in (self.generic_funcs or {}):
             return None
-        funcs = getattr(self.type_validator, "func_table", None)
+        funcs = getattr(self.tables, "funcs", None)
         if funcs is None:
             if function_name in (self.type_inferrer.func_table or {}):
                 return None
@@ -471,7 +475,7 @@ class ExpressionScanner:
         answers before a generic an import brought (#963).
         """
         from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
-        funcs = getattr(self.type_validator, "func_table", None)
+        funcs = getattr(self.tables, "funcs", None)
         unit = getattr(getattr(self.namespaces, "scope", None), "unit", None)
         return own_concrete_function(funcs, name, unit) is not None
 
@@ -711,9 +715,9 @@ class ExpressionScanner:
             return ()
         if call.method == "realise":
             return self._realise_default_type(receiver_type)
-        method = validator.perk_impl_table.get_method(receiver_type, call.method)
+        method = self.tables.perk_impls.get_method(receiver_type, call.method)
         if method is None:
-            method = validator.extension_table.get_method(receiver_type, call.method)
+            method = self.tables.extensions.get_method(receiver_type, call.method)
         if method is None:
             return self._instance_method_param_types(receiver_type, call.method)
         if getattr(method, "is_static", False):
@@ -737,8 +741,8 @@ class ExpressionScanner:
             args = tuple(getattr(receiver_type, "generic_args", None) or ())
         if base is None:
             return ()
-        validator = self.type_validator
-        declaration = validator.generic_extension_table.find_applicable(
+        tables = self.tables
+        declaration = tables.generic_extensions.find_applicable(
             base, method_name, str(receiver_type))
         if declaration is not None:
             if declaration.is_static or declaration.method_type_params:
@@ -748,7 +752,7 @@ class ExpressionScanner:
         else:
             found = next(
                 ((template, method)
-                 for template in validator.tables.generic_perk_impls.templates(base)
+                 for template in tables.generic_perk_impls.templates(base)
                  for method in template.impl.methods if method.name == method_name),
                 None)
             if found is None:
@@ -780,19 +784,18 @@ class ExpressionScanner:
 
     def _static_param_types(self, type_name: str, method_name: str) -> tuple:
         """A concrete type's static method parameter types, or () when there is none."""
-        validator = self.type_validator
         target = ((self.type_inferrer.struct_table or {}).get(type_name)
                   or (self.type_inferrer.enum_table or {}).get(type_name))
-        if validator is None or target is None:
+        if self.tables is None or target is None:
             return ()
-        method = validator.extension_table.get_method(target, method_name)
+        method = self.tables.extensions.get_method(target, method_name)
         if method is None or not getattr(method, "is_static", False):
             return ()
         return tuple(p.ty for p in method.params)
 
     def _visible_function(self, name: str):
         """The concrete function a bare call of `name` reaches in this unit, or None."""
-        funcs = getattr(self.type_validator, "func_table", None)
+        funcs = getattr(self.tables, "funcs", None)
         if funcs is None:
             return (self.type_inferrer.func_table or {}).get(name)
         scope = getattr(self.namespaces, "scope", None)
