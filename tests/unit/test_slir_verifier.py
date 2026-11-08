@@ -493,6 +493,30 @@ def test_a_stack_state_iterator_after_a_move_into_a_local_is_refused():
     _refused(function, STACK_ITERATOR)
 
 
+def test_a_stack_state_iterator_written_into_the_return_slot_is_refused():
+    function = _function([_ITERATOR, _ELEMENTS],
+                         _block(0, _ret(), st.Assign(_local(0), r.Aggregate(
+                             r.AggIterator(_ITERATOR, r.IterElements(_ELEMENTS, True), False),
+                             (_copy(1),)), BAD)),
+                         params=((1, GUARANTEED),))
+    _refused(function, STACK_ITERATOR)
+
+
+_HELD = EnumType(name="Maybe<Iterator<i32>>", variants=[
+    EnumVariantInfo(name="Some", associated_types=(_ITERATOR,)),
+    EnumVariantInfo(name="None", associated_types=())])
+
+
+def test_a_stack_state_iterator_in_a_variant_in_the_return_slot_is_refused():
+    function = _function([_HELD, _ELEMENTS, _ITERATOR],
+                         _block(0, _ret(), _live(2), _iterator_value(2, heap=False),
+                                st.Assign(_local(0), r.Aggregate(r.AggVariant(_HELD, "Some"),
+                                                                 (_move(2),)), BAD),
+                                _dead(2)),
+                         params=((1, GUARANTEED),))
+    _refused(function, STACK_ITERATOR)
+
+
 def test_a_stack_state_iterator_as_an_owned_argument_is_refused():
     takes = FunctionType((_ITERATOR,), BLANK, None, captures=(), param_modes=(ParamMode.NOM,))
     call = st.Call(_local(0), st.Indirect(p.Copy(_local(3))), ((_move(2), OWNED),), BAD)

@@ -412,8 +412,8 @@ class Lowering:
             value = self.value(stmt.value)
             ident = self.declare_binder(target.local, stmt.loc)
             self.emit([st.StorageLive(ident, stmt.loc)])
-            self.emit(views.lent_region(self, target.local, ident, stmt.loc))
             self.write(p.Local(ident), value, stmt.loc)
+            self.emit(views.lent_region(self, target.local, ident, stmt.loc))
             self.declared = ident
         else:
             rebinds.rebind(self, stmt, target)

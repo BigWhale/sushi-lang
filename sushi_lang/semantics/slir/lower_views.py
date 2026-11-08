@@ -101,8 +101,10 @@ def _changes_a_source(written: object) -> bool:
 
 def lent_region(low: Lowering, local: ShirLocalId, ident: LocalId,
                 span: Span) -> list[st.SlirStatement]:
-    """The region of a `let` that holds a lent iterator, over the owners of its region row. It
-    owns its value, so it is no view local. Any other `let` of a new value has no region."""
+    """The region of a `let` that holds a lent iterator, over the owners of its region row,
+    from the write of the value on: the call that answers it may change an owner (a `poke
+    self` method). It owns its value, so it is no view local. Any other `let` of a new value
+    has no region."""
     region = low.answers.ownership.region_of(local)
     if region is None:
         return []

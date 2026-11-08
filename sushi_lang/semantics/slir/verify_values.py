@@ -77,8 +77,8 @@ def capture_places(check: Check, function: SlirFunction) -> None:
 
 
 def stack_iterators(check: Check, function: SlirFunction) -> None:
-    """Each local that an `AggIterator` with a stack state writes, and each local that it moves
-    or copies into, stays in the function."""
+    """Each local that an `AggIterator` with a stack state writes, and each local that it moves,
+    copies or puts into an aggregate, stays in the function."""
     held = _stack_state_locals(function)
     for block in function.blocks:
         for stmt in block.statements:
@@ -88,8 +88,7 @@ def stack_iterators(check: Check, function: SlirFunction) -> None:
                         check.fail(STACK_ITERATOR, f"{operand} gives a stack state to an owned "
                                                    f"argument", stmt.span)
             if (isinstance(stmt, st.Assign) and stmt.place == p.Local(LocalId(0))
-                    and isinstance(stmt.rvalue, r.Use)
-                    and _reads_one_of(stmt.rvalue.operand, held)):
+                    and _carries(stmt.rvalue, held)):
                 check.fail(STACK_ITERATOR, "a stack state reaches the return slot", stmt.span)
 
 
@@ -100,16 +99,21 @@ def _stack_state_locals(function: SlirFunction) -> set[LocalId]:
         grew = False
         for block in function.blocks:
             for stmt in block.statements:
-                if not (isinstance(stmt, st.Assign) and isinstance(stmt.place, p.Local)):
-                    continue
-                value = stmt.rvalue
-                makes = (isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggIterator)
-                         and not value.kind.heap)
-                if ((makes or (isinstance(value, r.Use) and _reads_one_of(value.operand, held)))
-                        and stmt.place.id not in held):
+                if (isinstance(stmt, st.Assign) and isinstance(stmt.place, p.Local)
+                        and stmt.place.id not in held and _carries(stmt.rvalue, held)):
                     held.add(stmt.place.id)
                     grew = True
     return held
+
+
+def _carries(value: r.Rvalue, held: set[LocalId]) -> bool:
+    """Whether `value` makes a stack state, reads a local that holds one, or holds one as a
+    part of an aggregate."""
+    if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggIterator):
+        return not value.kind.heap
+    if isinstance(value, r.Aggregate):
+        return any(_reads_one_of(part, held) for part in value.parts)
+    return isinstance(value, r.Use) and _reads_one_of(value.operand, held)
 
 
 def _reads_one_of(operand: p.Operand, held: set[LocalId]) -> bool:

@@ -404,7 +404,15 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
     if reject_slice_of_temporary(checker, value) or reject_view_of_temporary(checker, value):
         return
     lent = lent_owners(checker, value)
-    if lent is not None and not isinstance(value, e.LocalRef):
+    if lent is not None and isinstance(value, e.LocalRef):
+        # A `let` of a `let` that holds a lent iterator moves it (ruling R-BA).
+        source = checker.borrow_state[value.local]
+        held = source.lent_value
+        consume_named(checker, value, Provenance.OWNED, value.loc)
+        _record_lent_binding(checker, node, dest, lent)
+        dest.lent_value = held
+        return
+    if lent is not None:
         # A lent iterator borrows its owners and owns its value, so the binding drops it.
         decide(checker, value, Provenance.FRESH, source_class(checker, value))
         _record_lent_binding(checker, node, dest, lent)

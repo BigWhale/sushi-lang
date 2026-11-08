@@ -1,0 +1,26 @@
+# A `poke self` method with a `peek` return that answers a lent iterator: the call changes its
+# receiver, and the region of the `let` starts at its answer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n4\n1\n"
+use <collections/iter>
+
+struct S:
+    i32[] xs
+
+extend S front(poke self) peek Iterator@(i32):
+    return self.xs.iter()
+
+extend S grown(poke self) peek Iterator@(i32):
+    self.xs.push(1)
+    return self.xs.iter()
+
+fn main() i32:
+    let S s = S(from([4]))
+    let Iterator@(i32) it = s.front()
+    foreach(x in it):
+        println(x)
+    let Iterator@(i32) more = s.grown()
+    foreach(x in more):
+        println(x)
+    return 0

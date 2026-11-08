@@ -122,11 +122,20 @@ def _view_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,
     """At each read of a view local, each region over its owners is open. A `poke self` call
     with a `peek` return writes its answer before the region starts."""
     answer = node.dest if isinstance(node, st.Call) else None
+    read = ({ident for operand in st.operands_of(node) for ident in _read_ids(operand)}
+            if isinstance(node, st.Call) else set())
     for local in _uses(node):
         closed = regions.get(local, frozenset()) - open_.keys()
-        if closed and answer != p.Local(local):
+        if closed and (answer != p.Local(local) or local in read):
             fail(VIEW_LOCAL, f"_{local.index} is read while its regions {_names(closed)} "
                              f"are closed", _span(node))
+
+
+def _read_ids(operand: p.Operand | p.Place) -> tuple[LocalId, ...]:
+    place = operand.place if isinstance(operand, (p.Copy, p.Move)) else operand
+    if isinstance(place, (p.Local, p.Global, p.Field, p.Index, p.Downcast, p.Deref)):
+        return p.locals_read(place)
+    return ()
 
 
 def _address_in_region(node: st.SlirStatement | tm.SlirTerminator, open_: _Open,

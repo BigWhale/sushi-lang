@@ -62,6 +62,7 @@ tests/array/constant_index_bounds/test_local_shadows_constant_index.sushi
 tests/array/constants/test_constants_arrays.sushi
 tests/array/constants/test_constants_arrays_direct.sushi
 tests/array/constants/test_constants_arrays_shadow.sushi
+tests/array/constants/test_constants_arrays_strings.sushi
 tests/array/constants/test_err_constants_array_fill.sushi
 tests/array/constants/test_err_constants_array_reverse.sushi
 tests/array/constants/test_err_constants_dynamic_array.sushi
@@ -3060,14 +3061,17 @@ tests/iterators/value/test_iv_state_place.sushi
 tests/iterators/value/test_iv_struct_field.sushi
 tests/iterators/value/test_iv_try_unwraps.sushi
 tests/iterators/values_on_slir/test_err_vs_lent_leaves.sushi
+tests/iterators/values_on_slir/test_err_vs_let_of_lent_used_after.sushi
 tests/iterators/values_on_slir/test_err_vs_owner_changed.sushi
 tests/iterators/values_on_slir/test_vs_clone.sushi
 tests/iterators/values_on_slir/test_vs_exits.sushi
 tests/iterators/values_on_slir/test_vs_lent_local.sushi
+tests/iterators/values_on_slir/test_vs_let_of_lent_moves.sushi
 tests/iterators/values_on_slir/test_vs_map_view.sushi
 tests/iterators/values_on_slir/test_vs_owned_returned.sushi
 tests/iterators/values_on_slir/test_vs_owning_items.sushi
 tests/iterators/values_on_slir/test_vs_peek_return.sushi
+tests/iterators/values_on_slir/test_vs_poke_self_answer.sushi
 tests/iterators/values_on_slir/test_vs_range_value.sushi
 tests/iterators/values_on_slir/test_vs_rebind.sushi
 tests/iterators/values_on_slir/test_vs_unwalked.sushi
