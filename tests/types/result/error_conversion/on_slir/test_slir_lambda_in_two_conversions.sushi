@@ -1,0 +1,28 @@
+# Two conversions of one source each hold a lambda. Each lifted lambda has the symbol of
+# its own conversion as its prefix, so the two do not collide.
+# EXPECT_STDOUT_EXACT: "AppError.Low(8)\nWebError.Code(104)\n"
+# EXPECT_NO_LEAKS
+
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(i32)
+
+error WebError:
+    Code(i32)
+
+extend LowError as AppError:
+    let fn(i32) -> i32 twice = |i32 n| n * 2
+    match self:
+        LowError.Bad(n) -> return AppError.Low(twice(n))
+
+extend LowError as WebError:
+    let fn(i32) -> i32 more = |i32 n| n + 100
+    match self:
+        LowError.Bad(n) -> return WebError.Code(more(n))
+
+fn main() i32:
+    println(LowError.Bad(4) as AppError)
+    println(LowError.Bad(4) as WebError)
+    return 0

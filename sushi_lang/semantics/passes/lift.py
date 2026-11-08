@@ -8,7 +8,6 @@ and goes on to the borrow pass, also a body whose walk in typecheck reported an 
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Optional
 
-from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.body import Initializer, TemplateCheck
 from sushi_lang.semantics.shir.lift_check import check_lift
@@ -57,9 +56,8 @@ class LiftPass:
         self.next_stage(decl, body, tables=tables, filename=filename)
 
     def _prefix(self, decl: object, body: ShirBody, tables: SymbolTables) -> str:
-        """The symbol of the body. A template check, an initializer and a conversion never
-        lower (SLIR stops at a conversion), so their name is enough."""
-        if (isinstance(body.origin, (TemplateCheck, Initializer))
-                or (isinstance(decl, ExtendDef) and decl.is_conversion)):
+        """The symbol of the body. A template check and an initializer never lower, so their
+        name is enough."""
+        if isinstance(body.origin, (TemplateCheck, Initializer)):
             return self.shir.decls.name_of(body.fn_id)
         return symbol_of(decl, declaring_unit(decl, self.unit), body, tables.perk_impls)
