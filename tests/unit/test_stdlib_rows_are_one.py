@@ -198,9 +198,9 @@ def test_a_math_family_row_is_one_type_throughout():
 def _scanner(generic_funcs=None, func_table=None):
     from sushi_lang.semantics.generics.instantiate.expressions import ExpressionScanner
 
-    inferrer = SimpleNamespace(struct_table={}, enum_table={},
+    tables = SimpleNamespace(struct_table={}, enum_table={},
                                func_table=func_table or {}, variable_types={})
-    return ExpressionScanner(inferrer, set(), set(), generic_funcs or {})
+    return ExpressionScanner(tables, set(), set(), generic_funcs or {})
 
 
 def test_a_user_generic_takes_the_name_before_the_row():

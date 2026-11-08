@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2] / "sushi_lang" / "semantics" / "gener
 PASSES = ("instantiate", "monomorphize")
 
 INFERENCE_ENTRIES = {"infer_expression_type", "infer_call_arg_type", "infer_lambda_type",
-                     "ReadOnlyInferrer"}
+                     "ReadOnlyInferrer", "TypeInferrer", "infer_simple_receiver_type",
+                     "get_builtin_method_return_type"}
 
 
 def _inference_calls(source: str) -> list[tuple[int, str]]:

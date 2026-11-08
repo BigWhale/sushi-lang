@@ -148,11 +148,3 @@ def solve_builtin_signature(
     return BuiltinInstance(signature=signature, substitution=substitution, params=params,
                            ret_type=substitute_type_params(signature.ret_type,
                                                            substitution)), ()
-
-
-def refuses_an_error_argument(instance: BuiltinInstance, structs: Any, enums: Any) -> bool:
-    """Whether a type argument in an `E` position of the instance is not an error type (E3)."""
-    from sushi_lang.semantics.error_types import non_error_type
-    return any(non_error_type(instance.substitution[name], structs or {}, enums or {})
-               is not None
-               for name in instance.signature.error_parameters)

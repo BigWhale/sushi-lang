@@ -1,124 +1,17 @@
-"""Type inference for instantiation collection."""
+"""The tables that instantiation collection reads (ruling E4: it types no expression)."""
 from __future__ import annotations
+
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
-from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.semantics.ast import BoolLit, DotCall, FloatLit, IntLit, Name, StringLit
-from sushi_lang.semantics.generics.types import GenericTypeRef
 
-
-_LITERAL_TYPES: dict[type, "Type"] = {
-    StringLit: BuiltinType.STRING,
-    FloatLit: BuiltinType.F64,
-    BoolLit: BuiltinType.BOOL,
-}
-
-
-def _literal_type(expr) -> "Type | None":
-    """The default type of a literal; an integer literal reads its kind (`a'x'` is u8)."""
-    if isinstance(expr, IntLit):
-        from sushi_lang.semantics.passes.types.inference import int_literal_default
-        return int_literal_default(expr)
-    return _LITERAL_TYPES.get(type(expr))
-
-
-class TypeInferrer:
-    """Simple type inference for instantiation collection."""
-
-    def __init__(self, variable_types: dict[str, "Type"], struct_table: dict, enum_table: dict,
-                 func_table: dict | None = None):
-        """Initialize type inferrer."""
-        self.variable_types = variable_types
-        self.struct_table = struct_table
-        self.enum_table = enum_table
-        self.func_table = func_table or {}
-
-    def infer_simple_receiver_type(self, receiver) -> "Type | None":
-        """Simple type inference for method call receivers."""
-        literal_type = _literal_type(receiver)
-        if literal_type is not None:
-            return literal_type
-        if isinstance(receiver, DotCall):
-            return self._infer_dotcall_type(receiver)
-        if isinstance(receiver, Name):
-            return self._infer_name_type(receiver)
-        return None
-
-    def _infer_dotcall_type(self, expr) -> "Type | None":
-        """Infer type for chained method call expressions."""
-        inner_receiver_type = self.infer_simple_receiver_type(expr.receiver)
-        if inner_receiver_type is not None:
-            return self.get_builtin_method_return_type(inner_receiver_type, expr.method,
-                                                       call=expr)
-        return None
-
-    def _infer_name_type(self, expr) -> "Type | None":
-        """Infer type for name references (variables, builtins)."""
-        if expr.id in self.variable_types:
-            return self.variable_types[expr.id]
-
-        # For other variables, we would need full type inference which we don't
-        # have access to at this stage. Users can use explicit type annotations
-        # for complex cases.
-        return None
-
-    def get_builtin_method_return_type(self, receiver_type: "Type", method_name: str,
-                                       call=None) -> "Type | None":
-        """Return type of a built-in method, read from the owning family's table.
-
-        This used to be a third, independent return-type table (#269): it knew some
-        string methods and Maybe, and nothing about to_str, hash or to_bits. A method
-        with a method-level type parameter (`or_err`, `map_err`) answers from the
-        arguments of the `call`, through the one solver (`solve_builtin_signature`).
-        """
-        from sushi_lang.sushi_stdlib.src.collections.strings import (
-            get_builtin_string_method_return_type,
-            is_builtin_string_method,
-        )
-        from sushi_lang.semantics.generics.primitives import primitive_method_return_type
-        from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_for_base
-        from sushi_lang.semantics.generics.maybe import (
-            is_builtin_maybe_method,
-            maybe_method_return_type,
-        )
-
-        if receiver_type == BuiltinType.STRING and is_builtin_string_method(method_name):
-            return get_builtin_string_method_return_type(method_name, receiver_type)
-
-        primitive_ret = primitive_method_return_type(receiver_type, method_name)
-        if primitive_ret is not None:
-            return primitive_ret
-
-        # A written `Maybe@(T)` / `Result@(T, E)` and an interned one both reach a method
-        # with a signature: the solver reads the type arguments of either.
-        base = (receiver_type.base_name if isinstance(receiver_type, GenericTypeRef)
-                else getattr(receiver_type, "generic_base", None))
-        signature = builtin_signature_for_base(base, method_name)
-        if signature is not None:
-            return self._signature_return_type(signature, receiver_type, call)
-
-        if (isinstance(receiver_type, GenericTypeRef)
-                and receiver_type.base_name == "Maybe"
-                and receiver_type.type_args
-                and is_builtin_maybe_method(method_name)):
-            return maybe_method_return_type(receiver_type.type_args[0], method_name)
-
-        return None
-
-    def _signature_return_type(self, signature, receiver_type: "Type",
-                               call) -> "Type | None":
-        """The return type of a built-in signature, solved from the call's arguments."""
-        from sushi_lang.semantics.generics.builtin_signatures import (
-            refuses_an_error_argument, solve_builtin_signature)
-        if call is None:
-            return None
-        arg_types = [self.infer_simple_receiver_type(arg) for arg in call.args]
-        instance, _unsolved = solve_builtin_signature(
-            signature, receiver_type, arg_types, self.struct_table, self.enum_table)
-        if instance is None or refuses_an_error_argument(instance, self.struct_table,
-                                                         self.enum_table):
-            return None
-        return instance.ret_type
+@dataclass
+class ScanTables:
+    """The written type of each local in scope, and the struct, enum and function tables."""
+    variable_types: dict[str, "Type"]
+    struct_table: dict
+    enum_table: dict
+    func_table: dict = field(default_factory=dict)

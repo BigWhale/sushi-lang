@@ -56,8 +56,8 @@ class FunctionCollector:
         element the tables know (#1161).
         """
         from sushi_lang.semantics.type_resolution import resolve_type_recursively
-        structs = self.expression_scanner.type_inferrer.struct_table or {}
-        enums = self.expression_scanner.type_inferrer.enum_table or {}
+        structs = self.expression_scanner.scan_tables.struct_table or {}
+        enums = self.expression_scanner.scan_tables.enum_table or {}
         return resolve_type_recursively(ty, structs, enums)
 
     def _bind_self(self, target_type) -> None:
@@ -71,8 +71,8 @@ class FunctionCollector:
             self.variable_types["self"] = target_type
         elif isinstance(target_type, UnknownType):
             from sushi_lang.semantics.type_resolution import resolve_unknown_type
-            structs = self.expression_scanner.type_inferrer.struct_table or {}
-            enums = self.expression_scanner.type_inferrer.enum_table or {}
+            structs = self.expression_scanner.scan_tables.struct_table or {}
+            enums = self.expression_scanner.scan_tables.enum_table or {}
             resolved = resolve_unknown_type(target_type, structs, enums)
             if resolved is not None and resolved != target_type:
                 self.variable_types["self"] = resolved
@@ -257,9 +257,8 @@ class FunctionCollector:
         if isinstance(stmt, Let):
             if stmt.ty is not None:
                 self._collect_from_type(stmt.ty, getattr(stmt, "type_span", None))
-                # Track variable type for later reference. Resolve a bare struct/enum
-                # name (UnknownType) to its concrete type: a receiver of a built-in
-                # method reads it (`_scan_dot_call`).
+                # Keep the written type of the local, with a bare struct or enum name
+                # (UnknownType) resolved to its table entry.
                 if stmt.name is not None:
                     self.variable_types[stmt.name] = self._resolve_local_type(stmt.ty)
             if stmt.value is not None:
@@ -398,13 +397,13 @@ class FunctionCollector:
         is the file of `site` when it is not the unit's own, and `parent` is then the
         instantiation whose template writes the type.
         """
-        inferrer = self.expression_scanner.type_inferrer
+        tables = self.expression_scanner.scan_tables
         collect_type_instantiations(
             ty,
             self.expression_scanner._resolver,
             self.instantiations,
-            structs=inferrer.struct_table or {},
-            enums=inferrer.enum_table or {},
+            structs=tables.struct_table or {},
+            enums=tables.enum_table or {},
             sites=self.sites,
             site=site,
             file=file if file is not None else self.file_of(),

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Set, Tuple
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
-    from sushi_lang.semantics.generics.instantiate.types import TypeInferrer
+    from sushi_lang.semantics.generics.instantiate.types import ScanTables
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import TypeResolver
@@ -18,7 +18,7 @@ class ExpressionScanner:
 
     def __init__(
         self,
-        type_inferrer: "TypeInferrer",
+        scan_tables: "ScanTables",
         instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         function_instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         generic_funcs: dict,
@@ -30,7 +30,7 @@ class ExpressionScanner:
         parents=None,
     ):
         """Initialize expression scanner."""
-        self.type_inferrer = type_inferrer
+        self.scan_tables = scan_tables
         self.instantiations = instantiations
         self.function_instantiations = function_instantiations
         # The first site naming each function instantiation (#579); see
@@ -61,8 +61,8 @@ class ExpressionScanner:
         # type through the one seam.
         self.collect_type = self._collect_from_type
         self._resolver = TypeResolver(
-            type_inferrer.struct_table or {},
-            type_inferrer.enum_table or {}
+            scan_tables.struct_table or {},
+            scan_tables.enum_table or {}
         )
 
     def scan_expression(self, expr) -> None:
@@ -92,7 +92,6 @@ class ExpressionScanner:
             # DotCall can be either a method call or enum constructor
             # We treat it as a potential method call for generic return types
             if not self._scan_namespaced_call(expr):
-                self._scan_dot_call(expr)
                 self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
@@ -173,22 +172,6 @@ class ExpressionScanner:
                                BlankLit, DynamicArrayNew)):
             pass
 
-    def _scan_dot_call(self, call) -> None:
-        """Detect built-in method calls (via DotCall) with generic return types."""
-        from sushi_lang.semantics.ast import DotCall
-
-        if not isinstance(call, DotCall):
-            return
-
-        receiver_type = self.type_inferrer.infer_simple_receiver_type(call.receiver)
-
-        if receiver_type is not None:
-            return_type = self.type_inferrer.get_builtin_method_return_type(
-                receiver_type, call.method, call=call)
-
-            if return_type is not None and isinstance(return_type, GenericTypeRef):
-                self._collect_from_type(return_type)
-
     def _scan_namespaced_call(self, call) -> bool:
         """`alias.f(args)` where the alias names a unit declaring a generic `f`.
 
@@ -199,7 +182,7 @@ class ExpressionScanner:
         from sushi_lang.semantics.ast import Call, Name
         if self.namespaces is None or not isinstance(call.receiver, Name):
             return False
-        if call.receiver.id in self.type_inferrer.variable_types:
+        if call.receiver.id in self.scan_tables.variable_types:
             return False
         binding = self.namespaces.lookup(call.receiver.id, call.method)
         if binding is None:
@@ -269,7 +252,7 @@ class ExpressionScanner:
             return None
         funcs = getattr(self.tables, "funcs", None)
         if funcs is None:
-            if function_name in (self.type_inferrer.func_table or {}):
+            if function_name in (self.scan_tables.func_table or {}):
                 return None
             return next((table[function_name] for table in signature_tables().values()
                          if function_name in table), None)
@@ -287,7 +270,6 @@ class ExpressionScanner:
         seam, but a payload enum has to be asked for here or the match on the answer
         sees an unresolved `Maybe@(string)` (CE2048).
         """
-        from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.typesys import UnknownType
 
         if sig.ok is None:
@@ -299,13 +281,13 @@ class ExpressionScanner:
             if inner is not None:
                 self.instantiations.add((payload.base_name, inner))
         elif isinstance(payload, UnknownType):
-            named = (self.type_inferrer.struct_table.get(payload.name)
-                     or self.type_inferrer.enum_table.get(payload.name))
+            named = (self.scan_tables.struct_table.get(payload.name)
+                     or self.scan_tables.enum_table.get(payload.name))
             if named is None:
                 return
             payload = named
 
-        error = self.type_inferrer.enum_table.get(sig.error) if sig.error else None
+        error = self.scan_tables.enum_table.get(sig.error) if sig.error else None
         if error is not None and not isinstance(payload, GenericTypeRef):
             self.instantiations.add(("Result", (payload, error)))
 
@@ -344,8 +326,8 @@ class ExpressionScanner:
             return None
         type_args = resolve_explicit_type_args(
             explicit,
-            self.type_inferrer.struct_table,
-            self.type_inferrer.enum_table,
+            self.scan_tables.struct_table,
+            self.scan_tables.enum_table,
         )
         if type_args is None:
             return None
@@ -435,7 +417,7 @@ class ExpressionScanner:
             name = value.id
             if not self.generic_funcs or name not in self.generic_funcs:
                 return
-            if name in self.type_inferrer.variable_types:
+            if name in self.scan_tables.variable_types:
                 return
             if self._declares_concrete(name):
                 return
@@ -463,7 +445,7 @@ class ExpressionScanner:
     def may_name_generic_fn(self, value) -> bool:
         """The value is a bare generic-function name, or a name behind an alias."""
         from sushi_lang.semantics.ast import MemberAccess, Name
-        locals_ = self.type_inferrer.variable_types
+        locals_ = self.scan_tables.variable_types
         if isinstance(value, Name):
             return value.id in (self.generic_funcs or {}) and value.id not in locals_
         return (isinstance(value, MemberAccess) and isinstance(value.receiver, Name)
@@ -520,7 +502,7 @@ class ExpressionScanner:
             if binding is not None and binding.kind in ("struct", "enum"):
                 type_name = binding.name
         elif (isinstance(receiver, Name)
-                and receiver.id not in self.type_inferrer.variable_types):
+                and receiver.id not in self.scan_tables.variable_types):
             binding = self._namespaced_binding(receiver, call.method)
             if binding is not None:
                 if binding.kind == "function" and binding.record is not None:
@@ -541,8 +523,8 @@ class ExpressionScanner:
 
     def _static_param_types(self, type_name: str, method_name: str) -> tuple:
         """A concrete type's static method parameter types, or () when there is none."""
-        target = ((self.type_inferrer.struct_table or {}).get(type_name)
-                  or (self.type_inferrer.enum_table or {}).get(type_name))
+        target = ((self.scan_tables.struct_table or {}).get(type_name)
+                  or (self.scan_tables.enum_table or {}).get(type_name))
         if self.tables is None or target is None:
             return ()
         method = self.tables.extensions.get_method(target, method_name)
@@ -554,13 +536,13 @@ class ExpressionScanner:
         """The concrete function a bare call of `name` reaches in this unit, or None."""
         funcs = getattr(self.tables, "funcs", None)
         if funcs is None:
-            return (self.type_inferrer.func_table or {}).get(name)
+            return (self.scan_tables.func_table or {}).get(name)
         scope = getattr(self.namespaces, "scope", None)
         return funcs.lookup(name, getattr(scope, "unit", None), scope)
 
     def _field_types(self, name: str, field_names) -> tuple:
         """A concrete struct's field types in argument order, or () when `name` is none."""
-        struct = (self.type_inferrer.struct_table or {}).get(name)
+        struct = (self.scan_tables.struct_table or {}).get(name)
         fields = getattr(struct, "fields", None)
         if fields is None:
             return ()
@@ -571,7 +553,7 @@ class ExpressionScanner:
 
     def _payload_types(self, enum_name: str, variant_name: str) -> tuple:
         """A concrete enum variant's payload types, or () when there is none."""
-        enum = (self.type_inferrer.enum_table or {}).get(enum_name)
+        enum = (self.scan_tables.enum_table or {}).get(enum_name)
         variant = enum.get_variant(variant_name) if hasattr(enum, "get_variant") else None
         return tuple(variant.associated_types) if variant is not None else ()
 
@@ -580,7 +562,7 @@ class ExpressionScanner:
         from sushi_lang.semantics.ast import Name
         if self.namespaces is None or not isinstance(receiver, Name):
             return None
-        if receiver.id in self.type_inferrer.variable_types:
+        if receiver.id in self.scan_tables.variable_types:
             return None
         return self.namespaces.lookup(receiver.id, member)
 
@@ -590,7 +572,7 @@ class ExpressionScanner:
         from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
         type_args = solve_leading_type_args(
             generic_func, list(expected_ty.param_types),
-            self.type_inferrer.struct_table or {}, self.type_inferrer.enum_table or {},
+            self.scan_tables.struct_table or {}, self.scan_tables.enum_table or {},
             ret_type=expected_ty.ok_type)
         if type_args is None:
             return
@@ -606,8 +588,8 @@ class ExpressionScanner:
             ty,
             self._resolver,
             self.instantiations,
-            structs=self.type_inferrer.struct_table or {},
-            enums=self.type_inferrer.enum_table or {},
+            structs=self.scan_tables.struct_table or {},
+            enums=self.scan_tables.enum_table or {},
             sites=self.sites,
             site=site,
             file=file,

@@ -64,12 +64,6 @@ def maybe_method_row(payload_type: Type, method_name: str) -> Optional[WrapperMe
     return payload_method_row(payload_type, method_name)
 
 
-def maybe_method_return_type(payload_type: Type, method_name: str) -> Optional[Type]:
-    """Return type of a Maybe<T> method, given the payload type T."""
-    row = maybe_method_row(payload_type, method_name)
-    return None if row is None else row.returns
-
-
 def maybe_payload(maybe_type: EnumType) -> Type:
     """The payload type `T` of a concrete `Maybe<T>` enum."""
     some_variant = maybe_type.get_variant("Some")
