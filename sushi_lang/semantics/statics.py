@@ -87,12 +87,12 @@ def static_template(generic_extensions, base: str, method: str, order=None):
 
 
 def solve_target_type_args(template, arg_types, stamped_args):
-    """A generic static's TARGET type arguments: the arguments first, the stamp second.
+    """A generic static's TARGET type arguments: the arguments first, the position second.
 
-    ONE resolution for both passes (#573, MIG.md R5). Every target type parameter a
-    parameter names is unified from the argument in that position, exactly as a generic
-    free function solves its own. What is still unsolved reads the propagation stamp at
-    the binding site, positionally. Returns `(type_args, unsolved)`: the tuple and `()`
+    Every target type parameter a parameter names is unified from the argument in that
+    position, exactly as a generic free function solves its own. What is still unsolved
+    reads the type arguments of the instance that the position gives (`stamped_args`),
+    positionally. Returns `(type_args, unsolved)`: the tuple and `()`
     when every parameter was reached, else `None` and the names neither source reached,
     in declaration order. An argument whose type is not known yet (`None`) solves
     nothing, and a stamp whose arity does not match the template answers nothing.

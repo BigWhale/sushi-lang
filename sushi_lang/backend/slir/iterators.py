@@ -128,10 +128,7 @@ def _clone_each(state: FunctionState, rvalue: r.Aggregate, source: r.IterCloneEa
 
 
 def _item_of(state: FunctionState, rvalue: r.Aggregate) -> Type:
-    ty = rvalue.kind.ty
-    if not isinstance(ty, IteratorType):
-        state.fault(f"an iterator value of {ty}")
-    return ty.element_type
+    return _result(state, rvalue).element_type
 
 
 #: One row for each source of an iterator value.

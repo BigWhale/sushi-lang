@@ -1,9 +1,8 @@
 """A call of a built-in method that has a method-level type parameter (design 8.3).
 
-The typecheck half of `semantics/generics/builtin_signatures.py`. Inference reads
-`builtin_call_return_type`, and the two validation halves (`calls/methods.py` over the AST,
-`visit/signature_methods.py` over SHIR) read `settle_builtin_instance`, which reports what
-the solver leaves.
+The typecheck half of `semantics/generics/builtin_signatures.py`. The SHIR arms
+(`visit/signature_methods.py`, `visit/iterator_methods.py`) read `settle_builtin_instance`,
+which reports what the solver leaves.
 """
 from __future__ import annotations
 

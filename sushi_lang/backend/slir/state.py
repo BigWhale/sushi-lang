@@ -67,8 +67,9 @@ class FunctionState:
         return address
 
     def call(self, callee: ir.Value, args: list[ir.Value]) -> ir.Value:
-        """The one `call` instruction of the emitter, for a function of the build and for a
-        C function alike."""
+        """The `call` instruction of a `Direct` callee: a function of the build or a C
+        function. The emitters of an indirect call, a cursor step and an adapter call
+        `builder.call` themselves."""
         return self.builder.call(callee, args)
 
     def block(self, block: BlockId) -> ir.Block:

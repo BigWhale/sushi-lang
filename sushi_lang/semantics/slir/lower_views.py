@@ -85,8 +85,6 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     low.placement.declare(ident, False)
     low.emit([st.StorageLive(ident, stmt.loc)])
     if _changes_a_source(written):
-        # A `poke self` call with a `peek` return changes its owner, and the region starts at
-        # its answer.
         low.write(p.Local(ident), written, stmt.loc)
         low.emit(low.placement.begin_region(ident, owners, frozenset(region.until), stmt.loc))
         return
@@ -95,6 +93,8 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
 
 
 def _changes_a_source(written: object) -> bool:
+    """Whether the value is a call that changes a source, as a `poke self` call with a `peek`
+    return does: the region of its view then starts after the write of its answer."""
     return isinstance(written, CallValue) and any(
         convention is Convention.INOUT for _, convention in written.args)
 

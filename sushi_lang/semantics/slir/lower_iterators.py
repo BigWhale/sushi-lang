@@ -49,6 +49,7 @@ from sushi_lang.semantics.typesys import (
 )
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.typeck import ResolvedCall
     from sushi_lang.semantics.slir.drops import FlowState
     from sushi_lang.semantics.slir.ids import LocalId
     from sushi_lang.semantics.slir.lower import Block, Lowering
@@ -251,12 +252,13 @@ def range_value(low: Lowering, node: e.Range) -> r.Aggregate:
     return r.Aggregate(r.AggIterator(low.type_of(node), source, True), (first, count))
 
 
-def new_value(low: Lowering, node: e.Call, next_: st.SlirCallee) -> r.Aggregate:
-    """`Iterator.new(nom x)`: an owned iterator, with the `next()` of `x`."""
-    next_row = low.typeck.iterator_next_of(node.shir_id)
-    if next_row is None or not isinstance(next_, st.Direct):
+def new_value(low: Lowering, node: e.Call, next_row: ResolvedCall,
+              next_: st.SlirCallee) -> r.Aggregate:
+    """`Iterator.new(nom x)`: an owned iterator, with the `next()` of `x`, whose callee row is
+    `next_row`."""
+    if not isinstance(next_, st.Direct):
         er.raise_internal_error("CE0000", span=node.loc,
-                                detail="an Iterator.new with no next() reached SLIR")
+                                detail="an Iterator.new whose next() is no direct call reached SLIR")
     value = node.args[0].value
     source = r.IterNew(cast(Type, deref_type(low.type_of(value))), next_.symbol,
                        cast(Method, next_row.callee).receiver)

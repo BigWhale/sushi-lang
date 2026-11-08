@@ -15,7 +15,7 @@ of glue. This module reads `lower.py` for its types only.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Sequence, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
@@ -126,8 +126,7 @@ def _cut(low: Lowering, node: e.Lambda, symbol: str, env: StructType,
     """The function of the lambda, then each function of a lambda in its body. As for a
     written body, the walk runs again with what it found, until it finds nothing new."""
     ret = _return_type(low, node)
-    fn_type = low.type_of(node)
-    has_channel = isinstance(fn_type, FunctionType) and fn_type.err_type is not None
+    has_channel = cast(FunctionType, low.type_of(node)).err_type is not None
     conventions = lambda_conventions(low.typeck, node)
 
     def lower_once(learned: Learned) -> tuple[Lowering, tuple[LocalId, Params]]:

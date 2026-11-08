@@ -4,9 +4,6 @@ The fields of a `StructInit` go through the one argument check, at the types of 
 fields (`check_struct_fields`). The written names of a named construction whose names are
 not the fields of the struct give CE2080, CE2081 or CE2082 (`reject_field_names`). A
 generic construction that nothing solves is CE2112 or CE2065 (`refuse_unsolved_struct`).
-
-The AST solver of a generic construction (`untyped_struct_instance`) is the answer that the
-early passes read.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, Mapping, Optional, Sequence

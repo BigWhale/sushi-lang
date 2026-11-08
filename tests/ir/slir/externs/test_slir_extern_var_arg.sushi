@@ -1,5 +1,6 @@
 # EXPECT_DUMP_SLIR: test_slir_extern_var_arg.slir
 # EXPECT_STDOUT_EXACT: "5: 12 ok\n"
+# EXPECT_NO_LEAKS
 # EXPECT_RUNTIME_EXIT: 0
 #
 # A function of an `unsafe external` block is a `Direct` callee with its link name. A

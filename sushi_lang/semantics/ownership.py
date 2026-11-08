@@ -120,7 +120,3 @@ def is_own_type(ty: Optional[Type]) -> bool:
         return ty.base_name == "Own"
     return is_instance_of(ty, "Own")
 
-
-# Containers whose `.get()` reads out of storage the receiver keeps, by base name.
-# Spelled ONCE in semantics/generics/cloning.py and aliased here.
-

@@ -64,7 +64,7 @@ def call(low: Lowering, node: e.Call) -> Value:
         if next_row is None:
             er.raise_internal_error("CE0000", span=node.loc,
                                     detail="an Iterator.new with no next() reached SLIR")
-        return iters.new_value(low, node, callee(low, node, next_row))
+        return iters.new_value(low, node, next_row, callee(low, node, next_row))
     target = callee(low, node, resolved)
     value = CallValue(target, receiver(low, resolved.callee, node)
                       + tuple(argument(low, node, index, arg)

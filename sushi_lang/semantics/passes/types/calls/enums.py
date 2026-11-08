@@ -1,8 +1,7 @@
 """Enum constructor validation.
 
 A variant of a generic enum that no position and no payload solves is CE2112
-(`refuse_untyped_variant`). The AST solver (`untyped_constructor_instance`) is the answer
-that the early passes read.
+(`refuse_untyped_variant`).
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, Mapping, Optional

@@ -1,5 +1,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "1\n1\n"
+# EXPECT_NO_LEAKS
 # EXPECT_DUMP_SHIR: test_borrow_iterator_rows.shir
 # The rows of an iterator value: a producer over a place is lent with a stack state, and with a
 # heap state when it leaves through a `peek` return. A producer over a temporary is owned. A walk
