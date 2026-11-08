@@ -1,12 +1,13 @@
 """The region rules and the view-local rules of the SLIR verifier (docs/design/ir.md 8.6, 8.13).
 
-A view local (8.2) is written by one statement: a `Copy` of a place, or a call whose answer
-is a view. The `_0` of a function with a `peek` return is a view local too, and it is written
-one time on each path to a `return` (the dataflow of `verify_flow.py`). A view local is never
+A view local (8.2) is written by a `Copy` of a place, or by a call whose answer is a view,
+by one statement on each path (`_one_write_on_each_path`). The `_0` of a
+function with a `peek` return is a view local too. A view local is never
 the place of a `Drop` or a `DropIfSet`, never `Move`d and never the operand of an `Owned`
 argument, at its root or at a projection of it. At each read of a view local, the regions
 that name it are open; a region has one view, and it is a view local. One `Ref` writes an
-address local (8.2), and it is never dropped as a whole and never moved. The `Ref` comes
+address local on each path (8.2), each `Ref` of it has one root, and it is never dropped as
+a whole and never moved. The `Ref` comes
 before each use of the address local on every path (a dataflow: a block knows the address
 locals that each path into it wrote), and at each use a region over the root of the place of
 the `Ref` is open.
@@ -56,6 +57,8 @@ def check_regions(function: SlirFunction, fail: Fail) -> None:
     if addresses:
         refs = _address_locals(function, addresses, fail)
         _written_before_use(function, addresses, fail)
+    if views or addresses:
+        _one_write_on_each_path(function, frozenset(views), addresses, fail)
     blocks = {block.id: block for block in function.blocks}
     at_top: dict[BlockId, _Open] = {function.entry: {}}
     work = [function.entry]
@@ -177,6 +180,44 @@ def _written_before_use(function: SlirFunction, addresses: frozenset[LocalId],
                 work.append(target)
 
 
+def _one_write_on_each_path(function: SlirFunction, views: frozenset[LocalId],
+                            addresses: frozenset[LocalId], fail: Fail) -> None:
+    """ONE statement writes a view local on each path, and one `Ref` an address local: a
+    block knows the statements that each path into it wrote each local with (the meet is
+    the union), and the storage markers of the local forget them. Two paths that each wrote
+    the local one time can meet (the binders of an alternative, ir.md 8.9), and a later
+    round of a loop writes it again with the same statement (the step of a walk)."""
+    blocks = {block.id: block for block in function.blocks}
+    at_top: dict[BlockId, dict[LocalId, frozenset[tuple[int, int]]]] = {function.entry: {}}
+    work = [function.entry]
+    while work:
+        block = blocks[work.pop()]
+        writers = dict(at_top[block.id])
+        for at, stmt in enumerate(block.statements):
+            if isinstance(stmt, (st.StorageLive, st.StorageDead)):
+                writers.pop(stmt.local, None)
+                continue
+            target = _written(stmt)
+            if target is None or not (target.id in views or (
+                    target.id in addresses and isinstance(stmt, st.Assign)
+                    and isinstance(stmt.rvalue, r.Ref))):
+                continue
+            here = (block.id.index, at)
+            if writers.get(target.id, frozenset()) - {here}:
+                rule, what = ((VIEW_LOCAL, "written") if target.id in views
+                              else (ADDRESS_LOCAL, "written by a Ref"))
+                fail(rule, f"{show(target)} is {what} two times on a path", stmt.span)
+            writers[target.id] = frozenset({here})
+        for target_id in successors(block.terminator):
+            known = at_top.get(target_id)
+            meet = writers if known is None else {
+                local: known.get(local, frozenset()) | writers.get(local, frozenset())
+                for local in known.keys() | writers.keys()}
+            if meet != known:
+                at_top[target_id] = meet
+                work.append(target_id)
+
+
 def _uses(node: st.SlirStatement | tm.SlirTerminator) -> Iterator[LocalId]:
     """The locals that `node` reads or writes as a value. The write of a `Ref` and the
     storage and region markers are no use."""
@@ -236,15 +277,10 @@ def _copied(value: r.Rvalue, slot: bool) -> bool:
 
 
 def _view_locals(function: SlirFunction, views: set[LocalId], fail: Fail) -> None:
-    written: set[LocalId] = set()
     for block in function.blocks:
         for stmt in block.statements:
             target = _written(stmt)
             if target is not None and target.id in views:
-                if target.id in written:
-                    fail(VIEW_LOCAL, f"{show(target)} is written two times", stmt.span)
-                if target.id.index != 0:
-                    written.add(target.id)
                 if isinstance(stmt, st.Assign) and not _copied(stmt.rvalue, target.id.index == 0):
                     fail(VIEW_LOCAL, f"{show(target)} is written by no copy", stmt.span)
             for place, what in _spends(stmt):
@@ -256,8 +292,8 @@ def _view_locals(function: SlirFunction, views: set[LocalId], fail: Fail) -> Non
 
 def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
                     fail: Fail) -> dict[LocalId, p.Place]:
-    """One `Ref` writes each address local, and it writes the local itself, not a part of
-    it. The local is never moved, at its root or at a part, and never dropped as a whole
+    """A `Ref` writes the address local itself, not a part of it, and each `Ref` of one
+    local has the same root (`_one_write_on_each_path` counts the `Ref`s on each path). The local is never moved, at its root or at a part, and never dropped as a whole
     but at a rebind through it, where the next statement writes it: a write of an owning
     part drops the old part through the address (rule 6). Answers the root of the place
     of the `Ref` of each address local."""
@@ -268,10 +304,10 @@ def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
                 if not isinstance(stmt.place, p.Local):
                     fail(ADDRESS_LOCAL, f"a Ref writes {show(stmt.place)}, which is no local",
                          stmt.span)
-                if stmt.place.id in refs:
-                    fail(ADDRESS_LOCAL, f"{show(stmt.place)} is written by two Refs",
+                root = p.root_of(stmt.rvalue.place)
+                if refs.setdefault(stmt.place.id, root) != root:
+                    fail(ADDRESS_LOCAL, f"two Refs write {show(stmt.place)} with two roots",
                          stmt.span)
-                refs[stmt.place.id] = p.root_of(stmt.rvalue.place)
             following = block.statements[at + 1:at + 2]
             for place, what in _spends(stmt):
                 local = p.root_of(place)

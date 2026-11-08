@@ -1,0 +1,18 @@
+# A `peek` binder in an alternative of an arm freezes the scrutinee while it lives. A
+# rebind of the scrutinee in the arm, before a read of the binder, is CE2412.
+# EXPECT_ERROR_CODE: CE2412
+
+enum Word:
+    A(string)
+    B(string)
+    Gone
+
+fn main() i32:
+    let string most = "most"
+    let Word w = Word.A("{most}ly")
+    match w:
+        Word.A(peek s) | Word.B(peek s) ->
+            w := Word.Gone
+            println(s)
+        Word.Gone -> println("gone")
+    return 0

@@ -26,6 +26,7 @@ from sushi_lang.semantics.shir.callee import Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.spelling import spell_pattern
 from sushi_lang.semantics.shir.stmts import Ref
+from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -60,7 +61,8 @@ def match(low: Lowering, stmt: s.Match) -> None:
             or tuple_):
         dispatch.stop(STAGE, stmt)
     scrutinee: p.Operand | tuple[p.Operand, ...]
-    if tuple_ and isinstance(stmt.scrutinee, e.TupleInit) and low.owns(facts.scrutinee):
+    if tuple_ and isinstance(stmt.scrutinee, e.TupleInit) and (
+            low.owns(facts.scrutinee) or _points_into(stmt)):
         scrutinee = tuple(_scrutinee(low, part, place=True) for part in stmt.scrutinee.parts)
     else:
         scrutinee = _scrutinee(low, stmt.scrutinee, place=enum or tuple_)
@@ -79,6 +81,13 @@ def match(low: Lowering, stmt: s.Match) -> None:
         arrivals = _chain(low, stmt, arms, at_switch, drops)
     if arrivals:
         meet(low, low.new_block(), arrivals, among, stmt.loc)
+
+
+def _points_into(stmt: s.Match) -> bool:
+    """Whether an arm has a `peek` or `poke` binder: a binder of a part of a tuple literal
+    points into the place of that part, so the literal builds no tuple (ir.md 8.9)."""
+    return any(isinstance(value, pt.PatBinding) and isinstance(value.by, Ref)
+               for case in stmt.arms for _, value in walk(case.pattern, ""))
 
 
 def _taken(paths: list[_Path]) -> set[LocalId]:
@@ -217,17 +226,11 @@ def _switch_case(test: _Test) -> int:
     return case
 
 
-def _bind_blocks(low: Lowering, stmt: s.Match, paths: list[_Path]) -> list[Block]:
+def _bind_blocks(low: Lowering, paths: list[_Path]) -> list[Block]:
     """A block for each path of an arm when two or more paths write a binder: each one
-    writes the binders of its path and goes to the body. A view local and an address local
-    have one write each, so two paths that write a binder of an owning payload or a `peek`
-    or `poke` binder stop (`Match owning alternatives`)."""
+    writes the binders of its path and goes to the body (ir.md 8.9)."""
     if len(paths) < 2 or not any(path.binds for path in paths):
         return []
-    if any(isinstance(value, r.Ref) or low.owns(low.typeck.local_type(local)
-                                                 or BuiltinType.BLANK)
-           for path in paths for local, value in path.binds):
-        dispatch.stop(STAGE, stmt, state="owning alternatives")
     return [low.new_block() for _ in paths]
 
 
@@ -250,7 +253,7 @@ def _one_switch(low: Lowering, stmt: s.Match, arms: list[list[_Path]], scrutinee
         scrutinee = p.Copy(p.Local(tag))
     entries = []
     for paths in arms:
-        entries.append((_bind_blocks(low, stmt, paths), low.new_block()))
+        entries.append((_bind_blocks(low, paths), low.new_block()))
     cases: list[tuple[int, BlockId]] = []
     otherwise: Optional[BlockId] = None
     for paths, (binds, block) in zip(arms, entries, strict=True):
@@ -285,7 +288,7 @@ def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
         counts = [[2 if isinstance(test.pattern, pt.IntRange) else 1 for test in path.tests]
                   for path in paths]
         steps = [entry, *(low.new_block() for _ in range(sum(map(sum, counts)) - 1))]
-        binds = _bind_blocks(low, stmt, paths)
+        binds = _bind_blocks(low, paths)
         body, missed = low.new_block(), low.new_block()
         start = 0
         for at, (path, sizes) in enumerate(zip(paths, counts, strict=True)):

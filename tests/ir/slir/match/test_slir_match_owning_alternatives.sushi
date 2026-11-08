@@ -1,0 +1,29 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a!\nb!?\nc!\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_match_owning_alternatives.slir
+#
+# An arm with two alternatives that bind an owning payload: each path writes its binders in
+# a block of its own and goes to the body, which is lowered one time. A bare binder is one
+# view local, a `poke` binder one address local, and a `nom` binder one owning local, with
+# one write on each path. Each path begins the region of a binder with the same id.
+
+enum Word:
+    A(string)
+    B(string)
+
+fn word(string s) string:
+    return "{s}!"
+
+fn main() i32:
+    let Word a = Word.A(word("a"))
+    match a:
+        Word.A(s) | Word.B(s) -> println(s)
+    let Word b = Word.B(word("b"))
+    match b:
+        Word.A(poke s) | Word.B(poke s) -> s := "{s}?"
+    match nom b:
+        Word.A(nom s) | Word.B(nom s) -> println(s)
+    match Word.A(word("c")):
+        Word.A(nom s) | Word.B(nom s) -> println(s)
+    return 0

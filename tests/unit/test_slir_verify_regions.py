@@ -7,6 +7,7 @@ rule. They call a Python function over data; they do not run the compiler.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Optional
 
 from sushi_lang.semantics.param_modes import Convention
@@ -14,6 +15,7 @@ from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
+from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import DeclaredParams
@@ -317,3 +319,96 @@ def test_a_use_of_an_address_local_in_a_region_over_another_owner_is_refused():
                _blank())),
         ADDRESS)
 
+
+
+# -- the writes of a view local and of an address local on each path (ir.md 8.9, 8.13) ---
+
+
+def _alternatives(left: tuple[object, ...], right: tuple[object, ...],
+                  body: tuple[object, ...] = (_read_view(3), _end(0))) -> SlirFunction:
+    """The two paths of an arm with alternatives: `_1` is the bool of the switch, `_2` owns a
+    string, `_3` is a view of it. `left` and `right` are the blocks of the two paths, and
+    they meet at the body `body`."""
+    return _function(
+        [BLANK, BOOL, STRING, STRING, BLANK], {3},
+        _block(0, _switch(1, 2, 1), _live(2), _text(2), _live(3)),
+        _block(1, _goto(3), *left),
+        _block(2, _goto(3), *right),
+        _block(3, _ret(), *body, _dead(3), _drop(2), _dead(2), _blank()),
+        params=((1, GUARANTEED),))
+
+
+def test_two_paths_that_each_write_a_view_local_one_time_pass():
+    write = (_begin(0, 2, 3), _set(3, r.Use(_copy(2))))
+    _passes(_alternatives(write, write), READ)
+
+
+def test_one_path_that_writes_a_view_local_two_times_is_refused():
+    _refused(_alternatives(
+        (_begin(0, 2, 3), _set(3, r.Use(_copy(2))), _set(3, r.Use(_copy(2)), BAD)),
+        (_begin(0, 2, 3), _set(3, r.Use(_copy(2))))), VIEW, declared=READ)
+
+
+def test_a_view_local_that_one_statement_writes_in_each_round_of_a_loop_passes():
+    """The answer of the step of a walk: its storage starts before the loop, and the header
+    writes it in each round."""
+    _passes(_function(
+        [BLANK, BOOL, STRING, STRING, BLANK], {3},
+        _block(0, _goto(1), _live(2), _text(2), _live(3)),
+        _block(1, _switch(1, 3, 2), _set(3, r.Use(_copy(2)))),
+        _block(2, _goto(1), _read_view(3)),
+        _block(3, _ret(), _dead(3), _drop(2), _dead(2), _blank()),
+        params=((1, GUARANTEED),)), READ)
+
+
+def test_a_view_local_that_a_later_round_writes_with_another_statement_is_refused():
+    _refused(_function(
+        [BLANK, BOOL, STRING, STRING, BLANK], {3},
+        _block(0, _goto(1), _live(2), _text(2), _live(3), _set(3, r.Use(_copy(2)))),
+        _block(1, _switch(1, 3, 2), _read_view(3)),
+        _block(2, _goto(1), _set(3, r.Use(_copy(2)), BAD)),
+        _block(3, _ret(), _dead(3), _drop(2), _dead(2), _blank()),
+        params=((1, GUARANTEED),)), VIEW, declared=READ)
+
+
+def test_two_paths_that_meet_with_two_region_ids_are_refused():
+    """Each path begins a region over the owner, but with another id."""
+    function = _alternatives((_begin(0, 2),), (_begin(1, 2),), body=(_end(0),))
+    blocks = tuple(replace(block, terminator=tm.Goto(BlockId(3), BAD))
+                   if block.id == BlockId(2) else block for block in function.blocks)
+    _refused(replace(function, blocks=blocks), REGION)
+
+
+def test_a_view_local_that_two_paths_write_in_regions_of_two_ids_is_refused():
+    """The view names both regions, and each path opens one of them."""
+    _refused(_alternatives((_begin(0, 2, 3), _set(3, r.Use(_copy(2)), BAD)),
+                           (_begin(1, 2, 3), _set(3, r.Use(_copy(2))))), VIEW, declared=READ)
+
+
+def _poke_alternatives(left: tuple[object, ...], right: tuple[object, ...]) -> SlirFunction:
+    """The two paths of an arm with `poke` alternatives: `_3` is an address local of `_1`,
+    and `_5` holds another `i32`."""
+    return _function(
+        [BLANK, I32, BOOL, I32, I32, I32], set(),
+        _block(0, _switch(2, 2, 1), _live(1), _one_of(1), _live(5),
+               _set(5, r.Use(p.Const(k.Int(2, I32)))), _live(2),
+               _set(2, r.Use(p.Const(k.Bool(True)))), _live(3), _live(4)),
+        _block(1, _goto(3), *left),
+        _block(2, _goto(3), *right),
+        _block(3, _ret(), _read(3), _end(0), _dead(4), _dead(3), _dead(2), _dead(5), _dead(1),
+               _blank()))
+
+
+def test_two_paths_that_each_write_an_address_local_with_one_ref_pass():
+    write = (_begin(0, 1), _ref(3, 1))
+    _passes(_poke_alternatives(write, write))
+
+
+def test_one_path_that_writes_an_address_local_with_two_refs_is_refused():
+    _refused(_poke_alternatives((_begin(0, 1), _ref(3, 1), _ref(3, 1, BAD)),
+                                (_begin(0, 1), _ref(3, 1))), ADDRESS)
+
+
+def test_two_paths_that_write_an_address_local_with_refs_of_two_roots_are_refused():
+    _refused(_poke_alternatives((_begin(0, 1), _ref(3, 1)),
+                                (_begin(0, 5), _ref(3, 5, BAD))), ADDRESS)

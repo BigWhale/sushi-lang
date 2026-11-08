@@ -330,6 +330,15 @@ class DropPlacement:
     def open_regions(self) -> tuple[OpenRegion, ...]:
         return tuple(self._open)
 
+    def next_region(self) -> int:
+        """The count of the region ids that the function has."""
+        return self._borrows
+
+    def region_again(self, mark: int) -> None:
+        """The next region gets the id `mark` again: each path of an arm with alternatives
+        begins the regions of its binders with the same ids (ir.md 8.9)."""
+        self._borrows = mark
+
     def end_regions(self, ends: Callable[[OpenRegion], bool],
                     span: Span) -> list[st.SlirStatement]:
         """An `EndBorrow` for each owner of each open region that `ends` names, the newest

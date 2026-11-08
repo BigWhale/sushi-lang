@@ -1,0 +1,152 @@
+unit test_slir_match_owning_alternatives
+
+fn word(_1: string @guaranteed) -> string {
+    let _0: string
+
+  bb0:
+    _0 = call builtin interp@(string, string)(copy _1 @guaranteed, const "!" @guaranteed)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string
+    let _2: Word                           // a
+    let _3: i32
+    let _4: string view                    // s
+    let _5: ~
+    let _6: string
+    let _7: Word                           // b
+    let _8: i32
+    let _9: string                         // s
+    let _10: string
+    let _11: Word
+    let _12: i32
+    let _13: string                        // s
+    let _14: ~
+    let _15: string
+    let _16: Word
+    let _17: i32
+    let _18: string                        // s
+    let _19: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @word(const "a" @guaranteed)
+    StorageLive(_2)
+    _2 = Word::A(move _1)
+    StorageDead(_1)
+    _3 = discriminant(_2)
+    switchInt(copy _3) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_4)
+    BeginBorrow(b0, _2, peek, for _4)
+    _4 = copy ((_2 as A).0)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_4)
+    BeginBorrow(b0, _2, peek, for _4)
+    _4 = copy ((_2 as B).0)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_5)
+    StorageDead(_4)
+    goto -> bb4
+
+  bb4:
+    StorageLive(_6)
+    _6 = call @word(const "b" @guaranteed)
+    StorageLive(_7)
+    _7 = Word::B(move _6)
+    StorageDead(_6)
+    _8 = discriminant(_7)
+    switchInt(copy _8) -> [0: bb5, 1: bb6, otherwise: unreachable]
+
+  bb5:
+    StorageLive(_9)
+    BeginBorrow(b1, _7, poke)
+    _9 = ref poke ((_7 as A).0)
+    goto -> bb7
+
+  bb6:
+    StorageLive(_9)
+    BeginBorrow(b1, _7, poke)
+    _9 = ref poke ((_7 as B).0)
+    goto -> bb7
+
+  bb7:
+    StorageLive(_10)
+    _10 = call builtin interp@(string, string)(copy _9 @guaranteed, const "?" @guaranteed)
+    Drop(_9)
+    _9 = move _10
+    EndBorrow(b1)
+    StorageDead(_10)
+    StorageDead(_9)
+    goto -> bb8
+
+  bb8:
+    StorageLive(_11)
+    _11 = move _7
+    _12 = discriminant(_11)
+    switchInt(copy _12) -> [0: bb9, 1: bb10, otherwise: unreachable]
+
+  bb9:
+    StorageLive(_13)
+    _13 = move ((_11 as A).0)
+    goto -> bb11
+
+  bb10:
+    StorageLive(_13)
+    _13 = move ((_11 as B).0)
+    goto -> bb11
+
+  bb11:
+    StorageLive(_14)
+    _14 = call builtin println@(string)(copy _13 @guaranteed)
+    StorageDead(_14)
+    Drop(_13)
+    StorageDead(_13)
+    goto -> bb12
+
+  bb12:
+    StorageDead(_11)
+    StorageLive(_15)
+    _15 = call @word(const "c" @guaranteed)
+    StorageLive(_16)
+    _16 = Word::A(move _15)
+    _17 = discriminant(_16)
+    switchInt(copy _17) -> [0: bb13, 1: bb14, otherwise: unreachable]
+
+  bb13:
+    StorageLive(_18)
+    _18 = move ((_16 as A).0)
+    goto -> bb15
+
+  bb14:
+    StorageLive(_18)
+    _18 = move ((_16 as B).0)
+    goto -> bb15
+
+  bb15:
+    StorageLive(_19)
+    _19 = call builtin println@(string)(copy _18 @guaranteed)
+    StorageDead(_19)
+    Drop(_18)
+    StorageDead(_18)
+    goto -> bb16
+
+  bb16:
+    StorageDead(_16)
+    StorageDead(_15)
+    _0 = const 0_i32
+    StorageDead(_7)
+    Drop(_2)
+    StorageDead(_2)
+    return
+}

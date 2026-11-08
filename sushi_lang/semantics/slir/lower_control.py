@@ -91,23 +91,33 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
     local written with the `Move` of its payload: the arm takes the variant whole, so the
     root moves one time for all of them. A path writes its other binders before its `nom`
     binders, because no part of the root is read after the take. A path writes its binders
-    in its own block, which goes to the body, or in the body block when it is the one path."""
+    in its own block, which goes to the body, or in the body block when it is the one path.
+    Two or more paths write one local for each binder, one time on each path, each from the
+    state before the paths, and each path begins the region of a binder with the same id
+    (ir.md 8.9)."""
     idents: dict[ShirLocalId, LocalId] = {}
+    order = {local: at for at, (local, _) in enumerate(binds[0][1])} if binds else {}
+    before, mark = low.placement.state(), low.placement.next_region()
+    after: list[FlowState] = []
     for block, writes in binds:
+        if after:
+            low.placement.restore(before)
+            low.placement.region_again(mark)
         statements: list[st.SlirStatement] = []
         taken: list[LocalId] = []
-        for local, value in sorted(writes, key=lambda write: _takes(write[1])):
+        for local, value in sorted(writes, key=lambda write: (_takes(write[1]),
+                                                              order.get(write[0], 0))):
             if isinstance(value, r.Ref):
-                statements += views.bind_address(low, local, value, span)
+                statements += views.bind_address(low, local, value, span, idents)
                 continue
             if isinstance(value, r.Use) and isinstance(value.operand, p.Move):
-                statements += _bind_taken(low, local, value, span)
+                statements += _bind_taken(low, local, value, span, idents)
                 held = p.root_of(value.operand.place)
                 if isinstance(held, p.Local) and held.id not in taken:
                     taken.append(held.id)
                 continue
             if views.binds_a_view(low, local):
-                statements += views.bind_view(low, local, value, span)
+                statements += views.bind_view(low, local, value, span, idents)
                 continue
             if local not in idents:
                 idents[local] = low.bind(local, span)[0]
@@ -116,21 +126,28 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
                            st.Assign(p.Local(idents[local]), value, span)]
         for ident in taken:
             low.placement.move(ident, span)
+        after.append(low.placement.state())
         if block is None:
             low.emit(statements)
         else:
             block.statements.extend(statements)
             block.terminator = tm.Goto(body.id, span)
+    if any(state != after[0] for state in after):
+        er.raise_internal_error("CE0000", span=span,
+                                detail="two paths of an arm write its binders with two states")
 
 
 def _takes(value: r.Rvalue) -> bool:
     return isinstance(value, r.Use) and isinstance(value.operand, p.Move)
 
 
-def _bind_taken(low: Lowering, local: ShirLocalId, value: r.Use,
-                span: Span) -> list[st.SlirStatement]:
-    """A `nom` binder: an owning local of the arm, with its flag after its write."""
-    ident = low.declare_binder(local, span)
+def _bind_taken(low: Lowering, local: ShirLocalId, value: r.Use, span: Span,
+                idents: dict[ShirLocalId, LocalId]) -> list[st.SlirStatement]:
+    """A `nom` binder: an owning local of the arm, with its flag after its write. Each path
+    of an arm with alternatives writes the one local of `idents`."""
+    ident = idents.get(local)
+    if ident is None:
+        ident = idents[local] = low.declare_binder(local, span)
     return [st.StorageLive(ident, span), st.Assign(p.Local(ident), value, span),
             *low.placement.flag_declared(ident, span)]
 

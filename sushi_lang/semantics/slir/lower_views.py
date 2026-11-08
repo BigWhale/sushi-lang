@@ -144,18 +144,21 @@ def binds_a_view(low: Lowering, local: ShirLocalId) -> bool:
     return ty is not None and low.owns(ty)
 
 
-def bind_view(low: Lowering, local: ShirLocalId, value: r.Rvalue,
-              span: Span) -> list[st.SlirStatement]:
+def bind_view(low: Lowering, local: ShirLocalId, value: r.Rvalue, span: Span,
+              idents: dict[ShirLocalId, LocalId]) -> list[st.SlirStatement]:
     """A bare binder of an owning payload (ir.md 8.9): a view local of the arm, written with
     the `Copy` of its payload place, in a region over the root of that place to the last
-    uses of the region row of `borrow`. A binder with no use has no region."""
+    uses of the region row of `borrow`. A binder with no use has no region. Each path of an
+    arm with alternatives writes the one local of `idents`."""
     region = low.answers.ownership.region_of(local)
     if region is None or not (isinstance(value, r.Use) and isinstance(value.operand, p.Copy)):
         er.raise_internal_error("CE0000", span=span,
                                 detail="a binder of an owning payload with no borrow region "
                                        "reached SLIR")
-    ident, _ = low.bind(local, span, view=True)
-    low.placement.declare(ident, False)
+    ident = idents.get(local)
+    if ident is None:
+        ident = idents[local] = low.bind(local, span, view=True)[0]
+        low.placement.declare(ident, False)
     statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
     if region.until:
         statements += low.placement.begin_region(
@@ -188,18 +191,22 @@ def bind_part_view(low: Lowering, local: ShirLocalId, read: p.Copy, root: p.Plac
     low.emit([st.Assign(p.Local(ident), r.Use(read), span)])
 
 
-def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref,
-                 span: Span) -> list[st.SlirStatement]:
-    """A `peek` or `poke` binder of the pointee of an `Own(...)` (ir.md 8.2): an address
-    local of the arm, written with the `Ref` of its payload place, in a region over the root
-    of that place with the mode of the `Ref`, to the last uses of the region row of
-    `borrow`. A binder with no use has no region."""
+def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref, span: Span,
+                 idents: dict[ShirLocalId, LocalId]) -> list[st.SlirStatement]:
+    """A `peek` or `poke` binder of a pattern (ir.md 8.2): an address local of the arm,
+    written with the `Ref` of its payload place, in a region over the root of that place
+    with the mode of the `Ref`, to the last uses of the region row of `borrow`. A binder
+    with no use has no region. Each path of an arm with alternatives writes the one local
+    of `idents`."""
     region = low.answers.ownership.region_of(local)
     if region is None:
         er.raise_internal_error("CE0000", span=span,
                                 detail="a reference binder with no borrow region reached SLIR")
-    ident, ty = low.bind(local, span)
-    low.placement.address(ident, low.owns(ty))
+    ident = idents.get(local)
+    if ident is None:
+        ident, ty = low.bind(local, span)
+        idents[local] = ident
+        low.placement.address(ident, low.owns(ty))
     statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
     if region.until:
         statements += low.placement.begin_region(
