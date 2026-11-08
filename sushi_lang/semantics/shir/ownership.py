@@ -41,8 +41,9 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True)
 class Region:
     """The borrow region of a view: each owner that it freezes, the statement of its last use
-    on each path, and its leaving ends (ir.md 7.9): the block of an arm that leaves the scope
-    of the view with no use of it, and each last use in an arm that leaves."""
+    on each path, and its leaving ends that are not last uses (ir.md 7.9): the block of an arm
+    that leaves the scope of the view with no use of it, and each last use in an arm that
+    leaves when a later statement uses the view."""
     owners: tuple[Owner, ...]
     until: tuple[ShirId, ...]
     leaving: frozenset[ShirId] = frozenset()

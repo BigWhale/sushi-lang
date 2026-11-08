@@ -3150,6 +3150,8 @@ tests/iterators/direct_walks/test_dw_change_on_leaving_arm.sushi
 tests/iterators/direct_walks/test_dw_exits.sushi
 tests/iterators/direct_walks/test_dw_fixed_array.sushi
 tests/iterators/direct_walks/test_dw_in_instance.sushi
+tests/iterators/direct_walks/test_dw_last_use_in_a_breaking_arm.sushi
+tests/iterators/direct_walks/test_dw_last_use_in_a_returning_arm.sushi
 tests/iterators/direct_walks/test_dw_let_view_on_leaving_arm.sushi
 tests/iterators/direct_walks/test_dw_list.sushi
 tests/iterators/direct_walks/test_dw_map_change_on_leaving_arm.sushi

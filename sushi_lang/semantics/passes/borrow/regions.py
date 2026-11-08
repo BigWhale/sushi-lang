@@ -67,9 +67,9 @@ def write_regions(views: dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]]
                   table: OwnershipResults) -> None:
     """One region row for each view of the body, in `table`."""
     for view, (owners, block, index) in views.items():
-        until = last_uses(block, index, view)
-        leaving = _leaving_ends(block.statements[index + 1:], view)
-        table.record_region(view, Region(owners, tuple(sorted(set(until) | leaving)), leaving))
+        until = set(last_uses(block, index, view))
+        leaving = _leaving_ends(block.statements[index + 1:], view) - until
+        table.record_region(view, Region(owners, tuple(sorted(until | leaving)), leaving))
 
 
 def last_uses(block: ShirBlock, index: int, view: LocalId) -> tuple[ShirId, ...]:
