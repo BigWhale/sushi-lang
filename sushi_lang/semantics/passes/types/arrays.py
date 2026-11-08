@@ -32,6 +32,7 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import effect_of
+from sushi_lang.semantics.operators import TYPE_KEEPING_UNARY
 from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
 from sushi_lang.semantics.passes.types.inference import int_literal_default
 from sushi_lang.semantics.places import Step, walk_place
@@ -103,7 +104,7 @@ def _reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
 
 
 def _is_byte_literal(node: 'ShirExpr') -> bool:
-    while isinstance(node, Unary) and node.op in ("neg", "~"):
+    while isinstance(node, Unary) and node.op in TYPE_KEEPING_UNARY:
         node = node.operand
     return (isinstance(node, Lit) and isinstance(node.value, IntConst)
             and node.value.byte_spelling is not None)

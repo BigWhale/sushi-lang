@@ -25,7 +25,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.const_eval import emit_string_plus
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.operators import (
-    ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, DIVISION_OPS, SHIFT_OPS)
+    ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, DIVISION_OPS, SHIFT_OPS, TYPE_KEEPING_UNARY)
 from sushi_lang.semantics.passes.types.expressions import (
     is_string_plus, reject_impossible_shift_count,
     reject_mixed_numeric_operands, reject_non_bool_condition, reject_non_integer_operands,
@@ -44,8 +44,6 @@ if TYPE_CHECKING:
 _LOGICAL = ("and", "or", "xor")
 #: The binary operators whose two operands have the type of the operation.
 _SAME_TYPE = ARITHMETIC_OPS + BITWISE_OPS
-#: The unary operators whose operand has the type of the operation.
-_TYPE_KEEPING = ("neg", "~")
 
 
 def check_condition(validator: TypeValidator, cond: e.ShirExpr) -> bool:
@@ -233,7 +231,7 @@ def _given(operand: e.ShirExpr, position: Optional[Type]) -> Optional[Type]:
 
 def _literal_under(node: e.ShirExpr) -> Optional[e.Lit]:
     """The number literal under a run of operators that keep the type of their operand."""
-    while isinstance(node, e.Unary) and node.op in _TYPE_KEEPING:
+    while isinstance(node, e.Unary) and node.op in TYPE_KEEPING_UNARY:
         node = node.operand
     if isinstance(node, e.Lit) and isinstance(node.value, (e.IntConst, e.FloatConst)):
         return node

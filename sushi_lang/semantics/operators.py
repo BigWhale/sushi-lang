@@ -18,3 +18,5 @@ COMPARISON_OPS = EQUALITY_OPS + ("<", "<=", ">", ">=")
 BITWISE_OPS = ("&", "|", "^")
 #: A shift: the count has a type of its own.
 SHIFT_OPS = ("<<", ">>")
+#: The unary operators whose operand has the type of the operation (#448).
+TYPE_KEEPING_UNARY = ("neg", "~")

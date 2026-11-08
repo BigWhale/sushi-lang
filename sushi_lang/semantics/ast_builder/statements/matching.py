@@ -145,8 +145,7 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
     negative = t.data == "neg_literal_pattern"
     value = -lit.value if negative else lit.value
     display = f"-{tok.value}" if negative else str(tok.value)
-    # A negated literal is a VALUE, never a bit pattern (same rule as
-    # _stamp_numeric_literal in passes/types/propagation.py).
+    # A negated literal is a VALUE, never a bit pattern.
     radix = 10 if negative else lit.radix
     return LiteralPattern(value=value, display=display, radix=radix,
                           is_byte=lit.byte_spelling is not None, loc=span_of(t))
