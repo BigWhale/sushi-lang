@@ -3676,14 +3676,16 @@ that another arm takes drops that temporary at its end, after the exit of its sc
 and the owning local of a `nom` binder have ONE write on each path (8.13). So in an arm whose
 two or more paths write a binder of an owning payload, or a `peek` or `poke` binder, each
 path writes the binder one time, in the block of that path, and the paths join at the arm
-body, which is lowered one time. The region row of the binder (7.9) has the same root, the
-scrutinee, on each path: each path writes the `BeginBorrow` of each owner of the region, with
-ONE id for the region on every path, before its write, so the paths that meet at the arm
-body bring the same open regions (8.6). A `nom` binder in an alternative takes the variant
+body, which is lowered one time. The region row of the binder (7.9) is over the root of
+the place of the binder on each path: the scrutinee, or the part of a tuple literal that
+the path reads (`(W.A(x), _) | (_, W.A(x))` gives two owners). Each path writes the
+`BeginBorrow` of each owner of the region, with ONE id for the region on every path, before
+its write, so the paths that meet at the arm body bring the same open regions by their ids
+(8.6), and at the body the region is over the owners of every path. A `nom` binder in an alternative takes the variant
 whole on its path, as a plain arm does. Each path writes its binders in the order of the
 first path, with its `nom` binders last, and starts from the state before the paths, so
 each path gives the same ids to its regions and the same state to the body (an internal
-error if two paths give two states). With one path, the block of the body writes the
+error if two paths give two moved sets or two sets of region ids). With one path, the block of the body writes the
 binders first.
 With two or more paths that write a binder, each path ends in a
 block of its own that writes the binders of that path and goes to the body. Each arm body is
@@ -4034,8 +4036,8 @@ Runs after lowering, before the backend. It checks:
   whose view is no view local of the function, are CE0158 of this check (the rule `a view
   local`, `VIEW_LOCAL` of `verify_rules.py`, which `verify_regions.py` reports)
 - an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
-  are counted, and a `Ref` writes a local, never a part of one. Each `Ref` of one address
-  local has the same root (the scrutinee of the alternatives of 8.9). It is never the place of a `DropIfSet` as a whole and never `Move`d, at its
+  are counted, and a `Ref` writes a local, never a part of one. At each use, a region over
+  the root of the place of each of its `Ref`s is open. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its
   root or
   at a part; the write of an owning part drops the old part through the address (8.10,
   rule 6). It is the place of a `Drop` as a whole only at a rebind through it: the next
@@ -4083,7 +4085,9 @@ drops. `verify_regions.py` holds the rules of a view local and of a borrow regio
 `a view local`, `a borrow region` and `no change of an owner in its region`; the read of a
 view local outside its regions is `a view local`): a dataflow
 gives each block the set of open regions at its top, every path into a block brings the
-same set, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
+same set of region ids, the owners of a region at a block are the owners that each path
+brings (two parts of a tuple literal, 8.9), the checks of the uses and of the owners read
+the answer of the dataflow, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
 an owner counts at its root and at each projection of it. It runs after the structure check
 and before the dataflow of the moves and the drops, which does not read a view local.
 `verify_rules.py` holds the names of the rules, which the five others share. The
