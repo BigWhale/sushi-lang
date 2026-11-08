@@ -330,14 +330,16 @@ class DropPlacement:
     def open_regions(self) -> tuple[OpenRegion, ...]:
         return tuple(self._open)
 
-    def meet_binders(self, states: Sequence[FlowState]) -> bool:
+    def meet_binders(self, states: Sequence[FlowState], flagged: frozenset[LocalId]) -> bool:
         """The paths `states` of an arm with alternatives meet at its body (ir.md 8.9): each
-        path gives the same moved and unknown locals and the same regions by their ids, and
-        the owners of a region are the owners of every path (the parts of a tuple literal
-        are two owners). False when two paths give two states."""
+        path gives the same moved and unknown locals, but the temporaries `flagged` that the
+        caller gives a flag, and the same regions by their ids, and the owners of a region
+        are the owners of every path (the parts of a tuple literal are two owners). False
+        when two paths give two states."""
         first = states[0]
         shape = [(region.view, region.ids, region.until) for region in first.regions]
-        if any(state.moved != first.moved or state.unknown != first.unknown
+        if any(state.moved - flagged != first.moved - flagged
+               or state.unknown != first.unknown
                or [(region.view, region.ids, region.until) for region in state.regions] != shape
                for state in states):
             return False

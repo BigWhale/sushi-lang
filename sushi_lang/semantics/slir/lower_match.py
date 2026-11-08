@@ -35,7 +35,8 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
-from sushi_lang.semantics.slir.lower_control import Binds, arm, meet, variant_of
+from sushi_lang.semantics.slir.lower_control import (
+    Binds, arm, meet, taken_roots, variant_of)
 from sushi_lang.semantics.type_predicates import is_integer_type
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 
@@ -50,8 +51,9 @@ def match(low: Lowering, stmt: s.Match) -> None:
     scrutinee, else a chain of tests in source order. A match on a tuple is a chain. Each arm
     starts from the state after the scrutinee, and the arms that reach their end meet at the
     join. A bare binder of an owning payload is a view local (`lower_views.bind_view`), and
-    a `nom` binder of one moves it out of a temporary of the scrutinee: each arm that takes
-    nothing out of that temporary drops it at its end."""
+    a `nom` binder of one moves it out of a temporary of the scrutinee: each arm with a path
+    that takes nothing out of that temporary drops it at its end, by its flag when another
+    path of the arm takes it."""
     facts = low.typeck.match_facts_of(stmt.shir_id)
     if facts is None:
         dispatch.stop(STAGE, stmt)
@@ -69,9 +71,10 @@ def match(low: Lowering, stmt: s.Match) -> None:
     low.emit(low.placement.flush())
     among, at_switch = low.placement.in_scope(), low.placement.state()
     arms = [_paths(low, case.pattern, scrutinee, facts.scrutinee) for case in stmt.arms]
-    taken = [_taken(paths) for paths in arms]
-    drops = [tuple(sorted(set().union(*taken) - own, key=lambda local: local.index))
-             for own in taken]
+    taken = [[set(taken_roots(path.binds)) for path in paths] for paths in arms]
+    every = {root for paths in taken for path in paths for root in path}
+    drops = [tuple(sorted((root for root in every if any(root not in path for path in paths)),
+                          key=lambda local: local.index)) for paths in taken]
     if not tuple_ and not isinstance(scrutinee, tuple) and all(
             len(path.tests) <= 1 and all(test.operand == scrutinee and _case(test) is not None
                                          for test in path.tests)
@@ -88,14 +91,6 @@ def _points_into(stmt: s.Match) -> bool:
     points into the place of that part, so the literal builds no tuple (ir.md 8.9)."""
     return any(isinstance(value, pt.PatBinding) and isinstance(value.by, Ref)
                for case in stmt.arms for _, value in walk(case.pattern, ""))
-
-
-def _taken(paths: list[_Path]) -> set[LocalId]:
-    """The temporaries of the scrutinee that an arm takes: the root of each `nom` binder
-    of an owning payload (ir.md 8.9)."""
-    roots = {p.root_of(value.operand.place) for path in paths for _, value in path.binds
-             if isinstance(value, r.Use) and isinstance(value.operand, p.Move)}
-    return {root.id for root in roots if isinstance(root, p.Local)}
 
 
 def _scrutinee(low: Lowering, expr: e.ShirExpr, *, place: bool) -> p.Operand:

@@ -1,0 +1,32 @@
+# The `nom` alternatives of one arm take a payload from two parts of a tuple literal, over
+# a temporary and under `match nom`. A path takes its part, and the other part drops.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "m2\nm3\nm5\nnone\n"
+
+enum W:
+    A(string)
+    B(string)
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let string m = "m"
+    match (W.B("{m}1"), W.A("{m}2")):
+        (W.A(nom x), _) | (_, W.A(nom x)) -> eat(nom x)
+        _ -> println("none")
+    match nom (W.A("{m}3"), W.B("{m}4")):
+        (W.A(nom x), _) | (_, W.A(nom x)) -> eat(nom x)
+        _ -> println("none")
+    foreach(k in 0..2):
+        match (W.B("{m}{k}"), W.A("{m}5")):
+            (W.A(nom x), _) | (_, W.A(nom x)) ->
+                if (k == 1):
+                    break
+                eat(nom x)
+            _ -> println("none")
+    match (W.B("{m}6"), W.B("{m}7")):
+        (W.A(nom x), _) | (_, W.A(nom x)) -> eat(nom x)
+        _ -> println("none")
+    return 0

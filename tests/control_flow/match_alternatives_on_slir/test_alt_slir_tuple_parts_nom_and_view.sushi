@@ -1,0 +1,26 @@
+# The alternatives of one arm take one part of a tuple literal with `nom` and view the
+# other part with a bare binder, at swapped positions. Each part is freed one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "m1\nm2\nm4\nm3\n"
+
+enum W:
+    A(string)
+    B(string)
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let string m = "m"
+    match (W.B("{m}1"), W.A("{m}2")):
+        (W.A(nom x), W.B(y)) | (W.B(y), W.A(nom x)) ->
+            println(y)
+            eat(nom x)
+        _ -> println("none")
+    match nom (W.A("{m}3"), W.B("{m}4")):
+        (W.A(nom x), W.B(y)) | (W.B(y), W.A(nom x)) ->
+            println(y)
+            eat(nom x)
+        _ -> println("none")
+    return 0

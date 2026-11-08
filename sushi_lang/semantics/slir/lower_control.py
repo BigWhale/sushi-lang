@@ -94,17 +94,21 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
     in its own block, which goes to the body, or in the body block when it is the one path.
     Two or more paths write one local for each binder, one time on each path, each from the
     state before the paths, and each path begins the region of a binder with the same id
-    (ir.md 8.9)."""
+    (ir.md 8.9). A temporary of the scrutinee that some paths take and others do not (the
+    parts of a tuple literal) gets a drop flag: each path writes it, and at the body the
+    temporary is unknown, so the end of the arm and each exit drop it by its flag."""
     idents: dict[ShirLocalId, LocalId] = {}
     order = {local: at for at, (local, _) in enumerate(binds[0][1])} if binds else {}
     before, mark = low.placement.state(), low.placement.next_region()
+    takes = [taken_roots(writes) for _, writes in binds]
+    partial = sorted(_partly_taken(takes), key=lambda local: local.index)
+    flags = {root: low.new_local(BuiltinType.BOOL, None, None) for root in partial}
     after: list[FlowState] = []
-    for block, writes in binds:
+    for (block, writes), taken in zip(binds, takes, strict=True):
         if after:
             low.placement.restore(before)
             low.placement.region_again(mark)
         statements: list[st.SlirStatement] = []
-        taken: list[LocalId] = []
         for local, value in sorted(writes, key=lambda write: (_takes(write[1]),
                                                               order.get(write[0], 0))):
             if isinstance(value, r.Ref):
@@ -112,9 +116,6 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
                 continue
             if isinstance(value, r.Use) and isinstance(value.operand, p.Move):
                 statements += _bind_taken(low, local, value, span, idents)
-                held = p.root_of(value.operand.place)
-                if isinstance(held, p.Local) and held.id not in taken:
-                    taken.append(held.id)
                 continue
             if views.binds_a_view(low, local):
                 statements += views.bind_view(low, local, value, span, idents)
@@ -126,15 +127,38 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
                            st.Assign(p.Local(idents[local]), value, span)]
         for ident in taken:
             low.placement.move(ident, span)
+        for root, flag in flags.items():
+            statements += [st.StorageLive(flag, span), set_flag(flag, root not in taken, span)]
         after.append(low.placement.state())
         if block is None:
             low.emit(statements)
         else:
             block.statements.extend(statements)
             block.terminator = tm.Goto(body.id, span)
-    if after and not low.placement.meet_binders(after):
+    if after and not low.placement.meet_binders(after, frozenset(partial)):
         er.raise_internal_error("CE0000", span=span,
                                 detail="two paths of an arm write its binders with two states")
+    for root, flag in flags.items():
+        low.placement.flag(root, flag)
+        low.placement.mark_unknown(root)
+
+
+def _partly_taken(takes: Sequence[Sequence[LocalId]]) -> set[LocalId]:
+    """The temporaries that some paths of `takes` take and some do not."""
+    every = {root for taken in takes for root in taken}
+    return {root for root in every if any(root not in taken for taken in takes)}
+
+
+def taken_roots(writes: Sequence[tuple[ShirLocalId, r.Rvalue]]) -> list[LocalId]:
+    """The temporaries of the scrutinee that one path takes: the root of each `nom` binder
+    of an owning payload, in the order of the binders (ir.md 8.9)."""
+    roots = [p.root_of(value.operand.place) for _, value in writes
+             if isinstance(value, r.Use) and isinstance(value.operand, p.Move)]
+    return list(dict.fromkeys(root.id for root in roots if isinstance(root, p.Local)))
+
+
+def set_flag(flag: LocalId, value: bool, span: Span) -> st.Assign:
+    return st.Assign(p.Local(flag), r.Use(p.Const(k.Bool(value))), span)
 
 
 def _takes(value: r.Rvalue) -> bool:
