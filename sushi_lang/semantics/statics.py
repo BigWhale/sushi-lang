@@ -98,8 +98,9 @@ def solve_target_type_args(template, arg_types, stamped_args):
     nothing, and a stamp whose arity does not match the template answers nothing.
     """
     from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
+    from sushi_lang.semantics.generics.types import type_param_names
 
-    names = [p.name if hasattr(p, "name") else str(p) for p in template.type_params]
+    names = type_param_names(template.type_params)
     solved, _ = solve_leading_type_args(template, arg_types, None, None, partial=True)
     if stamped_args is not None and len(stamped_args) == len(names):
         for name, stamped in zip(names, stamped_args, strict=True):

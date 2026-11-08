@@ -12,11 +12,23 @@ from sushi_lang.semantics.shir.callee import Free
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.decls import DeclNames
+    from sushi_lang.semantics.shir.ids import DeclId
+
+
+def unqualified(name: str) -> str:
+    """A written name with the alias before its last dot cut off."""
+    return name.rpartition(".")[2]
+
+
+def free_function_name(decls: DeclNames, written: object, callee: DeclId) -> str:
+    """The name of a free function in its unit. The callee row of an instance names the
+    instance: no alias stands before that name, and a pack marker can stand in it. Only the
+    name of the written declaration `written` has an alias to cut off."""
+    name = decls.name_of(callee)
+    return unqualified(name) if written == callee else name
 
 
 def free_callee_name(decls: DeclNames, node: e.Call, callee: Free) -> str:
-    """The name of a free function in its unit. The callee row of an instance names the
-    instance: no alias stands before that name, and a pack marker can stand in it."""
-    name = decls.name_of(callee.decl)
+    """The name of the free function that a call names."""
     written = isinstance(node.target, e.Named) and getattr(node.target.ref, "decl", None)
-    return name.rpartition(".")[2] if written == callee.decl else name
+    return free_function_name(decls, written, callee.decl)

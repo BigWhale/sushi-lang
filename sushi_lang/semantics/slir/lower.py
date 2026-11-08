@@ -98,7 +98,8 @@ from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir.lower_values import (
-    CallValue, Learned, ShortCircuit, Value, ViewValue, holds, moves_of, root_of_move)
+    CallValue, Learned, ShortCircuit, Value, ViewValue, holds, moves_of, root_of_move,
+    until_stable)
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.typesys import BuiltinType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit
@@ -189,22 +190,21 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     ret = return_type_of(decl, tables, body)
     borrows = getattr(decl, "borrowed_return", None) is not None
     shir_locals = {local.id: local for local in body.locals}
-    learned = Learned()
-    while True:
+
+    def lower_once(learned: Learned) -> tuple[Lowering, tuple[tuple[LocalId, Convention], ...]]:
         lowering = Lowering(answers, decls, drops, shir_locals, learned, label, tables,
                             unit=unit if home is None else home)
         lowering.new_local(ret, None, None, view=(borrows and lowering.owns(ret)
                                                   and not answers_an_iterator(ret)))
         params = lowering.parameters()
         lowering.lower_block(ret)
-        found = lowering.all_learned()
-        if found != learned:
-            learned = found
-            continue
-        blocks = tuple(block.closed() for block in lowering.blocks)
-        return SlirFunction(symbol, name, unit if home is None else home, params,
-                            tuple(lowering.locals), blocks, blocks[0].id,
-                            lifted=tuple(sorted(lowering.lifted, key=lambda each: each.symbol)))
+        return lowering, params
+
+    lowering, params = until_stable(lower_once)
+    blocks = tuple(block.closed() for block in lowering.blocks)
+    return SlirFunction(symbol, name, unit if home is None else home, params,
+                        tuple(lowering.locals), blocks, blocks[0].id,
+                        lifted=tuple(sorted(lowering.lifted, key=lambda each: each.symbol)))
 
 
 @dataclass(slots=True)

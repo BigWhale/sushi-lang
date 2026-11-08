@@ -35,7 +35,7 @@ from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
-from sushi_lang.semantics.slir.lower_generics import free_callee_name
+from sushi_lang.semantics.slir.lower_generics import free_callee_name, unqualified
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
 from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.type_predicates import generic_base_of
@@ -125,11 +125,11 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     if isinstance(callee, (Method, Static)):
         return user_method(low, callee, resolved, node.loc)
     if isinstance(callee, Stdlib):
-        name = low.decls.name_of(callee.decl).rpartition(".")[2]
+        name = unqualified(low.decls.name_of(callee.decl))
         types = [low.type_of(arg.value) for arg in node.args]
         return st.Direct(stdlib_symbol(callee.module, name, types), name, callee.module)
     if isinstance(callee, Extern):
-        return st.Direct(callee.symbol, low.decls.name_of(callee.decl).rpartition(".")[2])
+        return st.Direct(callee.symbol, unqualified(low.decls.name_of(callee.decl)))
     if isinstance(callee, Intrinsic):
         return st.Builtin(callee, tuple(display_type(low, node.shir_id, index, node.loc)
                                         for index in range(len(node.args))))
@@ -154,7 +154,7 @@ def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall,
     and a perk method by the perk symbol of the implementation of the receiver type."""
     owner = callee.ty if isinstance(callee, Static) else deref_type(low.type_of(callee.recv))
     name = low.decls.name_of(callee.decl)
-    method = name.rpartition(".")[2]
+    method = unqualified(name)
     if (isinstance(callee, Method) and owner is not None
             and low.tables.perk_impls.get_method(owner, method) is not None):
         return st.Direct(method_symbol(owner, method, None), name)

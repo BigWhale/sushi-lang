@@ -6,7 +6,7 @@ value into its place makes the statement (`Lowering.write`).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -21,6 +21,9 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.ids import LocalId
 from sushi_lang.semantics.typesys import ArrayType
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.slir.lower import Lowering
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +61,21 @@ class Learned:
     and the locals whose state a loop header does not know, by the loop."""
     flags: frozenset[ShirLocalId] = frozenset()
     unknown_at: frozenset[tuple[ShirId, ShirLocalId]] = frozenset()
+
+
+R = TypeVar("R")
+
+
+def until_stable(lower_once: Callable[[Learned], tuple[Lowering, R]]) -> tuple[Lowering, R]:
+    """Lower a body again with what its walk learned, until the walk learns nothing new.
+    `lower_once` makes a lowering from the learned facts and lowers the body."""
+    learned = Learned()
+    while True:
+        lowering, rest = lower_once(learned)
+        found = lowering.all_learned()
+        if found == learned:
+            return lowering, rest
+        learned = found
 
 
 def holds(constant: k.Constant) -> bool:

@@ -34,12 +34,16 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE, SlirFunction
-from sushi_lang.semantics.slir.lower_values import Learned, Value
+from sushi_lang.semantics.slir.lower_generics import free_function_name
+from sushi_lang.semantics.slir.lower_values import Learned, Value, until_stable
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, StructType, Type
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.slir.ids import LocalId
     from sushi_lang.semantics.slir.lower import Lowering
+
+    Params = tuple[tuple[LocalId, Convention], ...]
 
 _PLACES = (e.LocalRef, e.StorageRef, e.Field, e.Index, e.Slice)
 
@@ -51,9 +55,7 @@ def function_value(low: Lowering, node: e.GlobalRef) -> Value:
                                 detail="a function value with no callee reached SLIR")
     if resolved.unit is None:
         raise StageStop(STAGE, "library function", node.loc)
-    name = low.decls.name_of(resolved.callee.decl)
-    if resolved.callee.decl == node.decl:
-        name = name.rpartition(".")[2]
+    name = free_function_name(low.decls, node.decl, resolved.callee.decl)
     symbol = function_symbol(name, resolved.unit)
     return r.Aggregate(r.AggClosure(low.type_of(node)), (p.Const(k.FnRef(symbol)),))
 
@@ -127,8 +129,8 @@ def _cut(low: Lowering, node: e.Lambda, symbol: str, env: StructType,
     fn_type = low.type_of(node)
     has_channel = isinstance(fn_type, FunctionType) and fn_type.err_type is not None
     conventions = lambda_conventions(low.typeck, node)
-    learned = Learned()
-    while True:
+
+    def lower_once(learned: Learned) -> tuple[Lowering, tuple[LocalId, Params]]:
         lowering = low.sibling(learned, node.body)
         lowering.expression_return = node.body.statements[0].shir_id if node.expr_body else None
         lowering.channel_expression = has_channel
@@ -141,15 +143,14 @@ def _cut(low: Lowering, node: e.Lambda, symbol: str, env: StructType,
             [(param.local, convention, node.loc)
              for param, convention in zip(node.params, conventions, strict=True)])
         lowering.lower_block(ret)
-        found = lowering.all_learned()
-        if found != learned:
-            learned = found
-            continue
-        blocks = tuple(block.closed() for block in lowering.blocks)
-        function = SlirFunction(symbol, symbol, low.unit, ((environment, Convention.IN_GUARANTEED),
-                                                           *params),
-                                tuple(lowering.locals), blocks, blocks[0].id, environment)
-        return [function, *lowering.lifted]
+        return lowering, (environment, params)
+
+    lowering, (environment, params) = until_stable(lower_once)
+    blocks = tuple(block.closed() for block in lowering.blocks)
+    function = SlirFunction(symbol, symbol, low.unit, ((environment, Convention.IN_GUARANTEED),
+                                                       *params),
+                            tuple(lowering.locals), blocks, blocks[0].id, environment)
+    return [function, *lowering.lifted]
 
 
 def expression_return(low: Lowering, stmt: s.Return) -> None:

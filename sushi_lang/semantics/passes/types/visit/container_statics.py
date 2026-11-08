@@ -19,6 +19,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.own import own_payload_type
+from sushi_lang.semantics.generics.types import template_type_param_names
 from sushi_lang.semantics.method_effects import argument_conventions
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
@@ -103,13 +104,13 @@ def _record_conventions(validator: TypeValidator, node: e.Call, callee: BuiltinS
 def _reject_no_position(validator: TypeValidator, node: e.Call, base: str, name: str) -> None:
     """CE2060: the position gives the static no instance of its container (#570). The help
     names the type parameters of the container."""
-    generic = validator.generic_struct_table.by_name.get(base)
-    params = tuple(getattr(p, "name", str(p)) for p in getattr(generic, "type_params", ()))
+    params = template_type_param_names(validator.generic_struct_table.by_name.get(base),
+                                       node.loc)
     emit_no_source(validator, node.loc, name,
                    "the built-in static reads its type from the binding alone, and "
                    "this position declares no type",
                    f"bind the result to a declared type ('let {base}@(...) x = {name}(...)'), "
-                   f"or name {spell_names(params or ('T',))} in a parameter so the argument "
+                   f"or name {spell_names(params)} in a parameter so the argument "
                    f"solves it")
 
 

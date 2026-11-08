@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Mapping, NamedTuple, Optional, Sequence
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
-from sushi_lang.semantics.generics.types import substitute_type_params
+from sushi_lang.semantics.generics.types import (
+    substitute_type_params, template_type_param_names, type_param_names)
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     NOTHING_TYPED, marked_type, reject_misplaced_spread)
@@ -275,7 +276,7 @@ def generic_static_owner(validator: TypeValidator, node: e.Call, target: e.Stati
         reject_unreached_type_params(validator, node.loc, base, target.name,
                                      _type_params_of(validator, base), declared)
         return Constructed(None)
-    names = [getattr(p, "name", str(p)) for p in template.type_params]
+    names = list(type_param_names(template.type_params))
     stamped_args = None if stamped is None else stamped.generic_args
     given = dict(zip(names, stamped_args or (), strict=False))
     solution = solve_arguments(validator, names, [p.ty for p in template.params], node.args,
@@ -295,6 +296,5 @@ def generic_static_owner(validator: TypeValidator, node: e.Call, target: e.Stati
 
 
 def _type_params_of(validator: TypeValidator, base: str) -> tuple[str, ...]:
-    generic = (validator.generic_struct_table.by_name.get(base)
-               or validator.generic_enum_table.by_name.get(base))
-    return tuple(getattr(p, "name", str(p)) for p in getattr(generic, "type_params", ())) or ("T",)
+    return template_type_param_names(validator.generic_struct_table.by_name.get(base)
+                                     or validator.generic_enum_table.by_name.get(base))

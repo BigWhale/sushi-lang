@@ -21,8 +21,8 @@ and the body. An item that the walk owns moves into the binder, and the `None` e
 """
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import TYPE_CHECKING, cast
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Sequence, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -49,7 +49,9 @@ from sushi_lang.semantics.typesys import (
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.slir.lower import Lowering
+    from sushi_lang.semantics.slir.drops import FlowState
+    from sushi_lang.semantics.slir.ids import LocalId
+    from sushi_lang.semantics.slir.lower import Block, Lowering
 
 
 def loop(low: Lowering, stmt: s.Loop) -> None:
@@ -107,27 +109,60 @@ def _map_cursor(low: Lowering, stmt: s.Loop, source: s.Items, kind: HashMapCurso
     producer = _producer(low, source.iterable)
     owner = _container(low, producer)
     answer, some = _step_answer(low, source, span)
-    stepped = low.new_local(answer, None, None, view=True)
-    low.placement.temporary(stepped, False)
-    low.emit([st.StorageLive(stepped, span)])
-    low.walk_owners[stepped] = p.root_of(owner)
+    stepped = _step_local(low, answer, True, owner, span)
     cursor = low.temporary(r.Use(ctl.i32(0)), BuiltinType.I32, span)
-    header = ctl.enter_header(low, stmt)
-    among, at_header = ctl.header_state(low, stmt)
-    low.placement.open_statement()
     method = replace(producer.method, name=f"{CURSOR_NEXT}{kind.view.name}")
-    low.emit([st.Call(p.Local(stepped), st.Builtin(method, ()), (
+    step = _header_step(low, stmt, stepped, st.Builtin(method, ()), (
         (p.Copy(owner), Convention.IN_GUARANTEED),
-        (p.Copy(p.Local(cursor)), Convention.INOUT)), span)])
-    tag = low.temporary(r.Discriminant(p.Local(stepped)), BuiltinType.I32, span)
-    low.placement.detach(tag)
-    low.emit(low.placement.close_scope(span))
-    body, done, exit_ = low.new_block(), low.new_block(), low.new_block()
+        (p.Copy(p.Local(cursor)), Convention.INOUT)))
     payload: p.Place = p.Field(p.Downcast(p.Local(stepped), "Some"), 0)
     if isinstance(source.by, s.Ref):
         payload = p.Deref(payload)
-    ctl.rounds(low, stmt, (p.Copy(p.Local(tag)), tag, span), body, header, done, exit_,
-               (among, at_header), _binds(source, payload), leaves_at=1 - some)
+    _rounds(low, stmt, step, _binds(source, payload), some)
+
+
+def _step_local(low: Lowering, answer: EnumType, view: bool, owner: p.Place,
+                span: Span) -> LocalId:
+    """The temporary of the loop statement that takes the answer of each step."""
+    stepped = low.new_local(answer, None, None, view=view)
+    low.placement.temporary(stepped, False)
+    low.emit([st.StorageLive(stepped, span)])
+    low.walk_owners[stepped] = p.root_of(owner)
+    return stepped
+
+
+@dataclass(frozen=True, slots=True)
+class _Step:
+    """The header of a walk that steps: the tag of the answer, the header block, the state
+    at the header, and the blocks of the body, of the `None` edge and of the exit."""
+    tag: LocalId
+    header: Block
+    state: tuple[tuple[LocalId, ...], FlowState]
+    body: Block
+    done: Block
+    exit: Block
+
+
+def _header_step(low: Lowering, stmt: s.Loop, stepped: LocalId, callee: st.SlirCallee,
+                 args: tuple[tuple[p.Operand, Convention], ...]) -> _Step:
+    """The header, which calls the step into `stepped` and reads the tag of its answer."""
+    span = stmt.loc
+    header = ctl.enter_header(low, stmt)
+    state = ctl.header_state(low, stmt)
+    low.placement.open_statement()
+    low.emit([st.Call(p.Local(stepped), callee, args, span)])
+    tag = low.temporary(r.Discriminant(p.Local(stepped)), BuiltinType.I32, span)
+    low.placement.detach(tag)
+    low.emit(low.placement.close_scope(span))
+    return _Step(tag, header, state, low.new_block(), low.new_block(), low.new_block())
+
+
+def _rounds(low: Lowering, stmt: s.Loop, step: _Step, binds: Sequence[ctl.Binds], some: int,
+            held: Sequence[tuple[p.Place, Type]] = ()) -> None:
+    """The rounds of a walk that steps: the `None` edge leaves."""
+    ctl.rounds(low, stmt, (p.Copy(p.Local(step.tag)), step.tag, stmt.loc), step.body,
+               step.header, step.done, step.exit, step.state, binds, leaves_at=1 - some,
+               held=held)
 
 
 def _step_answer(low: Lowering, source: s.Items, span: Span) -> tuple[EnumType, int]:
@@ -251,31 +286,20 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
         owned_parts = _owned_parts(low, ty)
     answer, some = _maybe_of(low, item, span)
     takes_item = low.owns(item) and not peeks
-    stepped = low.new_local(answer, None, None,
-                            view=low.owns(item) and not takes_item and not owned_parts)
-    low.placement.temporary(stepped, False)
-    low.emit([st.StorageLive(stepped, span)])
-    low.walk_owners[stepped] = p.root_of(iterator)
-    header = ctl.enter_header(low, stmt)
-    among, at_header = ctl.header_state(low, stmt)
-    low.placement.open_statement()
-    low.emit([st.Call(p.Local(stepped), target, args, span)])
-    tag = low.temporary(r.Discriminant(p.Local(stepped)), BuiltinType.I32, span)
-    low.placement.detach(tag)
-    low.emit(low.placement.close_scope(span))
-    body, done, exit_ = low.new_block(), low.new_block(), low.new_block()
+    stepped = _step_local(low, answer, low.owns(item) and not takes_item and not owned_parts,
+                          iterator, span)
+    step = _header_step(low, stmt, stepped, target, args)
     if takes_item or owned_parts:
-        done.statements.append(low.placement.drop_step(stepped, span))
+        step.done.statements.append(low.placement.drop_step(stepped, span))
     payload: p.Place = p.Field(p.Downcast(p.Local(stepped), "Some"), 0)
     binds: tuple[ctl.Binds, ...] = ()
     if not isinstance(source.binder, s.Discard):
         read = p.Move(payload) if takes_item else p.Copy(payload)
         binds = ((None, ((source.binder, r.Use(read)),)),)
     elif takes_item:
-        body.statements.append(low.placement.drop_step(stepped, span))
+        step.body.statements.append(low.placement.drop_step(stepped, span))
     held = tuple((p.Field(payload, index), part) for index, part in owned_parts)
-    ctl.rounds(low, stmt, (p.Copy(p.Local(tag)), tag, span), body, header, done, exit_,
-               (among, at_header), binds, leaves_at=1 - some, held=held)
+    _rounds(low, stmt, step, binds, some, held)
 
 
 def _owned_parts(low: Lowering, ty: IteratorType) -> tuple[tuple[int, Type], ...]:
