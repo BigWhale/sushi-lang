@@ -36,6 +36,7 @@ from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig, GenericFuncDef
+    from sushi_lang.internals.report import Span
     from sushi_lang.semantics.passes.types import TypeValidator
 
 
@@ -182,7 +183,8 @@ def _instance_callee(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
     """The signature of the instance in its declaring unit. An instance that the early
     passes did not cut is a late request, and a constraint can refuse it: that refusal is
     the one diagnostic."""
-    instance = declared_or_late_instance(validator, ref, template, type_args, written)
+    instance = declared_or_late_instance(validator, ref, template, type_args, written,
+                                         site=node.loc)
     if instance is None:
         walk_unchecked(validator, node.args, typed)
         return None
@@ -197,9 +199,11 @@ class DeclaredInstance(NamedTuple):
 
 def declared_or_late_instance(validator: TypeValidator, ref: e.GlobalRef,
                               template: GenericFuncDef, type_args: tuple[Type, ...],
-                              written: str) -> Optional[DeclaredInstance]:
+                              written: str, site: Optional[Span] = None
+                              ) -> Optional[DeclaredInstance]:
     """The instance that `type_args` name. One that the early passes did not cut is a late
-    request. None after the refusal of a constraint, or after CE2061."""
+    request, and a refusal of it stands at `site` (the call), else at the name. None after
+    the refusal of a constraint, or after CE2061."""
     params = template.type_params
     pack_arity = (len(type_args) - (len(params) - 1) if params[-1].is_pack else None)
     mangled = mangle_function_name(template.name, type_args, pack_arity=pack_arity)
@@ -210,7 +214,7 @@ def declared_or_late_instance(validator: TypeValidator, ref: e.GlobalRef,
             er.raise_internal_error("CE0000", span=ref.loc,
                                     detail="the analyzer set no late request of an instance")
         refused = request((template.unit_name, template.name, type_args),
-                          (ref.loc, validator.reporter.filename),
+                          (site or ref.loc, validator.reporter.filename),
                           validator.body_instance_key, validator.reporter)
         sig = _declared_instance(validator, template, mangled)
         if refused or sig is None:
