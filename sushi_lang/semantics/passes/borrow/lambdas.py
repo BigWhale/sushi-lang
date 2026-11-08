@@ -11,11 +11,11 @@ has its row as any other local.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir.body import ShirParam
+from sushi_lang.semantics.shir.body import ShirLocal, ShirParam
 from sushi_lang.semantics.shir.ids import LocalId
 from sushi_lang.semantics.shir.typeck import lambda_conventions
 from sushi_lang.semantics.shir.walk import walk
@@ -72,7 +72,8 @@ def _walk_body(checker: 'BorrowChecker', node: e.Lambda,
         conventions = lambda_conventions(checker.answers(), node)
         for param, convention in zip(node.params, conventions, strict=True):
             ty = checker.local_type(param.local)
-            declared = ShirParam(param.local, ty, convention, node.loc, False)
+            declared = ShirParam(param.local, ty, convention,
+                                 _param_span(checker.locals[param.local]) or node.loc, False)
             checker._declare_param(declared, has_receiver=False, located=True)
         checker.block_locals.append([param.local for param in node.params])
         check_block(checker, node.body)
@@ -82,6 +83,14 @@ def _walk_body(checker: 'BorrowChecker', node: e.Lambda,
         (checker.borrow_state, checker.active_borrows, checker._scope_binding_borrows,
          checker.block_locals, checker.loop_frames, checker.statement_at,
          checker.borrowed_return, checker.is_main) = saved
+
+
+def _param_span(local: ShirLocal) -> Optional[Span]:
+    """The span of a lambda parameter: its written type and its name, else its name."""
+    if local.loc is None or local.declared_loc is None:
+        return local.loc
+    return Span(local.declared_loc.line, local.declared_loc.col,
+                local.loc.end_line, local.loc.end_col)
 
 
 def _declare_capture(checker: 'BorrowChecker', node: e.Lambda, local: LocalId) -> None:

@@ -240,7 +240,7 @@ def reject_misplaced_spread(validator: 'TypeValidator', arg: e.Arg) -> bool:
     """
     if not arg.bloom:
         return False
-    er.emit(validator.reporter, er.ERR.CE0120, arg.value.loc,
+    er.emit(validator.reporter, er.ERR.CE0120, arg.marker_loc or arg.value.loc,
             message="bloom argument 'arr...' is only allowed as the last argument "
                     "of a call to a variadic '...T' function")
     visit.check_expr(validator, arg.value)

@@ -166,8 +166,8 @@ CallTarget: TypeAlias = Named | Dotted | Static | BuiltinFn
 class Arg:
     """`marker` is the WRITTEN call-site mode, or None. `bloom` is `arr...`.
 
-    `marker_loc` is the span of the written marker: a `nom`, or a `peek x` or a `poke x`
-    from its marker. A diagnostic of the marker stands there.
+    `marker_loc` is the span of the written marker: a `nom`, a `peek x` or a `poke x` from
+    its marker, or a whole `arr...`. A diagnostic of the marker stands there.
     """
     value: ShirExpr
     marker: Optional[Convention]

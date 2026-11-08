@@ -563,7 +563,7 @@ def _marked(lw: BodyLowerer, node: a.Borrow) -> e.Arg:
 
 def _bloom(lw: BodyLowerer, node: a.Spread) -> e.Arg:
     """`xs...`: the array itself, forwarded whole."""
-    return e.Arg(lw.expr(node.value), None, bloom=True)
+    return e.Arg(lw.expr(node.value), None, bloom=True, marker_loc=lw.span(node))
 
 
 def _marker(word: str) -> Convention:
