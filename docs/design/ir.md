@@ -936,8 +936,9 @@ variant of the name, where no unit declares a method of the name, is
 gives to a generic enum. A `Try` takes a `Result` only
 ([CE2507](../error-catalog.md#ce2507)), and answers the payload of `Ok`. Its facts are
 the tag of `Ok`, the two payload types and the `Result` of the channel. Its conversion row
-is `NoConversion` when the two error types are one type; with no declared conversion
-between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
+is `NoConversion` when the two error types are one type, and the `Conversion` callee when
+a declared conversion joins the two error types (one step, an exact pair); with no declared
+conversion between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
 
 **A struct construction.** A `StructInit` of a struct that is not generic is an instance
 of that struct, also behind an alias: the struct is the one that the namespace holds. Each
@@ -1094,9 +1095,11 @@ that conversion is [CE2523](../error-catalog.md#ce2523), with a note at the conv
 refused cast still answers its target type and has the row `NoConversion`, so the node that
 reads it and `borrow` check it too. An
 opaque type parameter has no other rule: `v as T` with `v` of the type `T` calls nothing, and
-each other cast to or from `T` is CE2014 with a note at the parameter. Two
-casts are not typed yet, and each one stops the walk of the body with `typecheck, Cast`: a
-cast to or from `ptr`, and a cast between two error types that a declared conversion joins.
+each other cast to or from `T` is CE2014 with a note at the parameter. A cast between two
+error types that a declared conversion joins (`find_conversion`) calls it: the conversion
+row is the `Conversion` callee, whose `DeclId` names the written name `<source>.as` of the
+body. One cast is not typed yet, and it stops the walk of the body with `typecheck, Cast`: a
+cast to or from `ptr`.
 An integer literal directly under a cast to an integer type, also under a negation there,
 has the target type, and the pass does not check its range: the cast keeps the bits that
 the type holds (`300 as u8` is 44). The fold reads that operand at the target type too
@@ -2105,7 +2108,10 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
   borrow, and each slot takes its own copy);
 - the scrutinee of a `Match` that consumes (`match nom r:`);
 - the operand of a `Try`, and the operand of every `Cast`: a conversion takes it as
-  `nom self`, and an identity cast moves it (a plain operand gets `ADOPT`);
+  `nom self`, and an identity cast moves it (a plain operand gets `ADOPT`). A borrow of an
+  owning operand is [CE2411](../error-catalog.md#ce2411), and its help names
+  `x.clone() as T`: "convert the copy" when the conversion row is a `Conversion`, else
+  "cast the copy";
 - the iterable of a `Loop` over an iterator value or a `next()` type that does not walk
   in place;
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
@@ -2173,8 +2179,8 @@ does not check them, and the body never goes to the SLIR lowering.
 **`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`) and stops at
 nothing. For each `Lambda`, a lambda in a lambda too, in the order of the walk, it writes the
 symbol, the symbol of the body with the suffix `.__lambda_<n>`, and the captures of the node
-in slot order. A template check, an initializer and a conversion never lower, so their name is
-the prefix. A body with no `Lambda` has an empty `LiftResults`, and the dump prints no answer
+in slot order. A template check and an initializer never lower, so their name is
+the prefix. A conversion lowers, so its symbol is the prefix, as for each other body. A body with no `Lambda` has an empty `LiftResults`, and the dump prints no answer
 of `lift`. `check_lift` runs, and the body goes to `borrow`, also a body with an error of
 `typecheck`.
 
@@ -2707,7 +2713,8 @@ index. No statement has an empty span (G9).
 **Where SLIR lives.** The package is `semantics/slir/`, and it never imports the backend:
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
 `terminators.py`, `function.py`), the lowering (`lower.py`, with the control-flow arms in
-`lower_control.py`, the arm of a `match` in `lower_match.py`, the arms of a struct and a
+`lower_control.py`, the arm of `??` in `lower_try.py`, a cast and the call of a conversion
+in `lower_conversions.py`, the arm of a `match` in `lower_match.py`, the arms of a struct and a
 tuple in `lower_aggregate.py`, the arms of an array in `lower_arrays.py`, the arms of a
 call and of an interpolation in `lower_calls.py`, a value before its place in
 `lower_values.py`, the view locals and their regions in `lower_views.py` and the facts of a
@@ -2785,9 +2792,7 @@ symbol, with the receiver first (`declared_params`).
 
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or one of these names: `conversion` for the
-body of a conversion, and also for a
-`Try` that calls a declared conversion (today `typecheck` stops there first), `library
+class, or one of these names: `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
 argument, and `ConstRef out of range` for a `ConstRef` whose value its type cannot
@@ -3572,7 +3577,8 @@ backstop of the checker, as on the AST backend.
 |---|---|
 | `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)`; with no `else`, the zero edge goes to the join, or to a block of its own that goes to the join when the condition has a local (see below). The blocks are made in the order `then`, `else` or the zero block, join; with no `else` and no condition local, the join is the zero target. With an `else`, the join is made after the two arms, and no join is made when no block reaches it |
 | `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
-| `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
+| `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` across two error types (a `Conversion` row) calls the conversion in the `Err` block first: the error moves into the call, `Direct(<conversion symbol>, "<source>.as")` with one `Owned` operand, the answer goes into a temporary of a scope of the `Err` block alone, and the `Err` of the channel takes it |
+| `Cast(e)` | a numeric cast and a cast to the type of `e` are the `Cast` rvalue; a cast with a `Conversion` row is the call `Direct(<conversion symbol>, "<source>.as")` of the body of the conversion, with `e` as its one `Owned` operand. The body of a conversion is a function with `_1` owned (`nom self`), and its symbol is `extension_decl_symbol`: the symbol of `as` on the source with the target after it, with no unit |
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
 | `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. The `Maybe` place is read first (`wrapper`: a get-out receiver goes into a view temporary), then `e`, before the switch; a named `e` and a field take go into a temporary of the statement, so the `None` path moves the temporary and the `Some` path drops it at the top of its block, the point where the call of `or_err` drops it on `main`. When the `Maybe` is a get-out of a temporary container, the `let` of the payload keeps the container in a hidden owner local of the block: the walk to it crosses each `??`, each get-out and each read-through `or_err`. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
