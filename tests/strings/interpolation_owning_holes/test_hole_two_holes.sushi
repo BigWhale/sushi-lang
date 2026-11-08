@@ -1,0 +1,16 @@
+# A hole in a let and in a print argument, two owning holes in one string.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "left-right-LEFT|rightleft\n"
+# EXPECT_NO_LEAKS: true
+
+fn a() string:
+    return "left"
+
+fn b() string:
+    return "right"
+
+fn main() i32:
+    let string s = "{a()}-{b()}-{a().upper()}"
+    print("{s}|")
+    print("{b()}{a()}\n")
+    return 0

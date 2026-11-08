@@ -1,0 +1,32 @@
+# A Display override in a hole, on a plain and an owning struct, held in a field.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Holder(p: P1, o: O<kept>)\nO<tmp> P2 O<kept>\nkept\n"
+# EXPECT_NO_LEAKS: true
+
+struct Plain:
+    i32 n
+
+extend Plain with Display:
+    fn to_str() string:
+        return "P{self.n}"
+
+struct Owner:
+    string tag
+
+extend Owner with Display:
+    fn to_str() string:
+        return "O<{self.tag}>"
+
+struct Holder:
+    Plain p
+    Owner o
+
+fn make() Owner:
+    return Owner("tmp")
+
+fn main() i32:
+    let Holder h = Holder(Plain(1), Owner("kept"))
+    println("{h}")
+    println("{make()} {Plain(2)} {h.o}")
+    println("{h.o.tag}")
+    return 0

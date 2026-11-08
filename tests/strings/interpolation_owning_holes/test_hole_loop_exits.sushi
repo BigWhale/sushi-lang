@@ -1,0 +1,22 @@
+# A hole in a loop body with break and return drops its temporary on each exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "item0 item0\nitem1 item1\nITEM2\nitem0 item0\nitem1 item1\nitem2 item2\nitem3 item3\nitem4 item4\nitem5 item5\nitem6 item6\nnone\n"
+# EXPECT_NO_LEAKS: true
+
+fn name(i32 i) string:
+    return "item{i}"
+
+fn first_big(i32 limit) string:
+    foreach(i in 0..10):
+        let string s = "{name(i)}"
+        if (i == limit):
+            return "{name(i).upper()}"
+        if (i == 7):
+            break
+        println("{name(i)} {s}")
+    return "none"
+
+fn main() i32:
+    println(first_big(2))
+    println(first_big(20))
+    return 0
