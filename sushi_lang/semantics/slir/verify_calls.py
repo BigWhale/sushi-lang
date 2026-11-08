@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.generics.name_mangling import method_symbol
+from sushi_lang.semantics.ast import CONVERSION_METHOD
+from sushi_lang.semantics.generics.name_mangling import extension_symbol, method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import (
     Convention, declared_modes, mode_of_type, receiver_mode)
@@ -81,7 +82,8 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
     function of its name in the unit whose symbol is the symbol of the callee; the name of a
     pack instance has a dot too. A method or a static has the written name `<type>.<method>`:
     it is the extension of that name whose symbol is the symbol of the callee, else the method of
-    the perk implementation of that symbol, and an instance method has its receiver first. A function of a registry stdlib module is the row of its
+    the perk implementation of that symbol, and an instance method has its receiver first. A
+    conversion `<source>.as` has one `Owned` parameter. A function of a registry stdlib module is the row of its
     module, and each of its parameters borrows. A C function is the declaration of `externals`
     whose link name is the symbol of the callee: each parameter has the convention of its
     declared mode, and a variadic one has `var_arg`."""
@@ -92,7 +94,9 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
         sig = own.get(callee.name)
         if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
             return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
-    _, dot, method = callee.name.rpartition(".")
+    owner, dot, method = callee.name.rpartition(".")
+    if dot and method == CONVERSION_METHOD:
+        return _conversion_params(owner, callee.symbol)
     if dot:
         for record in extensions.signatures_named(method):
             if method_symbol(record.target_type, method, record.unit_name,
@@ -107,6 +111,14 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
         return DeclaredParams(tuple(mode_of_type(ty).convention for ty in extern.param_types),
                               var_arg=extern.is_variadic)
     return None
+
+
+def _conversion_params(owner: str, symbol: str) -> Optional[DeclaredParams]:
+    """A conversion of the source `owner` (`<source>.as`): one `Owned` parameter, the
+    `nom self` of its body. Its symbol is the symbol of `as` on that source with the target
+    after it. `as` is a reserved word, so no other method has the name."""
+    prefix = extension_symbol(owner, CONVERSION_METHOD)
+    return DeclaredParams((Convention.OWNED,)) if symbol.startswith(f"{prefix}__") else None
 
 
 def check_call(check: Check, stmt: st.Call) -> None:

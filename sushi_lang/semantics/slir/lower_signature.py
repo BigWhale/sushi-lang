@@ -8,13 +8,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics.generics.name_mangling import extension_decl_symbol, method_symbol
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.shir.body import ShirBody
-from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.typesys import Type
@@ -31,10 +29,9 @@ def symbol_of(decl: object, home: Optional[str], body: ShirBody,
     method or a static, the perk symbol of the target for a method of a perk implementation
     (ir.md 8.2), and `function_symbol` for a free function. The copy of a generic function
     is a free function: its name is the instance name, and `home` is the unit that declares
-    the template. A conversion stops with its name."""
+    the template. A conversion is an extension method `as` with no unit, and its target is
+    its one method type argument."""
     if isinstance(decl, ExtendDef):
-        if decl.is_conversion:
-            raise StageStop(STAGE, "conversion", body.block.loc)
         return extension_decl_symbol(decl, home)
     if isinstance(decl, FuncDef):
         impl = perk_impl_of(decl, perk_impls)

@@ -1,0 +1,20 @@
+# `e as B` on a borrowed parameter whose error owns a string is the consuming use of a
+# borrow. The help names `e.clone() as AppError`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: e.clone() as AppError
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn lift(TokenError e) AppError:
+    return e as AppError
+
+fn main() i32:
+    let TokenError e = TokenError.Bad("token")
+    println(lift(e))
+    return 0

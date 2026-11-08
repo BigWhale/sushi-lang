@@ -1,0 +1,35 @@
+# A `??` across two error types calls the declared conversion on its `Err` path. The
+# error is plain, so nothing drops.
+# EXPECT_STDOUT_EXACT: "ok 6\nerr AppError.Parse(ParseError.Empty)\nerr AppError.Parse(ParseError.Long(12))\n"
+# EXPECT_NO_LEAKS
+error ParseError:
+    Empty
+    Long(i32)
+
+error AppError:
+    Parse(ParseError)
+
+extend ParseError as AppError:
+    return AppError.Parse(self)
+
+fn parse(i32 n) i32 | ParseError:
+    if (n == 0):
+        return Result.Err(ParseError.Empty)
+    if (n > 9):
+        return Result.Err(ParseError.Long(n))
+    return Result.Ok(n * 2)
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = parse(n)??
+    return Result.Ok(v)
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(run(3))
+    show(run(0))
+    show(run(12))
+    return 0

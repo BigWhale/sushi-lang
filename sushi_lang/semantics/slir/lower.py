@@ -19,7 +19,7 @@ and `or` as control flow, the construction of an enum variant, of a struct, of a
 of an array, a field read and write, an element read and write with its bounds check, a
 slice, a destructure, a call, a function value and its call and a lambda
 (`lower_closures.py`), an
-interpolation, a `??`, `clone`, `expect`, `realise` and
+interpolation, a `??`, a cast and the call of a conversion (`lower_conversions.py`), `clone`, `expect`, `realise` and
 `err` (`lower_copies.py`), a borrowed view in a view local with its region, and a take of an
 owning value (`lower_takes.py`). The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
@@ -42,8 +42,7 @@ that a back edge brings. The walk finds such a local only at the join, after the
 that must make the flag. So a walk records what it finds (`Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
-The construct of a stop is the SHIR class of the node, or one of these names: `conversion`
-for the body of a conversion and for a `??` that calls a declared conversion,
+The construct of a stop is the SHIR class of the node, or one of these names:
 `library function` for a function, a method or a static whose declaring unit the typecheck
 row does not name, `bloom` for a bloom argument, `StructInit reference field`
 (`lower_aggregate.py`), and `ConstRef out of range` for a name
@@ -81,6 +80,7 @@ from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_control as ctl
+from sushi_lang.semantics.slir import lower_conversions as conversions
 from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_rebind as rebinds
@@ -544,11 +544,6 @@ class Lowering:
     def unary(self, node: e.Unary) -> Value:
         return r.Unary(node.op, self.operand(node.operand))
 
-    def cast(self, node: e.Cast) -> Value:
-        """A numeric cast, or a cast to the type of its operand. A cast that calls a
-        conversion stops in `typecheck`, so no row here calls one."""
-        return r.Cast(self.operand(node.operand), self.type_of(node))
-
     def enum_init(self, node: e.EnumInit) -> Value:
         """An enum variant as an aggregate of its instance type (L10)."""
         ty = self.typeck.instance_of(node.shir_id)
@@ -581,7 +576,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.Lambda: closures.lambda_value,
     e.Binary: Lowering.binary,
     e.Unary: Lowering.unary,
-    e.Cast: Lowering.cast,
+    e.Cast: conversions.cast,
     e.EnumInit: Lowering.enum_init,
     e.StructInit: agg.struct_init,
     e.TupleInit: agg.tuple_init,

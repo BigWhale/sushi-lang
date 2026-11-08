@@ -16,6 +16,7 @@ from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors.registry import REGISTRY, Category, ErrorMessage, Severity
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics import ast
+from sushi_lang.semantics.conversions import conversion_symbol
 from sushi_lang.semantics.param_modes import Convention, ParamMode
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.passes.collect.externals import ExternalSig, ExternalTable
@@ -994,6 +995,34 @@ def test_the_declared_parameters_of_a_stdlib_function_are_the_row_of_its_module(
         == DeclaredParams(())
     assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "math")) is None
     assert declared_params(funcs, extensions, st.Direct("sushi_sqrt", "sqrt")) is None
+
+
+def test_the_declared_parameters_of_a_conversion_are_one_owned_parameter():
+    """A conversion `<source>.as` takes `nom self`. Its symbol is the symbol of `as` on its
+    source with its target after it; a symbol of another source has no row."""
+    funcs, extensions = FunctionTable(), ExtensionTable()
+    low = EnumType(name="LowError", variants=(EnumVariantInfo("Bad", ()),), is_error=True)
+    app = EnumType(name="AppError", variants=(EnumVariantInfo("Low", (low,)),), is_error=True)
+    symbol = conversion_symbol(low, app)
+    assert declared_params(funcs, extensions, st.Direct(symbol, "LowError.as")) \
+        == DeclaredParams((OWNED,))
+    assert declared_params(funcs, extensions, st.Direct(symbol, "AppError.as")) is None
+    assert declared_params(funcs, extensions,
+                           st.Direct(method_symbol(low, "as", None), "LowError.as")) is None
+
+
+def test_a_conversion_call_with_a_borrowed_operand_is_refused():
+    funcs, extensions = FunctionTable(), ExtensionTable()
+    low = EnumType(name="LowError", variants=(EnumVariantInfo("Bad", ()),), is_error=True)
+    app = EnumType(name="AppError", variants=(EnumVariantInfo("Low", (low,)),), is_error=True)
+    callee = st.Direct(conversion_symbol(low, app), "LowError.as")
+    call = st.Call(_local(1), callee, ((_copy(2), GUARANTEED),), BAD)
+    function = _function([BLANK, app, low], _block(0, _ret(), call), params=((2, GUARANTEED),))
+    with pytest.raises(InternalCompilerError) as caught:
+        verify_function(function, drops=frozenset(),
+                        declared=lambda each: declared_params(funcs, extensions, each))
+    assert caught.value.params["rule"] == CONVENTIONS
+    assert "its parameter is @owned" in caught.value.params["detail"]
 
 
 def test_a_stdlib_call_with_an_owned_argument_is_refused():

@@ -1,0 +1,40 @@
+# A `??` across two error types moves an error that owns a string into the conversion.
+# The conversion keeps the string in one arm and drops it in the other. Each string is
+# freed once.
+# EXPECT_STDOUT_EXACT: "ok 4\nerr AppError.Token(TokenError.Bad("token -1"))\nerr AppError.Short(8)\n"
+# EXPECT_NO_LEAKS
+error TokenError:
+    Bad(string)
+    Cut(string)
+
+error AppError:
+    Token(TokenError)
+    Short(i32)
+
+extend TokenError as AppError:
+    match self:
+        TokenError.Bad(_) -> return AppError.Token(self)
+        TokenError.Cut(s) -> return AppError.Short(s.len())
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("token {n}"))
+    if (n == 0):
+        return Result.Err(TokenError.Cut("cut {n} at"))
+    return Result.Ok(n * 2)
+
+fn run(i32 n) i32 | AppError:
+    let string label = "run {n}"
+    let i32 v = tokenize(n)??
+    return Result.Ok(v + label.len() - label.len())
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(run(2))
+    show(run(-1))
+    show(run(0))
+    return 0

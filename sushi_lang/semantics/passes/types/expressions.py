@@ -13,6 +13,8 @@ from sushi_lang.semantics.type_predicates import (
 from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir.exprs import IntConst, Lit, Unary
+from sushi_lang.semantics.ast import CONVERSION_METHOD
+from sushi_lang.semantics.shir.callee import Conversion as ConversionCall
 from sushi_lang.semantics.shir.typeck import NoConversion, TryFacts
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .compatibility import is_valid_cast
@@ -36,9 +38,9 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
     A cast between two numeric types, and a cast to the type of its operand, call nothing:
     the conversion row is `NoConversion`. Any other pair is CE2014, and the cast still
     answers the target type. In the body of a conversion, a cast of the pair of that
-    conversion is CE2523. Two casts are not typed
-    yet, and the walk of the body stops there: a cast to or from `ptr` (D5), and a cast
-    between two error types that a declared conversion joins (D2).
+    conversion is CE2523. A cast between two error types that a declared conversion joins
+    calls it: the row is the `Conversion` callee. A cast to or from `ptr` is not typed yet
+    (D5), and the walk of the body stops there.
     """
     target = validator.written_type(node.target)
     resolved = resolve_variable_type(validator, target, node.loc)
@@ -52,7 +54,9 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
     if conversion is not None:
         if _reject_self_conversion(validator, node, conversion):
             return None
-        visit.stop_at(validator, node)
+        validator.body_answers().record_conversion(node.shir_id,
+                                                   conversion_callee(validator, conversion))
+        return resolved
     if not is_valid_cast(source, resolved):
         diag = er.emit_with(validator.reporter, er.ERR.CE2014, node.loc,
                             source=display_type(source), target=display_type(target))
@@ -81,6 +85,11 @@ def _check_cast_operand(validator: 'TypeValidator', operand: 'ShirExpr',
     if literal is not operand:
         visit.answer(validator, literal, target, wraps=True)
     return visit.answer(validator, operand, target, wraps=True)
+
+
+def conversion_callee(validator: 'TypeValidator', conversion: 'Conversion') -> ConversionCall:
+    """The callee of a declared conversion: the written name `<source>.as` of its body."""
+    return ConversionCall(validator.method_decl(conversion.source, CONVERSION_METHOD))
 
 
 def _reject_self_conversion(validator: 'TypeValidator', node: 'e.Cast',
@@ -121,8 +130,8 @@ def check_try(validator: 'TypeValidator', node: 'e.Try',
     of the table. The channel comes first, so a `??` in a bare body gets CE0131 alone
     (docs/design/error-conversion.md section 4). After CE0131 or CE2511, the `??` of a
     `Result` still answers the value of its success arm, so the position reports its own
-    fault. Two error types that a declared conversion joins are not typed yet, and the
-    walk of the body stops there.
+    fault. Two error types that a declared conversion joins give the row of the
+    `Conversion` callee.
     """
     inner_type = visit.check_expr(validator, node.inner)
     channel = _enclosing_channel(validator, node)
@@ -136,10 +145,9 @@ def check_try(validator: 'TypeValidator', node: 'e.Try',
     agreed, conversion = _error_arms_agree(validator, node, arms, channel)
     if not agreed:
         return arms.value_type
-    if conversion is not None:
-        visit.stop_at(validator, node)
     answers = validator.body_answers()
-    answers.record_conversion(node.shir_id, NoConversion())
+    answers.record_conversion(node.shir_id, NoConversion() if conversion is None
+                              else conversion_callee(validator, conversion))
     answers.record_try(node.shir_id, TryFacts(arms.success_tag, arms.value_type,
                                               arms.error_type, channel))
     return arms.value_type

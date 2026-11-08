@@ -21,6 +21,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.callee import Conversion
 
 from . import arms
 from .borrows import BY_ADDRESS, check_borrow as borrow_place
@@ -83,10 +84,14 @@ def check_binary(checker: 'BorrowChecker', node: e.Binary) -> None:
 def check_cast(checker: 'BorrowChecker', node: e.Cast) -> None:
     """A cast reads its operand and takes it by POSITION: a plain one by value (ADOPT), and
     an owning one, the identity cast `a as string`, as any consuming use (a move of a local,
-    CE2411 for a field). The escape of CE2411 casts the copy."""
+    CE2411 for a field). The escape of CE2411 casts the copy, or converts it when the cast
+    calls a conversion."""
     arms.check(checker, node.operand)
-    target = display_type(checker.answers().type_of(node.shir_id))
-    consume(checker, node.operand, CopyUse("cast the copy", f" as {target}"))
+    answers = checker.answers()
+    target = display_type(answers.type_of(node.shir_id))
+    clause = ("convert the copy" if isinstance(answers.conversion_of(node.shir_id), Conversion)
+              else "cast the copy")
+    consume(checker, node.operand, CopyUse(clause, f" as {target}"))
 
 
 def check_interp(checker: 'BorrowChecker', node: e.Interp) -> None:

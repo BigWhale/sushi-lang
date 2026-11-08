@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SLIR: test_slir_stopped_kinds.slir
+#
+# The SLIR lowering lowers a generic instance, a conversion, a perk method and an extension
+# method. Each one is a function of the dump, and nothing stops.
+
+fn keep@(T)(nom T x) T:
+    return x
+
+struct Dog:
+    i32 n
+
+extend Dog paws() i32:
+    return 4
+
+perk Named:
+    fn label() i32
+
+extend Dog with Named:
+    fn label() i32:
+        return 3
+
+error Small:
+    Tiny
+error Large:
+    Huge(Small)
+
+extend Small as Large:
+    return Large.Huge(self)
+
+fn main() i32:
+    return keep(nom 0)
