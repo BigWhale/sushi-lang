@@ -3490,10 +3490,14 @@ has no `env`, and takes its thunk: it has no environment in its own signature.
 `AggIterator(ty, source, heap)`. `ty` is the `Iterator@(T)` of the value. `source` names one
 row of a CLOSED table of the producers and the adapters: `IterElements(container, lent)` for a
 contiguous cursor, `IterMapView(container, view, lent)` for each view of a `HashMap`,
-`IterRange(step)`, `IterNew(value, next)`, and each lazy adapter. Its parts are the operands
+`IterRange(step)`, `IterNew(value, next)`, and one row for each lazy adapter:
+`IterMap(source, function)`, `IterFilter(source, function)`, `IterEnumerate(source)`,
+`IterZip(source, other)` and `IterCloneEach(source)`. In an adapter row, `source` is the
+`Iterator@(T)` type of the inner iterator, `function` is the function type of the argument,
+and `other` is the iterator type of the right side of `zip`. Its parts are the operands
 that the row reads: the container (a read of its place when `lent`, else its move), the first
-value and the count of a range, the value of `Iterator.new`, the inner iterator and the
-function of an adapter. `heap` is the answer of `OwnershipResults` (7.9), and the kind carries it, so the
+value and the count of a range, the value of `Iterator.new`, and for an adapter the move of
+the inner iterator, then the move of the function value or of the right iterator. `heap` is the answer of `OwnershipResults` (7.9), and the kind carries it, so the
 emitter decides nothing: a LENT iterator that no `peek` return takes out of the function has
 its state on the stack (`heap: false`), and an OWNED iterator, or a LENT iterator that
 leaves through a `peek` return, has its state in a heap block (`heap: true`). The emitter of
@@ -3503,6 +3507,12 @@ the adapters of `backend/runtime/iterator_adapters.py` are that table, over oper
 SLIR writes no glue. The `peek` return of a lent iterator (4.4, `borrow-model.md` S10h)
 moves the WHOLE chain to the heap: each adapter of the chain reads the same `heap` answer.
 The drop of an iterator value is a `Drop(place)` that calls its `drop_fn` (8.10, rule 7).
+A CONSUMER (`fold`, `partition`, `collect`) is no aggregate: it is one `Call` of
+`Builtin(iterator <name>)`, with the iterator `Owned` first and each argument `Owned`, into
+a local of the type of its answer. The emitter row of the `iterator` family walks the
+iterator to its end in the function of the caller and destroys it. SLIR writes no walk for
+it, so the walk of a consumer and the `next_fn` bodies of the adapters stay in one seam
+(`backend/runtime/iterator_adapters.py`).
 The answer of a `peek` return whose type holds an iterator is an owned value, and it has no
 view local: it borrows its sources, and it owns its state (`answers_an_iterator`).
 
@@ -4036,7 +4046,8 @@ Runs after lowering, before the backend. It checks:
   when it owns (`verify_values.capture_places`)
 - a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
   `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
-  the operand of an `Owned` argument (8.7)
+  the operand of an `Owned` argument (8.7), except the iterator of a consumer
+  (`Builtin(iterator <name>)`): the consumer walks it to its end in the same function
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
