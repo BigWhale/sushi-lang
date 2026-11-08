@@ -85,6 +85,7 @@ from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_takes as takes
+from sushi_lang.semantics.slir import lower_try as tries
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -591,6 +592,6 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.Call: calls.call,
     e.Interp: calls.interp,
     e.Range: iterators.range_value,
-    e.Try: ctl.try_,
+    e.Try: tries.try_,
     e.Take: takes.take_value,
 }

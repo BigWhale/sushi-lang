@@ -3,8 +3,8 @@
 The arms of `if`, `while`, a counted loop over a range, `break`, `continue` and `assert`,
 the failing path of an `assert` and of an `expect`, the lowering of a condition, the
 statements of an arm with its binders, the join of the paths of a statement with the drop
-state of each path, the short-circuit `and` and `or`, and `??`. The arm of `match` is in
-`lower_match.py`, and `expect` is in `lower_copies.py`. Each arm is a free function that takes the `Lowering` of `lower.py`
+state of each path, and the short-circuit `and` and `or`. The arm of `match` is in
+`lower_match.py`, `expect` is in `lower_copies.py`, and `??` is in `lower_try.py`. Each arm is a free function that takes the `Lowering` of `lower.py`
 first; the tables of `lower.py` name them. This module reads `lower.py` for its types
 only, so no import cycle exists at run time.
 """
@@ -14,13 +14,11 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Callable, Optional, Sequence, TypeAlias, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ranges import plan_range
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.callee import Conversion
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.loop_kind import CountedRange, While
@@ -34,7 +32,7 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type, deref_type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering
@@ -524,69 +522,3 @@ def _skipped(low: Lowering, switch: Block, join: Block, state: FlowState,
         (case, bridge.id if target == join.id else target) for case, target in test.targets),
         otherwise=bridge.id if test.otherwise == join.id else test.otherwise)
     return (bridge, replace(state, regions=low.placement.open_regions()))
-
-
-def try_(low: Lowering, node: e.Try) -> Value:
-    """`??` (ir.md 8.9): the operand into a temporary, a switch on its discriminant with
-    no other value, an `Err` block that builds the `Err` into `_0`, leaves every scope
-    and returns, and the `Ok` block, where the payload moves into the place that takes
-    the value; each store moves the temporary. A `??` that calls a declared conversion
-    stops (`slir, conversion`). A `??` over a borrowed owning wrapper (a `reject` row at its
-    operand) takes nothing: it switches on the wrapper where it is, the `Err` block copies the
-    error, which is plain, and the payload is a view of the wrapper. A `??` over
-    `m.or_err(nom e)` with a borrowed `Maybe` (a `reject` row at the receiver) is ONE shape
-    with no call and no `Result` value: it switches on the `Maybe` where it is, the `None`
-    block builds `Err(e)` with the move of `e`, and the payload is a view of the `Maybe`
-    (ir.md 8.9)."""
-    facts = low.typeck.try_facts_of(node.shir_id)
-    choice = low.typeck.conversion_of(node.shir_id)
-    if isinstance(choice, Conversion):
-        raise StageStop(STAGE, "conversion", node.loc)
-    if facts is None or choice is None:
-        er.raise_internal_error("CE0000", span=node.loc,
-                                detail="a ?? with no facts reached SLIR")
-    ty = low.type_of(node.inner)
-    (ok_tag, ok), (err_tag, err) = _arms(ty, facts.success_tag, node.loc)
-    error_variant = err
-    through = views.read_through(low, node.inner)
-    if through is not None:
-        wrapper, error = through
-        (ok_tag, ok), (err_tag, _none) = _maybe_arms(low.type_of(views.receiver_of(
-            low, node.inner)), node.loc)
-        borrowed = True
-    else:
-        wrapper, borrowed = views.wrapper(low, node.inner)
-        error = (p.Copy if borrowed else p.Move)(p.Field(p.Downcast(wrapper, err), 0))
-    take = p.Copy if borrowed else p.Move
-    tag = low.new_local(BuiltinType.I32, None, None)
-    low.emit([st.Assign(p.Local(tag), r.Discriminant(wrapper), node.loc)])
-    ok_block, err_block = low.new_block(), low.new_block()
-    targets = tuple(sorted([(ok_tag, ok_block.id), (err_tag, err_block.id)]))
-    low.jump(tm.SwitchInt(p.Copy(p.Local(tag)), targets, None, node.loc))
-    at_switch = low.placement.state()
-    low.block = err_block
-    low.finish(r.Aggregate(r.AggVariant(facts.returns, error_variant), (error,)), node.loc)
-    low.placement.restore(at_switch)
-    low.block = ok_block
-    if through is not None and isinstance(error, p.Move) and isinstance(error.place, p.Local):
-        low.emit(low.placement.drop_on_path(error.place.id, node.loc))
-    value = r.Use(take(p.Field(p.Downcast(wrapper, ok), 0)))
-    return views.view_of(value, value.operand) if borrowed else value
-
-
-def _maybe_arms(ty: Type, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:
-    """The tag and the name of the `Some` variant and of the `None` variant of a `Maybe`."""
-    maybe = deref_type(ty)
-    some = maybe.get_variant_index("Some") if isinstance(maybe, EnumType) else None
-    if not isinstance(maybe, EnumType) or some is None or len(maybe.variants) != 2:
-        er.raise_internal_error("CE0000", span=span,
-                                detail="a read-through or_err over no Maybe reached SLIR")
-    return (some, "Some"), (1 - some, maybe.variants[1 - some].name)
-
-
-def _arms(ty: Type, success: int, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:
-    """The tag and the name of the success variant and of the error variant of a `Result`."""
-    if not isinstance(ty, EnumType) or len(ty.variants) != 2:
-        er.raise_internal_error("CE0000", span=span, detail="a ?? over no Result reached SLIR")
-    return (success, ty.variants[success].name), (1 - success, ty.variants[1 - success].name)
-
