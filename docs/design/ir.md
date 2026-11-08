@@ -2,9 +2,9 @@
 
 **Status: ACCEPTED, and BUILT in part.** The design was measured against the tree on
 2026-10-11, at `cc4088ca`, and ruled on the same day. Every design question has a ruling.
-SHIR and SLIR exist on the branch `feat/ir-shir-slir`. Phases 0 to 4 of the migration are
-done: the spine, Tier A (plain values) and Tier B (ownership), closed at Gate 4. Phase 5
-(Tier C: generics, closures, iterators) is next. A construct that a stage does not handle
+SHIR and SLIR exist on the branch `feat/ir-shir-slir`. Phases 0 to 5 of the migration are
+done: the spine, Tier A (plain values), Tier B (ownership) and Tier C (generics, closures,
+iterators), closed at Gate 5. Phase 6 (Tier D) is next. A construct that a stage does not handle
 yet stops the compile with CE0155. The numbers in sections 1 to 5 describe the tree at
 `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
@@ -386,6 +386,26 @@ the receiver of a perk method with a `peek self` or a `poke self` is evaluated o
 the old pipeline evaluated it two times (8.3). A call of a method that two perk templates give one target
 (CE4015 at the second implementation) gets no second error: the old pipeline also gave a
 false CE2008 at the call.
+
+These diagnostics differ from the old pipeline too, and each one is a stated divergence:
+
+- a change of the owner of a view on a path that leaves the loop of the view, and a change
+  of the owner in a walk in place through a `poke` reference, is CE2412 (ruling R-BB, 7.9),
+  where the old pipeline compiled the program
+- a bare variant at a typed position (`x := Maybe.None`) is CE2002 or CE2003, where the old
+  pipeline gave the internal error CE0000
+- a template check refuses a constraint in the TEMPLATE (ruling R-BC, rule R7): CE4006 names
+  the type parameter (`type T`), with a note at its declaration and a help, where the old
+  pipeline named the type of the instance and added the note "this instance is required by
+  the call here". A late refusal does not stop the analysis, so the unused-parameter warning
+  CW1001 of a template can come beside the error
+- a lambda whose arity does not match a function-typed parameter of a generic is CE2006 with
+  the two function types, where the old pipeline gave CE2060
+- `poke from([0; 4])` into a `poke u8[]` parameter is CE2404 alone: the position gives `from`
+  its element type, and the old pipeline added a false CE2006
+- the caret of CE4006 at a generic call that only its arguments solve covers the whole call.
+  The old pipeline put it on the name of the callee when its early inference could not type
+  an argument (a field read, a lambda parameter), and on the whole call when it could
 
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.
@@ -947,9 +967,9 @@ of that struct, also behind an alias: the struct is the one that the namespace h
 field goes through the one argument check (`arguments.check_arguments`) at the type of its
 field, in the declaration order. A struct is never variadic: a bloom argument (`xs...`)
 is [CE0120](../error-catalog.md#ce0120) at the argument, and the fields are then not checked,
-as on a method call. Two parts of the old output stay different: the caret covers the value
-(`xs`) and not `xs...`, as on a function call, because an `Arg` keeps no span of the spread;
-and the refused construction has no instance, so it is unknown to `borrow` (7.9): `borrow`
+as on a method call. The caret covers the whole `xs...`: the `marker_loc` of a bloom `Arg` is
+the span of the spread. One part of the old output stays different: the refused construction
+has no instance, so it is unknown to `borrow` (7.9): `borrow`
 reads `xs` and does not take it, and the CE2405 that the old pipeline adds at a later use of
 `xs` does not come. A positional construction with a wrong count is
 [CE2027](../error-catalog.md#ce2027) at `decl_loc`, and a field that does not fit is
@@ -1473,8 +1493,8 @@ answer for a name behind a namespace: lowering resolves it (`DeclLookup.member_k
 2026-10-20.
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`, and `marker_loc` is
-the span of the written marker (a `peek x` and a `poke x` from the marker), where a
-diagnostic of the marker stands. The RESOLVED convention is `typecheck`'s: an unmarked
+the span of the written marker (a `peek x` and a `poke x` from the marker, and a whole bloom
+`xs...`), where a diagnostic of the marker stands. The RESOLVED convention is `typecheck`'s: an unmarked
 argument in a consuming position (constructor, container insert, array element) resolves
 to `Owned` with no marker. At a call of a declared parameter, the one argument check
 (`passes/types/arguments.py`) resolves the convention of each argument from the declared
@@ -1731,7 +1751,6 @@ row of the family of `ty` (`primitive` for a float, `string` for `string`). A st
 built-in container (`List.new`, `List.with_capacity`, `HashMap.new`, `Own.alloc`) is the
 same row: `ty` is the instance that the call builds, which its position gives, and
 `method` is the row of the family of the container (`CONTAINER_STATIC_FAMILIES`).
-`Iterator.new` is not typed yet.
 
 A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`): a row of
 the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
@@ -1967,8 +1986,11 @@ state of the walk of one body, not a row of `TypeckResults`: no later stage read
 a view (a `return`, a `break`, a `continue`) has no later use of the view on its path, also when
 the path that skips the arm uses the view again. So the region row has a third field, `leaving`.
 It holds the block of each such arm with no use of the view, where the region ends at the top of
-the arm, and each last use of the view in such an arm. `until` holds the last uses in `leaving`
-too, so the statement after a last use reads one field. A change of the owner in such an arm,
+the arm, and each last use of the view in such an arm when a later statement uses the view.
+A use in such an arm that is a last use of the view is no leaving end: the path that skips the
+arm has no use, so an arm with no use of that branch ends the region at its top, as for any
+other branch. `until` holds the last uses in `leaving` too, so the statement after a last use
+reads one field. A change of the owner in such an arm,
 after the end of the region, is legal, and a use after that change is CE2412.
 
 **Ruling S6: one fact, one writer.** Before this ruling, `typecheck` and `borrow` both
@@ -3071,8 +3093,8 @@ the receiver and of the argument, and the type of the destination, to
 Place    = Local(id: LocalId)
          | Global(symbol: str, ty: Type)      # a unit-level `var`, and its type
          | Field(Place, index: int)
-         | Index(Place, Operand)              # an element of a `T[N]` or a `T[]`; a byte
-                                              # (`u8`) of a `string`
+         | Index(Place, Operand)              # an element of a `T[N]`, a `T[]` or a
+                                              # `List@(T)`; a byte (`u8`) of a `string`
          | Downcast(Place, variant: str)      # narrow an enum to one variant
          | Deref(Place)
 
@@ -3473,7 +3495,7 @@ its value, and the emitter writes a deep copy of it into each slot, over `copy_o
 seam of the `Clone` arm). A value that is a new value is a temporary of the statement, which
 drops it at the end of the statement.
 
-`Len(place)` is the length of a `T[N]`, a `T[]` or a `string`, as an `i32`. `Slice(place,
+`Len(place)` is the length of a `T[N]`, a `T[]`, a `List@(T)` or a `string`, as an `i32`. `Slice(place,
 start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is exclusive. Its value
 is a `T[]` descriptor that views the storage of `place`. **A VIEW** is a local that a `Slice`
 writes, or a view local that a `Copy` writes (8.2): it owns nothing, so drop placement gives
@@ -4019,8 +4041,7 @@ Runs after lowering, before the backend. It checks:
   `FunctionType` of the operand (8.6). For the
   `concat_in_place` row of the string family (8.3, 8.9), the receiver is `Inout` and the
   one argument is `Guaranteed`. For the `cursor_next` row of the
-  `hashmap` family (8.6, 8.9), the map is `InGuaranteed` and the cursor is `Inout`; this
-  part is not built yet
+  `hashmap` family (8.6, 8.9), the map is `InGuaranteed` and the cursor is `Inout`
 - no `Copy` of an owning value into an `Owned` argument, except a `string` and a function
   value: a named function owns no heap, and `borrow` adopts it (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
@@ -4040,9 +4061,12 @@ Runs after lowering, before the backend. It checks:
   value of a sequence, whose element is an `i32`. The value of a `RunRepeat` is never a
   `Move`: the run borrows it. The counts of a `T[N]` are constants that add up to `N`. A constant `Aggregate` of a `T[N]` gives one part for each element, of the
   element type
-- a length and a slice: `Len` reads a `T[N]`, a `T[]` or a `string`, and `Slice` reads a
-  `T[N]` or a `T[]` with two `i32` bounds
-- an index: the index of an `Index` place is an `i32`
+- a length and a slice: `Len` reads a `T[N]`, a `T[]`, a `List@(T)` or a `string`, and
+  `Slice` reads a `T[N]` or a `T[]` with two `i32` bounds
+- an index: the index of an `Index` place is an `i32`. The element of a `List@(T)` has no
+  checked type: the verifier holds no table that resolves the type argument of the
+  instance, so it does not check the type of an `Index` of a `List` or of a place under it.
+  This is a known gap of the verifier
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
@@ -4079,7 +4103,14 @@ Runs after lowering, before the backend. It checks:
   `FnRef` is a `Copy` or a `Move` of a place: lowering takes it from the `Ownership` row of the
   capture (7.9). A store into one slot is legal (ruling R-AZ): a rebind of a capture stays
   for the next call (`n := n + 1` in a lambda), with the `Drop` of the old value of the slot
-  when it owns (`verify_values.capture_places`)
+  when it owns (`verify_values.capture_places`). The verifier checks the parts of each
+  `AggClosure`: the first part is a `FnRef` constant, one part follows for each field of
+  `env`, and each of them is a `Copy` or a `Move` (`verify_values.closure_value`)
+- an iterator value: an `Aggregate(AggIterator)` has the parts of its row (8.7): one for
+  `IterElements`, `IterMapView`, `IterNew`, `IterEnumerate` and `IterCloneEach`, two for
+  `IterRange`, `IterMap`, `IterFilter` and `IterZip`. The part of a lent cursor is a `Copy`
+  of the place of its container. The first part of `IterNew` and of each adapter row is a
+  `Move` (`verify_values.iterator_value`)
 - a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
   `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
   the operand of an `Owned` argument (8.7), except the iterator of a consumer
@@ -4100,7 +4131,7 @@ the verifier: no function comes from a body with the origin `TemplateCheck` (Q1,
 stage refuses such a body with the internal error CE0000 (`lower_function`,
 `semantics/slir/lower.py`).
 
-**As built.** The verifier is six modules of `semantics/slir/`. `verify.py` holds the
+**As built.** The verifier is seven modules of `semantics/slir/`. `verify.py` holds the
 entry (`SlirVerifier.verify`, `verify_function`) and the structure check, statement by
 statement. `verify_calls.py` holds the checks of a call: the conventions of a `Direct`
 callee (`declared_params`), the conventions of a container static (`argument_conventions`),
@@ -4119,7 +4150,10 @@ brings (two parts of a tuple literal, 8.9), the checks of the uses and of the ow
 the answer of the dataflow, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
 an owner counts at its root and at each projection of it. It runs after the structure check
 and before the dataflow of the moves and the drops, which does not read a view local.
-`verify_rules.py` holds the names of the rules, which the five others share. The
+`verify_values.py` holds the checks of a function value and of an iterator value: the
+conventions of an `Indirect` call, the capture places, the parts of an `AggClosure` and of an
+`AggIterator`, and the stack-state iterator. `verify_rules.py` holds the names of the rules,
+which the six others share. The
 SLIR stage gives the verifier each
 function that the lowering finished, on every compile, before the function meets the next
 stage. A failed rule is the internal error CE0158, at the span of the statement, with the
@@ -4188,7 +4222,9 @@ built per copy. The 2,809 lines stay. The generic inference gaps are untouched (
 **Q2. Does the copy fixpoint stay? YES.**
 
 Follows from Q1. After the per-unit loop, `_check_array_extensions`
-(`semantic_analyzer.py:917`) runs a fixpoint bounded by `MAX_NEW_TYPE_ROUNDS`: it drains
+(`semantic_analyzer.py`) runs a fixpoint bounded by `MAX_NEW_TYPE_ROUNDS` rounds that make
+a new type, plus one round for each template, because a finite chain of different templates
+makes one new type for each link: it drains
 the extension copies that a first call cut, places the array-template perk copies and the
 late function bodies, and `_check_copies` runs `scope`, `typecheck`, `lift` and `borrow`
 over each one with the home unit's passes. Under this design each copy is lowered to SHIR
