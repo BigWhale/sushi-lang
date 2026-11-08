@@ -1,0 +1,22 @@
+# A chain whose closure owns a capture: the closure takes the string, the state holds the
+# closure, and the drop of the chain frees the string, walked or not.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a-end\nbb-end\nbb\n"
+use <collections/iter>
+
+fn main() i32:
+    let string suffix = "-end"
+    let string[] names = from(["a", "bb"])
+    foreach(s in names.iter().map(nom |string s| s.concat(suffix))):
+        println(s)
+    let string min = "bb"
+    let List@(string) kept = names.iter().clone_each().filter(nom |string s| s.len() >= min.len()).collect()
+    println(kept.get(0).realise("-"))
+    let string unused = "never"
+    let Iterator@(i32) r = 0..3
+    let Iterator@(i32) dropped = r.map(nom |i32 x| x + unused.len())
+    if (min.len() > 5):
+        foreach(x in dropped):
+            println(x)
+    return 0

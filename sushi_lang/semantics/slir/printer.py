@@ -127,7 +127,17 @@ def _iterator_source(source: r.IterSource) -> str:
         return f"{source.view} {'lent' if source.lent else 'owned'}"
     if isinstance(source, r.IterRange):
         return f"range step {source.step}"
-    return f"new {source.next_symbol}"
+    if isinstance(source, r.IterNew):
+        return f"new {source.next_symbol}"
+    if isinstance(source, (r.IterMap, r.IterFilter)):
+        return f"{_ADAPTERS[type(source)]} {_type(source.source)} by {_type(source.function)}"
+    if isinstance(source, r.IterZip):
+        return f"zip {_type(source.source)} with {_type(source.other)}"
+    return f"{_ADAPTERS[type(source)]} {_type(source.source)}"
+
+
+_ADAPTERS = {r.IterMap: "map", r.IterFilter: "filter", r.IterEnumerate: "enumerate",
+             r.IterZip: "zip", r.IterCloneEach: "clone_each"}
 
 
 def _constant_aggregate(c: k.Aggregate) -> str:

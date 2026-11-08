@@ -57,9 +57,7 @@ _WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
 
 #: Shared fields that are no fact of a resolved method: the written parts of the call, and
 #: what the other call shapes and the AST borrow helpers write on their own nodes.
-_NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names",
-                       "iterator_leaves",
-                       "iterator_state")
+_NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names")
 
 #: Every `MethodCall(...)` construction under the typecheck pass, with why it is there.
 _METHOD_CALL_VIEWS = {

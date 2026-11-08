@@ -60,14 +60,18 @@ class LoopFrame:
 
 def arm(low: Lowering, block: Block, body: ShirBlock, binds: Sequence[Binds] = (),
         span: Optional[Span] = None, branch: Optional[ShirNode] = None,
-        drops: Sequence[LocalId] = ()) -> list[Arrival]:
+        drops: Sequence[LocalId] = (), held: Sequence[tuple[p.Place, Type]] = ()
+        ) -> list[Arrival]:
     """The statements of `body` in a scope of their own, from `block` on, after the binders
     of a match arm and the end of each region that the arm of `branch` ends at its top. The
     answer is the edge into the join when the path reaches the end of `body`. At that end,
-    each temporary of `drops` drops: another arm takes it, so every arm leaves it moved."""
+    each temporary of `drops` drops: another arm takes it, so every arm leaves it moved.
+    Each place of `held` moves into a hidden owner local of the scope, after the binders."""
     low.block = block
     low.placement.open_scope()
     _bind(low, block, binds, span or body.loc)
+    for place, ty in held:
+        low.temporary(r.Use(p.Move(place)), ty, span or body.loc, held=True)
     if branch is not None:
         views.enter_arm(low, branch, body)
     low.statements_of(body)
@@ -404,7 +408,7 @@ def rounds(low: Lowering, stmt: s.Loop,
            test: tuple[p.Operand, Optional[LocalId], Span], body: Block, next_: Block,
            done: Optional[Block], exit_: Block,
            header: tuple[tuple[LocalId, ...], FlowState], binds: Sequence[Binds],
-           *, leaves_at: int = 0) -> None:
+           *, leaves_at: int = 0, held: Sequence[tuple[p.Place, Type]] = ()) -> None:
     """The switch of the header, the body with its binders, which goes to `next_`, and the
     exit, where the edge of the value `leaves_at` and each `break` meet."""
     cond, local, span = test
@@ -414,7 +418,7 @@ def rounds(low: Lowering, stmt: s.Loop,
     after_cond = low.placement.state()
     frame = LoopFrame(next_.id, exit_.id, low.placement.depth())
     low.loops.append(frame)
-    for block, state in arm(low, body, stmt.body, binds):
+    for block, state in arm(low, body, stmt.body, binds, held=held):
         if block is not None:
             block.terminator = tm.Goto(next_.id, stmt.loc)
         frame.continues.append(state)

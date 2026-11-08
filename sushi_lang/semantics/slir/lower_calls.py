@@ -17,7 +17,7 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.iterators import (
-    ITERATOR_BASE, answers_an_iterator, produces_from_a_container)
+    ITERATOR_BASE, answers_an_iterator, is_lazy_adapter, produces_from_a_container)
 from sushi_lang.semantics.method_effects import (
     CONTRACT_FAMILIES, ITERATOR_FAMILY, answers_view, receiver_convention)
 from sushi_lang.semantics.param_modes import Convention
@@ -57,8 +57,8 @@ def call(low: Lowering, node: e.Call) -> Value:
         method = resolved.callee.method
         if produces_from_a_container(method.family, method.name, len(node.args)):
             return iters.producer_value(low, node, resolved.callee)
-        if method.family == ITERATOR_FAMILY:
-            raise StageStop(STAGE, f"Call(method iterator) {method.name}", node.loc)
+        if is_lazy_adapter(method.family, method.name):
+            return iters.adapter_value(low, node, resolved.callee)
     if isinstance(resolved.callee, BuiltinStatic) and is_iterator_static(resolved.callee):
         next_row = low.typeck.iterator_next_of(node.shir_id)
         if next_row is None:

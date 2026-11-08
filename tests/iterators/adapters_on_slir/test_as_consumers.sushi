@@ -1,0 +1,29 @@
+# Each consumer over a lent and over an owned source: `fold`, `partition` and `collect`
+# walk the iterator to its end at the call and free it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6 10\nabb ccc\n2 1\n1 2\n3 bb\n2 x\n"
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 lent_sum = xs.iter().fold(nom 0, nom |i32 acc, i32 x| acc + x)
+    let Iterator@(i32) r = 0..5
+    let i32 owned_sum = r.fold(nom 0, nom |i32 acc, i32 x| acc + x)
+    println("{lent_sum} {owned_sum}")
+    let string[] names = from(["a", "bb", "ccc"])
+    let string joined = names.iter().clone_each().filter(nom |string s| s.len() < 3).fold(nom "", nom |string acc, string s| acc.concat(s))
+    let string last = from(["ccc"]).iter().fold(nom "", nom |string acc, string s| acc.concat(s))
+    println("{joined} {last}")
+    let (List@(i32), List@(i32)) split = xs.iter().partition(nom |i32 x| x % 2 == 1)
+    println("{split.0.len()} {split.1.len()}")
+    let (List@(string), List@(string)) words = from(["a", "bb", "ccc"]).iter().clone_each().partition(nom |string s| s.len() == 1)
+    println("{words.0.len()} {words.1.len()}")
+    let List@(i32) kept = xs.iter().collect()
+    let List@(string) copied = names.iter().clone_each().filter(nom |string s| s.len() == 2).collect()
+    let string first = copied.get(0).realise("-")
+    println("{kept.len()} {first}")
+    let List@(string) owned = from(["x", "yy"]).iter().clone_each().collect()
+    let string head = owned.get(0).realise("-")
+    println("{owned.len()} {head}")
+    return 0

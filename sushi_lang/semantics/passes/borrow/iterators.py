@@ -65,8 +65,10 @@ def _is_lazy_adapter(checker: 'BorrowChecker', node: object) -> bool:
 
 
 def lent_source(checker: 'BorrowChecker', value: e.ShirExpr) -> e.ShirExpr:
-    """The place that a producer reads, under each iterator clone. Any other value is itself."""
-    while _is_clone(checker, value) or is_producer(checker, value):
+    """The place that a producer reads, under each iterator clone and each lazy adapter (its
+    receiver). Any other value is itself."""
+    while (_is_clone(checker, value) or is_producer(checker, value)
+           or _is_lazy_adapter(checker, value)):
         value = _builtin_of(checker, value).recv
     return value
 

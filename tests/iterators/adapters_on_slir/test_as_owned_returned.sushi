@@ -1,0 +1,20 @@
+# An owned chain leaves its function by an owned return, and the caller walks it. Each
+# state is on the heap, and the walk frees the chain and the array that it owns.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "b!\ncc!\n10\n30\n"
+use <collections/iter>
+
+fn long_words() Iterator@(string):
+    return from(["a", "bb", "ccc"]).iter().clone_each().filter(nom |string s| s.len() > 1).map(nom |string s| s.concat("!"))
+
+fn odd_tens() Iterator@(i32):
+    let Iterator@(i32) r = 0..4
+    return r.filter(nom |i32 x| x % 2 == 1).map(nom |i32 x| x * 10)
+
+fn main() i32:
+    foreach(s in long_words()):
+        println(s.s(1, s.len()))
+    foreach(x in odd_tens()):
+        println(x)
+    return 0

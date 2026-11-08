@@ -1,9 +1,9 @@
 """Method call validation.
 
-Port templates: `validate_method_call` (C3), `_validate_type_name_call` (C3)
-and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and that API
-is deleted. No pass reaches them today. The group in brackets after each name ports them
-to SHIR inputs before a SHIR pass calls them. The order of the rungs is on SHIR already:
+Port templates: `validate_method_call`, with its rungs `_validate_type_name_call` and
+`_validate_iterator_new`, calls `TypeValidator.validate_expression`, and that API is
+deleted. No pass reaches it today. Tier D (Phase 6) deletes the ladder with the AST
+typecheck. The order of the rungs is on SHIR already:
 `calls/dotcall.py:resolve_dotted`, and the SHIR arms of an extension method and of a
 static are in `visit/calls.py`.
 """

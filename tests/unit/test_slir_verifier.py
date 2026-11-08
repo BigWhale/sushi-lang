@@ -527,6 +527,23 @@ def test_a_stack_state_iterator_as_an_owned_argument_is_refused():
     _refused(function, STACK_ITERATOR)
 
 
+def _consumer(family: str) -> SlirFunction:
+    method = BuiltinMethod(family, "collect", nom_self=True)
+    call = st.Call(_local(3), st.Builtin(method, ()), ((_move(2), OWNED),), BAD)
+    return _function([BLANK, _ELEMENTS, _ITERATOR, I32],
+                     _block(0, _ret(), _live(2), _iterator_value(2, heap=False), _live(3), call,
+                            _dead(3), _dead(2), _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((1, GUARANTEED),))
+
+
+def test_a_stack_state_iterator_given_to_a_consumer_stays_in_the_function():
+    _passes(_consumer("iterator"))
+
+
+def test_a_stack_state_iterator_given_to_another_owned_builtin_is_refused():
+    _refused(_consumer("maybe"), STACK_ITERATOR)
+
+
 def test_the_step_of_an_iterator_takes_no_argument():
     call = st.Call(_local(0), st.Indirect(p.Copy(_local(2))), ((p.Const(k.Int(1, I32)), GUARANTEED),),
                    BAD)

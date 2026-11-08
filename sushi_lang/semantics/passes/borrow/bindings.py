@@ -16,7 +16,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir.stmts import Bare, Ref
-from sushi_lang.semantics.typesys import BorrowMode, Type
+from sushi_lang.semantics.typesys import BorrowMode
 
 from .regions import note_binder
 from .state import BorrowState, record_owners
@@ -116,52 +116,3 @@ def reference_binders(pattern: p.ShirPattern | p.PatBinding
     if isinstance(pattern, p.Or):
         return reference_binders(pattern.alternatives[0])
     return []
-
-
-class BindingScope:
-    """The lifetime of one `match` arm's or `foreach` loop's bindings (#337, #300).
-
-    A binding lives for its arm and no longer, so it must give back whatever outer local
-    it shadows; a REFERENCE binding additionally freezes the owner it points into for the
-    same span. Both are undone on the way out, on every path -- the bracket used to be
-    written by hand at each site, with the two accumulators threaded through five calls.
-    """
-
-    def __init__(self, checker: 'BorrowChecker') -> None:
-        """Open a scope over `checker`'s borrow state."""
-        self.checker = checker
-        self._displaced: dict = {}
-        self._frozen: list = []
-
-    def __enter__(self) -> "BindingScope":
-        """Enter the arm."""
-        return self
-
-    def __exit__(self, *exc) -> None:
-        """Give back every shadowed local and release every owner freeze."""
-        for name, previous in self._displaced.items():
-            if previous is None:
-                self.checker.borrow_state.pop(name, None)
-            else:
-                self.checker.borrow_state[name] = previous
-        for owner, binding in self._frozen:
-            release_binding_borrow(self.checker.borrow_state.get(owner), binding)
-        return None
-
-    def register(self, state: BorrowState) -> None:
-        """Install a binding, saving whatever entry it shadows."""
-        if state.name not in self._displaced:
-            self._displaced[state.name] = self.checker.borrow_state.get(state.name)
-        self.checker.borrow_state[state.name] = state
-
-    def bind_item(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
-        """Bind the item a `next()` protocol iterator answered: the iteration OWNS it.
-
-        The item is the payload of a fresh `Maybe@(T)` nobody else frees, so unlike a
-        container element it aliases nothing, and the body may write it or hand it
-        away -- which is what the `??` binder does, `let T x = <item>??` spending the
-        item like any owned local (#548). The item is created per iteration, so a move
-        at the top of the body reaches each exit of the item's scope and needs no
-        run-time drop flag.
-        """
-        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))

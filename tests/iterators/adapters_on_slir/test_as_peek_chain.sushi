@@ -1,0 +1,22 @@
+# A lent chain leaves through a `peek` return: the WHOLE chain goes to the heap, and it
+# still borrows the argument. The walk of the caller frees each state and nothing else.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "20\n40\n0:bb\n"
+use <collections/iter>
+
+fn doubled_evens(i32[] xs) peek Iterator@(i32):
+    return xs.iter().filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * 10)
+
+fn long_ones(string[] names) peek Iterator@((i32, peek string)):
+    let Iterator@(peek string) kept = names.iter().filter(nom |string s| s.len() > 1)
+    return kept.enumerate()
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    foreach(x in doubled_evens(xs)):
+        println(x)
+    let string[] names = from(["a", "bb"])
+    foreach(p in long_ones(names)):
+        println("{p.0}:{p.1}")
+    return 0

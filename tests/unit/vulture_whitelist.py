@@ -135,9 +135,6 @@ def _ast_probe(group: str) -> str:
 
 
 WHITELIST += (
-    (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
-    (_BORROW + "bindings.py", "BindingScope", _kept("C", "C3: iterators, the scope of a loop")),
-    (_BORROW + "bindings.py", "bind_item", _kept("C", "C3: iterators")),
     (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),
     (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
 )
@@ -155,10 +152,6 @@ def _family(group: str, what: str) -> str:
 
 
 WHITELIST += (
-    (_BACKEND + "runtime/iterator_adapters.py", "emit_adapter_call",
-     _family("C3", "the iterator adapters")),
-    (_BACKEND + "runtime/iterator_adapters.py", "owned_parts",
-     _family("C3", "the parts of an owned iterator that a loop destroys")),
     (_BACKEND + "runtime/strings.py", "emit_cstr_to_owned_fat_pointer",
      _family("D5", "the string that an extern returns")),
 )
@@ -179,15 +172,21 @@ _TYPES_PASS = "passes/types/"
 # (field, the module of its writer, group, what it holds). The field is declared in
 # semantics/ast.py, and vulture reports the declaration and the write.
 _FACTS = (
-    ("callee_borrows", _TYPES_PASS + "borrowed_returns.py", "C3",
-     "the source row of a borrowed call, in the AST inference that the iterators group ports; "
-     "a SHIR call reads TypeckResults.sources_of"),
-    ("callee_self_mode", _TYPES_PASS + "calls/methods.py", "C3",
-     "the receiver mode of a method call, in the AST inference that the iterators group ports; "
-     "a SHIR call reads the Method callee"),
-    ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "C3",
-     "the declaring unit of an extension callee, in the AST inference that the iterators "
-     "group ports; a SHIR call reads ResolvedCall.unit"),
+    ("callee_borrows", _TYPES_PASS + "borrowed_returns.py", "Tier D (Phase 6)",
+     "the source row of a borrowed call, written only by the AST method-call ladder "
+     "(validate_method_call) and validate_namespaced_call, and it goes with them; a SHIR "
+     "call reads TypeckResults.sources_of"),
+    ("callee_self_mode", _TYPES_PASS + "calls/methods.py", "Tier D (Phase 6)",
+     "the receiver mode of a method call, written only by the AST method-call ladder "
+     "(validate_method_call), and it goes with it; a SHIR call reads the Method callee"),
+    ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "Tier D (Phase 6)",
+     "the declaring unit of an extension callee, written only by the AST method-call "
+     "ladder (validate_method_call), and it goes with it; a SHIR call reads "
+     "ResolvedCall.unit"),
+    ("callee_param_types", _TYPES_PASS + "calls/*.py", "Tier D (Phase 6)",
+     "the solved parameter types of a call, written only by the AST method-call ladder "
+     "(validate_method_call) and validate_namespaced_call, and it goes with them; its last "
+     "reader was the AST port template of the iterator adapters, which group C3 deleted"),
 )
 
 WHITELIST += tuple(
@@ -196,8 +195,6 @@ WHITELIST += tuple(
     for module in ("ast.py", writer))
 
 WHITELIST += (
-    (_SEMANTICS + "passes/borrow/flow.py", "back_edge",
-     "kept for the iterators group C3: a field of LoopFlow, which C3 ports"),
     (_SEMANTICS + "typesys.py", "get_field_index",
      "kept for the struct and tuple group A5: the typecheck pass on SHIR reads the index "
      "of a field"),

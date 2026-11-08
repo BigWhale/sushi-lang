@@ -1,0 +1,21 @@
+# A chain that nothing walks drops at the end of its scope: a lent chain frees its
+# closures, and an owned chain frees its states and the array that it owns. The walks are
+# on a path that does not run.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "done\n"
+use <collections/iter>
+
+fn main() i32:
+    let string tag = "t"
+    let string[] names = from(["a", "bb"])
+    let Iterator@(string) lent = names.iter().map(nom |string s| s.concat(tag))
+    let Iterator@((i32, string)) owned = from(["x", "y"]).iter().clone_each().enumerate()
+    let i32 n = 0
+    if (n > 0):
+        foreach(s in lent):
+            println(s)
+        foreach(p in owned):
+            println(p.1)
+    println("done")
+    return 0

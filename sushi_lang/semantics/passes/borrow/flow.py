@@ -145,22 +145,6 @@ class LoopFrame:
     continues: list[FlowFacts] = field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class LoopFlow:
-    """The facts at the four points of a loop that the borrow pass reads (#993).
-
-    `fixed_point` is where the second, reporting round starts (`entry` joined with the
-    back edge of the first round), so a fact in it and not in `entry` came round the back
-    edge. `back_edge` joins every path that reaches the next round, of both rounds: a
-    view that lives for the whole loop reads its invalidation here. `exit` is what the
-    code after the loop sees: the loop head's facts joined with every `break` path.
-    """
-    entry: FlowFacts
-    fixed_point: FlowFacts
-    back_edge: FlowFacts
-    exit: FlowFacts
-
-
 def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
     """Every path-sensitive fact (for branch and loop control-flow joins)."""
     states = checker.borrow_state.items()

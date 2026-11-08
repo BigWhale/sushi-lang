@@ -7,13 +7,16 @@ it (`copies_with_no_transfer`). In a function that lowering cut from a lambda, a
 is never moved out of, and the environment is never written as a whole: a caller can call the
 closure two times or more (`capture_places`). The `Indirect` call of an `IteratorValue` walk
 has an iterator as its operand, and no argument. A local that holds an iterator with a stack
-state never reaches `_0` or an `Owned` argument (`stack_iterators`).
+state never reaches `_0` or an `Owned` argument, except the iterator of a consumer
+(`stack_iterators`).
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.method_effects import ITERATOR_FAMILY
 from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
+from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -82,7 +85,7 @@ def stack_iterators(check: Check, function: SlirFunction) -> None:
     held = _stack_state_locals(function)
     for block in function.blocks:
         for stmt in block.statements:
-            if isinstance(stmt, st.Call):
+            if isinstance(stmt, st.Call) and not _consumes_an_iterator(stmt.callee):
                 for operand, convention in stmt.args:
                     if convention.consumes and _reads_one_of(operand, held):
                         check.fail(STACK_ITERATOR, f"{operand} gives a stack state to an owned "
@@ -90,6 +93,12 @@ def stack_iterators(check: Check, function: SlirFunction) -> None:
             if (isinstance(stmt, st.Assign) and stmt.place == p.Local(LocalId(0))
                     and _carries(stmt.rvalue, held)):
                 check.fail(STACK_ITERATOR, "a stack state reaches the return slot", stmt.span)
+
+
+def _consumes_an_iterator(callee: st.SlirCallee) -> bool:
+    """A consumer walks its iterator to its end in the same function (ir.md 8.7)."""
+    return (isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod)
+            and callee.method.family == ITERATOR_FAMILY)
 
 
 def _stack_state_locals(function: SlirFunction) -> set[LocalId]:

@@ -8,9 +8,7 @@ narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went 
 
 Port templates: the probes that read the AST take an AST node, and no SHIR pass has one.
 No pass reaches them today. The group that checks each construct ports its probes to SHIR
-inputs before a SHIR caller is connected: C3 the get-out of an iterable (`called_on`,
-`reads_through_owner` with `is_bare_enum_constant`, `receiver_type`, `names_kept_storage`),
-and D1 a `var` (`unit_variables`).
+inputs before a SHIR caller is connected: D1 a `var` (`unit_variables`).
 """
 
 from __future__ import annotations

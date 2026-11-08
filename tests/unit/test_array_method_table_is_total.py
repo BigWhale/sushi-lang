@@ -53,7 +53,7 @@ MEASURED_DESCRIPTOR_ARMS = 16
 #: implementation overrides, and not a row of the `array` family.
 NOT_EMITTED_YET = {
     "hash": "never: the array_hash family, which SLIR lowering makes the intrinsic `hash`",
-    "iter": "C3: the borrow pass stops at a lent iterator",
+    "iter": "never: a producer, which SLIR lowering makes an Aggregate(AggIterator)",
 }
 
 #: The rows whose answer is a `Maybe` that the reader interns.

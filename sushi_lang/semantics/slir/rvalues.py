@@ -13,7 +13,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.slir.places import Operand, Place
-from sushi_lang.semantics.typesys import BorrowMode, StructType, Type
+from sushi_lang.semantics.typesys import (
+    BorrowMode, FunctionType, IteratorType, StructType, Type)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,7 +103,44 @@ class IterNew:
     receiver: Convention
 
 
-IterSource: TypeAlias = IterElements | IterMapView | IterRange | IterNew
+@dataclass(frozen=True, slots=True)
+class IterMap:
+    """Two parts: the move of the inner iterator of type `source`, then the move of the
+    function value of type `function`."""
+    source: IteratorType
+    function: FunctionType
+
+
+@dataclass(frozen=True, slots=True)
+class IterFilter:
+    """The parts of `IterMap`; the function is the predicate."""
+    source: IteratorType
+    function: FunctionType
+
+
+@dataclass(frozen=True, slots=True)
+class IterEnumerate:
+    """One part: the move of the inner iterator."""
+    source: IteratorType
+
+
+@dataclass(frozen=True, slots=True)
+class IterZip:
+    """Two parts: the move of the inner iterator, then the move of the right iterator of
+    type `other`."""
+    source: IteratorType
+    other: IteratorType
+
+
+@dataclass(frozen=True, slots=True)
+class IterCloneEach:
+    """One part: the move of the inner iterator."""
+    source: IteratorType
+
+
+IterAdapter: TypeAlias = IterMap | IterFilter | IterEnumerate | IterZip | IterCloneEach
+
+IterSource: TypeAlias = IterElements | IterMapView | IterRange | IterNew | IterAdapter
 
 
 @dataclass(frozen=True, slots=True)

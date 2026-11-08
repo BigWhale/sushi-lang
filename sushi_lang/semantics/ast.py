@@ -942,8 +942,6 @@ class Call(Node):
     # The callee has a borrowed return (#1229): where its sources stand in the call (an
     # argument index, or -1 for the receiver). None for an owned return. See MethodCall.
     callee_borrows: Optional[Tuple[int, ...]] = None
-    # LENT when the answer is an iterator that borrows the sources; see MethodCall.
-    iterator_state: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -975,12 +973,6 @@ class MethodCall(Node):
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
-    # How a built-in iterator producer keeps its state (`generics/iterators.py`, #1259):
-    # the bare cursor of a direct walk, a lent value, or an owned value.
-    iterator_state: Optional[str] = None
-    # A LENT iterator that leaves its function through a `peek` return (#1229): its state
-    # is on the heap. Stamped by the borrow pass on each link of the chain.
-    iterator_leaves: bool = False
     # The callee has a borrowed return (#1229): where its sources stand in the call (an
     # argument index, or -1 for the receiver). None for an owned return. The answer is a
     # borrow of the owners of those arguments.
@@ -1018,8 +1010,6 @@ class DotCall(Node):
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_extension_unit: Optional[str] = None  # see MethodCall
-    iterator_state: Optional[str] = None  # see MethodCall
-    iterator_leaves: bool = False  # see MethodCall
     callee_borrows: Optional[Tuple[int, ...]] = None  # see MethodCall
 
 

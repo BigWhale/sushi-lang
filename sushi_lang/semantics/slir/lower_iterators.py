@@ -26,7 +26,9 @@ from typing import TYPE_CHECKING, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.iterators import item_parts
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import CURSOR_NEXT
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
@@ -43,7 +45,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.typesys import (
-    BuiltinType, EnumType, IteratorType, PointerType, Type, deref_type,
+    BuiltinType, EnumType, FunctionType, IteratorType, PointerType, Type, deref_type,
 )
 
 if TYPE_CHECKING:
@@ -162,6 +164,47 @@ def producer_value(low: Lowering, node: e.Call, callee: Builtin) -> r.Aggregate:
     return r.Aggregate(r.AggIterator(low.type_of(node), source, heap), (part,))
 
 
+def adapter_value(low: Lowering, node: e.Call, callee: Builtin) -> r.Aggregate:
+    """A lazy adapter as a value: the move of its receiver, then the move of each argument,
+    with the heap decision of `borrow`. A lent adapter reads the same answer as each other
+    link of its chain."""
+    ownership = low.answers.ownership
+    lent = ownership.lent_of(node.shir_id)
+    if lent is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="an iterator adapter with no state reached SLIR")
+    heap = not lent or bool(ownership.lent_on_heap(node.shir_id))
+    parts = (calls.receiver(low, callee, node)[0][0],
+             *(calls.argument(low, node, index, arg)[0] for index, arg in enumerate(node.args)))
+    source = _iterator_type(low, callee.recv)
+    argument = deref_type(low.type_of(node.args[0].value)) if node.args else None
+    row = _adapter_row(callee.method.name, source, argument, node.loc)
+    return r.Aggregate(r.AggIterator(low.type_of(node), row, heap), parts)
+
+
+def _iterator_type(low: Lowering, value: e.ShirExpr) -> IteratorType:
+    ty = deref_type(low.type_of(value))
+    if not isinstance(ty, IteratorType):
+        er.raise_internal_error("CE0000", span=value.loc,
+                                detail=f"an adapter over {display_type(ty)} reached SLIR")
+    return ty
+
+
+def _adapter_row(name: str, source: IteratorType, argument: Type | None,
+                 span: Span) -> r.IterAdapter:
+    """The row of the source table of a lazy adapter (ir.md 8.7)."""
+    if name in ("map", "filter") and isinstance(argument, FunctionType):
+        return (r.IterMap if name == "map" else r.IterFilter)(source, argument)
+    if name == "zip" and isinstance(argument, IteratorType):
+        return r.IterZip(source, argument)
+    if name == "enumerate" and argument is None:
+        return r.IterEnumerate(source)
+    if name == "clone_each" and argument is None:
+        return r.IterCloneEach(source)
+    er.raise_internal_error("CE0000", span=span,
+                            detail=f"the adapter '{name}' with no row reached SLIR")
+
+
 def range_value(low: Lowering, node: e.Range) -> r.Aggregate:
     """A range as a value (ir.md 8.9): an owned iterator, with its first value and its count."""
     if not low.typeck.range_value_of(node.shir_id):
@@ -194,6 +237,7 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
     span = stmt.loc
     iterator = _walked_iterator(low, stmt, source.iterable)
     target: st.SlirCallee
+    owned_parts: tuple[tuple[int, Type], ...] = ()
     if isinstance(kind, Protocol):
         method = cast(Method, kind.next.callee)
         item, peeks = kind.item, False
@@ -204,9 +248,11 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
         ty = cast(IteratorType, deref_type(low.type_of(source.iterable)))
         item, peeks = ty.element_type, bool(ty.peeks)
         target, args = st.Indirect(p.Copy(iterator)), ()
+        owned_parts = _owned_parts(low, ty)
     answer, some = _maybe_of(low, item, span)
     takes_item = low.owns(item) and not peeks
-    stepped = low.new_local(answer, None, None, view=low.owns(item) and not takes_item)
+    stepped = low.new_local(answer, None, None,
+                            view=low.owns(item) and not takes_item and not owned_parts)
     low.placement.temporary(stepped, False)
     low.emit([st.StorageLive(stepped, span)])
     low.walk_owners[stepped] = p.root_of(iterator)
@@ -218,7 +264,7 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
     low.placement.detach(tag)
     low.emit(low.placement.close_scope(span))
     body, done, exit_ = low.new_block(), low.new_block(), low.new_block()
-    if takes_item:
+    if takes_item or owned_parts:
         done.statements.append(low.placement.drop_step(stepped, span))
     payload: p.Place = p.Field(p.Downcast(p.Local(stepped), "Some"), 0)
     binds: tuple[ctl.Binds, ...] = ()
@@ -227,8 +273,18 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
         binds = ((None, ((source.binder, r.Use(read)),)),)
     elif takes_item:
         body.statements.append(low.placement.drop_step(stepped, span))
+    held = tuple((p.Field(payload, index), part) for index, part in owned_parts)
     ctl.rounds(low, stmt, (p.Copy(p.Local(tag)), tag, span), body, header, done, exit_,
-               (among, at_header), binds, leaves_at=1 - some)
+               (among, at_header), binds, leaves_at=1 - some, held=held)
+
+
+def _owned_parts(low: Lowering, ty: IteratorType) -> tuple[tuple[int, Type], ...]:
+    """The owning parts of a tuple item whose parts differ in mode: the round holds each one
+    in a hidden owner local, and the binder views the item."""
+    if len(ty.peeks) <= 1:
+        return ()
+    return tuple((index, part) for index, (part, lent) in enumerate(
+        zip(item_parts(ty), ty.peeks, strict=True)) if not lent and low.owns(part))
 
 
 def _walked_iterator(low: Lowering, stmt: s.Loop, iterable: e.ShirExpr) -> p.Place:
