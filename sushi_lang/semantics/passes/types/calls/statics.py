@@ -11,46 +11,12 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Name
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.statics import (builtin_type_named, is_builtin_static,
-                                          solve_target_type_args, static_template)
+from sushi_lang.semantics.statics import (static_template)
 from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
-
-
-def static_target_type(validator: 'TypeValidator', call) -> Optional[Type]:
-    """The TYPE a receiver names, or None when it names something else.
-
-    Local-wins first (#296). A CONCRETE struct or enum answers itself. A GENERIC one
-    answers the instantiation its static's ARGUMENTS name, and the propagation stamp
-    at the binding site for every type parameter no parameter names (#573) -- the
-    stamp alone was the rule from #542, and it left a `| E` static unwritable, because
-    a Result-valued call is never stamped. A primitive answers its builtin (ruling R2).
-    """
-    receiver = call.receiver
-    if not isinstance(receiver, Name):
-        return None
-    name = receiver.id
-    if name in validator.variable_types:
-        return None
-    # A BUILT-IN static is emitted by its container's own handler (ruling R3), which no
-    # user declaration reaches. This path steps aside for one rather than refusing it.
-    if is_builtin_static(name, call.method):
-        return None
-
-    concrete = (validator.struct_table.by_name.get(name)
-                or validator.enum_table.by_name.get(name))
-    if concrete is not None:
-        return concrete
-
-    if (name in validator.generic_struct_table.by_name
-            or name in validator.generic_enum_table.by_name):
-        return _generic_static_target(validator, call, name)
-
-    return builtin_type_named(name)
 
 
 def static_template_for(validator: 'TypeValidator', base: str, method: str):
@@ -63,59 +29,6 @@ def static_template_for(validator: 'TypeValidator', base: str, method: str):
     target = GenericTypeRef(base_name=base, type_args=())
     return static_template(validator.generic_extension_table, base, method,
                            order=lambda templates: in_reach_order(validator, templates, target))
-
-
-def _stamped_instantiation(call, base: str):
-    """The instantiation of `base` the propagation stamp carries on this call, or None."""
-    stamped = (getattr(call, "resolved_struct_type", None)
-               or getattr(call, "resolved_enum_type", None))
-    if stamped is not None and getattr(stamped, "generic_base", None) == base:
-        return stamped
-    return None
-
-
-def _generic_static_target(validator: 'TypeValidator', call, base: str):
-    """The instantiation a `<generic>.name(...)` call resolves against, or None.
-
-    Without a static TEMPLATE of this name the node is a variant construction or a
-    concrete-target static, and the stamp is the whole answer, as before. With one, the
-    arguments are solved first and the stamp fills what they left (`solve_target_type_args`
-    is the one solver; the instantiate pass collects through it too). The solved
-    instantiation is normally interned already -- the instantiate pass saw the same
-    arguments -- and is interned late otherwise, through the seam the method-generic rung
-    uses, with the static's own copy queued for the fixpoint round.
-    """
-    stamped = _stamped_instantiation(call, base)
-    template = static_template_for(validator, base, call.method)
-    if template is None:
-        return stamped
-
-    type_args, unsolved = _solve_static(validator, call, template, stamped)
-    if type_args is None:
-        return None
-    return _interned_static_target(validator, call.method, call.loc, template, base, type_args)
-
-
-def _solve_static(validator: 'TypeValidator', call, template, stamped):
-    """Run the shared solver over this call's argument types and its stamp."""
-    from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-    arg_types = []
-    for arg in call.args:
-        arg_type = infer_call_arg_type(validator, arg)
-        if arg_type is not None:
-            arg_type = resolve_unknown_type(arg_type, validator.struct_table.by_name,
-                                            validator.enum_table.by_name)
-        arg_types.append(arg_type)
-    stamped_args = getattr(stamped, "generic_args", None) if stamped is not None else None
-    type_args, unsolved = solve_target_type_args(template, arg_types, stamped_args)
-    if type_args is None:
-        return None, unsolved
-    resolved = tuple(resolve_unknown_type(t, validator.struct_table.by_name,
-                                          validator.enum_table.by_name)
-                     for t in type_args)
-    return resolved, ()
 
 
 def _interned_static_target(validator: 'TypeValidator', method: str, site: Optional[Span],
@@ -167,58 +80,6 @@ def _add_late_static_copy(validator: 'TypeValidator', template, target, type_arg
 
     validator.extension_table.add_method(target_copy_signature(validator, template, target))
     _queue_extension_instantiation(validator, template, target, tuple(type_args), (), site)
-
-
-def _unentered_static(validator: 'TypeValidator', call, target):
-    """The signature an early inference reads where no copy is entered yet (#1153).
-
-    An inference before the typecheck pass enters no copy, so the extension table can
-    hold no row for an instance it reaches. It reads the substituted template instead.
-    """
-    from sushi_lang.semantics.generics.extensions import target_copy_args
-    from sushi_lang.semantics.passes.types.calls.methods import target_copy_signature
-    base = generic_base_of(target)
-    if base is None:
-        return None
-    template = static_template_for(validator, base, call.method)
-    if template is None or target_copy_args(template, target) is None:
-        return None
-    return target_copy_signature(validator, template, target)
-
-
-def resolve_static(validator: 'TypeValidator', call, report: bool = False):
-    """The static method a `Type.name(...)` call resolves to, or None.
-
-    `report` is the inference half's False and the validation half's True: only one of
-    them may let a template rung emit its own CE2063.
-    """
-    from sushi_lang.semantics.passes.types.calls.methods import (
-        RESOLUTION_REPORTED, resolve_method)
-
-    target = static_target_type(validator, call)
-    if target is None:
-        return None
-    resolved = resolve_method(validator, target, call.method, call=call,
-                              report=report, static=True)
-    if resolved is None and not validator.queues_late_copies:
-        return _unentered_static(validator, call, target)
-    if resolved is None or resolved is RESOLUTION_REPORTED:
-        return None
-    return resolved.method
-
-
-def infer_static_call(validator: 'TypeValidator', call) -> Optional[Type]:
-    """What a static call yields, or None when the node is not one."""
-    from sushi_lang.semantics.passes.types.calls.methods import (
-        extension_call_result_type)
-
-    method = resolve_static(validator, call)
-    if method is None:
-        return None
-    inferred = extension_call_result_type(validator, method)
-    if inferred is not None:
-        call.inferred_return_type = inferred
-    return inferred
 
 
 def emit_no_source(validator: 'TypeValidator', loc: Optional[Span], name: str, reason: str,

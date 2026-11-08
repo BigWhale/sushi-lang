@@ -5,68 +5,19 @@ A variant of a generic enum that no position and no payload solves is CE2112
 that the early passes read.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Mapping, NamedTuple, Optional, Sequence
+from typing import TYPE_CHECKING, Mapping, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 from ..arguments import NOTHING_TYPED, check_arguments
-from ..propagation import holds_declared_type
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from .. import TypeValidator
     from sushi_lang.semantics.shir import exprs as e
-    from sushi_lang.semantics.ast import EnumVariant, Expr
-
-
-class PayloadSolution(NamedTuple):
-    """What the arguments of an unstamped generic enum constructor give (#1005)."""
-    type_args: tuple
-
-
-def solve_constructor_payload(validator: 'TypeValidator', enum_name: str, variant_name: str,
-                              args: Sequence['Expr']) -> Optional[PayloadSolution]:
-    """Solve a generic enum's type parameters from a constructor's arguments. Silent.
-
-    `type_args` holds one entry per type parameter, None where no argument gives it. The
-    answer is None when the enum is not generic, the variant does not exist, or the count
-    is wrong: validation reports those.
-    """
-    from sushi_lang.semantics.generics.pack_inference import (
-        infer_call_arg_type, solve_leading_type_args)
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-    template = validator.generic_enum_table.by_name.get(enum_name)
-    if template is None:
-        return None
-    variant = next((v for v in template.variants if v.name == variant_name), None)
-    if variant is None or len(variant.associated_types) != len(args):
-        return None
-    names = [tp.name for tp in template.type_params]
-    arg_types = [infer_call_arg_type(validator, arg) for arg in args]
-    structs, enums = validator.struct_table.by_name, validator.enum_table.by_name
-    solved, _unsolved = solve_leading_type_args(
-        None, arg_types, structs, enums, partial=True,
-        param_types=list(variant.associated_types), type_param_names=names)
-    type_args = tuple(resolve_unknown_type(solved[name], structs, enums)
-                      if name in solved else None for name in names)
-    return PayloadSolution(type_args)
-
-
-def untyped_constructor_instance(validator: 'TypeValidator', enum_name: str,
-                                 variant_name: str, args: Sequence['Expr']) -> Optional[Type]:
-    """The instance an unstamped generic enum constructor builds, from its payload alone.
-
-    The validating and the inferring half both read this one answer (#1005). None when an
-    argument does not give a type parameter. Before the `monomorphize` pass the answer
-    is the instance's shape (`intern_constructed_instance`).
-    """
-    solution = solve_constructor_payload(validator, enum_name, variant_name, args)
-    if solution is None or any(t is None for t in solution.type_args):
-        return None
-    return intern_constructed_instance(validator, enum_name, solution.type_args)
+    from sushi_lang.semantics.ast import EnumVariant
 
 
 def intern_constructed_instance(validator: 'TypeValidator', base: str,
@@ -107,24 +58,6 @@ def _partial_shape(template, names: list, type_args: tuple):
     return GenericTypeRef(base_name=template.name, type_args=tuple(
         TypeParameter(name) if t is None else t
         for name, t in zip(names, type_args, strict=True)))
-
-
-def declared_position_shape(validator: 'TypeValidator', node: 'Expr', enum_name: str,
-                            variant_name: str, args: Sequence['Expr']):
-    """The type an unsolved constructor answers where a declared type does not fit it.
-
-    The position's mismatch check reads it (`got Maybe@(T)`) and reports the one
-    diagnostic. Everywhere else the answer is None and CE2112 is the diagnostic. It is
-    never a stamp: the program does not reach the backend.
-    """
-    if not holds_declared_type(validator, node):
-        return None
-    solution = solve_constructor_payload(validator, enum_name, variant_name, args)
-    if solution is None:
-        return None
-    template = validator.generic_enum_table.by_name[enum_name]
-    return _partial_shape(template, [tp.name for tp in template.type_params],
-                          solution.type_args)
 
 
 def refuse_untyped_variant(validator: 'TypeValidator', node: 'e.EnumInit', template,

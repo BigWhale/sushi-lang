@@ -11,11 +11,6 @@ from sushi_lang.semantics.ast import (
 )
 
 
-def function_value_type_of(type_validator, name: str) -> Optional[Type]:
-    """Build the FunctionType for a bare reference to a plain top-level function."""
-    return function_type_of_sig(type_validator.func_sig(name))
-
-
 def function_type_of_sig(sig) -> Optional[Type]:
     """The FunctionType of a function value of this signature, bare or behind an alias."""
     from sushi_lang.semantics.param_modes import declared_modes
@@ -108,11 +103,6 @@ def _channel_arrived_later(lam: Lambda, cached, expected) -> bool:
     from sushi_lang.semantics.typesys import FunctionType
     return (isinstance(expected, FunctionType) and lam.err_type is None and lam.ret is None
             and cached.err_type != expected.err_type)
-
-
-def resolve_fn_field_call(type_validator, node, recv_ty) -> Optional["Type"]:
-    """Field-vs-method rule for `obj.handler(args)` (a DotCall), over the receiver's type."""
-    return fn_field_call_type(type_validator, recv_ty, node.method)
 
 
 def fn_field_call_type(type_validator, recv_ty, method: str) -> Optional["Type"]:

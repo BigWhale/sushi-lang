@@ -211,7 +211,7 @@ def declared_or_late_instance(validator: TypeValidator, ref: e.GlobalRef,
                                     detail="the analyzer set no late request of an instance")
         refused = request((template.unit_name, template.name, type_args),
                           (ref.loc, validator.reporter.filename),
-                          validator.body_instance_key)
+                          validator.body_instance_key, validator.reporter)
         sig = _declared_instance(validator, template, mangled)
         if refused or sig is None:
             validator.refused_before = refused or validator.refused_before

@@ -380,11 +380,6 @@ def _declared_positions(validator: 'TypeValidator') -> set:
     return positions
 
 
-def holds_declared_type(validator: 'TypeValidator', node: Expr) -> bool:
-    """Whether a concrete declared type was propagated to this constructor node."""
-    return id(node) in _declared_positions(validator)
-
-
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation."""

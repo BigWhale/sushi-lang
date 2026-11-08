@@ -25,6 +25,14 @@ from .functions import FunctionMonomorphizer
 __all__ = ["Monomorphizer", "MonomorphizationDepthExceeded"]
 
 
+def _muted_reporter() -> Reporter:
+    """A reporter that records nothing: a diagnostic of it counts as offered, as in a
+    copy of a refused template."""
+    reporter = Reporter()
+    reporter.muted = True
+    return reporter
+
+
 @dataclass
 class Monomorphizer:
     """Generates concrete enum types, struct types, and function definitions from generic
@@ -46,10 +54,8 @@ class Monomorphizer:
     monomorphized_functions: Dict[str, Tuple[str | None, str, Tuple[Type, ...]]] = field(default_factory=dict)
     enum_table: 'EnumTable | None' = None
     struct_table: 'StructTable | None' = None
-    # Whole-program SymbolTables. Lets the nested-call collector infer a generic call's
-    # argument types through the typecheck pass's TypeValidator instead of the old Names-only inferrer,
-    # so a non-Name argument (a call, cast, or method result) no longer aborts inference and
-    # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
+    # Whole-program SymbolTables: the copy walks resolve names in them, and the refused
+    # templates are read from them. None on unit-test paths built from loose tables.
     tables: object | None = None
     pending_instantiations: Set[Tuple[str | None, str, Tuple[Type, ...]]] = field(default_factory=set)
     # None while the monomorphize stage runs: a function copy goes into its home unit's
@@ -65,6 +71,9 @@ class Monomorphizer:
     # chain goes up to a key that a written site named, so a refusal of a nested
     # instance has a note at the call that the user wrote.
     parents: dict = field(default_factory=dict)
+    # The template of each function copy, by the key of the copy. A refusal that a copy
+    # of a refused template names is muted (`in_refused_copy`).
+    copy_templates: dict = field(default_factory=dict)
     # The template and the size of the type arguments of each copy that the growth rule
     # judged, by key (`generics/instance_growth.py`).
     instance_records: dict = field(default_factory=dict)
@@ -143,6 +152,13 @@ class Monomorphizer:
         """
         if key is not None and key in self._refused:
             return False
+        validator = self.constraint_validator
+        if (report and validator is not None and not validator.reporter.muted
+                and self.in_refused_copy(key)):
+            with validator.reporting_to(_muted_reporter()):
+                return self._validate_type_constraints(
+                    type_params, type_args, key=key, template_file=template_file,
+                    error_params=error_params, site=site, report=report)
 
         reporters = self._emitting_reporters()
         before = [Counter(r.errors_offered) for r in reporters]
@@ -187,6 +203,16 @@ class Monomorphizer:
                     offered += reporter.errors_offered - counted
                 self.refuse(key, offered)
         return valid
+
+    def in_refused_copy(self, key: object) -> bool:
+        """The copy that names `key` is a copy of a template whose check refused it.
+
+        Such a copy reports nothing (rule R7 of #1070): the template check gave the
+        refusal at the same site, so the copy does not give it again (ruling R-BC).
+        """
+        template = self.copy_templates.get(self.parents.get(key))
+        refused = getattr(self.tables, "refused_templates", None)
+        return template is not None and refused is not None and template in refused
 
     def _emitting_reporters(self) -> list:
         """The reporters a constraint check emits to, each one time: the constraint

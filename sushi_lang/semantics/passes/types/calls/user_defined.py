@@ -14,7 +14,6 @@ from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION, unit_declares_external_block
-from sushi_lang.semantics.name_ladder import call_constructs_struct
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
@@ -44,21 +43,6 @@ def own_concrete_function(func_table, name: str, unit: Optional[str]):
     if func_table is None or unit is None:
         return None
     return func_table.declared(name, unit)
-
-
-def struct_takes_the_call(validator: 'TypeValidator', name: str) -> bool:
-    """Whether a bare call `name(...)` constructs the struct of that name here."""
-    return call_constructs_struct(name, validator.struct_table.by_name,
-                                  validator.func_table, validator.current_unit_name)
-
-
-def generic_struct_takes_the_call(validator: 'TypeValidator', name: str) -> bool:
-    """Whether a bare call `name(...)` constructs an instance of the generic struct `name`.
-
-    The same ladder as the concrete struct: the unit's own function of that name wins.
-    """
-    return call_constructs_struct(name, validator.generic_struct_table.by_name,
-                                  validator.func_table, validator.current_unit_name)
 
 
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,

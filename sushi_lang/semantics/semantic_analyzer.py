@@ -181,6 +181,9 @@ class SemanticAnalyzer:
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         # The perk copies cut on demand (#699); set with the monomorphizer.
         self.perk_copies: Optional['PerkCopies'] = None
+        # The implementations on one instantiation that no unit reached at the drop,
+        # with their units: a late cut can still intern the instance.
+        self._unreached_perk_impls: list[tuple[Unit, ExtendWithDef]] = []
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
         # The SHIR of each body that the scope pass checked, per unit, in the compilation
@@ -969,6 +972,7 @@ class SemanticAnalyzer:
             marks = table_marks(self.tables.structs, self.tables.enums)
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
             perk_copies = self._place_perk_copies(monomorphizer, compilation_order)
+            perk_copies += self._place_reached_perk_impls()
             batch = self.monomorphized_extensions[checked:]
             functions = self._place_late_functions(monomorphizer, compilation_order)
             self._check_late_instance_clash(compilation_order, functions)
@@ -1099,11 +1103,11 @@ class SemanticAnalyzer:
         """
         monomorphizer.late_bodies = []
         self.tables.request_function_instance = (
-            lambda key, site, parent: self._request_function_instance(
-                monomorphizer, compilation_order, key, site, parent))
+            lambda key, site, parent, reporter: self._request_function_instance(
+                monomorphizer, compilation_order, key, site, parent, reporter))
 
     def _request_function_instance(self, monomorphizer, compilation_order: list[Unit],
-                                   key, site, parent) -> bool:
+                                   key, site, parent, reporter: Reporter) -> bool:
         """Cut the function instance a call asks for. True when a rule refused it.
 
         `key` is (declaring unit, name, type arguments), `site` the (span, file) of the
@@ -1111,6 +1115,12 @@ class SemanticAnalyzer:
         makes the call: the growth rule reads that chain (CE0151). The copy goes through
         the monomorphizer as an early instance does: its signature is declared now, so the
         call has it, and every instance its body names is cut with it.
+
+        A constraint refusal goes to `reporter`, the reporter of the body that makes the
+        call. So a refusal in a copy of a refused template is muted, as every other
+        diagnostic of that copy is (rule R7 of #1070, ruling R-BC), and the analysis does
+        not stop. A copy whose cut refused an instance waits for no check: the refusal
+        stands, as for an extension copy.
         """
         from sushi_lang.semantics.generics.extension_targets import function_instance_key
         from sushi_lang.semantics.passes.finite_types import table_marks
@@ -1121,9 +1131,15 @@ class SemanticAnalyzer:
         if parent is not None:
             monomorphizer.parents.setdefault(site_key, parent)
         marks = table_marks(self.tables.structs, self.tables.enums)
-        monomorphizer.monomorphize_all_functions({key}, compilation_order)
+        violations = monomorphizer.constraint_violations
+        waiting = len(monomorphizer.late_bodies)
+        with monomorphizer.constraint_validator.reporting_to(reporter):
+            monomorphizer.monomorphize_all_functions({key}, compilation_order)
         self._settle_new_instances(marks)
-        return monomorphizer.was_refused(site_key)
+        if monomorphizer.constraint_violations == violations:
+            return monomorphizer.was_refused(site_key)
+        del monomorphizer.late_bodies[waiting:]
+        return True
 
     def _place_late_functions(self, monomorphizer,
                               compilation_order: list[Unit]) -> list[tuple[Unit, FuncDef]]:
@@ -1147,17 +1163,9 @@ class SemanticAnalyzer:
         its copy is simply never cut. Leaving the implementation in the walks reached
         the typecheck pass as a CE2001 about the target and the backend as a CE0045.
         """
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
         from sushi_lang.semantics.passes.types.perks import validate_unreached_header
 
-        def unreached(impl) -> bool:
-            return (isinstance(impl.target_type, GenericTypeRef)
-                    and isinstance(
-                        resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
-                                             self.tables.enums.by_name),
-                        GenericTypeRef))
-
+        unreached = self._names_no_instance
         for unit in compilation_order:
             impls = unit.ast.perk_impls if unit.ast is not None else None
             if not impls:
@@ -1166,11 +1174,40 @@ class SemanticAnalyzer:
             if not dropped:
                 continue
             unit.ast.perk_impls = [impl for impl in impls if not unreached(impl)]
+            self._unreached_perk_impls.extend((unit, impl) for impl in dropped)
             # The header of a dropped one is still a written declaration (#898).
             unit_reporter = self._unit_reporter(unit)
             for impl in dropped:
                 validate_unreached_header(self.tables, impl, unit_reporter)
             self._merge_unit(unit_reporter)
+
+    def _names_no_instance(self, impl) -> bool:
+        """The `@(...)` target of a perk implementation names no interned instance."""
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        return (isinstance(impl.target_type, GenericTypeRef)
+                and isinstance(
+                    resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
+                                         self.tables.enums.by_name),
+                    GenericTypeRef))
+
+    def _place_reached_perk_impls(self) -> list[tuple[Unit, ExtendWithDef]]:
+        """Put back each dropped implementation whose instance a late cut interned.
+
+        The typecheck pass cuts an inferred generic call late (ruling E4), so the
+        instance `Box@(string)` of `extend Box@(string) with Show` can come after the
+        drop. The implementation goes back into its unit, and the fixpoint checks it
+        as it checks a perk copy. Answers (unit, implementation).
+        """
+        placed = [(unit, impl) for unit, impl in self._unreached_perk_impls
+                  if not self._names_no_instance(impl)]
+        if not placed:
+            return placed
+        self._unreached_perk_impls = [pair for pair in self._unreached_perk_impls
+                                      if pair not in placed]
+        for unit, impl in placed:
+            unit.ast.perk_impls.append(impl)
+        return placed
 
     def _monomorphize_generic_perk_impls(self, monomorphizer, compilation_order,
                                          struct_instantiations, concrete_structs,

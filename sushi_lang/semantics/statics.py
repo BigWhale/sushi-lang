@@ -20,11 +20,6 @@ BUILTIN_TYPE_NAMES: frozenset[str] = frozenset(
     ty.value for ty in BuiltinType if ty is not BuiltinType.BLANK)
 
 
-def builtin_type_named(name: str) -> Optional[BuiltinType]:
-    """The primitive a name denotes, or None."""
-    return BuiltinType(name) if name in BUILTIN_TYPE_NAMES else None
-
-
 def names_a_type(name: str, *,
                  structs: AbstractSet[str] = frozenset(),
                  enums: AbstractSet[str] = frozenset(),

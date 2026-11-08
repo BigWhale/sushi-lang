@@ -3,11 +3,12 @@
 The walk over a substituted body was a hand-written ladder of statement arms. It had no
 arm for `println`, `print` and a rebind, and it walked only a block arm of a `match`, so
 a generic call there was not collected and the typecheck pass answered CE2061 for a
-correct program (#1157). Now a statement that BINDS a name has an arm of its own, and
-every other statement goes through the one node walk (`walk_nodes`).
+correct program (#1157). Now every statement goes through the one node walk
+(`walk_nodes`). The walk keeps no scope, because it types no argument (ruling E4), so no
+statement has an arm of its own.
 
-Read from the source, because the walk runs inside the compiler: the arms the walk
-names are the binding statements and nothing else, and the rest goes to the node walk.
+Read from the source, because the walk runs inside the compiler: the walk names no
+statement kind, and every statement goes to the node walk.
 """
 from __future__ import annotations
 
@@ -23,9 +24,9 @@ from sushi_lang.semantics.generics.monomorphize.functions import FunctionMonomor
 WALK = FunctionMonomorphizer._collect_block_instantiations
 NODE_WALK = FunctionMonomorphizer._collect_from_statement_nodes
 
-# The statements that BIND a name for what follows them or for a body they hold. Each
-# has an arm of its own in the walk. A new binding statement is added here, on purpose.
-BINDING_STATEMENTS = {"Let", "Foreach", "Match"}
+# The statements that have an arm of their own in the walk: none, since the walk keeps
+# no scope (ruling E4). A new arm is added here, on purpose.
+BINDING_STATEMENTS: set[str] = set()
 
 
 def _statement_kinds() -> set[str]:

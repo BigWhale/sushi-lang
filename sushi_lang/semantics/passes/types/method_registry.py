@@ -10,8 +10,7 @@ answers it (#751).
 
 There is one table now. A `MethodFamily` carries the CLAIM -- which receiver and which
 name it answers -- and both halves: the inferrer the typecheck pass reads, and the
-validator it runs. `claim()` is the one decision; `infer_method_type()` and
-`validate_method()` are two hooks on it. The gate is
+validator it runs. `claim()` is the one decision, and `validate_method()` reads it. The gate is
 `tests/unit/test_method_family_dispatch_is_one.py`, which holds the table TOTAL (no
 family with one half) and its claims DISJOINT.
 
@@ -180,14 +179,6 @@ class MethodTypeRegistry:
         a perk implementation overrides a built-in, it does not remove it."""
         return any(family.answers(receiver_type, method_name, derived_methods)
                    for family in self._families)
-
-    def infer_method_type(self, receiver_type: 'Type', call: 'MethodCall',
-                          validator: 'TypeValidator') -> Optional['Type']:
-        """Infer the return type of a method call."""
-        family = self.claim(receiver_type, call.method, validator)
-        if family is None or family.infer is None:
-            return None
-        return family.infer(receiver_type, call, validator).infer_return_type()
 
     def validate_method(self, validator: 'TypeValidator', call: 'MethodCall',
                         receiver_type: 'Type', *, beats_perk: bool) -> bool:

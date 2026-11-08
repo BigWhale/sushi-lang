@@ -78,19 +78,12 @@ class FunctionCollector:
                 self.variable_types["self"] = resolved
 
     def _infer_scrutinee_type(self, scrutinee):
-        """The scrutinee's type, through the typecheck pass's own inferrer."""
+        """The scrutinee's type when a generic call with explicit type arguments writes it:
+        the scanner answers from the substituted signature (#549). Nothing else is typed
+        here (ruling E4)."""
         if scrutinee is None:
             return None
-        inferred = None
-        validator = getattr(self.expression_scanner, "type_validator", None)
-        if validator is not None:
-            inferred = validator.infer_expression_type(scrutinee)
-        if inferred is None:
-            # A GENERIC call has no monomorphized copy yet, so the validator cannot type
-            # it. The scanner has the type arguments and answers from the substituted
-            # signature (#549).
-            inferred = self.expression_scanner.generic_call_type(scrutinee)
-        return inferred
+        return self.expression_scanner.generic_call_type(scrutinee)
 
     def _bind_destructure(self, targets, value_type) -> None:
         """A destructure's binders are locals: a written type is collected, and each
@@ -265,14 +258,12 @@ class FunctionCollector:
             if stmt.ty is not None:
                 self._collect_from_type(stmt.ty, getattr(stmt, "type_span", None))
                 # Track variable type for later reference. Resolve a bare struct/enum
-                # name (UnknownType) to its concrete type so the shared inferrer can
-                # reach the fields and methods of a local when it appears as a generic
-                # call argument (#191: identity(p.x), identity(p.method())).
+                # name (UnknownType) to its concrete type: a receiver of a built-in
+                # method reads it (`_scan_dot_call`).
                 if stmt.name is not None:
                     self.variable_types[stmt.name] = self._resolve_local_type(stmt.ty)
             if stmt.value is not None:
-                # A destructure states no type for its value.
-                self.expression_scanner.scan_expression(stmt.value, stmt.ty is not None)
+                self.expression_scanner.scan_expression(stmt.value)
                 if stmt.ty is not None:
                     self._scan_fn_value(stmt.value, stmt.ty)
             if stmt.targets is not None:
@@ -282,7 +273,7 @@ class FunctionCollector:
             if stmt.item_type is not None:
                 self._collect_from_type(stmt.item_type, getattr(stmt, "item_type_span", None))
             if stmt.iterable is not None:
-                self.expression_scanner.scan_expression(stmt.iterable, False)
+                self.expression_scanner.scan_expression(stmt.iterable)
             # The binder is a LOCAL of the body, as a `let` local is (#1155).
             bound = bind_locals(self.variable_types, foreach_bindings(
                 stmt, self._infer_scrutinee_type, self._resolve_local_type))
@@ -291,19 +282,19 @@ class FunctionCollector:
 
         elif isinstance(stmt, If):
             for cond, block in stmt.arms:
-                self.expression_scanner.scan_expression(cond, False)
+                self.expression_scanner.scan_expression(cond)
                 self._collect_from_block(block)
             if stmt.else_block is not None:
                 self._collect_from_block(stmt.else_block)
 
         elif isinstance(stmt, While):
             if stmt.cond is not None:
-                self.expression_scanner.scan_expression(stmt.cond, False)
+                self.expression_scanner.scan_expression(stmt.cond)
             self._collect_from_block(stmt.body)
 
         elif isinstance(stmt, Match):
             if stmt.scrutinee is not None:
-                self.expression_scanner.scan_expression(stmt.scrutinee, False)
+                self.expression_scanner.scan_expression(stmt.scrutinee)
             # A pattern binding is a LOCAL, and a generic called with one needs its type
             # exactly as a `let` local's is needed. The typecheck pass runs after this one,
             # so the scrutinee is typed here (#539).
@@ -317,7 +308,7 @@ class FunctionCollector:
                     # An arm body that is an EXPRESSION introduces no type ANNOTATION, which
                     # is why it used to be skipped -- but it may still CALL a generic, and
                     # the call is what needs collecting (#539).
-                    self.expression_scanner.scan_expression(arm.body, False)
+                    self.expression_scanner.scan_expression(arm.body)
                 self._unbind(bound)
 
         elif isinstance(stmt, Return):
@@ -328,10 +319,10 @@ class FunctionCollector:
         elif isinstance(stmt, (ExprStmt, Print, PrintLn)):
             expr = stmt.expr if hasattr(stmt, 'expr') else stmt.value
             if expr is not None:
-                self.expression_scanner.scan_expression(expr, False)
+                self.expression_scanner.scan_expression(expr)
 
         elif isinstance(stmt, Assert):
-            self.expression_scanner.scan_expression(stmt.cond, False)
+            self.expression_scanner.scan_expression(stmt.cond)
             if stmt.message is not None:
                 self.expression_scanner.scan_expression(stmt.message)
 
@@ -339,9 +330,8 @@ class FunctionCollector:
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
                 if self._holds_fn_candidate(stmt.value):
-                    target_type = self.expression_scanner._infer_arg_type(stmt.target)
-                    if target_type is None and isinstance(stmt.target, Name):
-                        target_type = self.variable_types.get(stmt.target.id)
+                    target_type = (self.variable_types.get(stmt.target.id)
+                                   if isinstance(stmt.target, Name) else None)
                     self._scan_fn_value(stmt.value, target_type)
 
         elif isinstance(stmt, (Break, Continue)):

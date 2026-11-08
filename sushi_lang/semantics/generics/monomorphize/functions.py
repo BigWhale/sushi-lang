@@ -10,10 +10,6 @@ from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.types import TypePack, type_param_substitution
 from sushi_lang.semantics.typesys import Type
 
-from sushi_lang.semantics.generics.local_bindings import (
-    bind_locals, foreach_bindings, pattern_bindings, unbind_locals,
-)
-
 from .order import functions_in_site_order
 from .transformer import pack_binding_for
 
@@ -247,6 +243,9 @@ class FunctionMonomorphizer:
 
         from sushi_lang.semantics.generics.extension_targets import function_instance_key
         key = function_instance_key(getattr(generic, "unit_name", None), generic.name, type_args)
+        from sushi_lang.semantics.generics.types import TemplateId
+        self.monomorphizer.copy_templates[key] = TemplateId(
+            getattr(generic, "unit_name", None), generic.name)
         with self.monomorphizer.cutting(getattr(generic, "filename", None), key):
             concrete_func, pack_param_fanout = self._cut(generic, substitution)
 
@@ -275,12 +274,12 @@ class FunctionMonomorphizer:
         # the typecheck pass for a call-site method copy (`instance_growth.py`).
         concrete_func.instance_key = key
         self._collect_nested_instantiations(
-            concrete_func.body, concrete_func.params, generic, concrete_func.instance_key)
+            concrete_func.body, generic, concrete_func.instance_key)
         concrete_func.name = mangled_name
 
         self._collect_fn_value_instantiations(
             concrete_func.body, getattr(generic, "unit_name", None),
-            file=generic.filename, functions=[concrete_func])
+            file=generic.filename, parent=key, functions=[concrete_func])
 
         self.monomorphizer.func_cache[cache_key] = concrete_func
 
@@ -441,23 +440,22 @@ class FunctionMonomorphizer:
     def _collect_nested_instantiations(
         self,
         body: 'Block',
-        params: list,
         generic_func: 'GenericFuncDef',
         key: object = None,
     ) -> None:
-        """Every generic call in one monomorphized function body, queued for monomorphization.
+        """Every generic call with explicit type arguments in one monomorphized function
+        body, queued for monomorphization.
 
-        The walk reads the SUBSTITUTED copy, as the extension walk does: a lambda's
-        written `|T y|` and an explicit `f@(T)(...)` name the concrete type only there,
-        and a template walk solved them against an unbound type parameter (#795).
+        The walk reads the SUBSTITUTED copy, as the extension walk does: an explicit
+        `f@(T)(...)` names the concrete type only there (#795). A call that its arguments
+        solve is cut late, when the typecheck pass asks for its instance (ruling E4).
         `key` is the instantiation of the copy.
         """
-        var_types = {param.name: param.ty for param in params if param.ty is not None}
         saved = self._asking_unit, self._asking_file, self._asking_key
         self._asking_unit = getattr(generic_func, "unit_name", None)
         self._asking_file = generic_func.filename
         self._asking_key = key
-        self._collect_block_instantiations(body, var_types)
+        self._collect_block_instantiations(body)
         self._asking_unit, self._asking_file, self._asking_key = saved
 
     def _record_site(self, unit: Optional[str], name: str, type_args, loc) -> None:
@@ -478,6 +476,7 @@ class FunctionMonomorphizer:
 
     def _collect_fn_value_instantiations(self, body: 'Block', unit_name: Optional[str],
                                          file: Optional[str] = None,
+                                         parent: object = None,
                                          **declarations) -> None:
         """Every generic function VALUE in one copy, queued for monomorphization (#1036).
 
@@ -486,11 +485,8 @@ class FunctionMonomorphizer:
         own collector: one rule for every position, in a concrete body and in a copy.
         `declarations` is the copy as a `Program` field (`functions=`, `extensions=` or
         `perk_impls=`). An extension or perk copy carries no unit, so it reads the flat view.
-
-        The same walk solves a generic CONSTRUCTOR in a position that states no type
-        (#1150, #1152): `foreach(r in Feed(items, 0))` names `Feed@(i32)` only in the
-        copy. The collector's inference interns that instance, and the late cut gives it
-        its extension copies.
+        `parent` is the key of a function copy: each instance that it names takes it as
+        its parent, for the note at the call and for `in_refused_copy`.
         """
         tables = self.monomorphizer.tables
         if tables is None:
@@ -518,19 +514,18 @@ class FunctionMonomorphizer:
         for kind, decls in declarations.items():
             setattr(program, kind, decls)
         _, found = collector.run(program)
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
         for key in found:
+            if parent is not None:
+                self.monomorphizer.parents.setdefault(function_instance_key(*key), parent)
             if key not in self.monomorphizer.func_cache:
                 self.monomorphizer.pending_instantiations.add(key)
 
     def _holds_position_candidate(self, body: 'Block', unit_name: Optional[str],
                                   namespaces) -> bool:
-        """The copy names a generic function, or a name behind an alias, as a VALUE, or
-        it constructs a generic type."""
-        from sushi_lang.semantics.ast import Call, DotCall, EnumConstructor, MemberAccess, Name
+        """The copy names a generic function, or a name behind an alias, as a VALUE."""
+        from sushi_lang.semantics.ast import Call, DotCall, MemberAccess, Name
         from sushi_lang.semantics.ast_walk import walk_nodes
-        tables = self.monomorphizer.tables
-        generic_structs = tables.generic_structs.by_name
-        generic_enums = tables.generic_enums.by_name
         callees: Set[int] = set()
         found = False
 
@@ -540,12 +535,8 @@ class FunctionMonomorphizer:
                 return False
             if isinstance(node, Call) and isinstance(node.callee, Name):
                 callees.add(id(node.callee))
-                found = node.callee.id in generic_structs
-            elif isinstance(node, EnumConstructor):
-                found = node.enum_name in generic_enums
             elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
-                found = node.receiver.id in generic_enums or (
-                    namespaces is not None and namespaces.is_namespace(node.receiver.id))
+                found = namespaces is not None and namespaces.is_namespace(node.receiver.id)
             elif isinstance(node, Name) and id(node) not in callees:
                 found = self._generic_def(unit_name, node.id) is not None
             elif (isinstance(node, MemberAccess) and isinstance(node.receiver, Name)
@@ -559,16 +550,9 @@ class FunctionMonomorphizer:
     def collect_from_extension_body(self, extend_def: 'ExtendDef') -> Set[Tuple[str, Tuple[Type, ...]]]:
         """Function instantiations in one MONOMORPHIZED extension body (#392).
 
-        A generic call whose argument types come from `self` is knowable only here: the
-        template spells the receiver's type parameter, and the substituted copy is the
-        first body in which `self.value` has a concrete type. The body is already
-        substituted, so the walk runs with `self` bound to the concrete target.
+        The body is already substituted, so an explicit type argument that the
+        template spells with a type parameter is concrete here.
         """
-        var_types: Dict[str, Type] = {"self": extend_def.target_type}
-        for param in extend_def.params:
-            if param.ty is not None:
-                var_types[param.name] = param.ty
-
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
@@ -577,7 +561,7 @@ class FunctionMonomorphizer:
         self._asking_file = extend_def.template_file
         self._asking_key = (getattr(extend_def, "instance_key", None)
                             or getattr(extend_def.target_type, "name", None))
-        self._collect_block_instantiations(extend_def.body, var_types)
+        self._collect_block_instantiations(extend_def.body)
         self._asking_unit, self._asking_key = saved_unit, saved_key
         self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,
                                               extensions=[extend_def])
@@ -594,11 +578,6 @@ class FunctionMonomorphizer:
         A perk method carries no target of its own -- the `extend X with P` header does
         -- so the receiver's type is handed in rather than read off the node.
         """
-        var_types: Dict[str, Type] = {"self": target_type}
-        for param in method.params:
-            if param.ty is not None:
-                var_types[param.name] = param.ty
-
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
@@ -606,7 +585,7 @@ class FunctionMonomorphizer:
         self._asking_unit = None
         self._asking_file = filename
         self._asking_key = getattr(target_type, "name", None)
-        self._collect_block_instantiations(method.body, var_types)
+        self._collect_block_instantiations(method.body)
         self._asking_unit, self._asking_key = saved_unit, saved_key
         from sushi_lang.semantics.ast import ExtendWithDef
         file = self._asking_file
@@ -619,106 +598,38 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
 
-    def _collect_block_instantiations(
-        self,
-        body: 'Block',
-        var_types: Dict[str, Type],
-    ) -> None:
+    def _collect_block_instantiations(self, body: 'Block') -> None:
         """The statement walk over a SUBSTITUTED body, shared by functions and extensions.
 
-        A statement that BINDS a name (a `let`, a `foreach`, a `match`) has an arm of its
-        own, so the name is in scope where it is used. Every other statement is walked whole by
-        the one node walk, so no statement kind can be missed: `println`, `print` and a
-        rebind had no arm, and their generic calls were not collected (#1157).
-        `tests/unit/test_monomorphize_statement_walk_is_total.py` is the gate.
+        Every statement is walked whole by the one node walk, so no statement kind can be
+        missed: `println`, `print` and a rebind had no arm, and their generic calls were
+        not collected (#1157). The walk keeps no scope, because it types no argument
+        (ruling E4). `tests/unit/test_monomorphize_statement_walk_is_total.py` is the gate.
         """
-        from sushi_lang.semantics.ast import Let, Match, Foreach, Block, Lambda
-
         for stmt in body.statements:
-            if isinstance(stmt, Let):
-                if stmt.value is not None:
-                    self._collect_from_expr(stmt.value, var_types)
-                    if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
-                        self._collect_block_instantiations(stmt.value.body, var_types)
-                # A local is in scope for the calls after it, and a generic called with
-                # one needs its type as a parameter's is needed (#555). The body is
-                # substituted, so the annotation is the local's type as it stands.
-                if stmt.ty is not None:
-                    var_types[stmt.name] = stmt.ty
-                if stmt.targets is not None:
-                    self._bind_destructure(stmt, var_types)
-            elif isinstance(stmt, Foreach):
-                self._collect_from_expr(stmt.iterable, var_types)
-                bound = bind_locals(var_types, foreach_bindings(
-                    stmt, self._inferred(var_types), self._resolved))
-                self._collect_block_instantiations(stmt.body, var_types)
-                unbind_locals(var_types, bound)
-            elif isinstance(stmt, Match):
-                self._collect_from_expr(stmt.scrutinee, var_types)
-                scrutinee_type = self._inferred(var_types)(stmt.scrutinee)
-                for arm in stmt.arms:
-                    bound = bind_locals(var_types, pattern_bindings(
-                        arm.pattern, scrutinee_type, self.monomorphizer.generic_enums,
-                        self._resolved))
-                    self._collect_from_statement_nodes(arm.body, var_types)
-                    unbind_locals(var_types, bound)
-            else:
-                self._collect_from_statement_nodes(stmt, var_types)
+            self._collect_from_statement_nodes(stmt)
 
-    def _collect_from_statement_nodes(self, root, var_types: Dict[str, Type]) -> None:
+    def _collect_from_statement_nodes(self, root) -> None:
         """Every expression under a statement, through the one node walk.
 
-        A nested block is walked as a block, in the scope it opens; an expression goes
-        to the expression collector, which walks its own subtree.
+        A nested block is walked as a block; an expression goes to the expression
+        collector, which walks its own subtree.
         """
         from sushi_lang.semantics.ast import Block
         from sushi_lang.semantics.ast_walk import walk_nodes
 
         def visit(node) -> bool:
             if isinstance(node, Block):
-                self._collect_block_instantiations(node, var_types)
+                self._collect_block_instantiations(node)
                 return False
             if isinstance(node, EXPRESSION_KINDS):
-                self._collect_from_expr(node, var_types)
+                self._collect_from_expr(node)
                 return False
             return True
 
         walk_nodes(root, visit)
 
-    def _inferred(self, var_types: Dict[str, Type]):
-        """The type of an expression in this scope, or None when nothing can type it."""
-        def infer(expr) -> Optional[Type]:
-            inferrer = self._get_arg_inferrer(var_types)
-            return inferrer.infer_expression_type(expr) if inferrer is not None else None
-        return infer
-
-    def _resolved(self, ty: Type) -> Type:
-        """Every struct/enum name in `ty` resolved to its table entry."""
-        from sushi_lang.semantics.type_resolution import resolve_type_recursively
-        structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
-        enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
-        return resolve_type_recursively(ty, structs, enums)
-
-    def _bind_destructure(self, stmt, var_types: Dict[str, Type]) -> None:
-        """Each binder of a destructure is a local for the calls after it (#555's rule)."""
-        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
-
-        inferrer = self._get_arg_inferrer(var_types)
-        value_type = inferrer.infer_expression_type(stmt.value) if inferrer else None
-
-        def bind(targets, whole) -> None:
-            elements: tuple = tuple_elements(whole) if is_tuple_type(whole) else ()
-            if len(elements) != len(targets):
-                elements = (None,) * len(targets)
-            for target, element in zip(targets, elements, strict=True):
-                if target.nested is not None:
-                    bind(target.nested, element)
-                elif target.name is not None and (target.ty or element) is not None:
-                    var_types[target.name] = target.ty or element
-
-        bind(stmt.targets, value_type)
-
-    def _collect_from_expr(self, expr, var_types: Dict[str, Type]) -> None:
+    def _collect_from_expr(self, expr) -> None:
         """Recursively scan expression for generic function calls."""
         from sushi_lang.semantics.ast import (
             Call, Name, BinaryOp, UnaryOp, TryExpr, DotCall,
@@ -734,7 +645,7 @@ class FunctionMonomorphizer:
 
                 generic_func = self._generic_def(self._asking_unit, function_name)
                 if generic_func is not None:
-                    type_args = self._call_type_args(expr, generic_func, var_types)
+                    type_args = self._call_type_args(expr, generic_func)
 
                     if type_args:
                         # Track this instantiation for later processing
@@ -749,113 +660,75 @@ class FunctionMonomorphizer:
             # Recurse into arguments: a generic call nested inside another call's argument
             # (e.g. f(g(x))) was missed, the monomorphizer's own #191 (issue #214).
             for arg in getattr(expr, "args", []) or []:
-                self._collect_from_expr(arg, var_types)
+                self._collect_from_expr(arg)
 
         elif isinstance(expr, BinaryOp):
-            self._collect_from_expr(expr.left, var_types)
-            self._collect_from_expr(expr.right, var_types)
+            self._collect_from_expr(expr.left)
+            self._collect_from_expr(expr.right)
         elif isinstance(expr, (UnaryOp, TryExpr, CastExpr, Borrow)):
-            self._collect_from_expr(expr.expr, var_types)
+            self._collect_from_expr(expr.expr)
         elif isinstance(expr, DotCall):
-            self._collect_from_expr(expr.receiver, var_types)
+            self._collect_from_expr(expr.receiver)
             for arg in expr.args:
-                self._collect_from_expr(arg, var_types)
+                self._collect_from_expr(arg)
         elif isinstance(expr, IndexAccess):
-            self._collect_from_expr(expr.array, var_types)
-            self._collect_from_expr(expr.index, var_types)
+            self._collect_from_expr(expr.array)
+            self._collect_from_expr(expr.index)
         elif isinstance(expr, ArrayLiteral):
             for element in expr.elements:
-                self._collect_from_expr(element.value, var_types)
+                self._collect_from_expr(element.value)
                 if element.count is not None:
-                    self._collect_from_expr(element.count, var_types)
+                    self._collect_from_expr(element.count)
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
-                self._collect_from_expr(arg, var_types)
+                self._collect_from_expr(arg)
         elif isinstance(expr, InterpolatedString):
             for part in expr.parts:
                 if not isinstance(part, str):
-                    self._collect_from_expr(part, var_types)
+                    self._collect_from_expr(part)
         elif isinstance(expr, RangeExpr):
-            self._collect_from_expr(expr.start, var_types)
-            self._collect_from_expr(expr.end, var_types)
+            self._collect_from_expr(expr.start)
+            self._collect_from_expr(expr.end)
         elif isinstance(expr, Spread):
-            self._collect_from_expr(expr.value, var_types)
+            self._collect_from_expr(expr.value)
         elif isinstance(expr, MemberAccess):
-            self._collect_from_expr(expr.receiver, var_types)
+            self._collect_from_expr(expr.receiver)
         elif isinstance(expr, MethodCall):
-            self._collect_from_expr(expr.receiver, var_types)
+            self._collect_from_expr(expr.receiver)
             for arg in expr.args:
-                self._collect_from_expr(arg, var_types)
+                self._collect_from_expr(arg)
         elif isinstance(expr, DynamicArrayFrom):
-            self._collect_from_expr(expr.elements, var_types)
+            self._collect_from_expr(expr.elements)
         elif isinstance(expr, TupleLiteral):
             for item in expr.elements:
-                self._collect_from_expr(item, var_types)
+                self._collect_from_expr(item)
         elif isinstance(expr, Lambda):
-            # An expression-body lambda scans directly. A block-body lambda (a `let` RHS) is
-            # walked in _collect_nested_instantiations, which has the generic_func needed to
-            # rebuild its var-type scope.
-            if not isinstance(expr.body, Block):
-                self._collect_from_expr(expr.body, var_types)
+            if isinstance(expr.body, Block):
+                self._collect_block_instantiations(expr.body)
+            else:
+                self._collect_from_expr(expr.body)
         elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
                                BlankLit, DynamicArrayNew)):
             pass
-
-    def _get_arg_inferrer(self, var_types: Dict[str, Type]):
-        """The typecheck pass's inference over the whole program, seeded with this scope.
-
-        One per call, so no call sees the scope of another; it writes no stamp (#806).
-        """
-        tables = getattr(self.monomorphizer, "tables", None)
-        if tables is None:
-            return None
-        from sushi_lang.semantics.passes.types import ReadOnlyInferrer
-        inferrer = ReadOnlyInferrer(tables, tables.namespaces.get(self._asking_unit))
-        inferrer.variable_types = var_types
-        return inferrer
 
     def _call_type_args(
         self,
         call: 'Call',
         generic_func: 'GenericFuncDef',
-        var_types: Dict[str, Type]
     ) -> Optional[Tuple[Type, ...]]:
-        """The type arguments of a generic call inside a monomorphized body: explicit, or solved.
+        """The explicit type arguments of a generic call inside a monomorphized body.
 
-        The arguments are typed by the typecheck pass's shared inferrer over the copy's
-        locals and solved by the one solver, the same solve the instantiate and
-        typecheck passes run (#795). This copy had no pack and no lambda path, so a
-        variadic or lambda call inside a generic body was solved by the passes around
-        it and never instantiated here.
+        A call that its arguments solve is not typed here: the typecheck pass asks for
+        its instance late, and the late request records this copy as its parent
+        (ruling E4).
         """
-        from sushi_lang.semantics.ast import Name
         from sushi_lang.semantics.generics.explicit_type_args import (
             check_explicit_type_arg_arity, resolve_explicit_type_args)
-        from sushi_lang.semantics.generics.pack_inference import (
-            infer_call_arg_type, infer_flat_type_args)
 
+        if not call.type_args:
+            return None
+        if check_explicit_type_arg_arity(generic_func, len(call.type_args)) is not None:
+            return None
         structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
         enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
-        if call.type_args:
-            if check_explicit_type_arg_arity(generic_func, len(call.type_args)) is not None:
-                return None
-            return resolve_explicit_type_args(call.type_args, structs, enums)
-
-        from sushi_lang.semantics.passes.types.calls.generics import names_generic_fn_value
-        inferrer = self._get_arg_inferrer(var_types)
-        arg_types: list[Type | None] = []
-        for arg_expr in getattr(call, "args", []) or []:
-            # A generic function value is typed by the callee, as in the passes around
-            # this one (#1029).
-            if inferrer is not None and names_generic_fn_value(inferrer, arg_expr):
-                arg_types.append(None)
-                continue
-            # The var-type map is the fallback for unit-test paths with no SymbolTables.
-            arg_type = infer_call_arg_type(inferrer, arg_expr)
-            if arg_type is None and isinstance(arg_expr, Name) and arg_expr.id in var_types:
-                arg_type = var_types[arg_expr.id]
-            if arg_type is None:
-                return None
-            arg_types.append(arg_type)
-
-        return infer_flat_type_args(generic_func, arg_types, structs, enums)
+        return resolve_explicit_type_args(call.type_args, structs, enums)

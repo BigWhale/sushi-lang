@@ -26,9 +26,7 @@ a construction and of a static of a generic type,
 index and a slice. The pattern arms are in `passes/types/matching.py`. The
 arms of `??` and of `as` are `check_try` and `check_cast` of
 `passes/types/expressions.py`, because the callers of the conversion lookup are in that
-module. The AST inference visitor of `inference.py` is not part of this walk: it is the
-inference of the early passes (`ReadOnlyInferrer`), until they stop inferring.
-`helpers.py` holds the lambda and function-value helpers that it reads.
+module. `helpers.py` holds the lambda helper.
 """
 from __future__ import annotations
 

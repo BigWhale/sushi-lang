@@ -10,8 +10,8 @@ On SHIR the typecheck pass walks ONE ladder, `resolve_dotted` (docs/design/ir.md
 and writes its answer as rows of `TypeckResults`: no stamp. This file holds the shape:
 one home for the SHIR ladder, a SHIR home for each fact that the AST stamp set carried,
 and one maker of a `BuiltinMethod`, so that its family is always a row of
-`METHOD_TYPE_REGISTRY`. The AST ladder `resolve_dotcall` stays for the inference of the
-early passes alone, until they stop inferring.
+`METHOD_TYPE_REGISTRY`. The AST ladder went with the inference of the early passes
+(ruling E4).
 """
 from __future__ import annotations
 
@@ -60,9 +60,7 @@ _WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
 _NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names")
 
 #: Every `MethodCall(...)` construction under the typecheck pass, with why it is there.
-_METHOD_CALL_VIEWS = {
-    "calls/dotcall.py": 1,      # the view the AST ladder of the early inference resolves on
-}
+_METHOD_CALL_VIEWS: dict[str, int] = {}
 
 
 def _field_names(node_class) -> set[str]:
@@ -143,12 +141,10 @@ def test_the_shir_ladder_has_one_home():
         f"the SHIR ladder is walked from {calls}: the method call arm, and nothing else")
 
 
-def test_the_ast_ladder_is_the_early_inference_alone():
-    """`resolve_dotcall` is the ladder of the AST inference of the early passes."""
+def test_no_ast_ladder_is_left():
+    """The early passes do not infer (ruling E4), so no AST ladder answers a call."""
     defs, calls = _homes("resolve_dotcall")
-    assert defs == {"calls/dotcall.py": 1}, f"the AST ladder is defined in {defs}"
-    assert calls == {"visit/inference.py": 1}, (
-        f"the AST ladder is walked from {calls}: the early inference, and nothing else")
+    assert defs == {} and calls == {}, (defs, calls)
 
 
 def _makes_a_shir_builtin_method(tree: ast.AST) -> int:

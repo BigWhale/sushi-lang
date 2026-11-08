@@ -40,8 +40,6 @@ def _port(group: str) -> str:
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
-    ("sushi_lang/semantics/*", "visit_*",
-     "NodeVisitor dispatches on f'visit_{kind}' (semantics/visitors.py)"),
     ("sushi_lang/sushi_stdlib/src/*", "is_builtin_*_constant",
      "StdlibRegistry reads f'is_builtin_{module}_constant' by getattr"),
     ("sushi_lang/sushi_stdlib/src/*", "get_builtin_*_constant_value",

@@ -22,7 +22,6 @@ class ExpressionScanner:
         instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         function_instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         generic_funcs: dict,
-        type_validator=None,
         tables=None,
         namespaces=None,
         generic_enums=None,
@@ -42,7 +41,6 @@ class ExpressionScanner:
         # `InstantiationCollector.parents`.
         self.parents = parents if parents is not None else {}
         self.generic_funcs = generic_funcs
-        self.type_validator = type_validator
         # The program tables: name resolution reads them (G.5 item 7). None on the
         # unit-test paths that drive the scanner directly.
         self.tables = tables
@@ -67,15 +65,13 @@ class ExpressionScanner:
             type_inferrer.enum_table or {}
         )
 
-    def scan_expression(self, expr, stated: bool = True) -> None:
+    def scan_expression(self, expr) -> None:
         """Recursively collect generic instantiations from expressions.
 
-        `stated` says whether the position of `expr` states a type: a typed `let`, a
-        `return`, an argument of a concrete callee. A generic constructor in a position
-        that states none is solved from its arguments, and the instance it builds is
-        collected here (#1150, #1152), so it gets its extension copies like any other.
-        A stated position gives the constructor its own type, so it is not solved: a
-        literal argument would solve another instance than the one the position states.
+        The walk reads what the expression WRITES: an explicit type argument, a written
+        type, a generic function value against the type of its position. It types no
+        expression, so a generic call or constructor that only its arguments solve is
+        cut late, when the typecheck pass asks for its instance (ruling E4).
         """
         from sushi_lang.semantics.ast import (
             Call, BinaryOp, UnaryOp, IndexAccess, ArrayLiteral,
@@ -87,8 +83,8 @@ class ExpressionScanner:
 
         if isinstance(expr, Call):
             self._scan_call(expr)
-            self._scan_arguments(expr, stated, constructs=self._names_generic_struct(expr),
-                                 solves=self._calls_generic(expr))
+            for arg in expr.args:
+                self.scan_expression(arg)
             self.scan_fn_value_arguments(expr, self._call_param_types)
 
         elif isinstance(expr, DotCall):
@@ -97,73 +93,69 @@ class ExpressionScanner:
             # We treat it as a potential method call for generic return types
             if not self._scan_namespaced_call(expr):
                 self._scan_dot_call(expr)
-                self.scan_expression(expr.receiver, False)
-            self._scan_arguments(expr, stated, constructs=self._dot_constructs_generic(expr),
-                                 solves=self._dot_calls_generic(expr))
-            self._scan_static_call(expr)
+                self.scan_expression(expr.receiver)
+            for arg in expr.args:
+                self.scan_expression(arg)
             self.scan_fn_value_arguments(expr, self._dot_call_param_types)
 
         elif isinstance(expr, BinaryOp):
-            self.scan_expression(expr.left, False)
-            self.scan_expression(expr.right, False)
+            self.scan_expression(expr.left)
+            self.scan_expression(expr.right)
 
         elif isinstance(expr, UnaryOp):
-            self.scan_expression(expr.expr, False)
+            self.scan_expression(expr.expr)
 
         elif isinstance(expr, IndexAccess):
-            self.scan_expression(expr.array, False)
+            self.scan_expression(expr.array)
             self.scan_expression(expr.index)
 
         elif isinstance(expr, ArrayLiteral):
             for element in expr.elements:
-                self.scan_expression(element.value, stated)
+                self.scan_expression(element.value)
                 if element.count is not None:
                     self.scan_expression(element.count)
 
         elif isinstance(expr, EnumConstructor):
-            self._scan_arguments(expr, stated,
-                                 constructs=expr.enum_name in (self.generic_enums or {}),
-                                 solves=False)
+            for arg in expr.args:
+                self.scan_expression(arg)
             self.scan_fn_value_arguments(
                 expr, lambda node: self._payload_types(node.enum_name, node.variant_name))
 
         elif isinstance(expr, CastExpr):
-            self.scan_expression(expr.expr, False)
+            self.scan_expression(expr.expr)
 
         elif isinstance(expr, InterpolatedString):
             for part in expr.parts:
                 if not isinstance(part, str):  # Skip string literals
-                    self.scan_expression(part, False)
+                    self.scan_expression(part)
 
         elif isinstance(expr, TryExpr):
-            self.scan_expression(expr.expr, False)
+            self.scan_expression(expr.expr)
 
         elif isinstance(expr, Borrow):
-            self.scan_expression(expr.expr, stated)
+            self.scan_expression(expr.expr)
 
         elif isinstance(expr, RangeExpr):
             self.scan_expression(expr.start)
             self.scan_expression(expr.end)
 
         elif isinstance(expr, Spread):
-            self.scan_expression(expr.value, stated)
+            self.scan_expression(expr.value)
 
         elif isinstance(expr, MemberAccess):
-            self.scan_expression(expr.receiver, False)
+            self.scan_expression(expr.receiver)
 
         elif isinstance(expr, MethodCall):
-            self.scan_expression(expr.receiver, False)
+            self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
-            self._scan_static_call(expr)
-            self.scan_fn_value_arguments(expr, self._method_param_types)
 
         elif isinstance(expr, DynamicArrayFrom):
-            self.scan_expression(expr.elements, stated)
+            self.scan_expression(expr.elements)
 
         elif isinstance(expr, TupleLiteral):
             for item in expr.elements:
-                self.scan_expression(item, stated)
+                self.scan_expression(item)
 
         elif isinstance(expr, Lambda):
             # Lambda bodies are still present at the instantiate pass (lambda-lifting is the lift pass), so a
@@ -175,80 +167,11 @@ class ExpressionScanner:
                 if self.scan_block is not None:
                     self.scan_block(expr.body, expr.ret)
             else:
-                self.scan_expression(expr.body, False)
+                self.scan_expression(expr.body)
 
         elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
                                BlankLit, DynamicArrayNew)):
             pass
-
-    def _scan_arguments(self, expr, stated: bool, *, constructs: bool, solves: bool) -> None:
-        """Scan the arguments of a call or a constructor, each in the position it fills.
-
-        A generic constructor in a position that states no type is collected here. Its
-        arguments are in the position the constructor is in: a declared type reaches
-        them through it. The arguments of a generic call solve it and state nothing,
-        and those of a concrete callee state its parameter types.
-        """
-        if constructs and not stated:
-            self._collect_constructed(expr)
-        args_stated = stated if constructs else not solves
-        for arg in expr.args:
-            self.scan_expression(arg, args_stated)
-
-    def _collect_constructed(self, expr) -> None:
-        """Collect the instance a generic constructor builds from its arguments alone.
-
-        The shared inferrer answers it, so the instance collected here is the one the
-        typecheck pass solves (#1150, #1152). An unsolvable constructor answers None,
-        and the typecheck pass reports it.
-        """
-        constructed = self._infer_arg_type(expr)
-        if constructed is not None:
-            self.collect_type(constructed)
-
-    def _generic_struct_names(self):
-        tables = self.tables
-        return tables.generic_structs.by_name if tables is not None else {}
-
-    def _names_generic_struct(self, call) -> bool:
-        """`Box(args)` constructs an instance of the generic struct `Box` in this unit."""
-        from sushi_lang.semantics.ast import Name
-        callee = call.callee
-        if not isinstance(callee, Name) or callee.id in self.type_inferrer.variable_types:
-            return False
-        return (callee.id in self._generic_struct_names()
-                and callee.id not in (self.generic_funcs or {})
-                and not self._declares_concrete(callee.id))
-
-    def _calls_generic(self, call) -> bool:
-        """`f(args)` calls a generic function: its arguments solve it, and state nothing."""
-        from sushi_lang.semantics.ast import Name
-        callee = call.callee
-        return (isinstance(callee, Name)
-                and callee.id not in self.type_inferrer.variable_types
-                and callee.id in (self.generic_funcs or {})
-                and not self._declares_concrete(callee.id))
-
-    def _dot_constructs_generic(self, call) -> bool:
-        """`X.Y(args)` builds an instance of a generic type: `sh.Box(1)`, `Slot.Full(5)`,
-        `sh.Slot.Full(5)`."""
-        from sushi_lang.semantics.ast import MemberAccess, Name
-        receiver = call.receiver
-        if isinstance(receiver, MemberAccess):
-            binding = self._namespaced_binding(receiver.receiver, receiver.member)
-            return (binding is not None and binding.kind == "enum"
-                    and binding.name in (self.generic_enums or {}))
-        if not isinstance(receiver, Name) or receiver.id in self.type_inferrer.variable_types:
-            return False
-        binding = self._namespaced_binding(receiver, call.method)
-        if binding is not None:
-            return binding.kind == "struct" and binding.name in self._generic_struct_names()
-        return receiver.id in (self.generic_enums or {})
-
-    def _dot_calls_generic(self, call) -> bool:
-        """`alias.f(args)` calls a generic function behind an alias."""
-        binding = self._namespaced_binding(call.receiver, call.method)
-        return binding is not None and binding.kind == "generic function"
 
     def _scan_dot_call(self, call) -> None:
         """Detect built-in method calls (via DotCall) with generic return types."""
@@ -265,45 +188,6 @@ class ExpressionScanner:
 
             if return_type is not None and isinstance(return_type, GenericTypeRef):
                 self._collect_from_type(return_type)
-
-    def _scan_static_call(self, call) -> None:
-        """A `<generic>.static(args)` call names the instantiation its ARGUMENTS solve (#573).
-
-        Through the same solver the typecheck pass resolves with, so what is collected here
-        is what that pass looks up. A type parameter the arguments leave unsolved is the
-        stamp's, and the declared type at the binding site is collected on its own; a call
-        the arguments cannot solve is collected by nothing, and the typecheck pass says so
-        (CE2060). The arguments were scanned before this, so a nested generic call has
-        already been collected.
-        """
-        from sushi_lang.semantics.ast import Name
-        from sushi_lang.semantics.passes.types.calls.statics import static_template_for
-        from sushi_lang.semantics.statics import solve_target_type_args
-
-        receiver = call.receiver
-        validator = self.type_validator
-        if validator is None or not isinstance(receiver, Name):
-            return
-        base = receiver.id
-        if base in self.type_inferrer.variable_types:
-            return
-        if (base not in self.tables.generic_structs.by_name
-                and base not in self.tables.generic_enums.by_name):
-            return
-        template = static_template_for(validator, base, call.method)
-        if template is None:
-            return
-
-        arg_types = [self._infer_arg_type(arg) for arg in call.args]
-        type_args, _unsolved = solve_target_type_args(template, arg_types, None)
-        if type_args is None:
-            return
-        resolved = self._resolver.resolve_type_args(tuple(type_args))
-        if self._resolver.contains_unresolvable_in_tuple(resolved):
-            return
-        self.instantiations.add((base, resolved))
-        for arg in resolved:
-            self.collect_type(arg)
 
     def _scan_namespaced_call(self, call) -> bool:
         """`alias.f(args)` where the alias names a unit declaring a generic `f`.
@@ -431,11 +315,12 @@ class ExpressionScanner:
         return tuple(type_args) if type_args else None
 
     def resolve_generic_call(self, call, generic_func=None):
-        """The generic declaration a call names and its type arguments, or None.
+        """The generic declaration a call names and its explicit type arguments, or None.
 
         A qualified call hands its declaration in; a bare one reads the unit's view.
-        Explicit `@(...)` type args (issue #137) override inference; a wrong arity
-        answers None and leaves CE2062 to the typecheck pass.
+        Only explicit `@(...)` type args (issue #137) name the instance here: a call that
+        its arguments solve is cut late (ruling E4). A wrong arity answers None and
+        leaves CE2062 to the typecheck pass.
         """
         from sushi_lang.semantics.ast import Call, Name
 
@@ -449,21 +334,19 @@ class ExpressionScanner:
             return None
 
         explicit = call.type_args
-        if explicit:
-            from sushi_lang.semantics.generics.explicit_type_args import (
-                resolve_explicit_type_args,
-                check_explicit_type_arg_arity,
-            )
-            if check_explicit_type_arg_arity(generic_func, len(explicit)) is not None:
-                return None
-            type_args = resolve_explicit_type_args(
-                explicit,
-                self.type_inferrer.struct_table,
-                self.type_inferrer.enum_table,
-            )
-        else:
-            type_args = self._infer_type_args_from_call(call, generic_func)
-
+        if not explicit:
+            return None
+        from sushi_lang.semantics.generics.explicit_type_args import (
+            resolve_explicit_type_args,
+            check_explicit_type_arg_arity,
+        )
+        if check_explicit_type_arg_arity(generic_func, len(explicit)) is not None:
+            return None
+        type_args = resolve_explicit_type_args(
+            explicit,
+            self.type_inferrer.struct_table,
+            self.type_inferrer.enum_table,
+        )
         if type_args is None:
             return None
         return generic_func, type_args
@@ -480,12 +363,7 @@ class ExpressionScanner:
         return own_concrete_function(funcs, name, unit) is not None
 
     def generic_call_type(self, expr):
-        """What a generic call yields, as this pass can know it (#549).
-
-        The shared inferrer answers this for a bare generic call now (#556), so what is
-        left here is the call this pass resolves through its OWN table of generic
-        declarations.
-        """
+        """What a generic call with explicit type arguments yields (#549), or None."""
         from sushi_lang.semantics.generics.types import substituted_call_result
 
         resolved = self.resolve_generic_call(expr)
@@ -543,33 +421,6 @@ class ExpressionScanner:
                 collect(substitute_type_params(param.ty, substitution),
                         getattr(param, "type_span", None))
 
-    def _infer_arg_type(self, arg_expr):
-        """Infer a generic call argument's type through the typecheck pass's real inferrer."""
-        from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
-        return infer_call_arg_type(self.type_validator, arg_expr)
-
-    def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
-        """Infer type arguments for generic function call.
-
-        A generic function value is not typed here: the callee types it, once the other
-        arguments solve the callee (#1029).
-        """
-        from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
-
-        arg_types: list["Type | None"] = []
-        for arg_expr in getattr(call, "args", []) or []:
-            if self._names_generic_fn_value(arg_expr):
-                arg_types.append(None)
-                continue
-            arg_type = self._infer_arg_type(arg_expr)
-            if arg_type is None:
-                return None
-            arg_types.append(arg_type)
-
-        return infer_flat_type_args(
-            generic_func, arg_types,
-            self.type_inferrer.struct_table or {}, self.type_inferrer.enum_table or {})
-
     def scan_generic_fn_reference(self, value, expected_ty) -> None:
         """Record an instantiation for a generic-fn reference with an expected fn type.
 
@@ -617,17 +468,6 @@ class ExpressionScanner:
             return value.id in (self.generic_funcs or {}) and value.id not in locals_
         return (isinstance(value, MemberAccess) and isinstance(value.receiver, Name)
                 and value.receiver.id not in locals_)
-
-    def _names_generic_fn_value(self, value) -> bool:
-        """The value is a generic function, bare or behind an alias, and no local or
-        concrete function takes the name."""
-        from sushi_lang.semantics.ast import MemberAccess
-        if not self.may_name_generic_fn(value):
-            return False
-        if isinstance(value, MemberAccess):
-            binding = self._namespaced_binding(value.receiver, value.member)
-            return binding is not None and binding.kind == "generic function"
-        return not self._declares_concrete(value.id)
 
     def _call_param_types(self, call) -> tuple:
         """The declared types of a direct call's argument positions, or () when unknown.
@@ -695,92 +535,9 @@ class ExpressionScanner:
                 return ()
             type_name = receiver.id
         if type_name is None:
-            return self._method_param_types(call)
+            return ()
         return (self._payload_types(type_name, call.method)
                 or self._static_param_types(type_name, call.method))
-
-    def _method_param_types(self, call) -> tuple:
-        """A method's parameter types on the receiver's type, or () when unknown.
-
-        A perk implementation answers first, then a plain extension, as the method ladder
-        reads them. A receiver that is an instance of a generic type (`Box@(i32)`) has no
-        copy of its methods yet, so the declaration that applies to the instance answers,
-        with the receiver's type arguments put through its parameter types.
-        """
-        validator = self.type_validator
-        if validator is None:
-            return ()
-        receiver_type = self._infer_arg_type(call.receiver)
-        if receiver_type is None:
-            return ()
-        if call.method == "realise":
-            return self._realise_default_type(receiver_type)
-        method = self.tables.perk_impls.get_method(receiver_type, call.method)
-        if method is None:
-            method = self.tables.extensions.get_method(receiver_type, call.method)
-        if method is None:
-            return self._instance_method_param_types(receiver_type, call.method)
-        if getattr(method, "is_static", False):
-            return ()
-        return tuple(p.ty for p in method.params)
-
-    def _instance_method_param_types(self, receiver_type, method_name: str) -> tuple:
-        """The parameter types of a method on an instance of a generic type, or ().
-
-        An extension declaration answers first: the one for the instance's own target,
-        else the template. Then a perk implementation on the generic target. A
-        method-generic declaration gives nothing: its call solves the method's own type
-        arguments, and those are not known here.
-        """
-        from sushi_lang.semantics.generics.types import substitute_type_params
-        from sushi_lang.semantics.type_predicates import generic_base_of
-        if isinstance(receiver_type, GenericTypeRef):
-            base, args = receiver_type.base_name, tuple(receiver_type.type_args)
-        else:
-            base = generic_base_of(receiver_type)
-            args = tuple(getattr(receiver_type, "generic_args", None) or ())
-        if base is None:
-            return ()
-        tables = self.tables
-        declaration = tables.generic_extensions.find_applicable(
-            base, method_name, str(receiver_type))
-        if declaration is not None:
-            if declaration.is_static or declaration.method_type_params:
-                return ()
-            params = declaration.params
-            names = declaration.type_params
-        else:
-            found = next(
-                ((template, method)
-                 for template in tables.generic_perk_impls.templates(base)
-                 for method in template.impl.methods if method.name == method_name),
-                None)
-            if found is None:
-                return ()
-            template, method = found
-            params, names = method.params, template.type_params
-        # A concrete target (`extend Box@(i32)`) declares no type parameter to substitute.
-        if not names:
-            return tuple(p.ty for p in params)
-        if len(names) != len(args):
-            return ()
-        substitution = dict(zip((getattr(n, "name", n) for n in names), args, strict=True))
-        return tuple(None if p.ty is None else substitute_type_params(p.ty, substitution)
-                     for p in params)
-
-    @staticmethod
-    def _realise_default_type(receiver_type) -> tuple:
-        """The type a `.realise(default)` default expects: the Ok or Some arm of the receiver."""
-        from sushi_lang.semantics.typesys import EnumType
-        base = getattr(receiver_type, "generic_base", None) or getattr(
-            receiver_type, "base_name", None)
-        if base not in ("Result", "Maybe"):
-            return ()
-        if isinstance(receiver_type, EnumType):
-            variant = receiver_type.get_variant("Ok" if base == "Result" else "Some")
-            return tuple(variant.associated_types[:1]) if variant is not None else ()
-        type_args = getattr(receiver_type, "type_args", None)
-        return (type_args[0],) if type_args else ()
 
     def _static_param_types(self, type_name: str, method_name: str) -> tuple:
         """A concrete type's static method parameter types, or () when there is none."""

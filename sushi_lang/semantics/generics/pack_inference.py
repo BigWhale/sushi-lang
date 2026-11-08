@@ -1,19 +1,10 @@
 """Type-argument inference for a generic call: the one solver, shared by every pass."""
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
-
-
-def _pack_value_param_index(generic_func) -> Optional[int]:
-    """Index of the (single) pack value-parameter, or None if there is none."""
-    params = getattr(generic_func, "params", None) or []
-    for i, p in enumerate(params):
-        if p.is_pack:
-            return i
-    return None
 
 
 def solve_leading_type_args(
@@ -108,39 +99,11 @@ def solve_leading_type_args(
     return tuple(solved)
 
 
-def infer_flat_type_args(
-    generic_func,
-    arg_types: Sequence["Type"],
-    structs: Any,
-    enums: Any,
-    why: Optional[List[str]] = None,
-) -> Optional[Tuple["Type", ...]]:
-    """The flat tuple of type arguments for a generic call: the leading ones, then the pack.
-
-    The arguments before the pack value-parameter solve the leading type parameters;
-    each argument from it on is one element of the pack, taken as it is. A None leading
-    type is a generic function value the callee types (see `solve_leading_type_args`);
-    a pack element must have a type of its own.
-    """
-    pack_idx = _pack_value_param_index(generic_func)
-    arg_types = list(arg_types)
-    if pack_idx is None:
-        return solve_leading_type_args(generic_func, arg_types, structs, enums, why=why)
-    if len(arg_types) < pack_idx or any(t is None for t in arg_types[pack_idx:]):
-        return None
-    leading = solve_leading_type_args(generic_func, arg_types[:pack_idx], structs, enums,
-                                      why=why)
-    if leading is None:
-        return None
-    from sushi_lang.semantics.generics.unify import as_type_argument
-    return leading + tuple(as_type_argument(t) for t in arg_types[pack_idx:])
-
-
 def infer_call_arg_type(validator, arg_expr) -> "Type | None":
     """One generic-call argument's type, read before its call is solved. Silent.
 
-    For the passes that solve a call ahead of the typecheck pass (instantiate,
-    monomorphize): a lambda is typed from its written parameters and never stamped, and
+    For an AST call that is solved before its arguments are checked: a lambda is typed
+    from its written parameters and never stamped, and
     `.clone()` answers its receiver's type when the receiver is still a generic
     reference -- `.clone()` returns its receiver's type by definition, and the interned
     instance does not exist until the monomorphize pass (F8). An argument that holds a

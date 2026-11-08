@@ -358,10 +358,6 @@ class FunctionTable(UnitOwnedSymbols[FuncSig]):
         key = (module_path, stdlib_func.name)
         self._stdlib_functions[key] = stdlib_func
 
-    def lookup_stdlib_function(self, module_path: str, function_name: str) -> Optional[Any]:
-        """Lookup a stdlib function by module and name."""
-        return self._stdlib_functions.get((module_path, function_name))
-
     def lookup_stdlib_by_name(self, function_name: str,
                               scope: object = None) -> Optional[Tuple[str, Any]]:
         """The registry stdlib FUNCTION a bare name reaches, with its module path.

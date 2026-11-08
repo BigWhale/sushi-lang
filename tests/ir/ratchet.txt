@@ -2329,6 +2329,7 @@ tests/generics/deep_written_nesting/test_nested_box_depth_32.sushi
 tests/generics/deep_written_nesting/test_nested_box_signature_depth_32.sushi
 tests/generics/deep_written_nesting/test_nested_pair_signature_depth_32.sushi
 tests/generics/derived_hash/test_hash_generic_struct.sushi
+tests/generics/diagnostic_order/test_err_late_refusal_of_inferred_call.sushi
 tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi
 tests/generics/edge-cases/test_generic_extension_nested.sushi
 tests/generics/edge-cases/test_generic_mixed_builtins.sushi

@@ -12,8 +12,7 @@ and the pass gives the body to the next stage, the lift pass (`next_stage`), whi
 driver gives the pass.
 """
 from __future__ import annotations
-from contextlib import contextmanager
-from typing import Callable, Dict, Iterator, Optional, Set, TYPE_CHECKING
+from typing import Callable, Dict, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -31,11 +30,10 @@ if TYPE_CHECKING:
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef, Expr
+from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.passes.types.visit.inference import TypeInferenceVisitor
 from sushi_lang.semantics.passes.types.visit.statements import check_block, check_params
 from sushi_lang.semantics.passes.types.fold import Folder
 from sushi_lang.internals.diagnostics import StageStop
@@ -177,9 +175,6 @@ class TypeValidator:
         # refused again (#1128). Only the AST port template `validate_method_call` (Tier D)
         # reads and writes it: the SHIR walk keeps `refused_locals`.
         self.refused_bindings: set[str] = set()
-        # The ranges refused outside their two positions (#1165): each answers no type
-        # after the refusal, so the position that holds it adds no second error.
-        self.refused_ranges: set[int] = set()
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
@@ -428,68 +423,4 @@ class TypeValidator:
         validate_extension_method(self, ext)
 
 
-class ReadOnlyInferrer(TypeValidator):
-    """The typecheck pass's inference, for a pass that runs BEFORE the typecheck pass (#806).
-
-    The `instantiate` and `monomorphize` passes type a generic call's arguments with it.
-    Inference writes stamps on the nodes it types, and the backend reads those stamps,
-    so an early pass that kept them would leave values read from tables that are not
-    complete yet. This inferrer puts every field of every node under the expression back
-    when the outermost inference returns, and its diagnostics go to a Reporter that
-    nobody reads: the typecheck pass reports them later, for real.
-
-    Only the nodes under the expression are put back. A node that inference builds for
-    itself (the `MethodCall` view of a `DotCall`) is dropped when inference returns.
-
-    `namespaces` is the table of the unit that holds the expression, as the typecheck
-    pass gives it: `sh.Pt(0)` names what `Pt(0)` names under a flat import only when
-    the inferrer knows the alias (#1147). Without it the inferrer has no unit.
-
-    It queues no late copy of a generic static either: the copy of an instance the
-    monomorphize pass reaches is cut by that pass, and a second copy from the queue
-    was a duplicate symbol (#1153). The typecheck pass queues what is still missing.
-    """
-
-    queues_late_copies = False
-
-    def __init__(self, tables: 'SymbolTables',
-                 namespaces: Optional['NamespaceTable'] = None) -> None:
-        unit = namespaces.scope.unit if namespaces is not None else None
-        super().__init__(Reporter(), tables, current_unit_name=unit,
-                         namespaces=namespaces)
-        self.type_inference_visitor = TypeInferenceVisitor(self)
-        self._depth = 0
-
-    def infer_expression_type(self, expr: Expr) -> Optional[Type]:
-        """The type of an AST expression, through the inference visitor of the early passes."""
-        if self._depth:
-            return self.type_inference_visitor.visit(expr)
-        self._depth += 1
-        try:
-            with fields_restored_under(expr):
-                return self.type_inference_visitor.visit(expr)
-        finally:
-            self._depth -= 1
-
-
-@contextmanager
-def fields_restored_under(root: Expr) -> Iterator[None]:
-    """Put back every declared field of every node under `root` when the block ends."""
-    from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
-
-    saved: list = []
-
-    def visit(node) -> bool:
-        saved.append((node, list(node_fields(node))))
-        return True
-
-    walk_nodes(root, visit)
-    try:
-        yield
-    finally:
-        for node, values in saved:
-            for name, value in values:
-                setattr(node, name, value)
-
-
-__all__ = ['ReadOnlyInferrer', 'TypeValidator', 'fields_restored_under']
+__all__ = ['TypeValidator']

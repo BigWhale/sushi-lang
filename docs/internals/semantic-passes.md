@@ -545,20 +545,17 @@ cuts an extension copy"), so the pass records the SUBSTITUTED signature of every
 call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
 -- through the same type walk a concrete declaration gets.
 
-The typecheck pass's inferrer types a generic call through its monomorphized copy, which does
-not exist yet, so it answers nothing for one here. A `match` over a generic call therefore
-types its arm bindings from that substituted signature, and a generic called with such a
-binding is collected like any other.
+A `match` over a generic call with explicit type arguments types its arm bindings from that
+substituted signature.
 
-### The inferrer reads the unit's scope
+### The early passes do not infer
 
-This pass and the `monomorphize` pass type the arguments of a generic call with
-`ReadOnlyInferrer`. Each inferrer gets the namespace table of the unit that holds the call,
-the same table the typecheck pass gives that unit. For a monomorphized copy, that unit is
-the home unit of the template. Thus `sh.Pt(0)` and `sh.Mark.Off()` behind `use "shapes" as
-sh` have the type that `Pt(0)` and `Mark.Off()` have under a flat import, and the argument
-solves the type parameter in every pass (#1147). An inferrer with no unit (a copy of an
-extension or of a perk implementation) reads only the FFI namespaces.
+This pass and the `monomorphize` pass type no expression (ruling E4). They collect what the
+program writes: an explicit type argument, a written type, and a generic function value
+against the type of its position. A call that only its arguments solve is cut late, when the
+typecheck pass asks for its instance (`docs/design/ir.md`, "A late instance"). Name
+resolution reads the program tables (`SymbolTables`) directly. The gate is
+`tests/unit/test_early_passes_do_not_infer.py`.
 
 ### Where a type names an instantiation
 
@@ -1117,8 +1114,8 @@ All paths are under `semantics/passes/`.
 
 | Module | What it holds |
 |---|---|
-| `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body; `ReadOnlyInferrer` for the early passes |
-| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `results.py`: the arm of an `EnumInit` (a `Result` variant at the `Result` type of its position, a variant of an enum that is not generic); `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
+| `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body |
+| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `results.py`: the arm of an `EnumInit` (a `Result` variant at the `Result` type of its position, a variant of an enum that is not generic); `helpers.py`: the lambda and function-value helpers |
 | `types/fold.py` | `Folder`: the readable fold of a SHIR sub-expression at the type of its position, over the integer operator kernel ([the IR design](../design/ir.md), 7.4) |
 | `types/arguments.py` | `check_arguments`: the one argument check over the SHIR arguments of a call (the count, then each argument: its type, its `nom` marker against the declared mode, and its convention) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |

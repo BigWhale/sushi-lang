@@ -151,13 +151,14 @@ def test_every_family_carries_both_halves():
 
 
 def test_both_halves_reach_the_one_claim():
-    """Inference and validation are two hooks on one claim, measured at the source."""
+    """Validation reads the one claim, measured at the source. The inference half went
+    with the inference of the early passes (ruling E4)."""
     tree = ast.parse(REGISTRY.read_text(encoding="utf-8"), filename=str(REGISTRY))
     registry = next(node for node in ast.walk(tree)
                     if isinstance(node, ast.ClassDef) and node.name == "MethodTypeRegistry")
     bodies = {node.name: ast.unparse(node) for node in registry.body
               if isinstance(node, ast.FunctionDef)}
-    for half in ("infer_method_type", "validate_method"):
+    for half in ("validate_method",):
         assert half in bodies, f"the registry has no {half}"
         assert "self.claim(" in bodies[half], (
             f"{half} decides for itself instead of reading the one claim")

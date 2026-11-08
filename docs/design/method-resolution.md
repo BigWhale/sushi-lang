@@ -146,7 +146,7 @@ precedence over every family that yields to a perk: the derived `hash`/`clone` p
 contract family (`eq`, `compare`, `to_str`), the function-value `clone` and the primitive
 family (`beats_perk=False`). The typecheck pass
 asks the perk implementation between the two halves of the family table
-(`passes/types/visit/inference.py` for the type, `calls/methods.py` for the check), and the
+(`calls/methods.py` for the check), and the
 codegen dispatcher runs its perk step before the auto-derived ones. The array, string,
 `Result`, `Maybe`, `Own`, `HashMap` and `List` families are `beats_perk=True`: a perk
 implementation does not take a name from one of them. `tests/perks/hashable/test_perk_override_hash.sushi` pins it.
