@@ -33,7 +33,7 @@ at a join have the same open regions.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Optional, Sequence
 
 from sushi_lang.internals import errors as er
@@ -329,6 +329,22 @@ class DropPlacement:
 
     def open_regions(self) -> tuple[OpenRegion, ...]:
         return tuple(self._open)
+
+    def meet_binders(self, states: Sequence[FlowState]) -> bool:
+        """The paths `states` of an arm with alternatives meet at its body (ir.md 8.9): each
+        path gives the same moved and unknown locals and the same regions by their ids, and
+        the owners of a region are the owners of every path (the parts of a tuple literal
+        are two owners). False when two paths give two states."""
+        first = states[0]
+        shape = [(region.view, region.ids, region.until) for region in first.regions]
+        if any(state.moved != first.moved or state.unknown != first.unknown
+               or [(region.view, region.ids, region.until) for region in state.regions] != shape
+               for state in states):
+            return False
+        self._open = [replace(region, owners=tuple(dict.fromkeys(
+            owner for state in states for owner in state.regions[at].owners)))
+            for at, region in enumerate(first.regions)]
+        return True
 
     def next_region(self) -> int:
         """The count of the region ids that the function has."""

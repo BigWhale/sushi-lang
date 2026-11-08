@@ -132,7 +132,7 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
         else:
             block.statements.extend(statements)
             block.terminator = tm.Goto(body.id, span)
-    if any(state != after[0] for state in after):
+    if after and not low.placement.meet_binders(after):
         er.raise_internal_error("CE0000", span=span,
                                 detail="two paths of an arm write its binders with two states")
 

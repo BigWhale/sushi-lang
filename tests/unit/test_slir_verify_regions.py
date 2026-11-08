@@ -379,15 +379,11 @@ def test_two_paths_that_meet_with_two_region_ids_are_refused():
     _refused(replace(function, blocks=blocks), REGION)
 
 
-def test_a_view_local_that_two_paths_write_in_regions_of_two_ids_is_refused():
-    """The view names both regions, and each path opens one of them."""
-    _refused(_alternatives((_begin(0, 2, 3), _set(3, r.Use(_copy(2)), BAD)),
-                           (_begin(1, 2, 3), _set(3, r.Use(_copy(2))))), VIEW, declared=READ)
-
-
-def _poke_alternatives(left: tuple[object, ...], right: tuple[object, ...]) -> SlirFunction:
+def _poke_alternatives(left: tuple[object, ...], right: tuple[object, ...],
+                       span=SPAN) -> SlirFunction:
     """The two paths of an arm with `poke` alternatives: `_3` is an address local of `_1`,
-    and `_5` holds another `i32`."""
+    and `_5` holds another `i32`, as the two parts of a tuple literal. The body reads `_3`
+    at `span`."""
     return _function(
         [BLANK, I32, BOOL, I32, I32, I32], set(),
         _block(0, _switch(2, 2, 1), _live(1), _one_of(1), _live(5),
@@ -395,8 +391,8 @@ def _poke_alternatives(left: tuple[object, ...], right: tuple[object, ...]) -> S
                _set(2, r.Use(p.Const(k.Bool(True)))), _live(3), _live(4)),
         _block(1, _goto(3), *left),
         _block(2, _goto(3), *right),
-        _block(3, _ret(), _read(3), _end(0), _dead(4), _dead(3), _dead(2), _dead(5), _dead(1),
-               _blank()))
+        _block(3, _ret(), _read(3, span), _end(0), _dead(4), _dead(3), _dead(2), _dead(5),
+               _dead(1), _blank()))
 
 
 def test_two_paths_that_each_write_an_address_local_with_one_ref_pass():
@@ -409,6 +405,13 @@ def test_one_path_that_writes_an_address_local_with_two_refs_is_refused():
                                 (_begin(0, 1), _ref(3, 1))), ADDRESS)
 
 
-def test_two_paths_that_write_an_address_local_with_refs_of_two_roots_are_refused():
-    _refused(_poke_alternatives((_begin(0, 1), _ref(3, 1)),
-                                (_begin(0, 5), _ref(3, 5, BAD))), ADDRESS)
+def test_two_paths_that_write_an_address_local_into_two_owners_in_one_region_pass():
+    """Each path points into its own part of a tuple literal, in the region `b0` over that
+    part: at the body, `b0` is open over both owners."""
+    _passes(_poke_alternatives((_begin(0, 1), _ref(3, 1)), (_begin(0, 5), _ref(3, 5))))
+
+
+def test_a_use_of_an_address_local_with_a_root_that_no_open_region_holds_is_refused():
+    """The second path points into `_5`, but its region is over `_1`."""
+    _refused(_poke_alternatives((_begin(0, 1), _ref(3, 1)), (_begin(0, 1), _ref(3, 5)),
+                                span=BAD), ADDRESS)

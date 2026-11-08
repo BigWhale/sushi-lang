@@ -1,0 +1,29 @@
+# The `poke` alternatives of one arm point into two parts of a tuple literal. A write
+# through the binder reaches the part of the alternative that matched.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10 5\n7 10\n20 2\nm! n\nm x!\n"
+
+fn bump(i32 a, i32 b) ~:
+    let i32 x0 = a
+    let i32 y0 = b
+    match (x0, y0):
+        (poke x, 5) | (7, poke x) -> x := 10
+        (poke x, _) -> x := 20
+    println("{x0} {y0}")
+
+fn shout(string a, string b) ~:
+    let string s = "{a}"
+    let string t = "{b}"
+    match (s, t):
+        (poke u, "n") | ("m", poke u) -> u := "{u}!"
+        (_, _) -> println("none")
+    println("{s} {t}")
+
+fn main() i32:
+    bump(1, 5)
+    bump(7, 1)
+    bump(1, 2)
+    shout("m", "n")
+    shout("m", "x")
+    return 0
