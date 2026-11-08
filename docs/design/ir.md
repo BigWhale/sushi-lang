@@ -3682,7 +3682,11 @@ the path reads (`(W.A(x), _) | (_, W.A(x))` gives two owners). Each path writes 
 `BeginBorrow` of each owner of the region, with ONE id for the region on every path, before
 its write, so the paths that meet at the arm body bring the same open regions by their ids
 (8.6), and at the body the region is over the owners of every path. A `nom` binder in an alternative takes the variant
-whole on its path, as a plain arm does. Each path writes its binders in the order of the
+whole on its path, as a plain arm does. When the paths take from two temporaries (two parts
+of a tuple literal: `(W.A(nom x), _) | (_, W.A(nom x))`), each temporary that some paths take
+and some do not gets a drop flag (8.10, rule 4): each path writes it after its binders, `false`
+where the path takes the temporary and `true` where it does not, so the temporary is unknown
+at the body, and the end of the arm and each exit from it drop it by its flag. Each path writes its binders in the order of the
 first path, with its `nom` binders last, and starts from the state before the paths, so
 each path gives the same ids to its regions and the same state to the body (an internal
 error if two paths give two moved sets or two sets of region ids). With one path, the block of the body writes the
