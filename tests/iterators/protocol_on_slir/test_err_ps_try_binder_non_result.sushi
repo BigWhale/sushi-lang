@@ -1,0 +1,26 @@
+# A `??` binder over an item that is no `Result` is CE2517, in a body with a channel.
+# EXPECT_ERROR_CODES_EXACT: CE2517
+
+error Bad:
+    Broken()
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        return Maybe.None
+    let i32 now = self.at
+    self.at := self.at - 1
+    return Maybe.Some(now)
+
+fn walk() ~ | Bad:
+    let Countdown c = Countdown(3)
+    foreach(n?? in c):
+        println(n)
+    return Result.Ok(~)
+
+fn main() i32:
+    match walk():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

@@ -112,7 +112,10 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # in the migration plan, and that stage deletes the entry.
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
-    (_TYPES + "statements.py", "validate_foreach_statement", _port("C3")),
+    (_TYPES + "calls/methods.py", "validate_method_call",
+     "the AST method-call ladder: the validate hooks of METHOD_TYPE_REGISTRY are its rungs, "
+     "and test_method_resolution_family_order.py and test_method_family_call_shape.py read "
+     "its source; kept for Tier D (Phase 6), which deletes the AST typecheck with them"),
 )
 
 # -- the AST helpers of borrow that the switch left with no caller (P2.6a) ------------
@@ -185,7 +188,6 @@ _FACTS = (
     ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "C3",
      "the declaring unit of an extension callee, in the AST inference that the iterators "
      "group ports; a SHIR call reads ResolvedCall.unit"),
-    ("iterator_next", _TYPES_PASS + "calls/methods.py", "C3", "the next() call of a protocol loop"),
 )
 
 WHITELIST += tuple(

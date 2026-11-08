@@ -5,10 +5,7 @@ and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and 
 is deleted. No pass reaches them today. The group in brackets after each name ports them
 to SHIR inputs before a SHIR pass calls them. The order of the rungs is on SHIR already:
 `calls/dotcall.py:resolve_dotted`, and the SHIR arms of an extension method and of a
-static are in `visit/calls.py`. No `WHITELIST` row can name `validate_method_call`:
-`statements.py:protocol_next_call` calls it, and the A7 port template
-`validate_foreach_statement` reaches that, so vulture never reports it. C3 deletes it when
-it ports the protocol `next()` call.
+static are in `visit/calls.py`.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -972,15 +969,8 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
 
 
 def _validate_iterator_new(validator: 'TypeValidator', call: MethodCall) -> None:
-    """`Iterator.new(nom x)`: `x` is walkable, and the result owns `x` and its items.
-
-    The `next()` call on the value is built and checked here, as a protocol `foreach`
-    builds its own, so the backend reads the receiver mode and the symbol from its
-    stamps (#1259).
-    """
-    from sushi_lang.semantics.passes.types.statements import (
-        protocol_item_type, protocol_next_call)
-    from sushi_lang.semantics.hidden_names import hidden_name
+    """`Iterator.new(nom x)`: `x` is walkable, and the result owns `x` and its items."""
+    from sushi_lang.semantics.passes.types.statements import protocol_item_type
 
     argument = call.args[0]
     argument_type = validator.validate_expression(argument)
@@ -992,9 +982,6 @@ def _validate_iterator_new(validator: 'TypeValidator', call: MethodCall) -> None
         er.emit(validator.reporter, er.ERR.CE2033, argument.loc,
                 got=display_type(argument_type))
         return
-    item, next_call = protocol_next_call(validator, argument_type,
-                                         hidden_name("iter_new", id(call)), argument.loc)
-    call.iterator_next = next_call
     call.inferred_return_type = iterator_new_type(validator, call)
 
 

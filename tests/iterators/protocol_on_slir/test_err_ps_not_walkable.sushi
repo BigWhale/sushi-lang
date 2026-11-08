@@ -1,0 +1,15 @@
+# A type whose `next()` answers no `Maybe` is not walkable: CE2033 at the iterable.
+# EXPECT_ERROR_CODES_EXACT: CE2033
+
+struct Ticker:
+    i32 at
+
+extend Ticker next(poke self) i32:
+    self.at := self.at + 1
+    return self.at
+
+fn main() i32:
+    let Ticker t = Ticker(0)
+    foreach(n in t):
+        println(n)
+    return 0

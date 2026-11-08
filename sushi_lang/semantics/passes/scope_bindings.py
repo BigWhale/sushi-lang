@@ -129,21 +129,12 @@ def _gap(what: str, name: str, node: object) -> None:
 
 
 def _check_complete(bindings: Bindings, receiver: bool) -> None:
-    """CE0153 at the first name, binder or lambda of the body that the walk did not record.
-
-    The `next()` call of a protocol walk is a node that the typecheck pass makes, and the
-    scope pass never walks it, so the check does not enter it.
-    """
+    """CE0153 at the first name, binder or lambda of the body that the walk did not record."""
     body = bindings.body
     if receiver and bindings.local_of(body, "self") is None:
         _gap("binder", "self", body)
-    made_later: set[int] = set()
 
     def visit(node: Node) -> bool:
-        if id(node) in made_later:
-            return False
-        if isinstance(node, Foreach) and node.protocol_next is not None:
-            made_later.add(id(node.protocol_next))
         if isinstance(node, Name) and bindings.resolution_of(node) is None:
             _gap("name", node.id, node)
         if isinstance(node, EnumConstructor) and bindings.resolution_of(node) is None:

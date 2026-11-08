@@ -1,0 +1,152 @@
+unit test_slir_protocol_walk
+
+fn first(_1: Words @inout) -> ~ {
+    let _0: ~
+    let _2: Maybe@(string)
+    let _3: i32
+    let _4: string                         // s
+    let _5: ~
+
+  bb0:
+    StorageLive(_2)
+    goto -> bb1
+
+  bb1:
+    _2 = call @Words.next(copy _1 @inout)
+    StorageLive(_3)
+    _3 = discriminant(_2)
+    switchInt(copy _3) -> [1: bb3, otherwise: bb2]
+
+  bb2:
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = move ((_2 as Some).0)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    StorageDead(_5)
+    Drop(_4)
+    StorageDead(_4)
+    goto -> bb4
+
+  bb3:
+    Drop(_2)
+    StorageDead(_3)
+    goto -> bb4
+
+  bb4:
+    StorageDead(_2)
+    _0 = const ~
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string[]
+    let _2: Words                          // w
+    let _3: ~
+    let _4: Words
+    let _5: Maybe@(string)
+    let _6: i32
+    let _7: string                         // s
+    let _8: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = [const "a", const "b"]
+    StorageLive(_2)
+    _2 = Words(move _1, const 0_i32)
+    StorageDead(_1)
+    StorageLive(_3)
+    _3 = call @first(copy _2 @inout)
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = move _2
+    StorageLive(_5)
+    goto -> bb1
+
+  bb1:
+    _5 = call @Words.next(copy _4 @inout)
+    StorageLive(_6)
+    _6 = discriminant(_5)
+    switchInt(copy _6) -> [1: bb3, otherwise: bb2]
+
+  bb2:
+    StorageDead(_6)
+    StorageLive(_7)
+    _7 = move ((_5 as Some).0)
+    StorageLive(_8)
+    _8 = call builtin println@(string)(copy _7 @guaranteed)
+    StorageDead(_8)
+    Drop(_7)
+    StorageDead(_7)
+    goto -> bb1
+
+  bb3:
+    Drop(_5)
+    StorageDead(_6)
+    goto -> bb4
+
+  bb4:
+    StorageDead(_5)
+    Drop(_4)
+    StorageDead(_4)
+    _0 = const 0_i32
+    StorageDead(_2)
+    return
+}
+
+fn Words.next(_1: Words @inout) -> Maybe@(string) {
+    let _0: Maybe@(string)
+    let _2: i32
+    let _3: i32
+    let _4: bool
+    let _5: i32
+    let _6: i32
+    let _7: u32
+    let _8: u32
+    let _9: bool
+    let _10: string
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy (_1.1)
+    StorageLive(_3)
+    _3 = call builtin array.len(copy (_1.0) @guaranteed)
+    StorageLive(_4)
+    _4 = copy _2 >= copy _3
+    StorageDead(_3)
+    StorageDead(_2)
+    switchInt(copy _4) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_4)
+    _0 = Maybe::None
+    return
+
+  bb2:
+    StorageDead(_4)
+    goto -> bb3
+
+  bb3:
+    (_1.1) = copy (_1.1) + const 1_i32
+    StorageLive(_5)
+    _5 = copy (_1.1) - const 1_i32
+    StorageLive(_6)
+    _6 = len((_1.0))
+    _7 = copy _5 as u32
+    _8 = copy _6 as u32
+    _9 = copy _7 < copy _8
+    switchInt(copy _9) -> [0: bb4, otherwise: bb5]
+
+  bb4:
+    trap RE2020(copy _5, copy _6)
+
+  bb5:
+    StorageLive(_10)
+    _10 = clone(copy ((_1.0)[copy _5]))
+    _0 = Maybe::Some(move _10)
+    StorageDead(_10)
+    StorageDead(_6)
+    StorageDead(_5)
+    return
+}

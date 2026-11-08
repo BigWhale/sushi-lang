@@ -4,13 +4,15 @@ A `foreach` whose iterable is a built-in producer over a container is a direct w
 on a `T[]`, a `T[N]`, a `List@(T)` or a slice is a `Cursor`, and `keys`, `values`, `entries`
 and `pairs` on a `HashMap@(K, V)` are a `HashMapCursor`. The iterable is no value. Its call
 has the rows of any call of its family, and the kind of the loop says what it walks. Any
-other `Iterator@(T)` is a value, and its loop is an `IteratorValue`. An iterable of any other
-type stops the walk (`Loop`).
+other `Iterator@(T)` is a value, and its loop is an `IteratorValue`. A type with a nullary
+`next()` that answers `Maybe@(T)` is a `Protocol` walk, with the row of that `next()`. Any
+other iterable is CE2033.
 
 The binder is the item of the iterator. A written type that the item does not fit is CE2034.
-A `peek` or a `poke` binder points into the storage of the container, and an entry and a
-pair have none: that is CE2423 at the marker. A `??` binder is a hidden binder and a `let` of
-its `??` at the top of the body, and an item that is no `Result` is CE2517.
+A `peek` or a `poke` binder points into the storage of the container, and an entry, a
+pair, an iterator value and the answer of a `next()` have none: that is CE2423 at the marker.
+A `??` binder is a hidden binder and a `let` of its `??` at the top of the body, and an item
+that is no `Result` is CE2517.
 """
 from __future__ import annotations
 
@@ -21,14 +23,18 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.iterators import produces_from_a_container
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.calls.methods import (
+    RESOLUTION_REPORTED, _answer_from_template)
 from sushi_lang.semantics.passes.types.compatibility import types_compatible
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
+from sushi_lang.semantics.passes.types.statements import protocol_item_type
 from sushi_lang.semantics.passes.types.utils import validate_type_name
+from sushi_lang.semantics.passes.types.visit.iterator_methods import next_call
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.shir.loop_kind import (
-    HASHMAP_VIEWS, Cursor, HashMapCursor, IteratorValue, LoopKind)
+    HASHMAP_VIEWS, Cursor, HashMapCursor, IteratorValue, LoopKind, Protocol)
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import IteratorType, Type, deref_type
 
@@ -49,10 +55,12 @@ def check_iterator_walk(validator: TypeValidator, node: s.Loop, source: s.Items)
             er.emit(validator.reporter, er.ERR.CE0146, iterable.loc)
         return False
     ty = deref_type(ty)
-    if not isinstance(ty, IteratorType):
-        visit.stop_at(validator, node)
-    kind = _kind_of(validator, iterable)
-    item = _binder_type(validator, source, ty.element_type)
+    walked = ((_kind_of(validator, iterable), ty.element_type) if isinstance(ty, IteratorType)
+              else _protocol(validator, iterable, ty))
+    if walked is None:
+        return False
+    kind, element = walked
+    item = _binder_type(validator, source, element)
     if item is None:
         return False
     first = node.body.statements[0] if node.body.statements else None
@@ -83,8 +91,22 @@ def unwraps_a_try_binder(validator: TypeValidator, node: s.Assign) -> bool:
 
 def _addressable(iterable: e.ShirExpr, kind: LoopKind) -> bool:
     """Whether the item of the walk has storage in a container."""
-    return (not isinstance(kind, IteratorValue) and isinstance(iterable, e.Call)
+    return (isinstance(kind, (Cursor, HashMapCursor)) and isinstance(iterable, e.Call)
             and isinstance(iterable.target, e.Dotted) and iterable.target.name in _ADDRESSABLE)
+
+
+def _protocol(validator: TypeValidator, iterable: e.ShirExpr,
+              ty: Type) -> Optional[tuple[LoopKind, Type]]:
+    """The `Protocol` walk of a type with a nullary `next()` that answers `Maybe@(T)`, and
+    its item. Any other type is CE2033, except a `next()` of a template whose bounds the type
+    does not meet: that is its own fault, which the template rung reports (#1070)."""
+    item = protocol_item_type(validator, ty)
+    if item is not None:
+        return Protocol(next_call(validator, iterable, ty, iterable.loc), item), item
+    if _answer_from_template(validator, ty, "next", iterable.loc,
+                             report=True) is not RESOLUTION_REPORTED:
+        er.emit(validator.reporter, er.ERR.CE2033, iterable.loc, got=display_type(ty))
+    return None
 
 
 def _kind_of(validator: TypeValidator, iterable: e.ShirExpr) -> LoopKind:

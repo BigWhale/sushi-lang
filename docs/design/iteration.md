@@ -562,7 +562,7 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | piece | file |
 |---|---|
 | the `??` binder's desugar, and the `_` binder | `semantics/ast_builder/statements/loops.py` |
-| the protocol's resolution, and the call it builds | `resolve_protocol_iterator`, `semantics/passes/types/statements.py` |
+| the protocol's resolution, and the call it builds | `protocol_item_type`, `semantics/passes/types/statements.py`; `next_call`, `semantics/passes/types/visit/iterator_methods.py` |
 | the method ladder it resolves through | `resolve_method`, `semantics/passes/types/calls/methods.py` |
 | the loop arm | SHIR-to-SLIR lowering of the `Loop` (`docs/design/ir.md` 8.9), which the iterators group C3 builds |
 | `Lines@(R)` and `lines()` | `sushi_stdlib/src_sushi/io/buf.sushi` |

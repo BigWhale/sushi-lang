@@ -22,7 +22,7 @@ condition once, then its body in two rounds (`check_loop_body`): the paths of a
 `continue` and of the end of the body go round the back edge, and the paths of a `break`
 leave the loop. A counted loop reads the bounds of its range once, and declares its binder
 as a read-only view before its body. A direct walk has its own arm (`walks.py`). A loop over
-an `IteratorValue` too. A loop over any other iterable stops the walk. The end of a block that the path
+an `IteratorValue` or a `Protocol` too. The end of a block that the path
 reaches, a `return`, a `break` and a `continue` are exits of the blocks that they leave
 (`flow.record_exit`), and a rebind is an exit of the old value of its local
 (`flow.record_rebind`).
@@ -40,7 +40,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.loop_kind import (
-    CountedRange, Cursor, HashMapCursor, IteratorValue)
+    CountedRange, Cursor, HashMapCursor, IteratorValue, Protocol)
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.paths import reached_statements, terminates
 from sushi_lang.semantics.shir.walk import walk
@@ -520,18 +520,18 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     fixed point, and each view that the condition reads is read again at the back edge: a
     change of its owner in the body is CE2412 there. A counted loop reads the bounds of its range once, at the entry,
     and its binder is a read-only view, as a bare binder of a match is. A direct walk has
-    its own arm (`walks.py`), and so does an `IteratorValue` walk. A loop over any other
-    iterable stops the walk: the iterators group checks it."""
+    its own arm (`walks.py`), and so does a walk of a value: an `IteratorValue` or a
+    `Protocol`."""
     source = node.source
     again: Optional[Callable[[], None]] = None
     kind = checker.answers().loop_kind_of(node.shir_id)
     if isinstance(source, s.Cond):
         arms.check(checker, source.cond)
-        again = partial(_read_views_again, checker, source.cond)
+        again = partial(read_views_again, checker, source.cond)
     elif isinstance(kind, (Cursor, HashMapCursor)):
         check_direct_walk(checker, node, source)
         return
-    elif isinstance(kind, IteratorValue):
+    elif isinstance(kind, (IteratorValue, Protocol)):
         check_value_walk(checker, node, source)
         return
     elif isinstance(kind, CountedRange) and isinstance(source.iterable, e.Range):
@@ -562,9 +562,10 @@ def check_expand(checker: 'BorrowChecker', node: s.Expand) -> None:
     check_loop_body(checker, node.body, per_round=frozenset({node.binder}), leaves_to_outer=True)
 
 
-def _read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
-    """The condition of a `while` loop at the back edge: each local that it reads is a use
-    again, so a view whose owner the body changed is CE2412, one time for each view."""
+def read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
+    """The condition of a `while` loop, or the place of a walk in place, at the back edge:
+    each local that it reads is a use again, so a view whose owner the body changed is
+    CE2412, one time for each view."""
     seen: set[LocalId] = set()
     for _path, value in walk(cond, ""):
         if isinstance(value, e.LocalRef) and value.local not in seen:

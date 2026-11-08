@@ -12,9 +12,10 @@ is the place of its receiver, or a new value in a temporary of the loop statemen
 drops at the end of the statement. The loop statement holds the cursor and the counter too.
 
 A producer, a range and `Iterator.new` as a value are ONE `Aggregate(AggIterator)`, with the
-row of the source and the heap decision of `borrow`. An `IteratorValue` walk holds the iterator
-in a temporary of the loop statement, which drops by the rules of a temporary (8.10, rule 7),
-or walks it where it is. Each round is an `Indirect` call, a switch on the tag of the `Maybe`,
+row of the source and the heap decision of `borrow`. An `IteratorValue` walk and a `Protocol`
+walk hold the iterator in a temporary of the loop statement, which drops by the rules of a
+temporary (8.10, rule 7), or walk it where it is. Each round is an `Indirect` call through
+`next_fn`, or a `Direct` call of the `next()` of the type, a switch on the tag of the `Maybe`,
 and the body. An item that the walk owns moves into the binder, and the `None` edge drops the
 `Maybe`. A lent item is a view of the `Maybe`.
 """
@@ -32,9 +33,10 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Builtin, Method
 from sushi_lang.semantics.shir.loop_kind import (
-    HASHMAP_VIEWS, Cursor, HashMapCursor, IteratorValue)
+    HASHMAP_VIEWS, Cursor, HashMapCursor, IteratorValue, Protocol)
 from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_arrays as arrays
+from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
@@ -57,8 +59,8 @@ def loop(low: Lowering, stmt: s.Loop) -> None:
         _cursor(low, stmt, source)
     elif isinstance(source, s.Items) and isinstance(kind, HashMapCursor):
         _map_cursor(low, stmt, source, kind)
-    elif isinstance(source, s.Items) and isinstance(kind, IteratorValue):
-        _value_walk(low, stmt, source)
+    elif isinstance(source, s.Items) and isinstance(kind, (IteratorValue, Protocol)):
+        _value_walk(low, stmt, source, kind)
     else:
         ctl.loop(low, stmt)
 
@@ -183,24 +185,35 @@ def new_value(low: Lowering, node: e.Call, next_: st.SlirCallee) -> r.Aggregate:
     return r.Aggregate(r.AggIterator(low.type_of(node), source, True), (low.operand(value),))
 
 
-def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items) -> None:
-    """The iterator, then a header that calls `next_fn` and switches on the tag of the answer,
+def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
+                kind: IteratorValue | Protocol) -> None:
+    """The iterator, then a header that calls `next_fn`, or the `next()` of a `Protocol` walk
+    with the iterator by the convention of its `self`, and switches on the tag of the answer,
     the body, and the exit. The blocks are made in the order header, body, the block of the
     tag on the `None` edge, exit."""
     span = stmt.loc
     iterator = _walked_iterator(low, stmt, source.iterable)
-    ty = cast(IteratorType, deref_type(low.type_of(source.iterable)))
-    answer, some = _maybe_of(low, ty.element_type, span)
-    takes_item = low.owns(ty.element_type) and not ty.peeks
-    stepped = low.new_local(answer, None, None,
-                            view=low.owns(ty.element_type) and not takes_item)
+    target: st.SlirCallee
+    if isinstance(kind, Protocol):
+        method = cast(Method, kind.next.callee)
+        item, peeks = kind.item, False
+        target = calls.user_method(low, method, kind.next, span)
+        args: tuple[tuple[p.Operand, Convention], ...] = (
+            (p.Copy(iterator), method.receiver),)
+    else:
+        ty = cast(IteratorType, deref_type(low.type_of(source.iterable)))
+        item, peeks = ty.element_type, bool(ty.peeks)
+        target, args = st.Indirect(p.Copy(iterator)), ()
+    answer, some = _maybe_of(low, item, span)
+    takes_item = low.owns(item) and not peeks
+    stepped = low.new_local(answer, None, None, view=low.owns(item) and not takes_item)
     low.placement.temporary(stepped, False)
     low.emit([st.StorageLive(stepped, span)])
     low.walk_owners[stepped] = p.root_of(iterator)
     header = ctl.enter_header(low, stmt)
     among, at_header = ctl.header_state(low, stmt)
     low.placement.open_statement()
-    low.emit([st.Call(p.Local(stepped), st.Indirect(p.Copy(iterator)), (), span)])
+    low.emit([st.Call(p.Local(stepped), target, args, span)])
     tag = low.temporary(r.Discriminant(p.Local(stepped)), BuiltinType.I32, span)
     low.placement.detach(tag)
     low.emit(low.placement.close_scope(span))

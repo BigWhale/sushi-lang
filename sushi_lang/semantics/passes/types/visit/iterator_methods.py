@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.iterators import ITERATOR_BASE, ITERATOR_METHOD_SIGNATURES
 from sushi_lang.semantics.generics.type_display import display_type
@@ -23,6 +24,7 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     Parameters, check_arguments, marked_type, record_conventions, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.calls.builtin_signature import settle_builtin_instance
+from sushi_lang.semantics.passes.types.calls.methods import resolve_extension_method
 from sushi_lang.semantics.passes.types.iterator_adapters import adapter_result, zip_instance
 from sushi_lang.semantics.passes.types.method_registry import (
     METHOD_TYPE_REGISTRY, MethodFamily)
@@ -31,7 +33,6 @@ from sushi_lang.semantics.passes.types.visibility import reject_out_of_scope_typ
 from sushi_lang.semantics.passes.types.visit.container_statics import type_name_span
 from sushi_lang.semantics.passes.types.visit.constructions import (
     TypedArguments, is_bare_lambda, names_a_parameter, type_lambda, typed_alone, walk_unchecked)
-from sushi_lang.semantics.passes.types.visit.method_templates import resolve_user_method
 from sushi_lang.semantics.passes.types.visit.signature_methods import unsolved_help
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import BuiltinStatic, Method
@@ -131,17 +132,22 @@ def check_iterator_new(validator: TypeValidator, node: e.Call,
     answers.record_callee(node.shir_id, ResolvedCall(BuiltinStatic(answer,
                                                                    family.callee(target.name))))
     record_conventions(validator, Parameters(node.shir_id, (ParamMode.NOM,), ["x"]), [arg])
-    _record_next(validator, node, arg.value, value)
+    validator.body_answers().record_iterator_next(
+        node.shir_id, next_call(validator, arg.value, value, node.loc))
     return answer
 
 
-def _record_next(validator: TypeValidator, node: e.Call, value: e.ShirExpr, owner: Type) -> None:
-    """The row of the `next()` that the state of the iterator calls."""
+def next_call(validator: TypeValidator, value: e.ShirExpr, owner: Type,
+              site: Span) -> ResolvedCall:
+    """The resolved call of the `next()` of `owner` on `value`: the method of a perk
+    implementation, else the extension method, with the convention of its `self`. The
+    caller has found a walkable `next()` (`protocol_item_type`)."""
     perk = validator.perk_impl_table.get_method(owner, "next")
-    method = perk if perk is not None else resolve_user_method(
-        validator, node, owner, "next", static=False).method
+    method = perk if perk is not None else resolve_extension_method(
+        validator, owner, "next", report=True, static=False, site=site)
     callee = Method(value, validator.method_decl(owner, "next"),
                     receiver_mode(method.self_mode).convention)
-    row = ResolvedCall(callee) if perk is not None else ResolvedCall(
-        callee, method.method_type_args, None if method.link_symbol else method.unit_name)
-    validator.body_answers().record_iterator_next(node.shir_id, row)
+    if perk is not None:
+        return ResolvedCall(callee)
+    return ResolvedCall(callee, method.method_type_args,
+                        None if method.link_symbol else method.unit_name)

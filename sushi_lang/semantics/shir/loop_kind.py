@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import ClassVar, Mapping, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Mapping, TypeAlias
 
-from sushi_lang.semantics.shir.callee import Callee
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.typeck import ResolvedCall
+    from sushi_lang.semantics.typesys import Type
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,8 +69,10 @@ class HashMapCursor:
 
 @dataclass(frozen=True, slots=True)
 class Protocol:
-    """A walk of a type that carries `next()`: `next` is the callee of that method."""
-    next: Callee
+    """A walk of a type that carries `next()`: `next` is the resolved call of that method, and
+    `item` is the `T` of the `Maybe@(T)` that it answers."""
+    next: ResolvedCall
+    item: Type
 
 
 @dataclass(frozen=True, slots=True)

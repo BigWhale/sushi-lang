@@ -42,9 +42,7 @@ SHIR_HOMES = {
 }
 
 #: The facts whose SHIR home comes with a later chunk, and the chunk.
-LATER = {
-    "iterator_next": "C3, the next() call of a protocol loop",
-}
+LATER: dict[str, str] = {}
 
 #: The facts that need no SHIR home: the typecheck pass reads them from the declaration of
 #: the callee when it checks the arguments, and no later stage reads them.
@@ -66,7 +64,6 @@ _NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names",
 #: Every `MethodCall(...)` construction under the typecheck pass, with why it is there.
 _METHOD_CALL_VIEWS = {
     "calls/dotcall.py": 1,      # the view the AST ladder of the early inference resolves on
-    "statements.py": 1,         # the `foreach` protocol's own `next()` call, not a DotCall
 }
 
 

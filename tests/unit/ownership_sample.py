@@ -192,7 +192,7 @@ def _typeck(decls: DeclNames, named: dict[str, e.ExprNode | s.Loop]) -> TypeckRe
     table.record_callee(named["fail_call"].shir_id, ResolvedCall(Free(decls.refer("fail"))))
     table.record_loop_kind(named["cursor_loop"].shir_id, Cursor())
     table.record_loop_kind(named["value_loop"].shir_id, IteratorValue())
-    table.record_loop_kind(named["protocol_loop"].shir_id, Protocol(Free(decls.refer("next"))))
+    table.record_loop_kind(named["protocol_loop"].shir_id, Protocol(ResolvedCall(Free(decls.refer("next"))), BuiltinType.I32))
     return table
 
 

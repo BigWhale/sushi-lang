@@ -630,11 +630,6 @@ class Foreach(Stmt):
     # The binder is `_` with no `??`: the loop binds nothing that the body can read. The
     # AST builder sets it from the source; `item_name` is then a hidden name.
     item_discarded: bool = False
-    # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
-    # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
-    # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
-    protocol_next: "Optional[MethodCall]" = None
-    protocol_iter_name: Optional[str] = None
 
 @dataclass(slots=True)
 class Expand(Stmt):
@@ -986,9 +981,6 @@ class MethodCall(Node):
     # A LENT iterator that leaves its function through a `peek` return (#1229): its state
     # is on the heap. Stamped by the borrow pass on each link of the chain.
     iterator_leaves: bool = False
-    # `Iterator.new(nom x)`: the `next()` call on the value, built and checked by the
-    # typecheck pass. No pass walks it as code.
-    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)
     # The callee has a borrowed return (#1229): where its sources stand in the call (an
     # argument index, or -1 for the receiver). None for an owned return. The answer is a
     # borrow of the owners of those arguments.
@@ -1027,7 +1019,6 @@ class DotCall(Node):
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_extension_unit: Optional[str] = None  # see MethodCall
     iterator_state: Optional[str] = None  # see MethodCall
-    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall
     iterator_leaves: bool = False  # see MethodCall
     callee_borrows: Optional[Tuple[int, ...]] = None  # see MethodCall
 

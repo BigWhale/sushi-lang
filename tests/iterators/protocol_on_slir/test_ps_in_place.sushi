@@ -1,0 +1,31 @@
+# A walk in place through a `poke` parameter and through a `poke` local: the walk changes the
+# value of the owner, and the owner is still usable after the loop.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n1\nleft 0\n4\nleft 3\n"
+# EXPECT_NO_LEAKS
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        return Maybe.None
+    let i32 now = self.at
+    self.at := self.at - 1
+    return Maybe.Some(now)
+
+fn walk(poke Countdown c) ~:
+    foreach(n in c):
+        println(n)
+
+fn main() i32:
+    let Countdown a = Countdown(2)
+    walk(poke a)
+    println("left {a.at}")
+    let Countdown b = Countdown(4)
+    let poke Countdown r = b
+    foreach(n in r):
+        println(n)
+        break
+    println("left {b.at}")
+    return 0
