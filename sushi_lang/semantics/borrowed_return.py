@@ -19,7 +19,7 @@ from typing import Any, Callable, FrozenSet, Optional, Sequence, Tuple
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, UnknownType
 
-# The name of the receiver in a source set, and its position in a call (`callee_borrows`).
+# The name of the receiver in a source set, and its position in a call (`sources_of`).
 RECEIVER = "self"
 RECEIVER_POSITION = -1
 

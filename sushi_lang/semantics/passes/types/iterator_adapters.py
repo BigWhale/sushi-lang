@@ -23,26 +23,12 @@ from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import IteratorType, Type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import MethodCall
     from sushi_lang.semantics.generics.builtin_signatures import BuiltinInstance
     from sushi_lang.semantics.passes.types import TypeValidator
 
 # The help of CE2129: the one escape is an owned copy of each item.
 COLLECT_HELP = ("there is no `List@(peek T)`, and the compiler makes no copy: clone each "
                 "item first, `.clone_each().{call}`")
-
-
-def settle_adapter_instance(validator: 'TypeValidator', call: 'MethodCall',
-                            instance: 'BuiltinInstance') -> 'BuiltinInstance':
-    """The instance with the parameter of `zip` in the mode of its argument.
-
-    `zip` keeps the item mode of each side, so its parameter takes an iterator of any
-    item mode over the solved item: the argument's own type is the parameter's.
-    """
-    if call.method != "zip" or not call.args:
-        return instance
-    from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
-    return zip_instance(validator, instance, infer_call_arg_type(validator, call.args[0]))
 
 
 def zip_instance(validator: 'TypeValidator', instance: 'BuiltinInstance',

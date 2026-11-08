@@ -111,7 +111,6 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     self.body_conversion = getattr(node, "declared_conversion", None)
     self.body_instance_key = getattr(node, "instance_key", None)
     self.variable_types = {}
-    self.refused_bindings = set()
 
 
 def _leave_body(self) -> None:

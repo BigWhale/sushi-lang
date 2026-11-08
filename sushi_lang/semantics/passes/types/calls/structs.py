@@ -9,7 +9,7 @@ The AST solver of a generic construction (`untyped_struct_instance`) is the answ
 early passes read.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Mapping, NamedTuple, Optional, Sequence
+from typing import TYPE_CHECKING, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -17,67 +17,12 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import StructType, Type
-from sushi_lang.semantics.ast import Expr
 from ..arguments import NOTHING_TYPED, check_arguments, reject_misplaced_spread
 from ..utils import intern_declared_wrapper, resolve_declared_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.types import GenericStructType
     from .. import TypeValidator
-
-
-class FieldSolution(NamedTuple):
-    """What the arguments of a generic struct constructor give (#1150)."""
-    type_args: tuple
-    disagreement: Optional[str]
-
-
-def solve_constructor_fields(validator: 'TypeValidator', base: str, args: Sequence[Expr],
-                             field_names: Optional[Sequence[str]]
-                             ) -> Optional[FieldSolution]:
-    """Solve a generic struct's type parameters from a constructor's arguments. Silent.
-
-    The one leading solver solves it, as it solves a generic call: each argument against
-    the field it fills. `type_args` holds one entry per type parameter, None where no
-    argument gives it. `disagreement` names the first argument that does not unify with
-    what the arguments before it gave. The answer is None when `base` is no generic
-    struct, or when an argument name is not a field: validation reports that.
-    """
-    from sushi_lang.semantics.generics.pack_inference import (
-        infer_call_arg_type, solve_leading_type_args)
-    from sushi_lang.semantics.type_resolution import (
-        resolve_type_recursively, resolve_unknown_type)
-
-    template = validator.generic_struct_table.by_name.get(base)
-    if template is None:
-        return None
-    fields = dict(template.fields)
-    if field_names:
-        if any(name not in fields for name in field_names):
-            return None
-        filled = list(field_names)
-    else:
-        filled = [name for name, _ in template.fields][:len(args)]
-    field_types = [fields[name] for name in filled]
-    args = list(args)[:len(field_types)]
-    names = [tp.name for tp in template.type_params]
-    structs, enums = validator.struct_table.by_name, validator.enum_table.by_name
-    arg_types = [infer_call_arg_type(validator, arg) for arg in args]
-    why: list[str] = []
-    misses: list[int] = []
-    solved, _unsolved = solve_leading_type_args(
-        None, arg_types, structs, enums, partial=True,
-        param_types=field_types, type_param_names=names, why=why, misses=misses)
-
-    disagreement = None
-    if misses:
-        first = misses[0]
-        disagreement = why[0] if why else _disagreement(
-            filled[first], field_types[first],
-            resolve_type_recursively(arg_types[first], structs, enums), solved)
-    type_args = tuple(resolve_unknown_type(solved[name], structs, enums)
-                      if name in solved else None for name in names)
-    return FieldSolution(type_args, disagreement)
 
 
 def _disagreement(field: str, field_type: Type, arg_type: Type, solved: dict) -> str:
@@ -88,22 +33,6 @@ def _disagreement(field: str, field_type: Type, arg_type: Type, solved: dict) ->
                 f"and '{display_type(arg_type)}' (field '{field}')")
     return (f"field '{field}' is '{display_type(field_type)}', and the argument is "
             f"'{display_type(arg_type)}'")
-
-
-def untyped_struct_instance(validator: 'TypeValidator', base: str, args: Sequence[Expr],
-                            field_names: Optional[Sequence[str]]) -> Optional[Type]:
-    """The instance a generic struct constructor with no expected type builds (#1150).
-
-    The validating and the inferring half both read this one answer, and so do the
-    flat spelling and the spelling behind an alias (#1151). None when the arguments do
-    not solve every type parameter, or when two of them disagree.
-    """
-    from .enums import intern_constructed_instance
-    solution = solve_constructor_fields(validator, base, args, field_names)
-    if (solution is None or solution.disagreement is not None
-            or any(t is None for t in solution.type_args)):
-        return None
-    return intern_constructed_instance(validator, base, solution.type_args)
 
 
 def refuse_unsolved_struct(validator: 'TypeValidator', node: e.StructInit, template,

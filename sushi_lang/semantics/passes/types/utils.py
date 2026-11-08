@@ -1,11 +1,4 @@
-"""Shared utilities for type validation.
-
-Port template: `reject_spread_args` calls `TypeValidator.validate_expression`, and that
-API is deleted. No pass reaches it today. Its one caller is the AST method-call ladder
-(`calls/methods.py`), which no pass reaches. A SHIR method call and a SHIR struct
-construction refuse a spread with `arguments.reject_misplaced_spread`, and Tier D deletes
-this one with the ladder.
-"""
+"""Shared utilities for type validation."""
 from __future__ import annotations
 
 import functools
@@ -566,24 +559,6 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                             if sig_param.name == param.name:
                                 sig_param.ty = resolved_type
                                 break
-
-
-def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
-    """Reject any bloom spread `arr...` argument in a context that is never variadic."""
-    from sushi_lang.semantics.ast import Spread
-    found = False
-    from .arguments import names_a_type_pack
-    for arg in args:
-        if isinstance(arg, Spread) and names_a_type_pack(validator, arg.value):
-            validator.validate_expression(arg)
-            found = True
-        elif isinstance(arg, Spread):
-            er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
-                    message="bloom argument 'arr...' is only allowed as the last argument "
-                            "of a call to a variadic '...T' function")
-            validator.validate_expression(arg)
-            found = True
-    return found
 
 
 def reject_named_argument(validator: 'TypeValidator', name: str, loc: Any) -> None:

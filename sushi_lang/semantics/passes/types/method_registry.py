@@ -1,28 +1,21 @@
 """The one table that says which built-in method family a call belongs to.
 
 A method call is answered by a built-in family (an array method, a `Result` method, a
-derived `clone`), by a perk implementation, or by an extension method. The families were
-dispatched TWICE: the typecheck pass INFERRED through a registry of checkers and
-VALIDATED through an `if/elif` chain of twelve arms in a different order, and nothing
-held the two in step but two comments. The failure mode is a miscompile -- the pass types
-the call as the built-in's return while the backend calls the perk implementation that
-answers it (#751).
-
-There is one table now. A `MethodFamily` carries the CLAIM -- which receiver and which
-name it answers -- and both halves: the inferrer the typecheck pass reads, and the
-validator it runs. `claim()` is the one decision, and `validate_method()` reads it. The gate is
-`tests/unit/test_method_family_dispatch_is_one.py`, which holds the table TOTAL (no
-family with one half) and its claims DISJOINT.
+derived `clone`), by a perk implementation, or by an extension method. A `MethodFamily`
+carries the CLAIM -- which receiver and which name it answers -- with the argument count
+and the parameter modes of each method. `claim()` is the one decision; the arm of a call in
+the typecheck pass (`visit/calls.py`) and the dot-call ladder (`calls/dotcall.py`) read it.
+The gate is `tests/unit/test_method_family_dispatch_is_one.py`, which holds the claims
+DISJOINT.
 
 Disjoint is what makes the order safe: exactly one family answers any (receiver kind,
-method name), so the order below decides nothing. It is written in the order the
-validation half reads, because `docs/design/method-resolution.md` and the codegen
-dispatcher state that one.
+method name), so the order below decides nothing. It is written in the order of
+`docs/design/method-resolution.md`.
 
-`beats_perk` is the one thing the order does decide. The ladder asks the perk
-implementation BETWEEN the two halves of this table, so a family says which side it is
-on. A family that yields to a perk declines a call that a perk implementation answers,
-and a family that beats one has nothing to ask.
+`beats_perk` is the one thing the order does decide. A perk implementation is asked
+BETWEEN the two halves of this table, so a family says which side it is on. A family that
+yields to a perk declines a call that a perk implementation answers, and a family that
+beats one has nothing to ask.
 
 A family's ANSWER is the other half of its claim: whether the compiler defines this name
 on this receiver, with no perk question. `builtin_method_exists` (CE2097) reads the
@@ -31,11 +24,10 @@ method" (#812). The gate is `tests/unit/test_builtin_method_seam.py`.
 """
 from __future__ import annotations
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Callable, Mapping, Optional, Protocol
+from typing import TYPE_CHECKING, Callable, Mapping, Optional
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
 from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
 from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
@@ -46,14 +38,13 @@ from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY, MAYBE_METHOD
 from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
-from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import (
     ARRAY_FAMILY, ARRAY_HASH_FAMILY, CONTRACT_FAMILY, DERIVED_HASH_FAMILY, MAYBE_FAMILY,
     PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
-    FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
+    FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY)
 from sushi_lang.semantics.shir.callee import BuiltinMethod
 
 from sushi_lang.semantics.typesys import (
@@ -64,44 +55,30 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.derived_methods import DerivedMethodTable
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.types import TypeValidator
-    from sushi_lang.semantics.ast import MethodCall
-
-
-class MethodTypeInferrer(Protocol):
-    """Protocol for method type inference handlers."""
-
-    def infer_return_type(self) -> Optional['Type']:
-        """Infer the return type of a method call."""
-        ...
 
 
 #: Does the compiler define this method name on this receiver? No perk question.
 AnswerHook = Callable[['Type', str, 'DerivedMethodTable'], bool]
-#: The inferrer the typecheck pass reads for a claimed call. It receives the CALL, so a
-#: return type can depend on an argument (`or_err`, docs/design/error-conversion.md 8.3).
-InferHook = Callable[['Type', 'MethodCall', 'TypeValidator'], MethodTypeInferrer]
-#: The check the typecheck pass runs for a claimed call.
-ValidateHook = Callable[['TypeValidator', 'MethodCall', 'Type'], None]
 
 
 def _has_perk_override(receiver_type: 'Type', method_name: str,
                        validator: 'TypeValidator') -> bool:
     """Whether a perk implementation answers this call instead.
 
-    A perk implementation is the sanctioned override and wins at validation and at
-    codegen, so a family that the ladder asks AFTER the perk has to decline or the two
-    halves disagree about which method the call names.
+    A perk implementation is the sanctioned override and wins at the typecheck pass and
+    at codegen, so a family that is asked AFTER the perk has to decline, or the two
+    disagree about which method the call names.
     """
     return validator.perk_impl_table.get_method(receiver_type, method_name) is not None
 
 
 @dataclass
 class MethodFamily:
-    """One built-in method family: who it answers for, and what each half does.
+    """One built-in method family: who it answers for, and how each method is called.
 
-    `arity` is the argument count of each method the family answers. The count is read
-    before `validate` runs, and a miscount is CE2009 like every other callee (#799). A
-    family whose module keeps its own count leaves the table empty.
+    `arity` is the argument count of each method the family answers, and a miscount is
+    CE2009 like every other callee (#799). A family whose module keeps its own count leaves
+    the table empty.
 
     `modes` is the parameter mode of each argument (#1173). The typecheck pass stamps it
     on the call, and the `borrow` pass checks each marker by the rule of a user method.
@@ -109,8 +86,6 @@ class MethodFamily:
     name: str
     beats_perk: bool
     answers: AnswerHook
-    infer: Optional[InferHook] = None
-    validate: Optional[ValidateHook] = None
     arity: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
     modes: BuiltinModes = field(default_factory=BuiltinModes)
 
@@ -132,7 +107,7 @@ class MethodFamily:
 
 
 class MethodTypeRegistry:
-    """The built-in method families, and the one claim both halves of the pass read."""
+    """The built-in method families, and the one claim the typecheck pass reads."""
 
     def __init__(self):
         self._families: list[MethodFamily] = []
@@ -144,7 +119,7 @@ class MethodTypeRegistry:
         return tuple(self._families)
 
     def register(self, family: MethodFamily) -> MethodFamily:
-        """Add a family. Its name is the handle the validation half attaches to."""
+        """Add a family. Its name is the handle the callee of SHIR names."""
         if family.name in self._by_name:
             raise ValueError(f"method family {family.name!r} is registered twice")
         self._families.append(family)
@@ -154,16 +129,6 @@ class MethodTypeRegistry:
     def family(self, name: str) -> MethodFamily:
         """The family registered under this name."""
         return self._by_name[name]
-
-    def validator(self, name: str) -> Callable[[ValidateHook], ValidateHook]:
-        """Attach the validation hook of a family the table already carries."""
-        def attach(hook: ValidateHook) -> ValidateHook:
-            family = self._by_name.get(name)
-            if family is None:
-                raise ValueError(f"no method family named {name!r}")
-            family.validate = hook
-            return hook
-        return attach
 
     def claim(self, receiver_type: 'Type', method_name: str,
               validator: 'TypeValidator') -> Optional[MethodFamily]:
@@ -179,35 +144,6 @@ class MethodTypeRegistry:
         a perk implementation overrides a built-in, it does not remove it."""
         return any(family.answers(receiver_type, method_name, derived_methods)
                    for family in self._families)
-
-    def validate_method(self, validator: 'TypeValidator', call: 'MethodCall',
-                        receiver_type: 'Type', *, beats_perk: bool) -> bool:
-        """Run the claiming family's check, and answer whether one ran.
-
-        `beats_perk` picks the half of the table the caller is asking for: the families
-        that answer before a perk implementation does, or the ones that answer after it.
-        """
-        family = self.claim(receiver_type, call.method, validator)
-        if family is None or family.beats_perk != beats_perk or family.validate is None:
-            return False
-        call.callee_builtin_family = family.name
-        if reject_builtin_miscount(validator.reporter, call.loc, call.method, len(call.args),
-                                   f"{display_type(receiver_type)}.{call.method}",
-                                   family.arity):
-            return True
-        family.validate(validator, call, receiver_type)
-        stamp_builtin_modes(call, family.modes)
-        return True
-
-
-def stamp_builtin_modes(call: 'MethodCall', modes: BuiltinModes) -> None:
-    """Stamp the parameter modes of a built-in call for the `borrow` pass (#1173).
-
-    A method with a signature row (`or_err`, `map_err`) stamped its own in `validate`. A
-    call into a container slot gets no stamp: the slot takes ownership by position.
-    """
-    if call.callee_param_modes is None:
-        call.callee_param_modes = modes.of(call.method, len(call.args))
 
 
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
@@ -237,24 +173,6 @@ def producer_iterator(validator: 'TypeValidator', item: Optional['Type']) -> Opt
     return answer(validator, item)
 
 
-def arity_of_family(name: str) -> Mapping[str, int]:
-    """The argument count of each method the named family answers."""
-    return METHOD_TYPE_REGISTRY.family(name).arity
-
-
-@dataclass
-class ArrayMethodInferrer:
-    """Type inferrer for array methods: the answer of the row of the method."""
-    receiver_type: ArrayType | DynamicArrayType
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.passes.types.arrays import array_method_return_type
-        return array_method_return_type(self.validator, self.receiver_type,
-                                        self.method_name)
-
-
 def string_method_return_type(validator: 'TypeValidator', method_name: str) -> Optional['Type']:
     """The type that a built-in string method yields, from its row.
 
@@ -269,93 +187,6 @@ def string_method_return_type(validator: 'TypeValidator', method_name: str) -> O
     ret = get_builtin_string_method_return_type(method_name, BuiltinType.STRING)
     interned = intern_declared_wrapper(validator, ret)
     return interned if interned is not None else ret
-
-
-@dataclass
-class StringMethodInferrer:
-    """Type inferrer for string methods."""
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        return string_method_return_type(self.validator, self.method_name)
-
-
-@dataclass
-class PrimitiveMethodInferrer:
-    """Type inferrer for built-in primitive methods (to_str, hash, to_bits, the bit methods)."""
-    receiver_type: 'Type'
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.primitives import primitive_method_return_type
-        return primitive_method_return_type(self.receiver_type, self.method_name)
-
-
-@dataclass
-class StructEnumBuiltinInferrer:
-    """Type inferrer for the auto-derived struct/enum builtins (hash, clone)."""
-    receiver_type: 'Type'
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        method = self.validator.derived_methods.get_method(
-            self.receiver_type, self.method_name)
-        if method is not None:
-            return method.return_type
-        return None
-
-
-@dataclass
-class ContractMethodInferrer:
-    """Type inferrer for `eq`, `compare` and `to_str`, the derived contract methods."""
-    method_name: str
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_RETURN
-        return CONTRACT_METHOD_RETURN.get(self.method_name)
-
-
-@dataclass
-class ResultMethodInferrer:
-    """Type inferrer for Result<T, E> methods."""
-    receiver_type: EnumType
-    call: 'MethodCall'
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.results import (
-            RESULT_METHOD_SIGNATURES, result_method_row)
-        signature = RESULT_METHOD_SIGNATURES.get(self.call.method)
-        if signature is not None:
-            from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-                builtin_call_return_type)
-            return builtin_call_return_type(self.validator, signature,
-                                            self.receiver_type, self.call)
-        row = result_method_row(self.receiver_type, self.call.method,
-                                self.validator.enum_table, self.validator.struct_table.by_name)
-        return None if row is None else row.returns
-
-
-@dataclass
-class MaybeMethodInferrer:
-    """Type inferrer for Maybe<T> methods."""
-    receiver_type: EnumType
-    call: 'MethodCall'
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.maybe import (
-            MAYBE_METHOD_SIGNATURES, maybe_method_return_type, maybe_payload)
-        signature = MAYBE_METHOD_SIGNATURES.get(self.call.method)
-        if signature is not None:
-            from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-                builtin_call_return_type)
-            return builtin_call_return_type(self.validator, signature,
-                                            self.receiver_type, self.call)
-        return maybe_method_return_type(maybe_payload(self.receiver_type), self.call.method)
 
 
 @dataclass
@@ -468,38 +299,13 @@ class OwnMethodInferrer:
         return None
 
 
-@dataclass
-class FunctionMethodInferrer:
-    """Type inferrer for the built-in methods on a function value (.clone())."""
-    receiver_type: 'Type'
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.closures import function_method_return_type
-        return function_method_return_type(self.method_name, self.receiver_type)
-
-
-@dataclass
-class ForeignPtrMethodInferrer:
-    """Type inferrer for the foreign-memory methods on a `ptr` (#1086)."""
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        return foreign_ptr_return_type(self.method_name, self.validator.enum_table,
-                                       self.validator.struct_table.by_name)
-
-
-# The family table. Written in the order the VALIDATION half reads: the families that
-# answer before a perk implementation, then the ones that answer after it. The claims are
-# disjoint, so the order changes no answer; stating ONE order is the point (#273), and
-# `tests/unit/test_method_resolution_family_order.py` pins it.
+# The family table: the families that answer before a perk implementation, then the ones
+# that answer after it. The claims are disjoint, so the order changes no answer; stating
+# ONE order is the point (#273), and `tests/unit/test_method_resolution_family_order.py`
+# pins it.
 #
-# A claim reads the receiver type as the caller hands it in. Both callers deref a borrow
-# before they ask -- the inference half in `visitor.py:visit_methodcall`, the validation
-# half because `infer_expression_type` of a receiver never answered a `ReferenceType` in
-# a sweep of 984 fixtures over the five areas that bind one -- so no claim derefs.
+# A claim reads the receiver type as the caller hands it in. The caller
+# (`calls/dotcall.py:resolve_dotted`) derefs a borrow before it asks, so no claim derefs.
 
 
 def _named(receiver_type: 'Type', kind: type, base: str) -> bool:
@@ -616,36 +422,6 @@ def _answers_iterator(receiver_type, method_name, derived_methods):
         method_name == "clone" or method_name in ADAPTERS)
 
 
-@dataclass
-class IteratorMethodInferrer:
-    """Type inferrer for the built-in methods on an iterator value: `.clone()` and the
-    adapters, whose result the arguments solve (`iterator_adapters.adapter_result`)."""
-    receiver_type: 'Type'
-    call: 'MethodCall'
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_SIGNATURES
-        if self.call.method == "clone":
-            return self.receiver_type
-        signature = ITERATOR_METHOD_SIGNATURES.get(self.call.method)
-        if signature is None:
-            return None
-        from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-            solve_builtin_call)
-        from sushi_lang.semantics.passes.types.iterator_adapters import (
-            adapter_result, settle_adapter_instance)
-        from sushi_lang.semantics.typesys import deref_type
-        receiver = deref_type(self.receiver_type)
-        instance, _unsolved = solve_builtin_call(self.validator, signature, receiver,
-                                                 self.call)
-        if instance is None:
-            return None
-        instance = settle_adapter_instance(self.validator, self.call, instance)
-        return adapter_result(self.validator, self.call, self.call.method, receiver, instance,
-                              report=False)
-
-
 def _answers_foreign_ptr(receiver_type, method_name, derived_methods):
     # No perk can name a `ptr`, so which side of the perk the family stands on decides
     # nothing; it is written with the other families that answer first.
@@ -661,56 +437,41 @@ def _answers_primitive(receiver_type, method_name, derived_methods):
 
 
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name=ARRAY_FAMILY, beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
-    infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
+    name=ARRAY_FAMILY, beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name=STRING_FAMILY, beats_perk=True, answers=_answers_string, arity=LazyStringArity(),
-    infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
+    name=STRING_FAMILY, beats_perk=True, answers=_answers_string, arity=LazyStringArity()))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=RESULT_FAMILY, beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
-    modes=RESULT_METHOD_MODES,
-    infer=lambda rt, call, v: ResultMethodInferrer(rt, call, v)))
+    modes=RESULT_METHOD_MODES))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=MAYBE_FAMILY, beats_perk=True, answers=_answers_maybe, arity=MAYBE_METHOD_ARITY,
-    modes=MAYBE_METHOD_MODES,
-    infer=lambda rt, call, v: MaybeMethodInferrer(rt, call, v)))
+    modes=MAYBE_METHOD_MODES))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="own", beats_perk=True, answers=_answers_own, arity=OWN_METHOD_ARITY,
-    modes=OWN_METHOD_MODES,
-    infer=lambda rt, call, v: OwnMethodInferrer(rt, call.method, v)))
+    modes=OWN_METHOD_MODES))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="hashmap", beats_perk=True, answers=_answers_hashmap, arity=HASHMAP_METHOD_ARITY,
-    modes=HASHMAP_METHOD_MODES,
-    infer=lambda rt, call, v: HashMapMethodInferrer(rt, call.method, v)))
+    modes=HASHMAP_METHOD_MODES))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="list", beats_perk=True, answers=_answers_list, arity=LIST_METHOD_ARITY,
-    modes=LIST_METHOD_MODES,
-    infer=lambda rt, call, v: ListMethodInferrer(rt, call.method, v)))
+    modes=LIST_METHOD_MODES))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="iterator", beats_perk=True, answers=_answers_iterator,
-    arity=ITERATOR_METHOD_ARITY, modes=iterator_method_modes(),
-    infer=lambda rt, call, v: IteratorMethodInferrer(rt, call, v)))
+    arity=ITERATOR_METHOD_ARITY, modes=iterator_method_modes()))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
-    arity=FOREIGN_PTR_METHOD_ARITY,
-    infer=lambda _receiver, call, v: ForeignPtrMethodInferrer(call.method, v)))
+    arity=FOREIGN_PTR_METHOD_ARITY))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name=ARRAY_HASH_FAMILY, beats_perk=False, answers=_answers_array_hash, arity=DERIVED_HASH_ARITY,
-    infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
+    name=ARRAY_HASH_FAMILY, beats_perk=False, answers=_answers_array_hash, arity=DERIVED_HASH_ARITY))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name=DERIVED_HASH_FAMILY, beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY,
-    infer=lambda rt, call, v: StructEnumBuiltinInferrer(rt, call.method, v)))
+    name=DERIVED_HASH_FAMILY, beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="derived_clone", beats_perk=False, answers=_answers_derived_clone, arity=DERIVED_CLONE_ARITY,
-    infer=lambda rt, call, v: StructEnumBuiltinInferrer(rt, call.method, v)))
+    name="derived_clone", beats_perk=False, answers=_answers_derived_clone, arity=DERIVED_CLONE_ARITY))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=CONTRACT_FAMILY, beats_perk=False, answers=_answers_contract,
-    arity=CONTRACT_METHOD_ARITY,
-    infer=lambda _receiver, call, _validator: ContractMethodInferrer(call.method)))
+    arity=CONTRACT_METHOD_ARITY))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="function", beats_perk=False, answers=_answers_function, arity={"clone": 0},
-    infer=lambda rt, call, v: FunctionMethodInferrer(rt, call.method, v)))
+    name="function", beats_perk=False, answers=_answers_function, arity={"clone": 0}))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=PRIMITIVE_FAMILY, beats_perk=False, answers=_answers_primitive,
-    arity=PRIMITIVE_METHOD_ARITY,
-    infer=lambda rt, call, v: PrimitiveMethodInferrer(rt, call.method, v)))
+    arity=PRIMITIVE_METHOD_ARITY))

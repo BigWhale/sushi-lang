@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.namespaces import Binding, NamespaceTable
+    from sushi_lang.semantics.namespaces import NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.passes.collect.functions import FuncSig
@@ -171,10 +171,6 @@ class TypeValidator:
         # template's own unit never imported them and never could (section 6).
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
-        # The `let` names whose initializer was refused; a method call on one is not
-        # refused again (#1128). Only the AST port template `validate_method_call` (Tier D)
-        # reads and writes it: the SHIR walk keeps `refused_locals`.
-        self.refused_bindings: set[str] = set()
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
@@ -390,24 +386,6 @@ class TypeValidator:
         """A type that a SHIR body writes, as the body half reads it: as written here. The
         check of a template reads it at the opaque type parameters."""
         return ty
-
-    def namespace_of(self, receiver) -> Optional[str]:
-        """The namespace a receiver names, or None when it names something else.
-
-        Local-wins, and it is the whole of section 8's first row: a variable named
-        `libc` or `geo` shadows the namespace for the rest of its scope.
-        """
-        from sushi_lang.semantics.ast import Name
-        if not isinstance(receiver, Name):
-            return None
-        if receiver.id in self.variable_types:
-            return None
-        return receiver.id if self.namespaces.is_namespace(receiver.id) else None
-
-    def resolve_namespaced(self, receiver, name: str) -> Optional['Binding']:
-        """What `<namespace>.<name>` denotes. The ONE reader, for every kind."""
-        ns = self.namespace_of(receiver)
-        return None if ns is None else self.namespaces.lookup(ns, name)
 
     def _validate_function(self, func: FuncDef) -> None:
         """The pass's surface for the `lift` pass (#756).

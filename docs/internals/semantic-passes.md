@@ -1097,16 +1097,12 @@ fn main() i32:
 
 Ensure all expressions and statements are type-correct.
 
-### Three phases per statement
+### Expected types
 
-The pass checks each statement in three phases, in this order:
-
-1. **resolution** (`types/resolution.py`): a written type becomes a resolved type.
-2. **propagation** (`types/propagation.py`): a declared type goes down into the value,
-   and the pass stamps `resolved_enum_type` and `resolved_struct_type` for the backend.
-   Propagation MUST run before validation.
-3. **validation** (`types/compatibility.py`, `types/expressions.py`,
-   `types/result_validation.py`): the value is checked against the type.
+The pass walks each SHIR body once. A written type becomes a resolved type
+(`types/resolution.py`), and each arm checks its node against the type of its position:
+the expected type goes down into the value through the arm itself, and no pass stamps the
+AST (`types/compatibility.py`, `types/expressions.py`, `types/result_validation.py`).
 
 ### Modules
 
@@ -1115,11 +1111,11 @@ All paths are under `semantics/passes/`.
 | Module | What it holds |
 |---|---|
 | `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body |
-| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `results.py`: the arm of an `EnumInit` (a `Result` variant at the `Result` type of its position, a variant of an enum that is not generic); `helpers.py`: the lambda and function-value helpers |
+| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `results.py`: the arm of an `EnumInit` (a `Result` variant at the `Result` type of its position, a variant of an enum that is not generic); `lambdas.py`: the arm of a lambda; `helpers.py`: the function type of a signature and the fn-typed-field call |
 | `types/fold.py` | `Folder`: the readable fold of a SHIR sub-expression at the type of its position, over the integer operator kernel ([the IR design](../design/ir.md), 7.4) |
 | `types/arguments.py` | `check_arguments`: the one argument check over the SHIR arguments of a call (the count, then each argument: its type, its `nom` marker against the declared mode, and its convention) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
-| `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
+| `types/calls/` | call helpers: `dotcall.py` (`resolve_dotted`, what `X.Y(args)` names), `statics.py`, `namespaced.py` (the refusal of a name that a namespace does not hold), `methods.py` (the resolution of a user-written method), `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
 | `types/expressions.py` | `check_try`, the arm of `??` (the channel, the operand, the two error types, the facts of the `??`), and the rules of the operands of an operator, on SHIR nodes: the three closed operand rules `reject_non_bool_condition`, `reject_non_numeric_arithmetic` and `reject_uncomparable_operands`, the mixed widths, the integer operands of a bitwise operator, the divisor and the shift count that the fold reads, and the overflow of an operation (`reject_overflow`) |
 | `types/statements.py` | the AST statement helpers that a later construct group moves to SHIR: a destructure, a reference `let`, a rebind of a field, an element or a unit variable, `foreach`; and `reject_unspelled_result`, [CE2030](../error-catalog.md#ce2030) |
 | `types/result_validation.py` | the `Result` constructor that a `return` of a body with a channel spells: `spells_a_result`, and the payload against the channel ([CE2031](../error-catalog.md#ce2031), [CE2039](../error-catalog.md#ce2039)) |
@@ -1139,7 +1135,7 @@ are in `semantics/type_predicates.py`.
 
 **FFI call-site resolution.** The `typecheck` pass types the call of an extern behind the
 alias of its block in `passes/types/visit/extern_calls.py`. It asks the namespace table
-(`resolve_namespaced`) for the name behind the dot, and the SHIR `Extern` callee carries
+for the name behind the dot, and the SHIR `Extern` callee carries
 the link name of the C function. The call yields the raw C type, with no Result around it,
 so `??` on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
 
@@ -1151,8 +1147,9 @@ so `??` on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
 written-type walk (`validate_type_name` → `reject_non_error_channels`,
 `passes/types/utils.py`), the spelled `| E` of a signature (`validate_error_channel`,
 `passes/types/signatures.py`), and each generic instance whose template writes a type
-parameter in an `E` position (the monomorphizer, and `resolve_method_generic_extension`
-for a method-level type parameter), with a note at the template. A type with no span
+parameter in an `E` position (the monomorphizer, and the arm of a method-generic call,
+`visit/method_templates.py`, for a method-level type parameter), with a note at the
+template. A type with no span
 came from inference and is not judged.
 
 **What `??` takes.** `check_try` (`passes/types/expressions.py`) asks for the

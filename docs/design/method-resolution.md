@@ -38,26 +38,14 @@ extensions of the units that the calling unit imports. One predicate answers it,
 
 ## The layers
 
-Two layers read the same precedence:
-
-| layer | file | what it decides |
-|---|---|---|
-| **validation** | `semantics/passes/types/method_registry.py` (the family's `validate` hook) | which family checks arity and argument types |
-| **inference** | `semantics/passes/types/method_registry.py` (the family's `infer` hook) | what the call expression's type is |
-
-Validation and inference are ONE table. Each of its eleven family rows carries both hooks,
-and `calls/methods.py:validate_method_call` asks the table and holds no arm chain of its
-own. The backend keeps no dispatcher of its own: the `Callee` of each SLIR `Call`
-(`docs/design/ir.md` 7.6) names the body that runs. The method-call dispatcher went with the
-AST body emitter.
-
-Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
-`if value_type is None: return`, so a family that fails to infer does not report anything --
-the annotation is simply never checked, and the mismatch reaches the backend as a [`CE0017`](../error-catalog.md#ce0017)
-internal error. Two faults can hide there: an inference layer that reads the
-backend-populated builtin-method registry (the pipeline imports codegen after semantic
-analysis, so the registry is empty then), and a family that claims a name it cannot type
-(a claim whose inferrer returns `None` *ends* the chain rather than falling through).
+One table reads the precedence: the family table, `METHOD_TYPE_REGISTRY` in
+`semantics/passes/types/method_registry.py`. Each of its family rows carries the CLAIM, the
+argument count and the parameter modes of its methods. The ladder of the typecheck pass,
+`resolve_dotted` (`semantics/passes/types/calls/dotcall.py`), asks the claim first, then a
+perk implementation, then an extension, and the arm of the call in `visit/calls.py` checks
+what answered and writes its type as a row of `TypeckResults`. The backend keeps no
+dispatcher of its own: the `Callee` of each SLIR `Call` (`docs/design/ir.md` 7.6) names the
+body that runs.
 
 Two rules follow, and both are load-bearing:
 

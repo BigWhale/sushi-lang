@@ -49,7 +49,7 @@ def test_control_the_scanner_sees_an_inference_call():
 def test_no_early_pass_module_infers():
     offenders = {}
     for name in PASSES:
-        modules = sorted((ROOT / name).glob("*.py"))
+        modules = sorted((ROOT / name).rglob("*.py"))
         assert modules, f"generics/{name}/ holds no module; update the gate"
         for path in modules:
             calls = _inference_calls(path.read_text())

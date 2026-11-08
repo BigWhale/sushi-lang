@@ -7,11 +7,10 @@ stated once (docs/design/method-resolution.md). The codegen dispatcher is delete
 the AST body emitter, so its half of this gate went with it.
 
 Since #751 the typecheck pass states its half in ONE place: the family table in
-`semantics/passes/types/method_registry.py`, which the inference half and the
-validation half both read. So the validation order below is the table's, and the two
-rungs that are the LADDER's and not a family's -- the perk implementation and the
-extension -- are read from `calls/methods.py`, where `beats_perk` puts the perk rung
-between the two halves of the table.
+`semantics/passes/types/method_registry.py`. So the order below is the table's, and the
+two rungs that are the LADDER's and not a family's -- the perk implementation and the
+extension -- are read from `calls/dotcall.py:resolve_dotted`, where the claim of the
+table puts the perk rung between the two halves of the table.
 """
 from __future__ import annotations
 
@@ -21,7 +20,6 @@ from pathlib import Path
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
-VALIDATION = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "methods.py"
 SHIR_LADDER = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "dotcall.py"
 
 # The canonical family order, highest priority first.
@@ -38,7 +36,7 @@ CANONICAL_ORDER = [
 
 # The family table's row name for each step it carries. The rungs that are not a
 # family -- the perk implementation and the extension -- are the ladder's, and the
-# markers below find them in the body of `validate_method_call`.
+# markers below find them in the body of `resolve_dotted`.
 TABLE_ROWS = {
     "array_hash": "ARRAY_HASH",
     "derived_hash": "DERIVED_HASH",
@@ -47,21 +45,6 @@ TABLE_ROWS = {
     "function": "FUNCTION_CLONE",
     "primitive": "PRIMITIVE",
 }
-
-# How each ladder rung is recognised. The marker is the step itself (the probe call),
-# never a comment.
-LADDER_MARKERS = {
-    "PERK": r"_validate_perk_method\(validator",
-    "FAMILIES_AFTER_PERK": r"beats_perk=False",
-    "EXTENSION": r"resolve_extension_method\(validator",
-}
-
-# The validation side is measured inside the DISPATCHER's body and not over the whole
-# file: the extension rungs live in `resolve_extension_method`, a shared helper declared
-# above the dispatcher, so a first-occurrence scan of the file reads the helper's
-# definition rather than the step that calls it.
-VALIDATION_SCOPE = "def validate_method_call("
-
 
 def _family_order(path: Path, markers: dict[str, str], scope: str | None = None, *,
                   one_function: bool = False) -> list[str]:
@@ -87,12 +70,6 @@ def test_validation_resolves_families_in_the_canonical_order():
               if not family.beats_perk]
     order.append("EXTENSION")
     assert order == CANONICAL_ORDER
-
-
-def test_the_dispatcher_asks_the_rungs_in_that_order():
-    """And the dispatcher reads them so: perk, the table's second half, extension."""
-    assert _family_order(VALIDATION, LADDER_MARKERS, scope=VALIDATION_SCOPE) == [
-        "PERK", "FAMILIES_AFTER_PERK", "EXTENSION"]
 
 
 # The ladder over SHIR (docs/design/ir.md 7.3): the claim of the table, which puts a perk

@@ -66,9 +66,9 @@ def test_a_derived_method_has_no_arity_validator_of_its_own():
 
 
 def test_the_derived_families_carry_their_count():
-    from sushi_lang.semantics.passes.types.method_registry import arity_of_family
-    assert dict(arity_of_family("derived_hash")) == {"hash": 0}
-    assert dict(arity_of_family("derived_clone")) == {"clone": 0}
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+    assert dict(METHOD_TYPE_REGISTRY.family("derived_hash").arity) == {"hash": 0}
+    assert dict(METHOD_TYPE_REGISTRY.family("derived_clone").arity) == {"clone": 0}
 
 
 def test_register_hash_if_hashable_answers_and_registers():

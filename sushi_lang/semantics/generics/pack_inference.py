@@ -99,26 +99,3 @@ def solve_leading_type_args(
     return tuple(solved)
 
 
-def infer_call_arg_type(validator, arg_expr) -> "Type | None":
-    """One generic-call argument's type, read before its call is solved. Silent.
-
-    For an AST call that is solved before its arguments are checked: a lambda is typed
-    from its written parameters and never stamped, and
-    `.clone()` answers its receiver's type when the receiver is still a generic
-    reference -- `.clone()` returns its receiver's type by definition, and the interned
-    instance does not exist until the monomorphize pass (F8). An argument that holds a
-    range in a value position answers nothing: the range is the fault (CE2122).
-    """
-    from sushi_lang.semantics.ast import Lambda
-    from sushi_lang.semantics.ranges import holds_a_range_value
-    if validator is None or holds_a_range_value(arg_expr):
-        return None
-    if isinstance(arg_expr, Lambda):
-        from sushi_lang.semantics.passes.types.visit.helpers import infer_lambda_type
-        return infer_lambda_type(validator, arg_expr, stamp=False)
-    arg_type = validator.infer_expression_type(arg_expr)
-    if arg_type is None and getattr(arg_expr, "method", None) == "clone":
-        receiver = getattr(arg_expr, "receiver", None)
-        if receiver is not None:
-            arg_type = validator.infer_expression_type(receiver)
-    return arg_type

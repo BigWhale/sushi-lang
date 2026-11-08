@@ -130,8 +130,8 @@ is the one builder of it, and `new()` and `from([])` are the same array. A liter
 count zero elements with a count that the compiler can read: `from([0; 0])` is [CE2017](../error-catalog.md#ce2017).
 
 `new()` names no element type. It takes one from the position it stands in: the typecheck pass
-stamps `DynamicArrayNew.resolved_type` in `propagate_types_to_value`, beside the arm that gives
-an array literal's elements their declared type. Every value position funnels there -- a call
+writes the type of the position as the type row of the node in `TypeckResults`, as it gives
+an array literal's elements their declared type. Every value position does so -- a call
 argument, an enum payload, a struct field, a rebind, and a `.realise()` default -- so the
 emitter always has a type to build from. An empty `from([])` or `new()` in a position that
 gives no type (a receiver, an index base, a `println` argument) is the user error [CE2111](../error-catalog.md#ce2111). A

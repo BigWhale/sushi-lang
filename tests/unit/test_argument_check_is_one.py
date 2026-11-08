@@ -24,15 +24,12 @@ _ARGUMENT_CODES = ("CE2006", "CE2009")
 
 #: What each module that still holds a copy may emit, at MOST. A row may only go DOWN:
 #: `arrays.py` keeps the one i32 seam (`reject_non_i32`), whose text names the argument
-#: and helps with `as i32`, and `calls/user_defined.py` keeps the two checks that are not
-#: a parameter list at all --
-#: the variadic TAIL, measured against an element type, and the polymorphic math family,
-#: measured against a SET of types. `calls/methods.py` held the perk arm and the
-#: extension arm; both read the seam since #752, so it carries no row. A module absent
-#: from this table may emit neither code.
+#: and helps with `as i32`, and `calls/user_defined.py` keeps the one check that is not a
+#: parameter list at all: the polymorphic math family, measured against a SET of types.
+#: A module absent from this table may emit neither code.
 _CEILING = {
     "arrays.py": {"CE2006": 1},
-    "calls/user_defined.py": {"CE2006": 6, "CE2009": 2},
+    "calls/user_defined.py": {"CE2006": 2, "CE2009": 1},
 }
 
 #: The reader above sees a code SPELLED at the emit. A module that carries the code in a
@@ -50,7 +47,6 @@ _INDIRECT_CEILING = {
 #: static too (group A10).
 _CALLERS = (
     "visit/calls.py",
-    "calls/methods.py",
     "calls/user_defined.py",
     "calls/enums.py",
     "calls/structs.py",

@@ -1,10 +1,4 @@
-"""User-defined and stdlib function call validation.
-
-Port templates: `validate_fn_value_call_args` (C2) and `validate_variadic_trailing_args`
-(D3) call `TypeValidator.validate_expression`, and that API is deleted. No pass reaches
-them today. The group in brackets after each name ports them to SHIR inputs before a SHIR
-pass calls them.
-"""
+"""User-defined and stdlib function call validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -12,7 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.ast import Call, Name, Spread
+from sushi_lang.semantics.ast import Call
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION, unit_declares_external_block
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.passes.types import visit
@@ -23,8 +17,6 @@ from sushi_lang.semantics.stdlib_registry import StdlibFunction, stdlib_row
 from sushi_lang.semantics.typesys import EnumType, FunctionType, Type
 from ..arguments import (
     Parameters, check_arguments, marked_type, record_conventions, reject_misplaced_spread)
-from ..compatibility import types_compatible
-from ..propagation import propagate_types_to_value
 from ..utils import intern_declared_wrapper
 
 if TYPE_CHECKING:
@@ -45,39 +37,6 @@ def own_concrete_function(func_table, name: str, unit: Optional[str]):
     return func_table.declared(name, unit)
 
 
-def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
-                                    fixed_count: int, array_ty, element_ty) -> None:
-    """Validate the trailing arguments of a variadic call (native '...T' or stdlib)."""
-    for offset, arg in enumerate(trailing):
-        index = fixed_count + offset + 1
-        if isinstance(arg, Spread):
-            if offset != 0 or len(trailing) != 1:
-                er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
-                        message="bloom argument 'arr...' must be the sole, last trailing argument")
-            elif not isinstance(arg.value, Name):
-                # The backend only marks a bloomed source moved when it is a bare
-                # Name (variadic.py::_bloom_move_array). A struct field / call / index
-                # source would be consumed by the callee yet still freed by the
-                # caller's RAII -> double free. Confine the source to a plain variable.
-                er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
-                        message="bloom source must be a bare array variable, "
-                                "not an arbitrary expression")
-            validator.validate_expression(arg)
-            if array_ty is not None:
-                arg_type = validator.infer_expression_type(arg)
-                if arg_type is not None and not types_compatible(validator, arg_type, array_ty):
-                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                            index=index, expected=display_type(array_ty), got=display_type(arg_type))
-        else:
-            propagate_types_to_value(validator, arg, element_ty)
-            validator.validate_expression(arg)
-            if element_ty is not None:
-                arg_type = validator.infer_expression_type(arg)
-                if arg_type is not None and not types_compatible(validator, arg_type, element_ty):
-                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                            index=index, expected=display_type(element_ty), got=display_type(arg_type))
-
-
 def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:
     """`errno()`: no argument, and a unit that declares an `unsafe external` block."""
     if not check_arguments(validator, ERRNO_FUNCTION, (), call.args, call.callee.loc,
@@ -87,52 +46,6 @@ def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:
     if not unit_declares_external_block(validator.external_table,
                                         validator.current_unit_name):
         er.emit(validator.reporter, er.ERR.CE5014, call.callee.loc)
-
-
-def validate_call_arguments(validator: 'TypeValidator', function_name: str, func_sig,
-                            actual_args: list, loc) -> None:
-    """Check a named callee's arguments against its declared parameters.
-
-    Split out of `validate_function_call` so a call written through a namespace
-    (`geo.twice(42)`) is measured against exactly the same rules as the bare form. The
-    call node differs -- a `DotCall` carries no `callee` -- and nothing else does.
-    """
-    expected_params = func_sig.params
-
-    # Native variadic call: a trailing '...T' parameter collects all remaining
-    # trailing arguments into a T[]. Validate the fixed prefix as usual, then
-    # validate each trailing argument against the element type T.
-    variadic_param = (
-        expected_params[-1]
-        if expected_params and getattr(expected_params[-1], "is_variadic", False)
-        else None
-    )
-    if variadic_param is not None:
-        from sushi_lang.semantics.typesys import DynamicArrayType
-        fixed_count = len(expected_params) - 1
-
-        check_arguments(validator, function_name,
-                        [p.ty for p in expected_params[:fixed_count]],
-                        actual_args, loc,
-                        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                        minimum_arity=True)
-
-        # Validate trailing variadic arguments. Two forms are accepted:
-        #   - individual values, each type-checked against element type T;
-        #   - a single bloom spread `arr...`, type-checked against the whole array T[].
-        element_ty = (
-            variadic_param.ty.base_type
-            if isinstance(variadic_param.ty, DynamicArrayType)
-            else variadic_param.ty
-        )
-        validate_variadic_trailing_args(
-            validator, actual_args[fixed_count:], fixed_count,
-            variadic_param.ty, element_ty)
-        return
-
-    check_arguments(validator, function_name, [p.ty for p in expected_params],
-                    actual_args, loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
 def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef,

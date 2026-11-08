@@ -28,20 +28,9 @@ CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
 _PRODUCER_FAMILIES = frozenset({"array", "list", "hashmap"})
 
 
-def is_producer(expr: Any) -> bool:
-    """Is `expr` a built-in iterator method of a container: `xs.iter()`, `m.keys()`?
-
-    A `foreach` walks such a producer DIRECTLY when it is the iterable.
-    """
-    from sushi_lang.semantics.ast import DotCall, MethodCall
-    return (isinstance(expr, (MethodCall, DotCall))
-            and produces_from_a_container(expr.callee_builtin_family, expr.method,
-                                          len(expr.args)))
-
-
 def produces_from_a_container(family: Optional[str], method: str, arity: int) -> bool:
     """Is a call of the built-in method `method` of `family`, with `arity` arguments, a
-    producer over a container? The AST and SHIR both ask this one rule."""
+    producer over a container? Each stage that walks SHIR asks this one rule."""
     return arity == 0 and method in CONTAINER_ITERATORS and family in _PRODUCER_FAMILIES
 
 

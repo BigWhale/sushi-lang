@@ -1,14 +1,10 @@
-"""What the three visitors share: a name's function type, a lambda's type,
-and the fn-typed-field call.
+"""What the arms of the typecheck pass share: a name's function type, and the
+fn-typed-field call.
 """
 from __future__ import annotations
 from typing import Optional
 
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.ast import (
-    Lambda,
-    Block
-)
 
 
 def function_type_of_sig(sig) -> Optional[Type]:
@@ -30,79 +26,6 @@ def function_type_of_sig(sig) -> Optional[Type]:
     # borrow fn type, so binding one to the other was a double free (#368).
     return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type,
                         param_modes=declared_modes(sig.params))
-
-
-def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
-    """Compute (and, by default, cache on the node) the FunctionType of a lambda literal.
-
-    A written parameter type is resolved before the body is read and before the type is
-    built: `|P p|` binds `p` to the struct, so `p.x` has a type, and a solver that
-    unifies the answer against `fn(T) -> U` never sees `UnknownType("P")` beside the
-    struct (#1135).
-    """
-    from sushi_lang.semantics.param_modes import declared_modes
-    from sushi_lang.semantics.passes.types.utils import resolve_declared_type
-    from sushi_lang.semantics.typesys import BuiltinType, FunctionType
-    expected = getattr(lam, "expected_type", None)
-    cached = getattr(lam, "resolved_type", None)
-    if stamp and cached is not None and not _channel_arrived_later(lam, cached, expected):
-        return cached
-
-    saved = dict(type_validator.variable_types)
-
-    param_types = []
-    for idx, p in enumerate(lam.params):
-        pty = p.ty
-        if pty is None and isinstance(expected, FunctionType) and idx < len(expected.param_types):
-            pty = expected.param_types[idx]
-            if stamp:
-                p.ty = pty
-        elif pty is not None and not isinstance(pty, BuiltinType):
-            pty = resolve_declared_type(type_validator, pty)
-        param_types.append(pty)
-        if pty is not None:
-            type_validator.variable_types[p.name] = pty
-
-    ok_type: Optional[Type]
-    if lam.ret is not None:
-        ok_type = lam.ret
-    else:
-        # An EXPRESSION body says what it builds, and the DECLARED type answers when it
-        # cannot: a built-in static and a generic variant read their type from the
-        # position and infer nothing of their own (#625). A block body has no expression
-        # to ask at all.
-        ok_type = (None if isinstance(lam.body, Block)
-                   else type_validator.infer_expression_type(lam.body))
-        if ok_type is None and isinstance(expected, FunctionType):
-            ok_type = expected.ok_type
-
-    # The channel comes from the annotation or from the expected type, never from the
-    # body: with neither, the lambda is bare (docs/design/error-channel.md).
-    err_type = lam.err_type
-    if err_type is None and lam.ret is None and isinstance(expected, FunctionType):
-        err_type = expected.err_type
-
-    type_validator.variable_types.clear()
-    type_validator.variable_types.update(saved)
-
-    ft = FunctionType(
-        param_types=tuple(param_types),
-        ok_type=ok_type,
-        err_type=err_type,
-        param_modes=declared_modes(lam.params),
-    )
-    if stamp:
-        lam.resolved_type = ft
-    return ft
-
-
-def _channel_arrived_later(lam: Lambda, cached, expected) -> bool:
-    """A lambda typed before its position said its type: a generic argument is typed to
-    solve the call, and the solved parameter type comes after. An unannotated lambda
-    takes its channel from that expected type, so the cached answer is read again."""
-    from sushi_lang.semantics.typesys import FunctionType
-    return (isinstance(expected, FunctionType) and lam.err_type is None and lam.ret is None
-            and cached.err_type != expected.err_type)
 
 
 def fn_field_call_type(type_validator, recv_ty, method: str) -> Optional["Type"]:

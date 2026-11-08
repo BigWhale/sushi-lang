@@ -174,7 +174,6 @@ tables below are a map; each module's docstring holds the full rule.
 | The family of a built-in method call (`METHOD_TYPE_REGISTRY`) | `semantics/passes/types/method_registry.py` |
 | What `X.Y(args)` names (`resolve_dotcall`) | `semantics/passes/types/calls/dotcall.py` |
 | Every argument check (`check_arguments`) | `semantics/passes/types/arguments.py` |
-| Declared-type propagation at a method boundary | `semantics/passes/types/propagation.py` |
 | The root of a place (`walk_place`) | `semantics/places.py` |
 | A write through a read-only receiver (`reject_readonly_write`) | `semantics/passes/borrow/writes.py` |
 | What a borrow of a constant may do (`reject_borrow_of_constant`) | `semantics/constant_borrow.py` |

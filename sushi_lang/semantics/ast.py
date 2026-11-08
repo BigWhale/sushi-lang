@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.generics.types import TemplateId
     from sushi_lang.semantics.namespaces import NamespaceRef
-    from sushi_lang.semantics.param_modes import ParamMode
 
 
 @dataclass(slots=True)
@@ -925,23 +924,11 @@ class Call(Node):
     # Span of the `@(...)` type-arg list, for diagnostics (CE2062 arity, constraint
     # failures) that must underline the type args rather than the callee.
     type_args_loc: Optional["Span"] = None
-    # Set by the type checker when `callee` is a non-Name expression resolving to a
-    # FunctionType: the backend uses it to emit the fat-pointer indirect call without
-    # re-inferring the callee's signature.
-    # What the typecheck pass resolved about the callee's parameters. The borrow pass
-    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_types: Optional[Tuple[Type, ...]] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_self_mode: Optional[str] = None  # "peek"/"poke"; see MethodCall
     inferred_return_type: Optional["Type"] = None  # Return type inferred by the typecheck pass
     namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
-    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type
-    # The callee has a borrowed return (#1229): where its sources stand in the call (an
-    # argument index, or -1 for the receiver). None for an owned return. See MethodCall.
-    callee_borrows: Optional[Tuple[int, ...]] = None
 
 
 @dataclass(slots=True)
@@ -950,33 +937,12 @@ class MethodCall(Node):
     method: str
     args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
-    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     # A call through a `use ... as` alias; see DotCall for what the triple carries.
     namespace_ref: Optional["NamespaceRef"] = None
-    callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `poke self` (#327); stamped by the typecheck pass, read
-                                            # by the borrow pass (a poke call is a receiver WRITE)
-                                            # and the backend (pass a pointer)
-    # The built-in method family that answered the call ("array", "list", ...), or None
-    # for a user method. The borrow pass reads a method-effect row only for its family.
-    callee_builtin_family: Optional[str] = None
-    # What the typecheck pass resolved about the callee's parameters. The borrow pass
-    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_types: Optional[Tuple[Type, ...]] = None
-    # The rest of what the typecheck pass resolves about a call. Every call node
-    # carries the whole set, so a pass never has to ask which call shape it has.
-    # The unit that declares the extension method the call resolved to; the backend
-    # composes it into the callee symbol (`docs/design/extension-visibility.md` C5).
-    callee_extension_unit: Optional[str] = None
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
-    # The callee has a borrowed return (#1229): where its sources stand in the call (an
-    # argument index, or -1 for the receiver). None for an owned return. The answer is a
-    # borrow of the owners of those arguments.
-    callee_borrows: Optional[Tuple[int, ...]] = None
 
 
 @dataclass(slots=True)
@@ -987,19 +953,11 @@ class DotCall(Node):
     args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
-    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
     # kind of producer answered, the unit or module it named, and the declared name.
     # The back end resolves through the origin, so a shadowed name reaches the right
     # declaration (`docs/design/unit-namespaces.md` section 5).
     namespace_ref: Optional["NamespaceRef"] = None
-    callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `poke self` (#327); see MethodCall
-    callee_builtin_family: Optional[str] = None  # see MethodCall
-    # What the typecheck pass resolved about the callee's parameters. The borrow pass
-    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_types: Optional[Tuple[Type, ...]] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
     # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
     # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a
@@ -1007,10 +965,6 @@ class DotCall(Node):
     # states is unharmed and only the parse shape changed (unit-namespaces.md 5.1).
     type_args: Optional[List["Type"]] = None
     type_args_loc: Optional["Span"] = None
-    # The rest of what the typecheck pass resolves about a call. Every call node
-    # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_extension_unit: Optional[str] = None  # see MethodCall
-    callee_borrows: Optional[Tuple[int, ...]] = None  # see MethodCall
 
 
 @dataclass(slots=True)

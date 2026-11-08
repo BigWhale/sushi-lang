@@ -573,8 +573,8 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the plain-item rule where an instance is interned | `settle_in_tables` over `EnumTable.item_owner`, `semantics/generics/iterators.py` |
 | the reserved name | `_compiler_type_names`, `semantics/passes/collect/utils.py` |
 | the choice of the walk (direct, or a value) | `_choose_the_walk`, `semantics/passes/types/statements.py` |
-| the range value | `propagate_types_to_value`, `semantics/passes/types/propagation.py` |
-| `Iterator.new` | `_validate_iterator_new`, `semantics/passes/types/calls/methods.py`; `emit_new_iterator`, `backend/runtime/iterators.py` (C3 gives it operands) |
+| the range value | `check_range`, `semantics/passes/types/visit/ranges.py` |
+| `Iterator.new` | `check_iterator_new`, `semantics/passes/types/visit/iterator_methods.py`; `emit_new_iterator`, `backend/runtime/iterators.py` |
 | the lent and the owned iterator in the borrow pass | `semantics/passes/borrow/iterators.py` |
 | the value, the state and the three functions of each source | `backend/runtime/iterators.py` |
 | the HashMap cursor | `bucket_source`, `backend/generics/hashmap/methods/iterators.py` |

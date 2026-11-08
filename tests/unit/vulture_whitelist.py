@@ -15,11 +15,7 @@ gate, and a new candidate cannot go in it without a reason and a review.
 from __future__ import annotations
 
 # `@<decorator>` patterns passed to `vulture --ignore-decorators`.
-IGNORE_DECORATORS: dict[str, str] = {
-    "@METHOD_TYPE_REGISTRY.validator":
-        "registers the validation hook of a built-in method family "
-        "(semantics/passes/types/calls/methods.py)",
-}
+IGNORE_DECORATORS: dict[str, str] = {}
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
@@ -30,12 +26,6 @@ _TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct grou
            "the helper to SHIR inputs")
 _TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
-
-
-def _port(group: str) -> str:
-    return (f"a port template: it calls TypeValidator.validate_expression, which is deleted, "
-            f"and no pass reaches it; group {group} ports it to SHIR inputs before a SHIR "
-            f"pass calls it")
 
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
@@ -109,11 +99,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
-    (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
-    (_TYPES + "calls/methods.py", "validate_method_call",
-     "the AST method-call ladder: the validate hooks of METHOD_TYPE_REGISTRY are its rungs, "
-     "and test_method_resolution_family_order.py and test_method_family_call_shape.py read "
-     "its source; kept for Tier D (Phase 6), which deletes the AST typecheck with them"),
 )
 
 # -- the AST helpers of borrow that the switch left with no caller (P2.6a) ------------
@@ -154,43 +139,7 @@ WHITELIST += (
      _family("D5", "the string that an extern returns")),
 )
 
-# -- AST facts whose last reader P2.13 deleted ----------------------------------------
-# The old body emitter read each one. A port template writes it, and the group moves the
-# fact to the tables of SHIR (TypeckResults, OwnershipResults) and deletes the field.
 _SEMANTICS = "sushi_lang/semantics/"
-
-
-def _fact(group: str, what: str) -> str:
-    return (f"kept for {group}: {what}; an AST port template writes it, and the group "
-            "moves the fact to a SHIR table and deletes it")
-
-
-_TYPES_PASS = "passes/types/"
-
-# (field, the module of its writer, group, what it holds). The field is declared in
-# semantics/ast.py, and vulture reports the declaration and the write.
-_FACTS = (
-    ("callee_borrows", _TYPES_PASS + "borrowed_returns.py", "Tier D (Phase 6)",
-     "the source row of a borrowed call, written only by the AST method-call ladder "
-     "(validate_method_call) and validate_namespaced_call, and it goes with them; a SHIR "
-     "call reads TypeckResults.sources_of"),
-    ("callee_self_mode", _TYPES_PASS + "calls/methods.py", "Tier D (Phase 6)",
-     "the receiver mode of a method call, written only by the AST method-call ladder "
-     "(validate_method_call), and it goes with it; a SHIR call reads the Method callee"),
-    ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "Tier D (Phase 6)",
-     "the declaring unit of an extension callee, written only by the AST method-call "
-     "ladder (validate_method_call), and it goes with it; a SHIR call reads "
-     "ResolvedCall.unit"),
-    ("callee_param_types", _TYPES_PASS + "calls/*.py", "Tier D (Phase 6)",
-     "the solved parameter types of a call, written only by the AST method-call ladder "
-     "(validate_method_call) and validate_namespaced_call, and it goes with them; its last "
-     "reader was the AST port template of the iterator adapters, which group C3 deleted"),
-)
-
-WHITELIST += tuple(
-    (_SEMANTICS + module, name, _fact(group, what))
-    for name, writer, group, what in _FACTS
-    for module in ("ast.py", writer))
 
 WHITELIST += (
     (_SEMANTICS + "typesys.py", "get_field_index",
@@ -231,7 +180,6 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/test_pack_substitution.py", "_validate_type_constraints", _READ_BY_CODE),
     ("tests/unit/test_pack_substitution.py", "ret_span", _READ_BY_CODE),
     ("tests/unit/test_pack_substitution.py", "err_span", _READ_BY_CODE),
-    ("tests/unit/test_lambda_annotate_seam.py", "infer_expression_type", _READ_BY_CODE),
     ("tests/unit/test_borrow_of_constant_matrix.py", "emit_with", _READ_BY_CODE),
     ("tests/unit/test_library_registration_records.py", "loaded_libraries", _READ_BY_CODE),
     ("tests/unit/test_drop_invalidates_cache.py", "file_path", _READ_BY_CODE),

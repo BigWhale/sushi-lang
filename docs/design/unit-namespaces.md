@@ -366,12 +366,11 @@ alias folds into `Sign`, and what is left is the ordinary `EnumConstructor` path
 (`resolve_dotcall`, `passes/types/calls/dotcall.py`) has no extra rung for it: the namespace
 check is the one namespace rung.
 
-One phase runs BEFORE the fold: propagation, which stamps a GENERIC enum's constructor
-with the instantiation its position declares. It reads the enum's name through the alias
-for itself (`_enum_receiver_name`, `passes/types/propagation.py`), because a
-`my_math.Slot.Filled(x)` reaches it with the `MemberAccess` receiver still in place. The
-bare `my_math.Slot.Empty` takes the same reading. A GENERIC struct's constructor behind an
-alias (`my_math.Box(1)`) is stamped by the same phase; with no declared type, the
+A GENERIC enum's constructor behind an alias (`my_math.Slot.Filled(x)`) takes the
+instantiation its position declares, as the flat form does: SHIR lowering makes it an
+`EnumInit` whose declaration is the written name, the alias included, and the arm of the
+typecheck pass reads the enum from it. A GENERIC struct's
+constructor behind an alias (`my_math.Box(1)`) is the same; with no declared type, the
 arguments solve it through the one leading solver, as they solve the flat `Box(1)`.
 
 ### 5.1 The grammar

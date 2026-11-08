@@ -18,19 +18,6 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 
-def stamp_call_sources(validator: 'TypeValidator', call: Any, callee: Any) -> None:
-    """Stamp where the sources of `callee` stand in `call` (`callee_borrows`).
-
-    `callee` is the declaration or the signature the call resolved to. A callee with an
-    owned return leaves the stamp None.
-    """
-    record = borrowed_return_of(callee)
-    if record is None:
-        return
-    names = [param.name for param in getattr(callee, "params", None) or ()]
-    call.callee_borrows = source_positions(record, names, validator.tables)
-
-
 def record_call_sources(validator: 'TypeValidator', call: Any, callee: Any) -> None:
     """The source row of the SHIR `call` of `callee`, a declaration or a signature: where
     the sources of its `peek` return stand in the call. A callee with an owned return has

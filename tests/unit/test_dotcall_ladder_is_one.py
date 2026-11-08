@@ -31,7 +31,8 @@ TYPES_PASS = PACKAGE / "semantics" / "passes" / "types"
 LADDER = TYPES_PASS / "calls" / "dotcall.py"
 
 #: Each fact that the AST ladder copied back onto the call node, and the SHIR field that
-#: holds it now: a field of the callee row, or a row kind of `TypeckResults`.
+#: holds it now: a field of the callee row, or a row kind of `TypeckResults`. The AST
+#: ladder is deleted, and so are these fields of the AST call nodes.
 SHIR_HOMES = {
     "callee_builtin_family": (BuiltinMethod, "family"),
     "callee_extension_unit": (ResolvedCall, "unit"),
@@ -41,19 +42,10 @@ SHIR_HOMES = {
     "callee_borrows": (TypeckResults, "sources_of"),
 }
 
-#: The facts whose SHIR home comes with a later chunk, and the chunk.
-LATER: dict[str, str] = {}
-
-#: The facts that need no SHIR home: the typecheck pass reads them from the declaration of
-#: the callee when it checks the arguments, and no later stage reads them.
-_READ_FROM_THE_DECLARATION = ("callee_param_types",)
-
-#: What the AST half handed INTO the temporary node instead of reading back off it: the
-#: propagation stamp (#272) and the namespace stamp (#506). No rung copies them back.
-_CARRIED_IN = ("resolved_struct_type", "namespace_ref")
-
-#: What the DotCall's own visit writes on the DotCall: its inferred type (#769).
-_WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
+#: The fields of an AST call node that are no written part of the call and that stay for
+#: now: no pass of the body writes them, and Phase 6 deletes them with their AST readers.
+#: `namespace_ref` is written by the constant evaluator for a constant initializer.
+_STILL_ON_THE_AST = ("inferred_return_type", "resolved_enum_type", "namespace_ref")
 
 #: Shared fields that are no fact of a resolved method: the written parts of the call, and
 #: what the other call shapes and the AST borrow helpers write on their own nodes.
@@ -100,19 +92,15 @@ def _homes(name: str) -> tuple[dict[str, int], dict[str, int]]:
     return defs, calls
 
 
-def test_each_fact_of_the_stamp_set_has_a_shir_home():
-    """A field that the temporary node and the DotCall both carry is a fact with a SHIR
-    home, a fact of a later chunk, or no fact of a resolved method."""
+def test_no_ast_call_node_carries_a_fact_of_a_resolved_method():
+    """The fields that the AST call nodes share are the written parts of the call, or a
+    field that no body pass writes. No fact of `SHIR_HOMES` but one of those is there."""
     shared = (_field_names(MethodCall) & _field_names(DotCall)) - _field_names(Node)
-    accounted = (set(SHIR_HOMES) | set(LATER) | set(_READ_FROM_THE_DECLARATION)
-                 | set(_CARRIED_IN)
-                 | set(_WRITTEN_ON_THE_DOTCALL) | set(_NOT_A_METHOD_STAMP))
-    missing = sorted(shared - accounted)
-    assert not missing, (
-        "a field the temporary node and the DotCall both carry is in no table: "
-        + ", ".join(missing)
-        + "\nName its SHIR home in SHIR_HOMES, or the chunk that adds it in LATER.")
-    assert len(shared) > 10, f"the field reader found only {sorted(shared)}"
+    left = sorted(shared - set(_NOT_A_METHOD_STAMP) - set(_STILL_ON_THE_AST))
+    assert not left, (
+        "an AST call node carries a field that is no written part of the call: "
+        + ", ".join(left) + "\nA fact of a resolved method is a row of TypeckResults.")
+    assert set(_NOT_A_METHOD_STAMP) <= shared, f"the field reader found only {sorted(shared)}"
 
 
 @pytest.mark.parametrize("stamp", sorted(SHIR_HOMES))

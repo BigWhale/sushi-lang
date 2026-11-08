@@ -334,9 +334,3 @@ def _help_a_value_call(validator: 'TypeValidator', diag: Any, arg: e.Arg, actual
               f"referent")
 
 
-def names_a_type_pack(validator: 'TypeValidator', expr: Any) -> bool:
-    """Is `expr` the bare name of a type pack of the instance being checked (#1109)?"""
-    from sushi_lang.semantics.ast import Name
-    func = validator.current_function
-    return (isinstance(expr, Name) and func is not None
-            and expr.id in func.pack_names and expr.id not in validator.variable_types)

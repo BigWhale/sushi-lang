@@ -33,10 +33,10 @@ MODULES = (
 SITES = (
     ("generics/instantiate/expressions.py", "_record_fn_reference"),
     ("passes/types/calls/generics.py", "solved_value_type_args"),
-    # The PARTIAL callers (#809): a generic static's target, and the method-level type
-    # parameters of an extension. Each keeps its own contract (the stamp fill, CE2063).
+    # The PARTIAL callers (#809): a generic static's target, and the arguments of a SHIR
+    # call, which solve a method-level type parameter of an extension too (CE2063).
     ("statics.py", "solve_target_type_args"),
-    ("passes/types/calls/methods.py", "resolve_method_generic_extension"),
+    ("passes/types/visit/constructions.py", "unify_arguments"),
     # The method-level type parameter of a built-in method (`or_err`, design 8.3).
     ("generics/builtin_signatures.py", "solve_builtin_signature"),
 )
