@@ -66,7 +66,7 @@ from sushi_lang.semantics.slir.verify_arrays import (
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_values import (
-    capture_places, copies_with_no_transfer, stack_iterators)
+    capture_places, closure_value, copies_with_no_transfer, iterator_value, stack_iterators)
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
@@ -387,6 +387,10 @@ class Check:
                               [self.operand_type(part, span) for part in value.parts], span)
         if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggArray):
             array_value(self, value.kind, value.parts, span)
+        if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggClosure):
+            closure_value(self, value.kind, value.parts, span)
+        if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggIterator):
+            iterator_value(self, value.kind, value.parts, span)
         if isinstance(value, (r.Len, r.Slice)):
             length_or_slice(self, value, span)
 

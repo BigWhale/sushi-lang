@@ -5,27 +5,34 @@ its operand, because the modes are part of the type. A function value is the one
 beside a `string` that may come as a copy: a named function owns no heap, and `borrow` adopts
 it (`copies_with_no_transfer`). In a function that lowering cut from a lambda, a capture place
 is never moved out of, and the environment is never written as a whole: a caller can call the
-closure two times or more (`capture_places`). The `Indirect` call of an `IteratorValue` walk
+closure two times or more (`capture_places`). A closure value is the `FnRef` of its function,
+then one `Copy` or `Move` of a place for each field of its environment (`closure_value`). An
+iterator value has the parts of its row: a lent cursor reads its container with a `Copy`, and
+an adapter moves its inner iterator (`iterator_value`). The `Indirect` call of an `IteratorValue` walk
 has an iterator as its operand, and no argument. A local that holds an iterator with a stack
 state never reaches `_0` or an `Owned` argument, except the iterator of a consumer
 (`stack_iterators`).
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from sushi_lang.semantics.method_effects import ITERATOR_FAMILY
 from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
 from sushi_lang.semantics.shir.callee import BuiltinMethod
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import SlirFunction
 from sushi_lang.semantics.slir.ids import LocalId
-from sushi_lang.semantics.slir.verify_rules import CAPTURE_PLACES, CONVENTIONS, STACK_ITERATOR
+from sushi_lang.semantics.slir.verify_rules import (
+    CAPTURE_PLACES, CONVENTIONS, ITERATOR_VALUE, STACK_ITERATOR,
+)
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, IteratorType, Type, deref_type
 
 if TYPE_CHECKING:
+    from sushi_lang.internals.report import Span
     from sushi_lang.semantics.slir.verify import Check
 
 
@@ -55,6 +62,48 @@ def indirect_conventions(check: Check, stmt: st.Call, callee: st.Indirect) -> No
         if have is not want:
             check.fail(CONVENTIONS, f"argument {index} of the indirect call is @{have.value}, "
                                     f"and its parameter is @{want.value}", stmt.span)
+
+
+def closure_value(check: Check, kind: r.AggClosure, parts: Sequence[p.Operand],
+                  span: Span) -> None:
+    """The `FnRef` first, then one `Copy` or `Move` for each field of the environment."""
+    if not parts or not (isinstance(parts[0], p.Const)
+                         and isinstance(parts[0].constant, k.FnRef)):
+        check.fail(CAPTURE_PLACES, "the first part of a closure value is no FnRef", span)
+    fields = 0 if kind.env is None else len(kind.env.fields)
+    if len(parts) != 1 + fields:
+        check.fail(CAPTURE_PLACES, f"the closure value has {len(parts)} parts, and its "
+                                   f"environment has {fields} fields", span)
+    for part in parts[1:]:
+        if not isinstance(part, (p.Copy, p.Move)):
+            check.fail(CAPTURE_PLACES, f"the capture {part} is no Copy or Move of a place", span)
+
+
+#: How many parts each row of the source table of an iterator value has (ir.md 8.7).
+_ITERATOR_PARTS: dict[type, int] = {
+    r.IterElements: 1, r.IterMapView: 1, r.IterRange: 2, r.IterNew: 1, r.IterMap: 2,
+    r.IterFilter: 2, r.IterEnumerate: 1, r.IterZip: 2, r.IterCloneEach: 1,
+}
+
+
+def iterator_value(check: Check, kind: r.AggIterator, parts: Sequence[p.Operand],
+                   span: Span) -> None:
+    """The part count of the row; a lent cursor reads its container, and an adapter and
+    `Iterator.new` move their first part."""
+    source = kind.source
+    wanted = _ITERATOR_PARTS[type(source)]
+    if len(parts) != wanted:
+        check.fail(ITERATOR_VALUE, f"the iterator value has {len(parts)} parts, and its row "
+                                   f"{type(source).__name__} has {wanted}", span)
+    first = parts[0]
+    if isinstance(source, (r.IterElements, r.IterMapView)) and source.lent:
+        if not isinstance(first, p.Copy):
+            check.fail(ITERATOR_VALUE, f"the lent cursor reads {first}, which is no Copy of a "
+                                       f"place", span)
+    elif not isinstance(source, (r.IterElements, r.IterMapView, r.IterRange)):
+        if not isinstance(first, p.Move):
+            check.fail(ITERATOR_VALUE, f"the iterator value takes {first}, which is no Move",
+                       span)
 
 
 def capture_places(check: Check, function: SlirFunction) -> None:

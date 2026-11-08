@@ -2,7 +2,9 @@
 
 A failed rule is the internal error CE0158, and the diagnostic names the rule by one of
 these texts. The structure check (`verify.py`), the call check (`verify_calls.py`), the
-dataflow (`verify_flow.py`) and the region check (`verify_regions.py`) share them.
+check of an array value (`verify_arrays.py`), the check of a function value and of an
+iterator value (`verify_values.py`), the dataflow (`verify_flow.py`) and the region check
+(`verify_regions.py`) share them.
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ BOOL_FLAG = "bool drop flag"
 DROP_ONCE = "one drop or move on every path"
 CONVENTIONS = "declared conventions"
 CAPTURE_PLACES = "capture places"
+ITERATOR_VALUE = "an iterator value"
 STACK_ITERATOR = "a stack-state iterator never leaves"
 RECEIVER_OPERAND = "a receiver operand"
 OWNED_COPY = "no copy of an owning value into an owned argument"
