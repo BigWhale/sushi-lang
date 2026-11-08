@@ -15,6 +15,7 @@ import pytest
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import CONVERSION_METHOD, ExtendDef, FuncDef
+from sushi_lang.semantics.conversions import conversion_symbol
 from sushi_lang.semantics.passes import lift as lift_module
 from sushi_lang.semantics.passes.lift import LiftPass
 from sushi_lang.semantics.shir import exprs as e
@@ -25,6 +26,7 @@ from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.lowering import LoweredProgram
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.walk import walk
+from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
 
 from ownership_sample import CAPTURED, sample, span
 
@@ -80,12 +82,16 @@ def test_a_lambda_has_its_symbol_and_its_captured_locals() -> None:
     assert [call[1] for call in next_stage.calls] == [made.body]
 
 
-def test_a_conversion_has_its_name_as_the_prefix() -> None:
+def test_a_conversion_has_its_symbol_as_the_prefix() -> None:
+    """A conversion lowers, so two conversions of one source lift two lambdas of two names."""
     made = sample()
-    decl = ExtendDef(target_type=None, name=CONVERSION_METHOD, params=[], ret=None, body=None,
-                     loc=span(1))
+    low = EnumType(name="LowError", variants=(EnumVariantInfo("Bad", ()),), is_error=True)
+    app = EnumType(name="AppError", variants=(EnumVariantInfo("Low", (low,)),), is_error=True)
+    decl = ExtendDef(target_type=low, name=CONVERSION_METHOD, params=[], ret=app, body=None,
+                     loc=span(1), self_mode="nom", method_type_args=(app,))
     next_stage, program = _run(made.body, made.decls, decl=decl, tables=_PERKLESS)
-    assert program.lift_table_of(made.body).symbol_of(made.id_of("lambda")) == "sample.__lambda_0"
+    assert program.lift_table_of(made.body).symbol_of(made.id_of("lambda")) \
+        == f"{conversion_symbol(low, app)}.__lambda_0"
     assert [call[1] for call in next_stage.calls] == [made.body]
 
 
