@@ -806,7 +806,7 @@ the value of a pattern (7.8, ruling R-AE). That covers more than types:
 | the resolved `Convention` of each argument | the call's `shir_id`, per position |
 | the instance type of a `StructInit`, an `EnumInit` or a `TupleInit` | the node's `shir_id` |
 | the field INDEX of a `Field` (the node carries only the name) | the `Field`'s `shir_id` |
-| the `LoopKind` of a loop (7.7), with the `next()` callee of a protocol walk | the loop's `shir_id` |
+| the `LoopKind` of a loop (7.7), with the `next()` callee of a protocol walk, its type arguments, its declaring unit and its item type | the loop's `shir_id` |
 | whether a `Range` is an `Iterator@(i32)` value | the `Range`'s `shir_id` |
 | the `next()` that the state of an `Iterator.new` calls | the call's `shir_id` |
 | the conversion that a `Cast` or a `Try` calls | the node's `shir_id` |
@@ -1779,7 +1779,7 @@ LoopKind = While
          | CountedRange
          | Cursor
          | HashMapCursor(view: Keys | Values | Entries | Pairs)
-         | Protocol(next: Callee)
+         | Protocol(next: ResolvedCall, item: Type)
          | IteratorValue
 ```
 
@@ -1804,7 +1804,10 @@ applies.
   source with `by: Ref(Poke)`.
 - `HashMapCursor` is a direct walk of one HashMap view.
 - `Protocol` walks a type that carries `next()` answering `Maybe@(T)`, such as
-  `Lines@(R)`. The `next()` callee is in `TypeckResults`.
+  `Lines@(R)`. The `next()` callee is in `TypeckResults`, as a `ResolvedCall` (7.3): a
+  `Method` whose `recv` is the iterable, with the convention of the declared `self`, and
+  the declaring unit that the symbol needs (C5). `item` is the `T` of the `Maybe@(T)` that
+  `next()` answers: the binder can be `_` or have a written type, so no other row holds it.
 - `IteratorValue` walks an `Iterator@(T)` value through its `next_fn`.
 
 A `while(true)` loop is a `Cond` source with a constant condition. A `foreach(x?? in ...)` reaches
