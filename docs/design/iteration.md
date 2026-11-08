@@ -377,8 +377,9 @@ null. A producer over a TEMPORARY (`from([1, 2]).iter()`, `make_map().keys()`) m
 OWNED iterator: the iterator takes the temporary, and its state holds the cursor and the
 container on the heap. A range and `Iterator.new` are owned too. The `drop_fn` of an owned
 state destroys the container or the value it holds, and then frees the state. A `drop_fn`
-never frees a stack slot. The borrow pass chooses, and stamps the producer with
-`MethodCall.iterator_state` (`CURSOR`, `LENT` or `OWNED`, `semantics/generics/iterators.py`).
+never frees a stack slot. The borrow pass chooses, and writes LENT or OWNED for the
+producer and its heap decision in `OwnershipResults` (`passes/borrow/iterators.py`). SLIR
+lowering puts the heap decision in the `heap` field of `AggIterator` (`ir.md` 8.7).
 
 **The walk.** A `foreach` over an iterator VALUE calls `next_fn` until it answers `None`. A
 `foreach` over a source the compiler can read keeps its DIRECT walk, with no call through
@@ -418,10 +419,10 @@ fn main() i32:
 ```
 
 Its state cannot stay in a stack slot of the function, so it moves to the HEAP at that
-return. The two facts stay apart: `iterator_state` says what the value borrows (`LENT`),
-and `state_on_heap` (`semantics/generics/iterators.py`) says where its state is. The borrow
-pass stamps `iterator_leaves` on each link of the chain that the return gives (a producer
-and each lazy adapter, through each `let` that held a link), so EVERY link moves: an
+return. The two facts stay apart: LENT says what the value borrows, and the heap decision
+says where its state is (two rows of `OwnershipResults`). The borrow pass puts each link of
+the chain that the return gives on the heap (`lend_to_the_caller`: a producer and each lazy
+adapter, through each `let` that held a link), so EVERY link moves: an
 adapter state holds its inner iterator by value, and the state pointer of that inner value
 must not point into the frame. A heap lent cursor frees its block in its `drop_fn`, and a
 heap adapter state destroys what it holds and frees its block. The caller holds a lent
@@ -525,7 +526,7 @@ freezes its owners for the whole loop, as a direct walk freezes its container.
 
 **The state.** A lazy adapter over a lent input is LENT: its state is a stack slot of the
 function, as the state of its input is. Over owned inputs it is OWNED: its state is on the
-heap. The borrow pass stamps `MethodCall.iterator_state`. The state holds the inner iterator
+heap. The borrow pass writes the answer in `OwnershipResults`. The state holds the inner iterator
 and the function (`map`, `filter`), the count (`enumerate`) or the second iterator (`zip`).
 Its `next_fn` asks the inner iterator for an item and changes it. Its `drop_fn` destroys the
 inner iterator and the function, and frees the state only when it is on the heap. Its

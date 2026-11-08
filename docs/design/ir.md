@@ -137,7 +137,10 @@ frees it after the call, so no SLIR local holds it). Amended on 2026-11-07 by ru
 legal, and the environment as a whole is never written; CE2405 stays for a second capture of
 an owning local and for a use after a move from a rebound function value). Amended on
 2026-11-08 by ruling R-BA: 4.4 and 7.9 (a `let` of a `let` that holds a lent iterator moves
-it).
+it). Amended on 2026-11-08 by group C3 (iterators): 8.7 and 8.13 (one row of the source
+table of `AggIterator` for each lazy adapter; a consumer is one `Call` of
+`Builtin(iterator)` that takes a stack-state iterator), and 1.2, 4.4, 7.3, 7.7, 7.9, 8.6,
+8.9 and 8.12 (the text of the walks, the values, the adapters and the consumers as built).
 
 ## The decisions, in one place
 
@@ -216,8 +219,9 @@ completeness check. Three faults follow from that shape, and each one is in the 
   `iterator_state` is written by `typecheck` (`CURSOR`) and by `borrow` (`LENT`, `OWNED`).
   `Lambda.captures` is written by `scope` (the names) and by `typecheck` (each capture's
   `ty`, `passes/types/visit/helpers.py:72`). No pass can say that the field is final.
-  On the old pipeline, ruling S6 now makes `borrow` the one writer of `walks_in_place`
-  and of `iterator_state`.
+  On the old pipeline, ruling S6 made `borrow` the one writer of `walks_in_place` and
+  of `iterator_state`. Group C3 deleted both fields: `OwnershipResults` holds the two
+  answers (7.9).
 - **One set that is not one set.** `CallLike` says that each call class carries the whole
   set of callee fields. `Call` carries 7 `callee_*` fields, `MethodCall` 11 and `DotCall`
   13.
@@ -459,7 +463,7 @@ An `Iterator@(T)` is a value (`iteration.md`, ruling 10). It has the shape of a 
 view, a range, `Iterator.new`, each lazy adapter) supplies its own three functions.
 
 The loop kind is still chosen statically. `typecheck` decides it once
-(`_choose_the_walk`): a range or a built-in producer written as the iterable is a DIRECT
+(`check_iterator_walk`, `passes/types/visit/walks.py`): a range or a built-in producer written as the iterable is a DIRECT
 walk with no call through `next_fn` and no allocation, a type with `next()` is a protocol
 walk, and every other iterator is a walk of a value through its `next_fn`. `LoopKind`
 (7.7) has a variant for each.
@@ -1121,8 +1125,7 @@ family in ONE table, `FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the
 the family in `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
 `tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
 progress, a family with no arm in the table stops the walk with `typecheck, Call(method
-<family>)`, on a receiver of any type (`Call(method iterator)`), so the stops of each
-family are counted apart. A receiver that is not of a built-in type and that no family
+<family>)`, on a receiver of any type, so the stops of each family are counted apart. A receiver that is not of a built-in type and that no family
 claims, and no extension method of a plain type answers (see below), stops the walk with
 the label of the call target (`Call(method)`, `Call(stdlib method)`). A perk method that is
 no contract method is a `Method` callee (7.6). An opaque type parameter that a
@@ -1245,8 +1248,7 @@ type that owns. The faults of a declaration are reported at the declaration, one
 template: an empty source set is [CE2438](../error-catalog.md#ce2438), and an `E` that owns
 a resource is [CE2442](../error-catalog.md#ce2442). The AST builder refuses a `peek` return
 on a lambda and on a perk method (CE2439) and on a `nom self` method (CE2440). A function
-with a `peek` return named as a value is [CE2441](../error-catalog.md#ce2441); a function
-value stops the walk (`typecheck, GlobalRef`), so that check comes with the function values.
+with a `peek` return named as a value is [CE2441](../error-catalog.md#ce2441), at the name.
 
 **A stdlib function.** A bare name that no function of the unit's scope takes is the
 function of a registry stdlib module that the unit imports, when one has it
@@ -1795,10 +1797,10 @@ applies.
   is in the `Range`. The binder is an `i32` local. The `Range` has the type
   `Iterator@(i32)` and the row "no value". Each bound is an i32 position: a bound that is
   no number is CE2072, and a number of another type is CE2121. Readable bounds that go down
-  are CE2125 (`semantics/ranges.py`). A `peek` or `poke` binder over a range stops the walk
-  (`typecheck, Loop`). A `Range` in any other position is CE2122 and its bounds are checked
-  too, except in a position that expects an `Iterator@(T)`: there it is a value, which
-  stops the walk (`typecheck, Range`).
+  are CE2125 (`semantics/ranges.py`). A `peek` or `poke` binder over a range is CE2423:
+  only a `Cursor` and a `HashMapCursor` have items with an address. A `Range` in any other
+  position is CE2122 and its bounds are checked too, except in a position that expects an
+  `Iterator@(i32)`: there it is a value (the row "value"), an owned iterator (8.9).
 - `Cursor` is a direct walk of contiguous elements: `xs.iter()` on `T[]`, `T[N]`,
   `List@(T)`, and a slice. `foreach(poke r in xs.iter())` is `Cursor` over an `Items`
   source with `by: Ref(Poke)`.
@@ -1814,11 +1816,11 @@ A `while(true)` loop is a `Cond` source with a constant condition. A `foreach(x?
 lowering already desugared by the AST builder: a hidden binder, and a `let` with `??` at
 the top of the body.
 
-The iterator of a `Protocol` or an `IteratorValue` walk has no SHIR local. Today the
-typecheck pass makes a hidden local for it (`Foreach.protocol_iter_name`) and the `next()`
-call on it (`Foreach.protocol_next`), after `scope`, so lowering cannot read either. The
-`next()` callee is the `Protocol` answer, keyed by the loop's `shir_id`, and SHIR-to-SLIR
-lowering makes the SLIR local that holds the iterator. No pass before it names that local:
+The iterator of a `Protocol` or an `IteratorValue` walk has no SHIR local. The `next()`
+callee is the `Protocol` answer, keyed by the loop's `shir_id`, and SHIR-to-SLIR lowering
+makes the SLIR local that holds the iterator. An iterable of any other type is CE2033, and
+an iterable that names nothing gives the error of the unknown name; the loop then has no
+kind, and the body does not reach `borrow` (7.9). No pass before it names that local:
 `borrow` keys its facts on the loop's `shir_id`.
 
 Whether a `Protocol` or an `IteratorValue` walk takes its iterator or walks it in place,
@@ -2330,9 +2332,11 @@ reports and writes each row once. The code after the loop sees that fixed point 
 with each `Break` path of the second round. A `CountedRange` loop reads the bounds of its
 range once, at the entry, and declares its binder as a read-only view, as a bare binder of
 a match is: a write or a rebind of it is CE2414, with a note at the binder. Then it checks
-its body as a `Cond` loop does. A `Loop` with any other `Items` source walks an iterator,
-and it stops the walk (`borrow, Loop`). A `While` loop has no iterator, so it has no
-walk-in-place row: that row is a fact of a `Protocol` or an `IteratorValue` walk alone.
+its body as a `Cond` loop does. A `Loop` with any other `Items` source walks an iterator
+(`passes/borrow/walks.py`): a direct walk freezes the owner of its container for the loop,
+and a `Protocol` or an `IteratorValue` walk takes its iterator, or walks it in place (4.4).
+A `While` loop has no iterator, so it has no walk-in-place row: that row is a fact of a
+`Protocol` or an `IteratorValue` walk alone.
 `walk_place` (`semantics/places.py`) reads a SHIR place through the adapter of its tree,
 with the same `Step` and `Walked` as the AST walk of the `scope` pass.
 
@@ -2400,8 +2404,8 @@ lives is [CE2412](../error-catalog.md#ce2412). The element of `push` and the val
 answer a view of the receiver (`answers_view`), as those of a List do. A refill (`fill`)
 whose argument reads a slot of the owning array that it refills is CE2430
 (`reject_refill_from_own_slot`): an index and a get-out read as any slot, so `xs.fill(xs[0])`
-is refused. `iter()` on an array stops the walk (`Call(method array) iterator`), because it
-makes a lent iterator.
+is refused. `iter()` on an array is a producer: it makes a lent iterator over a place, and
+an owned one over a temporary (`passes/borrow/iterators.py`).
 
 **A `var` in `borrow`.** A `var` is storage that the program keeps for its whole run, with
 an address and no owner that can hand its value away (`unit-storage.md`). A read of a
@@ -2458,8 +2462,8 @@ sources; a literal has none), with a region row. A `let` of a plain answer is a 
 still freezes those owners. A bare binder of a match over the answer views the same owners,
 and a `nom` binder there is CE2432. A source argument that is a temporary is legal in one
 statement, and a `let` of the answer is [CE2444](../error-catalog.md#ce2444), with a note at
-the temporary. A call with a `peek` return that answers an iterator makes a lent iterator;
-the lowering of a lent iterator adds it.
+the temporary. A call with a `peek` return that answers an iterator makes a lent iterator
+with its state on the heap (`settle_borrowed_iterator`).
 
 **A destructure in `borrow`.** The value is checked first, as a consuming use. A value of
 plain elements is a copy (`ADOPT`). A value that owns is OWNED or BORROWED, by its
@@ -2516,11 +2520,10 @@ error. It reads `TypeckResults` and `LiftResults` for the positions, and it need
 container and each lazy adapter, except the iterable of a `Cursor` or a `HashMapCursor`
 walk, which makes no value; a heap decision for each lent one; and a walk-in-place answer
 for each `Loop` of kind `Protocol` or `IteratorValue`. A `REJECT` row is legal only at
-the three positions of a borrowed view above. Two other calls get LENT from
-`borrow`, and the check does not ask for them yet, because no spine body holds them: the
-clone of a lent iterator and a borrowed call that answers an iterator (a call with a source
-row, 7.3, whose answer is an iterator). The check asks for each of them with the lowering
-of a lent iterator, which adds the call. The conditionally moved locals have
+the three positions of a borrowed view above. The clone of an iterator and a borrowed call
+that answers an iterator (a call with a source row, 7.3, whose answer is an iterator) have
+LENT or OWNED too, and the check asks for them (`_makes_an_iterator`). The conditionally
+moved locals have
 no check, because no row is an answer. `check_lift` (`semantics/shir/lift_check.py`) runs
 when `lift` ends a body with no error, and it needs a symbol and an environment for each
 `Lambda`, a lambda in the body of a lambda too. A gap of either check is the internal error
@@ -3339,7 +3342,6 @@ a binder is over the map. Its emitter keeps the one probe loop
 (`backend/generics/hashmap/probe.py`) and the one counted walk
 (`backend/generics/container_walk.py`), as a `linkonce_odr` function that LLVM inlines.
 So SLIR does not see the bucket array, its state per slot or its layout (Q7, the door).
-This row is not built yet.
 
 The `own` family takes the ADDRESS of its receiver too. Its rows are `OWN_EMITTERS`
 (`backend/generics/own.py`). `get` loads the payload out of the heap block, a shallow copy
@@ -3591,9 +3593,10 @@ backstop of the checker, as on the AST backend.
 | `Loop`, kind `Cursor` | `Len` into a local, then the `CountedRange` shape |
 | `Loop`, kind `HashMapCursor` | the `Protocol` shape with a built-in step: a hidden cursor local (an `i32` slot index, `0` at the entry), and each round a `Call` of `Builtin(hashmap cursor_next)` (8.6, the row of the view) with the map `InGuaranteed` and the cursor `Inout`, into a view local of the type `Maybe@(item)`, or `Maybe@(item*)` for a `peek` or a `poke` binder; then `Discriminant` and `SwitchInt`. The `Some` block writes the item into a view local (8.2), in a region over the map (7.9), so a change of the map in the body is CE2412, as for a `Cursor`. A `peek` or a `poke` binder is an address local, with one `BeginBorrow` over the map and one over the `Maybe` local, because the rule of an address local (8.13) reads the root of the place of its `Ref`. The walk has the block shape of the other walks, and it has no bucket layout and no second CFG |
 | `Loop`, kind `Protocol` | the iterator in a hidden owning local (or an `Inout` place, for a walk in place); each round calls `next()`, `Discriminant`, `SwitchInt` |
-| `Loop`, kind `IteratorValue` | the same shape: each round an `Indirect` call whose operand is the iterator value. The emitter reads the semantic type of the operand, an `Iterator@(T)`, and calls its `next_fn` with its state (`emit_next`). This is not built yet: the walk of an iterator stops before SLIR (`typecheck, Loop` or `borrow, Loop`) |
-| an iterator producer or a lazy adapter | ONE `Aggregate(AggIterator(ty, source, heap))` (8.7) into a fresh owning local: `source` is the row of the producer or the adapter, and `heap` is the heap decision of `OwnershipResults` for the `shir_id` of the call. The emitter of the row builds the state and supplies the three functions. This is not built yet |
-| `Range` as a value | an owned iterator: an `AggIterator` of the range row, with its bounds as parts and `heap: true`. This is not built yet: `typecheck` stops at it (`typecheck, Range`) |
+| `Loop`, kind `IteratorValue` | the same shape: each round an `Indirect` call whose operand is the iterator value. The emitter reads the semantic type of the operand, an `Iterator@(T)`, and calls its `next_fn` with its state (`emit_next`). An item that the walk owns moves into the binder, and the `None` edge drops the `Maybe`. A lent item is a view of the `Maybe`. A tuple item whose parts differ in mode is a view too, and each owning part that the walk owns moves into a hidden owner local of the round, which drops at each exit of the round (`semantics/slir/lower_iterators.py`) |
+| an iterator producer or a lazy adapter | ONE `Aggregate(AggIterator(ty, source, heap))` (8.7) into a fresh owning local: `source` is the row of the producer or the adapter, and `heap` is the heap decision of `OwnershipResults` for the `shir_id` of the call. The emitter of the row builds the state and supplies the three functions (`backend/slir/iterators.py`) |
+| `Range` as a value | an owned iterator: an `AggIterator` of the range row, with its first value and its count as parts and `heap: true`. The formula of the range is `semantics/ranges.py`, and lowering writes the count, so the backend has no twin of it |
+| a consumer (`fold`, `partition`, `collect`) | ONE `Call(Builtin(iterator <name>))` with the iterator `Owned` first and each argument `Owned`, into a fresh local of its answer (8.7). The emitter walks the iterator to its end and destroys it |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
 | `Lambda` | one `SlirFunction` cut from the body (Q8), with the symbol of `LiftResults`: its environment is `_1`, with the convention `InGuaranteed`, and its declared parameters come after it. A capture is the place `Field(_1, k)`, where `k` is the slot of the capture. Then ONE `Aggregate(AggClosure(ty))` (8.7) into a fresh owning local: the first part is the constant `FnRef` of the symbol, and one part follows for each capture of `LiftResults`, in slot order, a `Copy` or a `Move` of the captured local by the `Ownership` row of the capture (7.9). A lambda with no capture has the `FnRef` alone. An expression body with a channel returns its value in `Result.Ok`, and a bare `~` body evaluates a value that it does not return (`semantics/slir/lower_closures.py`) |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
@@ -3920,8 +3923,8 @@ decides the owner set and the last use of each view, and SLIR lowering writes th
 `BeginBorrow` and the `EndBorrow` statements from that row (8.6). The iterator-state row
 comes from the heap decision of `OwnershipResults` (7.9): SLIR lowering writes it into the
 `heap` field of `AggIterator` (8.7), and the emitter of the row of the source builds the
-state on the stack or in a heap block. This row is not built yet: no lowering makes an
-`AggIterator`.
+state on the stack or in a heap block (`backend/slir/iterators.py`,
+`backend/runtime/iterator_adapters.py`).
 
 What is NOT in this table: the 2,809 lines of monomorphization. Ruling Q1 leaves them
 where they are. Also not in the table: the per-type emitter families. Ruling Q7 keeps them.

@@ -474,7 +474,7 @@ another value keeps (#1259). It is two things at one time, and the two are kept 
   in-place `foreach`), a rebind is refused as for every let-borrow, and the scope exit
   DESTROYS the iterator.
 
-The borrow pass stamps the producer `LENT` (`MethodCall.iterator_state`) and marks the
+The borrow pass writes LENT for the producer (`OwnershipResults`) and marks the
 `let` `BorrowState.is_lent_iterator`. These are two answers, and the borrow pass keeps them
 apart: the binding owns no source (REJECT), and the binding owns its value. In SLIR the local
 of the `let` is an owning local, so drop placement drops it at each exit, and the `drop_fn`
@@ -569,8 +569,9 @@ program keeps.
 (§10g). The answer borrows the owners of the sources and owns its state, so the caller
 destroys it and may adapt it. The state of a lent iterator is on the stack of its function,
 so a lent iterator that leaves through a `peek` return moves its state to the HEAP: the borrow
-pass stamps each link of the chain (`iterator_leaves`), through each `let` that it was bound
-to, and `state_on_heap` is the one answer that the backend reads. `peek Iterator@(T) | E` is
+pass puts each link of the chain on the heap (`lend_to_the_caller`), through each `let` that
+it was bound to, and the `heap` field of `AggIterator` is the one answer that the backend
+reads. `peek Iterator@(T) | E` is
 legal: the `Result` owns the iterator in its `Ok`, and `??` gives the iterator to its holder.
 
 **Libraries.** A binary or hybrid `.slib` records `return_mode: "peek"` on the record of the

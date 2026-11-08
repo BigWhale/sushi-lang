@@ -611,7 +611,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | Capture analysis | `semantics/passes/scope.py` |
 | Lambda type-check, [CE2094](../error-catalog.md#ce2094), bare-param inference | `semantics/passes/types/visit/helpers.py` |
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
-| The `lift` pass | `semantics/passes/lift.py` (it runs on SHIR and writes `LiftResults`; a `Lambda` stops with CE0155 until group C2 of the migration) |
+| The `lift` pass | `semantics/passes/lift.py` (it runs on SHIR and writes `LiftResults`) |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
 | Ownership predicate (single source of truth) | `semantics/typesys.py:owns_resource` (see `docs/design/ownership-conventions.md` §6) |
 | Ownership of a capture | `semantics/ownership.py` (the `classify()` table); the borrow pass on SHIR writes the row of each capture (`OwnershipResults`, `docs/design/ir.md` 7.9) |
