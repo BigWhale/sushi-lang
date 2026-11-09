@@ -6,8 +6,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.ast import Call
-from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION, unit_declares_external_block
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
@@ -35,17 +33,6 @@ def own_concrete_function(func_table, name: str, unit: Optional[str]):
     if func_table is None or unit is None:
         return None
     return func_table.declared(name, unit)
-
-
-def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:
-    """`errno()`: no argument, and a unit that declares an `unsafe external` block."""
-    if not check_arguments(validator, ERRNO_FUNCTION, (), call.args, call.callee.loc,
-                           mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                           stop_on_arity=True):
-        return
-    if not unit_declares_external_block(validator.external_table,
-                                        validator.current_unit_name):
-        er.emit(validator.reporter, er.ERR.CE5014, call.callee.loc)
 
 
 def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef,

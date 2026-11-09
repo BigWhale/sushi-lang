@@ -1,4 +1,4 @@
-"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, the contract calls
+"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, `errno`, the contract calls
 `hash`, `eq`, `compare` and `to_str`, the statics of a primitive type name and the statics
 of a built-in container (docs/design/ir.md 8.6).
 
@@ -31,6 +31,7 @@ from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.type_predicates import is_numeric_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_errno_location
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -55,6 +56,15 @@ def operands(state: FunctionState, statement: st.Call) -> list[tuple[ir.Value, T
 def _interp(state: FunctionState, statement: st.Call) -> ir.Value:
     """A fresh owned string, from the string builder."""
     return emit_interpolation(state.codegen, operands(state, statement))
+
+
+def _errno(state: FunctionState, statement: st.Call) -> ir.Value:
+    """The `errno` of the calling thread: one call of the location function of the
+    platform, then a load of the `int`."""
+    if operands(state, statement):
+        state.fault("a call of errno with an argument")
+    location = declare_errno_location(state.codegen.module)
+    return state.builder.load(state.call(location, []))
 
 
 def _print(state: FunctionState, statement: st.Call) -> ir.Value:
@@ -205,6 +215,7 @@ INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
     "Own.alloc": _container_static(_own_static("alloc"), 1),
     "compare": _compare,
     "eq": _eq,
+    "errno": _errno,
     "hash": _hash,
     "interp": _interp,
     "print": _print,

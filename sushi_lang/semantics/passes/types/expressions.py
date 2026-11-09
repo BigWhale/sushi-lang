@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import (
-    BuiltinType, ArrayType, DynamicArrayType, EnumType, ForeignPtrType, StructType)
+    BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.conversions import find_conversion
 from sushi_lang.semantics.operators import EQUALITY_OPS
@@ -39,8 +39,8 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
     the conversion row is `NoConversion`. Any other pair is CE2014, and the cast still
     answers the target type. In the body of a conversion, a cast of the pair of that
     conversion is CE2523. A cast between two error types that a declared conversion joins
-    calls it: the row is the `Conversion` callee. A cast to or from `ptr` is not typed yet
-    (D5), and the walk of the body stops there.
+    calls it: the row is the `Conversion` callee. A cast to or from `ptr` is CE2014, as any
+    other pair that is not numeric; `ptr` to `ptr` calls nothing.
     """
     target = validator.written_type(node.target)
     resolved = resolve_variable_type(validator, target, node.loc)
@@ -48,8 +48,6 @@ def check_cast(validator: 'TypeValidator', node: 'e.Cast',
     if source is None:
         return None
     from sushi_lang.semantics.generics.opaque import note_opaque
-    if any(isinstance(ty, ForeignPtrType) for ty in (source, resolved)):
-        visit.stop_at(validator, node)
     conversion = find_conversion(validator.tables, source, resolved)
     if conversion is not None:
         if _reject_self_conversion(validator, node, conversion):

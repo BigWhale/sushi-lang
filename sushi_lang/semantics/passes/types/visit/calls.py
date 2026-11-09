@@ -111,7 +111,8 @@ from sushi_lang.semantics.passes.types.visit.container_statics import (
     check_container_static, container_static_base)
 from sushi_lang.semantics.passes.types.visit.contract_calls import (
     check_contract_method, promised_contract_family)
-from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_call
+from sushi_lang.semantics.passes.types.visit.extern_calls import (
+    check_errno_call, check_extern_call, reject_foreign_ptr_method)
 from sushi_lang.semantics.passes.types.visit.function_values import (
     check_field_call, check_function_clone, check_value_call, function_behind_local)
 from sushi_lang.semantics.passes.types.visit.generic_calls import resolve_generic_call
@@ -194,6 +195,8 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
         return check_stdlib_call(validator, node, ref, sig)
     if sig is None:
         return None
+    if sig == ERRNO_FUNCTION:
+        return check_errno_call(validator, node, ref)
     if isinstance(sig, ExternalSig):
         return check_extern_call(validator, node, ref, sig)
     if reject_private_call(validator, "function", sig, ref.loc):
@@ -273,6 +276,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         return None
     if answer.rung is MethodRung.PERK:
         return check_perk_call(validator, node, target, receiver)
+    if reject_foreign_ptr_method(validator, node, receiver, target.name):
+        return None
     if not _takes_user_methods(validator, receiver):
         visit.stop_at(validator, node)
     if target.name == "clone" and reject_uncloneable(validator, node, receiver):
@@ -587,14 +592,14 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
-                       name: str) -> Optional[FuncSig | GenericFuncDef | StdlibFunction]:
+                       name: str) -> Optional[FuncSig | GenericFuncDef | StdlibFunction | str]:
     """The function that a bare name calls in this unit, or None after its error.
 
     The own concrete function of the unit wins over a generic function of the scope. A name
     that no function of the unit's scope takes is the function of a registry stdlib module
-    that the unit imports, when one has it. `errno()` is not typed here, and its call stops
-    the walk of its body. A bare call that constructs a struct is a `StructInit` (lowering,
-    #1076), never a call.
+    that the unit imports, when one has it. A call of `errno` with no function of that name
+    answers the name of the intrinsic. A bare call that constructs a struct is a
+    `StructInit` (lowering, #1076), never a call.
     """
     own = own_concrete_function(validator.func_table, name, validator.current_unit_name)
     template = None if own is not None else validator.generic_sig(name)
@@ -608,7 +613,7 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
         if stdlib is not None:
             return stdlib[1]
         if name == ERRNO_FUNCTION:
-            visit.stop_at(validator, node)
+            return ERRNO_FUNCTION
         reject_undefined_function(validator, name, ref.loc)
         return None
     if reject_ambiguous_name(validator, "function", name, ref.loc):

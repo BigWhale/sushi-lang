@@ -1169,8 +1169,7 @@ made from a `ptr` (`docs/ffi.md`, "No danger zone, no `ptr`"). This is the answe
 probes `p07_ptr_cast_from_int` (`0 as ptr`) and `p08_ptr_cast_to_int` (`p as i64`),
 `.superpowers/sdd/probes/P6/`, at `00633e4bd`, are CE2014 at the cast. A cast of a `ptr` to
 `ptr` is a cast to the type of its operand, and calls nothing. So a `ptr` cast is no `Cast`
-rvalue of SLIR. Not built yet: a cast to or from `ptr` stops the walk of the body with
-`typecheck, Cast`; P6.D5.1 (Task 104) builds the refusal and removes this note.
+rvalue of SLIR.
 An integer literal directly under a cast to an integer type, also under a negation there,
 has the target type, and the pass does not check its range: the cast keeps the bits that
 the type holds (`300 as u8` is 44). The fold reads that operand at the target type too
@@ -1892,8 +1891,7 @@ the link name of the declaration (`ExternalSig.link_name`). It is the
 declared mode (a `poke u8[]` is `Inout`), and each value of the variadic tail of a
 `var_arg` extern is `Guaranteed`, as each argument of a `Stdlib` callee is. A `nom` marker
 on an argument is not compared with the mode: C takes nothing from Sushi. A value in the
-tail is a number, a `bool`, a `string` or a `ptr` (S25; not built yet for a `ptr`, see
-below); a value that C cannot hold as itself is
+tail is a number, a `bool`, a `string` or a `ptr` (S25); a value that C cannot hold as itself is
 [CE5005](../error-catalog.md#ce5005) at the argument. The call yields the declared return
 type, with no channel, and the row carries the declaring unit of the block.
 
@@ -1901,12 +1899,11 @@ type, with no channel, and the row carries the declaring unit of the block.
 operand that never drops. A `Maybe@(ptr)` and a `Maybe@(string)` parameter or return is a
 plain `Maybe` operand. A `string` return is a fresh value that owns (`ADOPT`, 7.9). A `ptr`
 value in the tail of a `var_arg` extern is a `Guaranteed` scalar. `errno()` is an
-intrinsic with no operand that answers an `i32`. The boundary rules are those of 8.6.
-Not built yet: `typecheck` types only an extern whose declared parameters are numbers,
-`string` and byte buffers (`u8[]`, bare, `peek` or `poke`), and whose return is a number or
-`~`. The call of any other extern (a `ptr`, a nullable pointer, a `string` return) stops at
-`Call(extern)`, and so do a `ptr` value in the tail and `errno()`. P6.D5.1 (Task 104)
-builds these rules and removes this note.
+intrinsic with no operand that answers an `i32`; a unit that declares no `unsafe external`
+block cannot call it ([CE5014](../error-catalog.md#ce5014)). A method of a `ptr` that is
+not a `foreign_ptr` method is [CE5011](../error-catalog.md#ce5011). The boundary rules are
+those of 8.6. Not built yet: the `foreign_ptr` methods stop the walk of the body with
+`Call(method foreign_ptr)`; P6.D5.2 (Task 105) builds them and removes this note.
 
 `BuiltinMethod` names a row of `METHOD_TYPE_REGISTRY`, so the iterator adapters, `or_err`,
 `map_err`, the container methods and the string methods are one variant. The row of a
@@ -3677,7 +3674,8 @@ does (probes `p03_extern_string_return`, `p04_extern_maybe_parameters` and
 - A `string` return is an owned copy of the C string, never a view: `main` calls `llvm_strlen`,
   `malloc` and `memcpy` and sets the owned field of the string to 1, and the caller drops
   the copy. A plain `string` or `ptr` return that is NULL ends the program with
-  [RE2025](../error-catalog.md#re2025).
+  [RE2025](../error-catalog.md#re2025). The emitter reads the return before it frees the
+  C copies of the arguments, because C can answer a pointer into one of them (`strchr`).
 - `errno()` is an intrinsic (a row of `INTRINSICS`): one call of the platform function
   (`__error` on macOS, `__errno_location` on Linux) and a `load` of the `i32`. Probe
   `p05_errno_after_failure` reads 2 (`ENOENT`) after a failed `remove`. Lowering keeps the
@@ -3688,8 +3686,7 @@ The `foreign_ptr` methods (`p.load_i32(off)`, `p.store_i32(off, v)`, `p.to_strin
 `method_effects.py`: the receiver is a `Guaranteed` scalar, and the family leaves
 `NO_RECEIVER_RULE_FAMILIES` (8.3). `to_string` answers an owned copy (`ADOPT`), and
 `load_ptr` a `Maybe@(ptr)` with NULL as `None`. The emitter family takes operands (Q7).
-Not built yet: P6.D5.1 (Task 104) builds the boundary rules and `errno()`, and P6.D5.2
-(Task 105) builds the `foreign_ptr` family. Each removes its part of this note.
+Not built yet: P6.D5.2 (Task 105) builds the `foreign_ptr` family and removes this note.
 
 A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.

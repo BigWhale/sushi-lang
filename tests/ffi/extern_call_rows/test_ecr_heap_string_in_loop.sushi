@@ -1,0 +1,26 @@
+# A heap string goes to C in a loop that ends with `break`. Each call makes one C copy
+# and frees it right after the call, and a `ptr` answer goes in the tail of a `var_arg`
+# extern.
+# EXPECT_STDOUT_EXACT: "copies 3, last 19\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "C copies of a string":
+    fn strdup(string s) ptr = "strdup"
+    fn snprintf(poke u8[] buf, i64 n, string fmt, ...) i32 = "snprintf"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let i32 answer = 42
+    let string s = "Mostly Harmless {answer}"
+    let u8[] buf = from([0; 32])
+    let i32 count = 0
+    let i32 last = 0
+    foreach(i in 0..10):
+        let ptr p = libc.strdup(s)
+        last := libc.snprintf(poke buf, 32, "%s!", p)
+        libc.free(p)
+        count := count + 1
+        if (i == 2):
+            break
+    println("copies {count}, last {last}")
+    return 0

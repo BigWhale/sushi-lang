@@ -1,0 +1,17 @@
+# `errno()` right after a failing call reads its cause: `remove` of a missing path is -1
+# and ENOENT, which is 2 on macOS and on Linux. A `string` answer is an owned copy.
+# EXPECT_STDOUT_EXACT: "remove: -1\nerrno: 2\ntext: No such file or directory\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "the cause of a failed remove":
+    fn remove(string path) i32 = "remove"
+    fn strerror(i32 code) string = "strerror"
+
+fn main() i32:
+    let i32 got = libc.remove("/sushi/no/such/file")
+    let i32 code = errno()
+    let string text = libc.strerror(code)
+    println("remove: {got}")
+    println("errno: {code}")
+    println("text: {text}")
+    return 0

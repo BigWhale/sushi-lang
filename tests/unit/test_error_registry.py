@@ -173,9 +173,7 @@ def test_expect_error_code_directives_are_registered():
 # removes it here. P2.13 deleted the AST body emitter, which alone emitted the three
 # runtime traps; each one comes back with the SLIR Trap of its construct group.
 UNREFERENCED: set[str] = {
-    "CE5011",                                 # Tier D (D5): a method a `ptr` has not
     "CE5016",                                 # Tier D: a write to a C global
-    "RE2025",                                 # Tier D (D5): a null foreign return
 }
 
 

@@ -1,0 +1,16 @@
+# A `ptr` answer of one extern goes to two other externs: `strdup` gives the pointer,
+# `strlen` reads it, `free` releases it. A `ptr` is a plain scalar that never drops.
+# EXPECT_STDOUT_EXACT: "len 15\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a C copy of a string":
+    fn strdup(string s) ptr = "strdup"
+    fn strlen(ptr p) i64 = "strlen"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.strdup("Mostly Harmless")
+    let i64 n = libc.strlen(p)
+    libc.free(p)
+    println("len {n}")
+    return 0

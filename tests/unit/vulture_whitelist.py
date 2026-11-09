@@ -94,11 +94,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
-    # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
-    # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
-    # Each one moves to SHIR inputs in the typecheck stage of its construct group
-    # in the migration plan, and that stage deletes the entry.
-    (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
 )
 
 # -- the AST helpers of borrow that the switch left with no caller (P2.6a) ------------
@@ -120,23 +115,6 @@ def _ast_probe(group: str) -> str:
 WHITELIST += (
     (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),
     (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
-)
-
-# -- the emitter families whose AST callers P2.13 deleted ----------------------------
-# The old body emitter called each entry below. The families stay (ir.md Q7), and the
-# group of each one gives it operands from SLIR. Its AST argument half calls the deleted
-# expression layer until then.
-_BACKEND = "sushi_lang/backend/"
-
-
-def _family(group: str, what: str) -> str:
-    return (f"kept for {group}: {what}; the SLIR emitter calls the family with operands "
-            "there, and its AST argument half goes then")
-
-
-WHITELIST += (
-    (_BACKEND + "runtime/strings.py", "emit_cstr_to_owned_fat_pointer",
-     _family("D5", "the string that an extern returns")),
 )
 
 _SEMANTICS = "sushi_lang/semantics/"
