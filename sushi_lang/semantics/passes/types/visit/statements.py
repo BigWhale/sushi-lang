@@ -62,6 +62,7 @@ from sushi_lang.semantics.passes.types.statements import reject_unspelled_result
 from sushi_lang.semantics.passes.types.utils import (
     names_no_type, resolve_declared_type, validate_type_name)
 from sushi_lang.semantics.passes.types.visit.arrays import reject_wrong_size
+from sushi_lang.semantics.passes.types.visit.extern_calls import reject_extern_variable_write
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.passes.types.visit.ranges import check_range_iterable
 from sushi_lang.semantics.passes.types.visit.walks import (
@@ -115,11 +116,14 @@ def check_expand(validator: TypeValidator, node: s.Expand) -> None:
 
 def check_assign(validator: TypeValidator, node: s.Assign) -> None:
     """A `let`, a rebind of a local or of a `var`, a field write or an element write. A
-    write into a constant is CE2096, and a write into a byte of a string CE2113; the value
-    is then checked at no type."""
+    write into a constant is CE2096, a write into a byte of a string CE2113, and a write of
+    a C global CE5016; the value is then checked at no type."""
     target = node.target
     if node.is_init and isinstance(target, e.LocalRef):
         _check_let(validator, node, target)
+        return
+    if not node.is_init and reject_extern_variable_write(validator, target):
+        visit.check_expr(validator, node.value)
         return
     if node.is_init or not isinstance(target, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
         visit.stop_at(validator, node)

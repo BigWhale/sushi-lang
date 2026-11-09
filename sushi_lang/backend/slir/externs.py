@@ -11,9 +11,8 @@ promotion: a narrow integer and a `bool` to `i32`, an `f32` to `f64`. A C functi
 answers `~` writes `~` into the place of the call.
 
 A `ptr` crosses as itself. A `Maybe@(ptr)` or a `Maybe@(string)` argument crosses as a null
-pointer for `None` and as its marshalled payload for `Some`. A nullable answer is `None` for
-a null pointer; a plain `ptr` or `string` answer that is null ends the program with RE2025.
-A `string` answer is an owned copy. The emitter reads the answer before it frees the C
+pointer for `None` and as its marshalled payload for `Some`. The answer becomes a Sushi value
+through `foreign.py`. The emitter reads the answer before it frees the C
 copies, because C can answer a pointer into one of them.
 """
 from __future__ import annotations
@@ -22,15 +21,16 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 
+from sushi_lang.backend import enum_utils
 from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg, free_cstr_args
 from sushi_lang.backend.gep_utils import gep_dynamic_array_data
-from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.slir.foreign import c_answer
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import (
     constant_value, operand_address, operand_value, place_address, type_of_operand,
 )
-from sushi_lang.semantics.ffi_boundary import is_byte_buffer, is_pointer_value, nullable_payload
+from sushi_lang.semantics.ffi_boundary import is_byte_buffer, nullable_payload
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -62,7 +62,7 @@ def emit_extern(state: FunctionState, statement: st.Call, direct: st.Direct,
     if isinstance(function_type.return_type, ir.VoidType):
         value = constant_value(state, k.Blank())
     else:
-        value = _answer(state, value, extern.ret_type)
+        value = c_answer(state, value, extern.ret_type)
     free_cstr_args(state.codegen, copies)
     state.builder.store(value, place_address(state, statement.dest))
 
@@ -119,68 +119,13 @@ def _nullable_argument(state: FunctionState, maybe: ir.Value, maybe_type: EnumTy
 
 
 def _payload(state: FunctionState, maybe: ir.Value, payload: Type) -> ir.Value:
-    """The `Some` payload of a Maybe value, at offset 0 of its data."""
-    builder = state.builder
-    data = builder.extract_value(maybe, 1)
-    slot = entry_alloca(builder, data.type, "ffi_maybe_data")
-    builder.store(data, slot)
-    typed = builder.bitcast(slot, ir.PointerType(state.codegen.types.ll_type(payload)))
-    return builder.load(typed)
-
-
-def _answer(state: FunctionState, raw: ir.Value, ty: Type | None) -> ir.Value:
-    """The Sushi value of the answer of a C function."""
-    payload = nullable_payload(ty)
-    if payload is not None:
-        return _nullable_answer(state, raw, payload)
-    if is_pointer_value(ty):
-        _end_on_null(state, raw)
-        return _pointer_value(state, raw, ty)
-    return raw
-
-
-def _pointer_value(state: FunctionState, raw: ir.Value, ty: Type | None) -> ir.Value:
-    """A `char*` answer is an owned copy; a `ptr` is the pointer itself."""
-    if ty == BuiltinType.STRING:
-        return state.codegen.runtime.strings.emit_cstr_to_owned_fat_pointer(raw)
-    return raw
-
-
-def _end_on_null(state: FunctionState, raw: ir.Value) -> None:
-    """RE2025: a declaration that says non-null got a null pointer."""
-    builder = state.builder
-    is_null = builder.icmp_unsigned("==", raw, ir.Constant(raw.type, None))
-    trap_block = builder.append_basic_block("ffi_null_trap")
-    ok_block = builder.append_basic_block("ffi_non_null")
-    builder.cbranch(is_null, trap_block, ok_block)
-    builder.position_at_end(trap_block)
-    state.codegen.runtime.errors.emit_runtime_error("RE2025")
-    builder.unreachable()
-    builder.position_at_end(ok_block)
-
-
-def _nullable_answer(state: FunctionState, raw: ir.Value, payload: Type) -> ir.Value:
-    """A null pointer is `Maybe.None`; any other pointer is `Maybe.Some` of its value."""
+    """The `Some` payload of a Maybe value, through the one layout of a payload."""
     codegen = state.codegen
-    builder = state.builder
-    is_null = builder.icmp_unsigned("==", raw, ir.Constant(raw.type, None))
-    none_block = builder.append_basic_block("ffi_ret_none")
-    some_block = builder.append_basic_block("ffi_ret_some")
-    merge_block = builder.append_basic_block("ffi_ret_merge")
-    builder.cbranch(is_null, none_block, some_block)
-    builder.position_at_end(none_block)
-    none_value = emit_maybe_none(codegen, payload)
-    none_end = builder.block
-    builder.branch(merge_block)
-    builder.position_at_end(some_block)
-    some_value = emit_maybe_some(codegen, payload, _pointer_value(state, raw, payload))
-    some_end = builder.block
-    builder.branch(merge_block)
-    builder.position_at_end(merge_block)
-    result = builder.phi(none_value.type)
-    result.add_incoming(none_value, none_end)
-    result.add_incoming(some_value, some_end)
-    return result
+    slot = entry_alloca(state.builder, maybe.type, "ffi_maybe")
+    state.builder.store(maybe, slot)
+    offset = codegen.types.payload_field_offsets([payload])[0]
+    return enum_utils.unpack_variant_field(codegen, enum_utils.get_data_ptr(codegen, slot),
+                                           payload, offset)
 
 
 def _promoted(state: FunctionState, value: ir.Value, ty: object) -> ir.Value:

@@ -22,15 +22,15 @@ from sushi_lang.backend.generics.maybe import (
 from sushi_lang.backend.generics.own import emit_own_method
 from sushi_lang.backend.generics.results import (
     emit_builtin_result_method, emit_result_signature_method)
+from sushi_lang.backend.slir.foreign import emit_foreign_ptr_method
 from sushi_lang.backend.slir.iterators import emit_consumer
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import (
     operand_address, operand_value, type_of_operand, type_of_place)
 from sushi_lang.backend.types.arrays import emit_array_method
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, CONCAT_IN_PLACE, CURSOR_NEXT, HASHMAP_FAMILY, ITERATOR_FAMILY, LIST_FAMILY,
-    MAYBE_FAMILY,
-    OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY, steps_a_cursor,
+    ARRAY_FAMILY, CONCAT_IN_PLACE, CURSOR_NEXT, FOREIGN_PTR_FAMILY, HASHMAP_FAMILY,
+    ITERATOR_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY, steps_a_cursor,
 )
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import BuiltinMethod
@@ -81,6 +81,14 @@ def _concat_in_place(state: FunctionState, statement: st.Call) -> ir.Value:
     piece = operand_value(state, argument)
     emit_string_append(state.codegen, operand_address(state, receiver), piece)
     return blank(state.codegen)
+
+
+def _foreign_ptr(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
+    """A method of a `ptr`: the value of the receiver and of each argument."""
+    if not statement.args:
+        state.fault(f"the call of '{method.name}' has no receiver")
+    values = [operand_value(state, operand) for operand, _ in statement.args]
+    return emit_foreign_ptr_method(state, method.name, values[0], values[1:])
 
 
 def _array(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
@@ -197,6 +205,7 @@ METHOD_FAMILIES: dict[str, _MethodRow] = {
     RESULT_FAMILY: _wrapper(emit_builtin_result_method, emit_result_signature_method),
     MAYBE_FAMILY: _wrapper(emit_builtin_maybe_method, emit_maybe_signature_method),
     ITERATOR_FAMILY: emit_consumer,
+    FOREIGN_PTR_FAMILY: _foreign_ptr,
 }
 
 

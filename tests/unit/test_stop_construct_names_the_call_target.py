@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from types import SimpleNamespace
 
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
+from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
@@ -99,28 +99,3 @@ def test_a_stop_at_a_call_carries_the_label(target, label):
     with pytest.raises(StageStop) as raised:
         dispatch.stop("typecheck", _call(target), facts())
     assert label in str(raised.value)
-
-
-@pytest.mark.parametrize("family", ["primitive", "string", "contract"])
-def test_a_stop_at_a_family_names_the_family(family):
-    """The ladder found a family whose arm the pass does not have yet: the label names it,
-    and it needs no facts, because the ladder already resolved the callee."""
-    call = _call(e.Dotted(LOCAL, "to_str"))
-    assert dispatch.construct_of(call, family=family) == f"Call(method {family})"
-    with pytest.raises(StageStop) as raised:
-        dispatch.stop("typecheck", call, family=family)
-    assert raised.value.params == {"stage": "typecheck", "construct": f"Call(method {family})"}
-
-
-@pytest.mark.parametrize("stage", ["typecheck", "borrow"])
-def test_one_helper_stops_at_a_family_for_every_stage(stage):
-    call = _call(e.Dotted(LOCAL, "len"))
-    with pytest.raises(StageStop) as raised:
-        dispatch.stop_at_family(stage, call, "string")
-    assert raised.value.params == {"stage": stage, "construct": "Call(method string)"}
-
-
-def test_only_a_method_call_has_a_family():
-    with pytest.raises(InternalCompilerError) as raised:
-        dispatch.construct_of(_call(e.BuiltinFn("println")), facts(), family="primitive")
-    assert raised.value.code == "CE0000"

@@ -94,7 +94,7 @@ def receiver(low: Lowering, callee: Callee,
                  Convention.GUARANTEED),)
     if isinstance(callee, Builtin):
         return ((low.operand(callee.recv, in_place=True),
-                 _receiver_convention(callee, node.loc)),)
+                 receiver_convention(callee.method)),)
     if isinstance(callee, Method):
         return ((_by_convention(low, callee.recv, callee.receiver, node.args),
                  callee.receiver),)
@@ -224,14 +224,3 @@ def display_type(low: Lowering, node: ShirId, part: int, span: Span) -> Type:
     return ty
 
 
-def _receiver_convention(callee: Builtin, span: Span) -> Convention:
-    """The convention of the receiver of a built-in method: the answer of the receiver
-    partition (`receiver_convention`, docs/design/ir.md 8.3). A family with no answer stops
-    in `typecheck` or `borrow` first, so its call here is an internal error."""
-    convention = receiver_convention(callee.method)
-    if convention is None:
-        er.raise_internal_error(
-            "CE0000", span=span,
-            detail=f"a call of a method of the family '{callee.method.family}' reached "
-                   f"SLIR, and no receiver convention is written for that family")
-    return convention

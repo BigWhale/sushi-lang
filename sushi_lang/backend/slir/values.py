@@ -42,6 +42,7 @@ from sushi_lang.backend.expressions.operators import (
     emit_arithmetic, emit_bitwise, emit_contract_relation, emit_number_comparison, emit_string_relation,
     emit_unary_value, emit_xor,
 )
+from sushi_lang.backend.slir.foreign import extern_variable, read_extern_variable
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.types.arrays.indexing import array_length, element_address, slice_value
 from sushi_lang.backend.types.arrays.runs import emit_array_value
@@ -89,6 +90,8 @@ def global_address(state: FunctionState, symbol: str) -> ir.Value:
     """The global of a `var` in the module. The declaration round makes it in every module:
     the module of its unit defines it, and each other module declares it external (ir.md
     8.2). A symbol that the module does not hold is an internal error."""
+    if extern_variable(state, symbol) is not None:
+        state.fault(f"the C global '{symbol}' is used by its address")
     found = state.codegen.module.globals.get(symbol)
     if not isinstance(found, ir.GlobalVariable):
         state.fault(f"the module holds no global '{symbol}'")
@@ -153,10 +156,13 @@ def _payload_types(state: FunctionState, base: p.Place, variant: str,
 
 def operand_value(state: FunctionState, operand: p.Operand) -> ir.Value:
     """The value of an operand: a load of its place, or a constant. The drop statements of
-    SLIR carry the ownership, so `Copy` and `Move` read alike."""
+    SLIR carry the ownership, so `Copy` and `Move` read alike. A `Copy` of a C global is
+    the read of `foreign.py`."""
     match operand:
         case p.Const(constant):
             return constant_value(state, constant)
+        case p.Copy(p.Global(symbol)) if extern_variable(state, symbol) is not None:
+            return read_extern_variable(state, symbol)
         case p.Copy(place) | p.Move(place):
             return state.builder.load(place_address(state, place))
 

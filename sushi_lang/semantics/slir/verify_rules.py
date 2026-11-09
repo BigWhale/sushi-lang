@@ -3,8 +3,8 @@
 A failed rule is the internal error CE0158, and the diagnostic names the rule by one of
 these texts. The structure check (`verify.py`), the call check (`verify_calls.py`), the
 check of an array value (`verify_arrays.py`), the check of a function value and of an
-iterator value (`verify_values.py`), the dataflow (`verify_flow.py`) and the region check
-(`verify_regions.py`) share them.
+iterator value (`verify_values.py`), the dataflow (`verify_flow.py`), the region check
+(`verify_regions.py`) and the `ptr` quarantine (`verify_quarantine.py`) share them.
 """
 from __future__ import annotations
 
@@ -44,3 +44,4 @@ REGION_OWNER = "no change of an owner in its region"
 ELEMENT_MOVE = "no move of an element"
 TRAP = "registered trap"
 SPANS = "spans"
+PTR_QUARANTINE = "no ptr at a public signature"

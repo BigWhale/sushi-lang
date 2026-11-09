@@ -1,0 +1,30 @@
+# A store and a load through a `ptr` from `malloc`, at an offset and through `offset`,
+# and a copy of a C string with `to_string`. Each path frees the block: the early return
+# and the end of the function.
+# EXPECT_STDOUT_EXACT: "text: Mostly Harmless\nsum: 49\nsum: 9\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a block on the C heap":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn strcpy(ptr dst, string src) ptr = "strcpy"
+
+fn fill(i32 first, bool early) i32:
+    let ptr block = libc.malloc(32)
+    block.store_i32(0, first)
+    block.offset(4).store_i32(0, 7)
+    block.store_u8(8, 0)
+    let i32 sum = block.load_i32(0) + block.load_i32(4)
+    if (early):
+        libc.free(block)
+        return sum
+    let ptr copied = libc.strcpy(block.offset(8), "Mostly Harmless")
+    let string text = copied.to_string(0)
+    println("text: {text}")
+    libc.free(block)
+    return sum
+
+fn main() i32:
+    println("sum: {fill(42, false)}")
+    println("sum: {fill(2, true)}")
+    return 0

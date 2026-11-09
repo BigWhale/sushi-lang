@@ -4,8 +4,8 @@ ShirBody main
   params : []
   locals : [_0 "first": i32]
   block  :
-    Assign(LocalRef(_0), Binary(+, GlobalRef(@libc.optind), Lit(0)), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Interp(["optind: ", LocalRef(_0), ""])]))
-    Match(GlobalRef(@libc.optind), [Arm(Literal(1), [ExprStmt(Call(BuiltinFn("println"), [Lit("optind: one")]))]), Arm(Wildcard, [ExprStmt(Call(BuiltinFn("println"), [Lit("optind: other")]))])], consumes: false)
-    Match(Call(Dotted(GlobalRef(@libc.environ), "load_ptr"), [Lit(0)]), [Arm(Variant(@Maybe, "Some", [Wildcard]), [ExprStmt(Call(BuiltinFn("println"), [Lit("environ: some")]))]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("environ: none")]))])], consumes: false)
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt Binary(+, GlobalRef(@libc.optind), Lit(0)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["optind: ", LocalRef(_0), ""]), Guaranteed)]))
+    Match(GlobalRef(@libc.optind), [Arm(Literal(1), [ExprStmt(Call(Intrinsic("println"), [(Lit("optind: one"), Guaranteed)]))]), Arm(Wildcard, [ExprStmt(Call(Intrinsic("println"), [(Lit("optind: other"), Guaranteed)]))])], consumes: false)
+    Match(Call(Builtin(GlobalRef(@libc.environ), "load_ptr"), [(Lit(0), Guaranteed)]), [Arm(Variant(@Maybe, "Some", [Wildcard]), [ExprStmt(Call(Intrinsic("println"), [(Lit("environ: some"), Guaranteed)]))]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("environ: none"), Guaranteed)]))])], consumes: false)
+    Return(adopt Lit(0))

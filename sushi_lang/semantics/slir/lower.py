@@ -575,7 +575,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.LocalRef: Lowering.leaf,
     e.ConstRef: Lowering.leaf,
     e.StorageRef: Lowering.leaf,
-    e.GlobalRef: closures.function_value,
+    e.GlobalRef: globals_.global_ref,
     e.Lambda: closures.lambda_value,
     e.Binary: Lowering.binary,
     e.Unary: Lowering.unary,

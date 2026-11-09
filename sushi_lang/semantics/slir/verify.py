@@ -65,6 +65,7 @@ from sushi_lang.semantics.slir.verify_arrays import (
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_globals import drops_a_global, global_drops
+from sushi_lang.semantics.slir.verify_quarantine import check_ptr_quarantine, is_public_function
 from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_values import (
     capture_places, closure_value, copies_with_no_transfer, iterator_value, stack_iterators)
@@ -112,14 +113,18 @@ class SlirVerifier:
         verify_function(function, drops=drops,
                         declared=partial(declared_params, funcs, extensions,
                                          externals=externals, perk_impls=perk_impls),
-                        filename=filename)
+                        filename=filename,
+                        public=is_public_function(funcs, extensions, function))
 
 
 def verify_function(function: SlirFunction, *, drops: frozenset[str],
-                    declared: DeclaredLookup, filename: Optional[str] = None) -> None:
+                    declared: DeclaredLookup, filename: Optional[str] = None,
+                    public: bool = False) -> None:
     """CE0158 at the first rule of ir.md 8.13 that `function` breaks."""
     check = Check(function, drops, declared, filename)
     check.structure()
+    if public:
+        check_ptr_quarantine(function, check.fail)
     capture_places(check, function)
     stack_iterators(check, function)
     check_regions(function, check.fail)

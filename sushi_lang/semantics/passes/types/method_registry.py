@@ -39,8 +39,8 @@ from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, ARRAY_HASH_FAMILY, CONTRACT_FAMILY, DERIVED_HASH_FAMILY, MAYBE_FAMILY,
-    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, ARRAY_HASH_FAMILY, CONTRACT_FAMILY, DERIVED_HASH_FAMILY, FOREIGN_PTR_FAMILY,
+    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
@@ -459,7 +459,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="iterator", beats_perk=True, answers=_answers_iterator,
     arity=ITERATOR_METHOD_ARITY, modes=iterator_method_modes()))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
+    name=FOREIGN_PTR_FAMILY, beats_perk=True, answers=_answers_foreign_ptr,
     arity=FOREIGN_PTR_METHOD_ARITY))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=ARRAY_HASH_FAMILY, beats_perk=False, answers=_answers_array_hash, arity=DERIVED_HASH_ARITY))

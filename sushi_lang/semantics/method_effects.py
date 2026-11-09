@@ -11,7 +11,7 @@ and SLIR lowering read it.
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.param_modes import Convention
@@ -85,12 +85,15 @@ MAYBE_FAMILY = "maybe"
 ITERATOR_FAMILY = "iterator"
 
 # The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` is in exactly
-# one of the four sets below (ruling R-V, docs/design/ir.md 8.3). The clone family and the
+# one of the three sets below (ruling R-V, docs/design/ir.md 8.3). The clone family and the
 # contract families are in no set.
 # Only reads: no method of the family changes or consumes its receiver.
-# The one method of a function value is its `clone`, the same rvalue.
+# The one method of a function value is its `clone`, the same rvalue. A method of a `ptr`
+# reads the pointer, a plain scalar; a store writes the memory it points to, not the `ptr`.
 FUNCTION_FAMILY = "function"
-RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY, FUNCTION_FAMILY})
+FOREIGN_PTR_FAMILY = "foreign_ptr"
+RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY, FUNCTION_FAMILY,
+                                    FOREIGN_PTR_FAMILY})
 # The one row of the string family that writes its receiver: the call of the concat
 # peephole. Only SLIR lowering makes it, and no program can name it (docs/design/ir.md 8.9).
 CONCAT_IN_PLACE = "concat_in_place"
@@ -102,8 +105,6 @@ CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY, ITERATOR_F
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
 RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
-# No rule yet: the set can only shrink.
-NO_RECEIVER_RULE_FAMILIES = frozenset({"foreign_ptr"})
 # The derived `clone` of a struct and an enum is in no set: SLIR lowering makes the rvalue
 # `Clone` of every `.clone()`, which reads its receiver (docs/design/ir.md 8.3, 8.7).
 CLONE_FAMILY = "derived_clone"
@@ -143,9 +144,8 @@ def steps_a_cursor(method: BuiltinMethod) -> bool:
     return method.family == HASHMAP_FAMILY and method.name.startswith(CURSOR_NEXT)
 
 
-def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
-    """The convention of the receiver of a call of `method`, or None when its family has
-    no receiver rule yet: a family of `NO_RECEIVER_RULE_FAMILIES`.
+def receiver_convention(method: BuiltinMethod) -> Convention:
+    """The convention of the receiver of a call of `method`.
 
     A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`), but
     `concat_in_place` of the string family writes it (`Inout`). A `cursor_next` row of the
@@ -167,8 +167,6 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
         return Convention.OWNED if method.nom_self else Convention.GUARANTEED
     if method.family in RULED_EFFECT_FAMILIES:
         return Convention.INOUT if effect_of(method.name).mutates else Convention.GUARANTEED
-    if method.family in NO_RECEIVER_RULE_FAMILIES:
-        return None
     raise_internal_error("CE0000", detail=f"the method family '{method.family}' is in no "
                                           f"receiver set of `semantics/method_effects.py`")
 

@@ -35,10 +35,11 @@ from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import (
     CONVENTIONS, DeclaredParams, declared_params, verify_function,
 )
-from sushi_lang.semantics.slir.verify_rules import STACK_ITERATOR
+from sushi_lang.semantics.slir.verify_quarantine import is_public_function
+from sushi_lang.semantics.slir.verify_rules import PTR_QUARANTINE, STACK_ITERATOR
 from sushi_lang.semantics.typesys import (
     ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
-    FunctionType, IteratorType, PointerType, ReferenceType, StructType, Type, UnknownType,
+    ForeignPtrType, FunctionType, IteratorType, PointerType, ReferenceType, StructType, Type, UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -1705,3 +1706,45 @@ def test_a_move_out_of_a_capture_place_is_refused():
 def test_a_write_of_the_environment_is_refused():
     written = st.Assign(_local(1), r.Use(_copy(1)), BAD)
     _refused(_lifted(written), "capture places")
+
+
+# -- the `ptr` quarantine (S25) ---------------------------------------------------------
+
+MAYBE_PTR = EnumType(name="Maybe<ptr>", variants=(
+    EnumVariantInfo(name="Some", associated_types=(ForeignPtrType(),)),
+    EnumVariantInfo(name="None", associated_types=())))
+
+
+def _with_parameter(param: Type, ret: Type = BLANK) -> SlirFunction:
+    return _function([ret, param], _block(0, _ret(), _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((1, GUARANTEED),))
+
+
+def _quarantined(function: SlirFunction) -> InternalCompilerError:
+    with pytest.raises(InternalCompilerError) as caught:
+        verify_function(function, drops=frozenset(), declared=lambda _callee: None,
+                        public=True)
+    assert caught.value.code == "CE0158"
+    assert caught.value.params["rule"] == PTR_QUARANTINE
+    return caught.value
+
+
+def test_a_public_function_with_a_ptr_parameter_is_refused():
+    assert "_1" in _quarantined(_with_parameter(ForeignPtrType())).params["detail"]
+
+
+def test_a_public_function_that_answers_a_maybe_ptr_is_refused():
+    assert "return" in _quarantined(_with_parameter(I32, MAYBE_PTR)).params["detail"]
+
+
+def test_a_function_that_is_not_public_may_take_a_ptr():
+    _passes(_with_parameter(ForeignPtrType()))
+
+
+def test_the_public_marker_is_read_from_the_declaration_of_the_symbol():
+    funcs, extensions = FunctionTable(), ExtensionTable()
+    function = _with_parameter(ForeignPtrType())
+    assert not is_public_function(funcs, extensions, function)
+    funcs.declare("probe", FuncSig("probe", unit_name="unit", is_public=True))
+    assert is_public_function(funcs, extensions, function)
+

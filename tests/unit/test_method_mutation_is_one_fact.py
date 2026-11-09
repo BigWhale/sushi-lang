@@ -41,16 +41,10 @@ def test_every_array_method_the_table_marks_is_measured():
             "extend_back"} <= marked
 
 
-#: The families with no receiver rule yet, at the day of the pin (ruling R-V). A family may
-#: leave the set and the pin together; none may join.
-PINNED_NO_RECEIVER_RULE = frozenset({"foreign_ptr"})
-
-
 def _receiver_sets():
     from sushi_lang.semantics import method_effects as me
     return {"only reads": me.RECEIVER_READ_FAMILIES, "effect": me.EFFECT_FAMILIES,
-            "consumes": me.CONSUMING_RECEIVER_FAMILIES,
-            "no rule yet": me.NO_RECEIVER_RULE_FAMILIES}
+            "consumes": me.CONSUMING_RECEIVER_FAMILIES}
 
 
 def test_each_registry_family_is_in_exactly_one_receiver_set():
@@ -73,15 +67,6 @@ def test_each_registry_family_is_in_exactly_one_receiver_set():
     assert all(sets.values()), "a receiver set is empty"
 
 
-def test_the_no_rule_set_only_shrinks():
-    from sushi_lang.semantics.method_effects import NO_RECEIVER_RULE_FAMILIES
-
-    grown = sorted(NO_RECEIVER_RULE_FAMILIES - PINNED_NO_RECEIVER_RULE)
-    assert not grown, f"a family may leave the no-rule set and never join it: {grown}"
-    stale = sorted(PINNED_NO_RECEIVER_RULE - NO_RECEIVER_RULE_FAMILIES)
-    assert not stale, f"delete the pin row together with the family: {stale}"
-
-
 def test_the_borrow_pass_and_slir_lowering_read_the_one_receiver_convention():
     from sushi_lang.semantics import method_effects
     from sushi_lang.semantics.passes.borrow import calls
@@ -91,7 +76,7 @@ def test_the_borrow_pass_and_slir_lowering_read_the_one_receiver_convention():
     assert lower_calls.receiver_convention is method_effects.receiver_convention
 
 
-def test_a_read_family_gives_a_borrow_and_a_family_with_no_answer_gives_none():
+def test_a_read_family_gives_a_borrow():
     from sushi_lang.semantics import method_effects as me
     from sushi_lang.semantics.param_modes import Convention
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
@@ -99,9 +84,6 @@ def test_a_read_family_gives_a_borrow_and_a_family_with_no_answer_gives_none():
     for name in me.RECEIVER_READ_FAMILIES | me.CONTRACT_FAMILIES | {me.CLONE_FAMILY}:
         callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
         assert me.receiver_convention(callee) is Convention.GUARANTEED
-    for name in (me.EFFECT_FAMILIES - me.RULED_EFFECT_FAMILIES) | me.NO_RECEIVER_RULE_FAMILIES:
-        callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
-        assert me.receiver_convention(callee) is None, name
 
 
 def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
@@ -242,25 +224,6 @@ def test_a_wrapper_method_takes_its_receiver_only_when_it_declares_nom_self(fami
     assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
                if name not in owned)
     assert {"realise", "expect"} <= set(answers) - owned
-
-
-def test_slir_lowering_refuses_a_receiver_with_no_convention():
-    """A family with no answer stops in `typecheck` or `borrow` first. A call of it in SLIR
-    lowering is an internal error, never a `Guaranteed` receiver by default."""
-    from sushi_lang.internals.diagnostics import InternalCompilerError
-    from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
-    from sushi_lang.semantics.shir import exprs as e
-    from sushi_lang.semantics.shir.callee import Builtin
-    from sushi_lang.semantics.shir.ids import LocalId, ShirId
-    from sushi_lang.semantics.slir import lower_calls
-
-    span = Span(1, 1, 1, 2)
-    recv = e.LocalRef(ShirId(1), span, LocalId(0))
-    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("foreign_ptr").callee("load_f32"))
-    with pytest.raises(InternalCompilerError) as caught:
-        lower_calls._receiver_convention(callee, span)
-    assert caught.value.code == "CE0000"
 
 
 def test_a_family_in_no_receiver_set_is_an_internal_error():

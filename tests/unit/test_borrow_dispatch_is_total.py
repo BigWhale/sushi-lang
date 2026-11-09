@@ -32,7 +32,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import arms, calls
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import dispatch, exprs, stmts
-from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Conversion
+from sushi_lang.semantics.shir.callee import Conversion
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 
 _UNIONS = {"ShirStmt": stmts.ShirStmt, "ShirExpr": exprs.ShirExpr}
@@ -104,23 +104,6 @@ def test_the_borrow_pass_never_stops_at_a_call() -> None:
     assert not isinstance(caught.value, StageStop)
     assert caught.value.code == "CE0000"
     assert arms.ARMS[exprs.Call] is not arms.stop_at
-
-
-def test_the_borrow_pass_stops_at_a_builtin_call_with_its_family() -> None:
-    """A call of a built-in method of a family with no checking arm in the borrow pass yet
-    stops. Its stop names the stage and the family that the typecheck pass wrote in the
-    callee row."""
-    span = Span(6, 4, 6, 12)
-    call = _node(exprs.Call, span)
-    call.target = exprs.Dotted(None, "load_f32")  # type: ignore[attr-defined, arg-type]
-    row = ResolvedCall(Builtin(None, BuiltinMethod("foreign_ptr", "load_f32", nom_self=False)))  # type: ignore[arg-type]
-    checker = types.SimpleNamespace(answers=lambda: types.SimpleNamespace(
-        callee_of=lambda _id: row))
-    with pytest.raises(StageStop) as caught:
-        calls.check_call(checker, call)  # type: ignore[arg-type]
-    assert caught.value.code == "CE0155"
-    assert caught.value.params == {"stage": "borrow", "construct": "Call(method foreign_ptr)"}
-    assert caught.value.span == span
 
 
 def test_a_callee_that_never_reaches_the_borrow_pass_is_an_internal_error_that_says_so() -> None:

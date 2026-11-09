@@ -17,16 +17,16 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   of that function.
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
-- `Dotted` is a method call. The receiver is typed first. A call through a field of a
+- `Dotted` is a method call. The receiver is typed first. A method of a `ptr` has one arm,
+  `check_foreign_ptr_call` (`visit/extern_calls.py`). A call through a field of a
   function type is an `Indirect` callee, and the field comes before a family. Then the ladder of the
   call (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
   implementation, an extension method, or nothing (CE2008). A family answer is the callee
   row `Builtin`, and the arm of the family in `FAMILY_ARMS` types the call. So does a
   contract method that a constraint of an opaque receiver promises
-  (`visit/contract_calls.py`). A family with no arm stops with the label
-  `Call(method <family>)`, for a receiver of any type. A method is never variadic, so a
-  bloom argument is CE0120. An extension method is the callee row `Method`. The copy of a
-  template is one body (`visit/method_templates.py`).
+  (`visit/contract_calls.py`). Every family but `foreign_ptr` has an arm there. A method
+  is never variadic, so a bloom argument is CE0120. An extension method is the callee row
+  `Method`. The copy of a template is one body (`visit/method_templates.py`).
 - `Static` is a call on a type name. On an enum whose dot holds no such member it is
   CE2045 (`visit/results.py:reject_unknown_variant`). A static method of a plain type is
   the callee row `Static`, and a type whose dot holds no static of the name is CE2102. A
@@ -112,7 +112,7 @@ from sushi_lang.semantics.passes.types.visit.container_statics import (
 from sushi_lang.semantics.passes.types.visit.contract_calls import (
     check_contract_method, promised_contract_family)
 from sushi_lang.semantics.passes.types.visit.extern_calls import (
-    check_errno_call, check_extern_call, reject_foreign_ptr_method)
+    ERRNO, ErrnoFunction, check_errno_call, check_extern_call, check_foreign_ptr_call)
 from sushi_lang.semantics.passes.types.visit.function_values import (
     check_field_call, check_function_clone, check_value_call, function_behind_local)
 from sushi_lang.semantics.passes.types.visit.generic_calls import resolve_generic_call
@@ -126,7 +126,7 @@ from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
 from sushi_lang.semantics.passes.types.visit.perk_calls import check_perk_call
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.passes.types.visit.signature_methods import check_signature_method
-from sushi_lang.semantics.shir import dispatch, exprs as e
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Free, Intrinsic, Method, Static)
 from sushi_lang.semantics.shir.ids import DeclId
@@ -139,8 +139,8 @@ from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
     IteratorType,
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, ReferenceType, StructType,
-    Type, deref_type)
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
+    ReferenceType, StructType, Type, deref_type)
 from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
@@ -195,7 +195,7 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
         return check_stdlib_call(validator, node, ref, sig)
     if sig is None:
         return None
-    if sig == ERRNO_FUNCTION:
+    if isinstance(sig, ErrnoFunction):
         return check_errno_call(validator, node, ref)
     if isinstance(sig, ExternalSig):
         return check_extern_call(validator, node, ref, sig)
@@ -241,9 +241,10 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
                        target: e.Dotted) -> Optional[Type]:
     """`x.f(args)`: the receiver, then the callee that the ladder finds (ir.md 7.3).
 
-    A field of a function type comes first (`visit/function_values.py`). A family answer goes
-    to the arm of the family in `FAMILY_ARMS`, and a family with no arm stops the walk with
-    the label of the family, on a receiver of any type. A contract method that a constraint
+    A `ptr` receiver goes to the one arm of its family and of CE5011
+    (`check_foreign_ptr_call`). A field of a function type comes next
+    (`visit/function_values.py`). A family answer goes to the arm of the family in
+    `FAMILY_ARMS`. A contract method that a constraint
     of an opaque receiver promises has the arm of its family. Any other perk method is a
     `Method` callee (`visit/perk_calls.py`). Any other method of a receiver that takes no user
     method yet stops the walk (`_takes_user_methods`). An extension method is a `Method`
@@ -259,6 +260,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if received is None:
         return None
     receiver = deref_type(received)
+    if isinstance(receiver, ForeignPtrType):
+        return check_foreign_ptr_call(validator, node, target, receiver)
     called = fn_field_call_type(validator, receiver, target.name)
     if called is not None:
         return check_field_call(validator, node, target, receiver, called)
@@ -267,7 +270,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if family is not None:
         arm = FAMILY_ARMS.get(family.name)
         if arm is None:
-            dispatch.stop_at_family(visit.STAGE, node, family.name)
+            raise_internal_error("CE0000", span=node.loc,
+                                 detail=f"the method family '{family.name}' has no arm")
         callee = Builtin(target.recv, family.callee(target.name))
         validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
         return arm(validator, node, receiver, target.name, family)
@@ -276,8 +280,6 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         return None
     if answer.rung is MethodRung.PERK:
         return check_perk_call(validator, node, target, receiver)
-    if reject_foreign_ptr_method(validator, node, receiver, target.name):
-        return None
     if not _takes_user_methods(validator, receiver):
         visit.stop_at(validator, node)
     if target.name == "clone" and reject_uncloneable(validator, node, receiver):
@@ -573,8 +575,8 @@ def _check_derived_clone(validator: TypeValidator, node: e.Call, receiver: Type,
 
 FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optional[Type]]
 
-#: The arm of each built-in family that the pass types, keyed by the registry name of the
-#: family. A family that is not here stops the walk (`Call(method <family>)`).
+#: The arm of each built-in family, keyed by the registry name of the family. The
+#: `foreign_ptr` family is not here: a `ptr` receiver has its own arm.
 FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     ARRAY_FAMILY: check_array_method,
     LIST_FAMILY: check_list_method,
@@ -592,7 +594,8 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
-                       name: str) -> Optional[FuncSig | GenericFuncDef | StdlibFunction | str]:
+                       name: str) -> Optional[FuncSig | GenericFuncDef | StdlibFunction
+                                              | ErrnoFunction]:
     """The function that a bare name calls in this unit, or None after its error.
 
     The own concrete function of the unit wins over a generic function of the scope. A name
@@ -613,7 +616,7 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
         if stdlib is not None:
             return stdlib[1]
         if name == ERRNO_FUNCTION:
-            return ERRNO_FUNCTION
+            return ERRNO
         reject_undefined_function(validator, name, ref.loc)
         return None
     if reject_ambiguous_name(validator, "function", name, ref.loc):

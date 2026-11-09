@@ -17,7 +17,7 @@ from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, deref_type
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.shir import dispatch, exprs as e
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Extern, Free, Indirect, Intrinsic, Method, Static, Stdlib)
 
@@ -68,7 +68,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     callee = resolved.callee if resolved is not None else None
     writes_receiver = False
     if isinstance(callee, Builtin):
-        writes_receiver = _check_builtin_receiver(checker, node, callee)
+        writes_receiver = _check_builtin_receiver(checker, callee)
     elif isinstance(callee, Indirect):
         arms.check(checker, callee.value)
     elif not isinstance(callee, (Free, Intrinsic, Method, Static, Stdlib, Extern,
@@ -220,7 +220,7 @@ def _method_name(checker: 'BorrowChecker', callee: Method) -> str:
     return checker.decl_name(callee.decl).rpartition(".")[2]
 
 
-def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> bool:
+def _check_builtin_receiver(checker: 'BorrowChecker', callee: Builtin) -> bool:
     """The receiver of a built-in method call: a read of its place. True when the call
     writes it.
 
@@ -229,12 +229,9 @@ def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Buil
     the array) is read too, and the call writes it after its arguments
     (`_write_builtin_receiver`). An `Owned` receiver (a `nom self` method: `map_err`,
     `or_err`) is read too, and the call takes it after its arguments
-    (`_take_builtin_receiver`). A family with no receiver rule stops the walk.
+    (`_take_builtin_receiver`).
     """
-    method = callee.method
-    convention = receiver_convention(method)
-    if convention is None:
-        dispatch.stop_at_family(arms.STAGE, node, method.family)
+    convention = receiver_convention(callee.method)
     arms.check(checker, callee.recv)
     return convention is Convention.INOUT
 

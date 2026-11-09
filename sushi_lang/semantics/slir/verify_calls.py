@@ -43,7 +43,7 @@ from sushi_lang.semantics.unit_symbols import function_symbol
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalTable
     from sushi_lang.semantics.passes.collect.functions import (
-        ExtensionTable, FuncSig, FunctionTable)
+        ExtensionMethod, ExtensionTable, FuncSig, FunctionTable)
     from sushi_lang.semantics.passes.collect.perks import PerkImplementationTable
     from sushi_lang.semantics.slir.verify import Check
 
@@ -74,6 +74,30 @@ def _perk_params(perk_impls: Optional[PerkImplementationTable], symbol: str,
     return None
 
 
+def function_of(funcs: FunctionTable, symbol: str, name: str) -> Optional[FuncSig]:
+    """The free function `name` whose symbol is `symbol`: of the unit of that symbol, or of
+    the flat view (an instance of a template of a binary library has no unit)."""
+    rows: list[tuple[Optional[str], Optional[FuncSig]]] = [
+        (unit, own.get(name)) for unit, own in funcs.by_unit.items()]
+    rows.append((None, funcs.by_name.get(name)))
+    for unit, sig in rows:
+        if sig is None or (unit is None and sig.unit_name is not None):
+            continue
+        if symbol in (sig.link_symbol, function_symbol(name, unit)):
+            return sig
+    return None
+
+
+def extension_of(extensions: ExtensionTable, symbol: str,
+                 method: str) -> Optional[ExtensionMethod]:
+    """The extension method or static `method` whose symbol is `symbol`."""
+    for record in extensions.signatures_named(method):
+        if symbol in (record.link_symbol, method_symbol(
+                record.target_type, method, record.unit_name, record.method_type_args)):
+            return record
+    return None
+
+
 def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     callee: st.Direct, *,
                     externals: Optional[ExternalTable] = None,
@@ -94,25 +118,18 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
     if callee.module is not None:
         arity = stdlib_arity(callee.module, callee.name)
         return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
-    rows: list[tuple[Optional[str], Optional[FuncSig]]] = [
-        (unit, own.get(callee.name)) for unit, own in funcs.by_unit.items()]
-    rows.append((None, funcs.by_name.get(callee.name)))
-    for unit, sig in rows:
-        if sig is None or (unit is None and sig.unit_name is not None):
-            continue
-        if callee.symbol in (sig.link_symbol, function_symbol(callee.name, unit)):
-            return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
+    sig = function_of(funcs, callee.symbol, callee.name)
+    if sig is not None:
+        return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
     owner, dot, method = callee.name.rpartition(".")
     if dot and method == CONVERSION_METHOD:
         return _conversion_params(owner, callee.symbol)
     if dot:
-        for record in extensions.signatures_named(method):
-            if callee.symbol in (record.link_symbol, method_symbol(
-                    record.target_type, method, record.unit_name, record.method_type_args)):
-                receiver = () if record.is_static else (
-                    receiver_mode(record.self_mode).convention,)
-                return DeclaredParams(receiver + tuple(
-                    mode.convention for mode in declared_modes(record.params)))
+        record = extension_of(extensions, callee.symbol, method)
+        if record is not None:
+            receiver = () if record.is_static else (receiver_mode(record.self_mode).convention,)
+            return DeclaredParams(receiver + tuple(
+                mode.convention for mode in declared_modes(record.params)))
         return _perk_params(perk_impls, callee.symbol, method)
     extern = None if externals is None else externals.by_link_name(callee.symbol, callee.name)
     if extern is not None:
@@ -228,10 +245,7 @@ def _method_conventions(check: Check, stmt: st.Call, method: BuiltinMethod) -> N
         arguments = (Convention.GUARANTEED,)
     else:
         return
-    receiver = receiver_convention(method)
-    if receiver is None:
-        return
-    wanted = (receiver,) + arguments
+    wanted = (receiver_convention(method),) + arguments
     for index, ((_, have), want) in enumerate(zip(stmt.args, wanted, strict=True)):
         if have is not want:
             what = "the receiver" if index == 0 else f"argument {index - 1}"

@@ -1,0 +1,10 @@
+# The offset of `to_string` is an `i32` position: a `string` argument is CE2006.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+unsafe external "C" as libc because "probe":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr p = libc.malloc(8)
+    let string s = p.to_string("zero")
+    println(s)
+    return 0

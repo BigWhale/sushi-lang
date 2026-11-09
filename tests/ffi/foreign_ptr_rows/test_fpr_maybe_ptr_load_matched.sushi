@@ -1,0 +1,22 @@
+# `load_ptr` answers a `Maybe@(ptr)`: a null slot is `Maybe.None`. The match reads each
+# arm, and the stored pointer is read again through the payload of `Some`.
+# EXPECT_STDOUT_EXACT: "slot 0: none\nslot 1: 42\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a pointer table on the C heap":
+    fn calloc(i64 count, i64 size) ptr = "calloc"
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr table = libc.calloc(2, 8)
+    let ptr cell = libc.malloc(4)
+    cell.store_i32(0, 42)
+    table.store_ptr(8, cell)
+    foreach(i in 0..2):
+        match table.load_ptr(i * 8):
+            Maybe.Some(found) -> println("slot {i}: {found.load_i32(0)}")
+            Maybe.None -> println("slot {i}: none")
+    libc.free(cell)
+    libc.free(table)
+    return 0

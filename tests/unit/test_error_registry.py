@@ -172,9 +172,7 @@ def test_expect_error_code_directives_are_registered():
 # there alone. Each one comes back with the typecheck stage of its construct group, which
 # removes it here. P2.13 deleted the AST body emitter, which alone emitted the three
 # runtime traps; each one comes back with the SLIR Trap of its construct group.
-UNREFERENCED: set[str] = {
-    "CE5016",                                 # Tier D: a write to a C global
-}
+UNREFERENCED: set[str] = set()
 
 
 def test_unreferenced_codes_match_the_allowlist():

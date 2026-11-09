@@ -5,7 +5,7 @@ A `GlobalRef` that no call target holds is a named function used as a value. It 
 function type of the function, with no capture, and the callee row `Free` keyed by the
 `GlobalRef`. A generic function names the instance that the function type of its position
 solves; an instance that the early passes did not cut is a late request. A C global behind an
-alias stops the walk. A call whose target is any other value is an `Indirect` callee: the
+alias is a read of the global (`visit/extern_calls.py`). A call whose target is any other value is an `Indirect` callee: the
 function type of the value gives each argument its type and its convention. A field of a
 function type that no method of the struct names is an `Indirect` callee too. A name of a
 constant or of a `var` is no callee (CE2008), and any other value that is no function is
@@ -34,6 +34,7 @@ from sushi_lang.semantics.passes.types.method_registry import MethodFamily
 from sushi_lang.semantics.passes.types.resolution import call_yield, resolve_variable_type
 from sushi_lang.semantics.passes.types.visibility import (
     name_was_refused, reject_ambiguous_name, reject_private_name, reject_undefined_function)
+from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_variable
 from sushi_lang.semantics.passes.types.visit.generic_calls import declared_or_late_instance
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.shir import exprs as e
@@ -81,7 +82,7 @@ def _behind_alias(validator: TypeValidator, node: e.GlobalRef, alias: str, name:
     are no value (CE2008)."""
     binding = validator.namespaces.lookup(alias, name)
     if binding is not None and binding.kind == "extern variable":
-        visit.stop_at(validator, node)
+        return check_extern_variable(validator, node, binding.record)
     if (binding is None or binding.provider.namespace_kind != "unit"
             or binding.kind not in ("function", "generic function")):
         reject_unknown_namespace_call(validator, alias, alias, name, node.loc)

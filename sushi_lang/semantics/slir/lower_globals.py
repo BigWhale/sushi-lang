@@ -4,8 +4,10 @@ A `var` is a `Global` place, named by the symbol of its typecheck row. A `Global
 is a place as a local is, with no scope: its rebind puts the new value into a temporary,
 unless it is a constant, then drops the old value, then moves the temporary into the
 global (rule 6). No exit drops it. A borrowed read of one is a `Copy` of the place
-(`Lowering.operand`). Each arm is a free function that takes the `Lowering` of `lower.py`
-first. This module reads `lower.py` for its types only.
+(`Lowering.operand`). A C global (an extern variable) is a `Global` too, named by its link
+name, and a read of one is a `Copy` of it; nothing writes it (CE5016). Each arm is a free
+function that takes the `Lowering` of `lower.py` first. This module reads `lower.py` for
+its types only.
 """
 from __future__ import annotations
 
@@ -15,9 +17,10 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
-from sushi_lang.semantics.slir.lower_values import ShortCircuit
+from sushi_lang.semantics.slir.lower_values import ShortCircuit, Value
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Lowering
@@ -30,6 +33,15 @@ def global_place(low: Lowering, ref: e.StorageRef) -> p.Global:
         er.raise_internal_error("CE0000", span=ref.loc,
                                 detail="a unit variable with no global reached SLIR")
     return p.Global(symbol, low.type_of(ref))
+
+
+def global_ref(low: Lowering, ref: e.GlobalRef) -> Value:
+    """A `GlobalRef` with a global row is a read of a C global: a `Copy` of its `Global`.
+    Any other `GlobalRef` is a function value (`lower_closures.py`)."""
+    symbol = low.typeck.global_of(ref.shir_id)
+    if symbol is None:
+        return closures.function_value(low, ref)
+    return r.Use(p.Copy(p.Global(symbol, low.type_of(ref))))
 
 
 def owner_place(low: Lowering, symbol: str, span: Span) -> p.Global:
