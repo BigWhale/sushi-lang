@@ -2905,10 +2905,7 @@ symbol, with the receiver first (`declared_params`).
 
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or one of these names: `library
-function` for a free, a method or a static callee whose row names no declaring unit (a
-function of a binary library, whose symbol is its `link_symbol`; the label goes with
-P6.D6.1, Task 101, which lowers the callee by 8.6), `bloom` for a bloom
+class, or one of these names: `bloom` for a bloom
 argument (the label goes with P6.D3.1, Task 102, which lowers the bloom by 7.4), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
@@ -3645,23 +3642,29 @@ case. A generic function as a value names the instance that its position gives (
 
 **A library callee** (S26, decision E7). A function, a method or a static of a binary or a
 hybrid library has no declaring unit in the build: its symbol is its `link_symbol`, from the
-manifest. The `link_symbol` is a fact of the callee row: `typecheck` reads `sig.link_symbol`
-(as `_check_function_call` does to choose `unit = None`) and writes it into
-`ResolvedCall`. SLIR lowering makes `Direct(link_symbol, name)` for a `Free`, a `Method` or
-a `Static` callee of such a row, and a function value of one is
-`Aggregate(AggClosure(ty), [FnRef(link_symbol)])`. The `.slib` format does not change (9,
-Q4). An instance of a template of a binary library is already stated (8.2): it goes into
-the module of the unit that holds its body, with a symbol of that unit. A source library
-needs nothing, because its units are ordinary units of the build. The verifier finds the
-declared parameters of such a callee in the function table that the `libraries` step fills
-from the manifest (8.13). Two carries go with this rule: a public constant of a binary or a
-hybrid library whose value names a private function of the library gives CE1001 in the
-consumer today, because the thunk of the constant names the link symbol of the private
-function; and a private `var` of a binary library named by the consumer must give
-[CE3005](../error-catalog.md#ce3005) (`test_err_lib_binary_private_var`). Not built yet: a
-`Free`, `Method` or `Static` row with no declaring unit stops the lowering (`slir, library
-function`), and so does a function value of one. P6.D6.1 (Task 101) builds this rule and
-the two carries, and removes this note.
+manifest. The `link_symbol` is a fact of the callee row: `typecheck` reads the
+`link_symbol` of the signature or of the extension record and writes it into
+`ResolvedCall`, with no unit (`user_callee`, `passes/types/visit/user_callees.py`). SLIR
+lowering makes `Direct(link_symbol, name)` for a `Free`, a `Method` or a `Static` callee of
+such a row, and a function value of one is `Aggregate(AggClosure(ty), [FnRef(link_symbol)])`
+(`callee_symbol`, `slir/lower_symbols.py`). A perk method of a library implementation
+needs nothing: its perk symbol has no unit (7.6). The `.slib` format does not change (9,
+Q4). An instance of a template of a binary library is a row with no unit and no
+`link_symbol`: its body goes into the module of the unit that holds it (8.2), and its
+symbol has no unit prefix. A source library needs nothing, because its units are ordinary
+units of the build. The verifier finds the declared parameters of a library callee in the
+function table and in the extension table that the `libraries` step fills from the
+manifest, by the `link_symbol` of the row (8.13).
+
+A public constant of a binary or a hybrid library travels as source, and the consumer
+checks its initializer in the scope of the library unit. The export closure of the library
+walks the initializer of each public constant, so a private function that the value names
+travels with its signature and its link symbol, as a private function that a template body
+names does. The check of the initializer may name it, as a body of a library template may
+(`in_library_body`). The thunk of the constant then names the link symbol of the private
+function. A private `var` or a private constant of a binary library that the consumer names
+is a name of the scope pass (`kept_constant_names`), so `typecheck` gives
+[CE3005](../error-catalog.md#ce3005) for it, and the scope pass gives no CE1001.
 
 ### 8.7 Rvalues
 
@@ -4409,15 +4412,18 @@ target after it (`conversion_symbol`). `as` is a reserved word, so no other meth
 name. A `Direct` callee with no row is CE0158. Today a free function, a method or a static
 of the build, a conversion, a function of a registry stdlib module and a C function have a
 row. A `Direct` callee whose symbol is the `link_symbol` of a function, a method or a static
-of a binary or a hybrid library finds its row in the function table that the `libraries`
-step fills from the manifest (8.6, S26). Not built yet: P6.D6.1 (Task 101) adds that row. The verifier does not check a shape that no lowering makes yet,
+of a binary or a hybrid library finds its row in the function table or in the extension
+table that the `libraries` step fills from the manifest (8.6, S26). An instance of a
+template of a binary library has no unit: the flat view of the function table holds its
+row, and its symbol has no unit prefix. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
 place that is no local, no element of a local and no `Global`, and a `DropIfSet` of a place
 that is no local and no `Global`.
 A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`,
-`tests/unit/test_slir_verify_regions.py` for the views and the regions, and
-`tests/unit/test_slir_verifier_globals.py` for the drop of a `Global`), because a correct
+`tests/unit/test_slir_verify_regions.py` for the views and the regions,
+`tests/unit/test_slir_verifier_globals.py` for the drop of a `Global`, and
+`tests/unit/test_slir_verifier_libraries.py` for a library callee), because a correct
 lowering makes none.
 
 This is where most of the 250 backend internal errors go. One gate, one message, one source
