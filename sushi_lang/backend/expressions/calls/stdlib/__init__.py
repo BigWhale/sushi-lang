@@ -16,7 +16,7 @@ from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 
 # One row per registry module, keyed by its `use` path. The semantic side answers for
 # the same set (`semantics/stdlib_registry.py`); a module it answers and this table
-# misses is a CE0055.
+# misses is an internal error of the SLIR emitter (`_stdlib`, `backend/slir/emit.py`).
 STDLIB_EMITTERS: dict[str, Callable] = {
     "time": emit_time_function,
     "sys/env": emit_env_function,

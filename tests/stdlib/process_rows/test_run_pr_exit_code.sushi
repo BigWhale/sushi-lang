@@ -1,0 +1,15 @@
+# `exit` never returns: the statements after it do not run.
+# EXPECT_STDOUT_EXACT: "before\n"
+# EXPECT_RUNTIME_EXIT: 3
+use <sys/process>
+
+fn leave(i32 code) i32:
+    println("before")
+    exit(code)
+    println("after")
+    return 0
+
+fn main() i32:
+    let i32 n = leave(3)
+    println("main {n}")
+    return 0

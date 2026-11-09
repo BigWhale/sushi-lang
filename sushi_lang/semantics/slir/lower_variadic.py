@@ -3,7 +3,8 @@
 The tail row of the callee (`ResolvedCall.tail`) says where the tail starts. The values of
 the tail go into ONE temporary `T[]` local of the call, as ONE `Aggregate(AggArray)` in the
 written order: a value that owns is the `Move` of its temporary. An empty tail is the
-empty array. A bloom `arr...` moves the array itself into the temporary. The temporary is
+empty array. A bloom `arr...` moves the array itself into the temporary; a bloom that
+borrows (a stdlib row, `run`) is the place of its source, with no temporary. The temporary is
 the operand of the tail, with the convention of the tail parameter: a `Guaranteed` tail is
 a borrow of the callee, and the temporary drops at the end of the statement. Each arm is a
 free function that takes the `Lowering` of `lower.py` first.
@@ -29,6 +30,9 @@ def tail_argument(low: Lowering, node: e.Call, tail: Tail) -> tuple[p.Operand, C
     values = node.args[tail.position:]
     array: Value
     if len(values) == 1 and values[0].bloom:
+        bloom = low.typeck.convention_of(node.shir_id, tail.position)
+        if bloom is not None and not bloom.consumes:
+            return low.operand(values[0].value), tail.convention
         array = r.Use(low.operand(values[0].value))
     else:
         exprs = [arg.value for arg in values]

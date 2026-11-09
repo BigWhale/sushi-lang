@@ -454,6 +454,9 @@ class Lowering:
                 self.emit(self.placement.drop_part(part, span))
         if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
+            if calls.never_returns(value.callee):
+                self.block.terminator = tm.Unreachable(span)
+                self.block = self.new_block()
         else:
             self.emit([st.Assign(place, value, span)])
         for root in dict.fromkeys(root_of_move(moved) for moved in moves):

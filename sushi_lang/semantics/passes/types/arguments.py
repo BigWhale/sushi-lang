@@ -96,6 +96,7 @@ def check_arguments(
     compares_nom: bool = True,
     typed: Mapping[int, Optional[Type]] = NOTHING_TYPED,
     tail: Optional[DynamicArrayType] = None,
+    bloom_borrows: bool = False,
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
@@ -106,7 +107,8 @@ def check_arguments(
     The answer is the arity alone, for the callers that stop there. A caller that wants
     every fault reported ignores it. `compares_nom` False gives no CE2427: a C function
     takes nothing from Sushi, so its `nom` marker is inert. `typed` holds, by index, the
-    answer of each argument that the caller checked to solve the parameter types.
+    answer of each argument that the caller checked to solve the parameter types. A bloom
+    into the `tail` moves its source, or with `bloom_borrows` borrows it (a stdlib row).
     """
     arity_ok = (len(args) >= len(params) if minimum_arity or tail is not None
                 else len(args) == len(params))
@@ -140,7 +142,7 @@ def check_arguments(
 
     if tail is not None:
         _check_tail(validator, callee_name, args, len(params), tail, mismatch_code,
-                    None if declared is None else declared.call)
+                    None if declared is None else declared.call, bloom_borrows)
     if minimum_arity or tail is not None:
         return arity_ok
 
@@ -152,7 +154,7 @@ def check_arguments(
 
 def _check_tail(validator: 'TypeValidator', callee_name: str, args: Sequence[e.Arg],
                 start: int, tail: DynamicArrayType, mismatch_code: er.ErrorMessage,
-                call: Optional[ShirId]) -> None:
+                call: Optional[ShirId], bloom_borrows: bool) -> None:
     """Each value of the tail at the element type of `tail`, and a bloom at `tail` itself.
     A bloom is the sole value of the tail, and its value is a name (CE0120). A tail of
     references is CE0114 of the collect pass, so its values take no convention."""
@@ -169,7 +171,8 @@ def _check_tail(validator: 'TypeValidator', callee_name: str, args: Sequence[e.A
                               tail if arg.bloom else tail.base_type,
                               mismatch_code=mismatch_code)
         if fits and call is not None:
-            validator.body_answers().record_convention(call, index, ParamMode.NOM.convention)
+            mode = ParamMode.BORROW if arg.bloom and bloom_borrows else ParamMode.NOM
+            validator.body_answers().record_convention(call, index, mode.convention)
 
 
 def _reject_misplaced_bloom(validator: 'TypeValidator', arg: e.Arg, sole: bool) -> bool:

@@ -176,7 +176,7 @@ def sample() -> Sample:
 def _typeck(decls: DeclNames, named: dict[str, e.ExprNode | s.Loop]) -> TypeckResults:
     """The rows of `TypeckResults` that the ownership check reads."""
     table = TypeckResults()
-    conventions = {"keep_call": (Convention.OWNED, Convention.GUARANTEED, Convention.GUARANTEED),
+    conventions = {"keep_call": (Convention.OWNED, Convention.GUARANTEED, Convention.OWNED),
                    "map_call": (Convention.OWNED,)}
     for name, answers in conventions.items():
         for position, convention in enumerate(answers):

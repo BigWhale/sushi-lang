@@ -1,0 +1,12 @@
+# A bloom of `args` into `run` borrows its source: `args` stays readable after the call.
+# EXPECT_STDOUT_EXACT: "ran 0\nargs 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn main(string[] args) i32:
+    match run("true", args...):
+        Result.Ok(out) -> println("ran {out.exit_code}")
+        Result.Err(_) -> println("err")
+    println("args {args.len()}")
+    return 0

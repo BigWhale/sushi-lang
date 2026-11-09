@@ -1,0 +1,14 @@
+# The tail of `run` holds temporaries and an owning local. Each value moves into the
+# array of the tail, and the caller drops that array at the end of the statement.
+# EXPECT_STDOUT_EXACT: "ok 0 a-1 b-2 3c\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+use <collections/strings>
+
+fn main() i32:
+    let string c = "{3}c"
+    match run("echo", "a-{1}", "b-{2}", c):
+        Result.Ok(out) -> println("ok {out.exit_code} {out.stdout_text.trim()}")
+        Result.Err(_) -> println("err")
+    return 0

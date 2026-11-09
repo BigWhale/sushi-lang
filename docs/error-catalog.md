@@ -324,16 +324,6 @@ Type is not hashable - semantic analysis should prevent this.
 
 Hash method called with incorrect number of arguments.
 
-### CE0055 {#ce0055}
-
-**Error** · internal
-
-**Message:** `unknown variable or constant: {name}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Variable/constant not found in symbol table during codegen.
-
 ### CE0064 {#ce0064}
 
 **Error** · internal

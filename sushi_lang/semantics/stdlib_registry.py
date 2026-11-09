@@ -332,6 +332,10 @@ def stdlib_arity(module_path: str, name: str) -> Optional[int]:
     return None if row is None else row.arity
 
 
+#: The modules whose generated functions carry the name of their layer.
+_SYMBOL_PREFIXES = {"io/files": "sushi_io_files_", "net/socket": "sushi_net_"}
+
+
 def stdlib_symbol(module_path: str, name: str, arg_types: Sequence["Type"]) -> str:
     """The symbol of the generated function that a call of a registry stdlib function
     calls: the ONE derivation (docs/design/ir.md 8.6). It is `sushi_<name>`
@@ -343,8 +347,13 @@ def stdlib_symbol(module_path: str, name: str, arg_types: Sequence["Type"]) -> s
     return f"{_SYMBOL_PREFIXES.get(module_path, 'sushi_')}{name}"
 
 
-#: The modules whose generated functions carry the name of their layer.
-_SYMBOL_PREFIXES = {"io/files": "sushi_io_files_", "net/socket": "sushi_net_"}
+#: The registry functions whose call never returns.
+_NEVER_RETURNS = frozenset({("sys/process", "exit")})
+
+
+def stdlib_never_returns(module_path: str, name: str) -> bool:
+    """Whether a call of a registry stdlib function never returns (`exit`, ir.md 8.6)."""
+    return (module_path, name) in _NEVER_RETURNS
 
 
 class StdlibRegistry:

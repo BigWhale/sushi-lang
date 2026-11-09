@@ -1,0 +1,19 @@
+# The status of `chdir` in `??`: the Ok goes on, and a missing path is an Ok of -1.
+# EXPECT_STDOUT_EXACT: "first 0\nmissing ok -1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn go(string path) i32 | ProcessError:
+    let i32 rc = chdir(path)??
+    return Result.Ok(rc)
+
+fn main() i32:
+    let string base = "/"
+    match go("{base}tmp"):
+        Result.Ok(rc) -> println("first {rc}")
+        Result.Err(_) -> println("first err")
+    match go("/definitely/not/a/dir/xyz"):
+        Result.Ok(rc) -> println("missing ok {rc}")
+        Result.Err(_) -> println("missing err")
+    return 0

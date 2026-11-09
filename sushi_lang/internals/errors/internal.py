@@ -170,9 +170,9 @@ _add(ErrorMessage("CE0054", Severity.ERROR,
     Category.INTERNAL, "Hash method called with incorrect number of arguments."))
 
 # Variable/Constant Lookup (CE0055-CE0058)
-_add(ErrorMessage("CE0055", Severity.ERROR,
-    "unknown variable or constant: {name}",
-    Category.INTERNAL, "Variable/constant not found in symbol table during codegen."))
+# CE0055 ("unknown variable or constant") is retired. Its last emitter was the AST entry of
+# the `<net/socket>` rows, which the operand form replaced (docs/design/ir.md 8.6). The
+# number is not reused.
 
 # Builder/Context State (CE0059-CE0063)
 # CE0062 ("invalid cleanup_type") is retired. `emit_scope_cleanup` took a cleanup kind

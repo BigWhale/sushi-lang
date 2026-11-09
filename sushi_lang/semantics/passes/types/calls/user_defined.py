@@ -12,9 +12,9 @@ from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Stdlib
-from sushi_lang.semantics.shir.typeck import ResolvedCall
+from sushi_lang.semantics.shir.typeck import ResolvedCall, Tail
 from sushi_lang.semantics.stdlib_registry import StdlibFunction, stdlib_row
-from sushi_lang.semantics.typesys import EnumType, FunctionType, Type
+from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, FunctionType, Type
 from ..arguments import (
     Parameters, check_arguments, marked_type, record_conventions, reject_misplaced_spread)
 from ..utils import intern_declared_wrapper
@@ -57,22 +57,24 @@ def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef
     types of its row. Each argument borrows. The call yields the return type of its row,
     also after an error of an argument, and the reference of the target answers the
     function type of the row. A family whose first argument has no row yields nothing. A
-    function of a module that the pass does not type yet stops the walk (`Call(stdlib)`).
+    function whose last parameter is variadic (`run`) has the tail of S22, and a bloom into
+    it borrows its source (ir.md 7.4).
     """
     module, name = func.module_path, func.name
-    if module in UNTYPED_STDLIB_MODULES:
-        visit.stop_at(validator, node)
+    tail = _stdlib_tail(func)
     validator.body_answers().record_callee(node.shir_id,
-                                           ResolvedCall(Stdlib(ref.decl, module)))
+                                           ResolvedCall(Stdlib(ref.decl, module), tail=tail))
     if func.params is None:
         arg_types = _check_math_family(validator, node, name, ref.loc)
     else:
         arg_types = list(func.params)
-        declared = Parameters(node.shir_id, (ParamMode.BORROW,) * len(arg_types),
-                              [_row_parameter_name(ty) for ty in arg_types])
-        check_arguments(validator, name, arg_types, node.args, ref.loc,
+        fixed = arg_types if tail is None else arg_types[:tail.position]
+        declared = Parameters(node.shir_id, (ParamMode.BORROW,) * len(fixed),
+                              [_row_parameter_name(ty) for ty in fixed])
+        check_arguments(validator, name, fixed, node.args, ref.loc,
                         mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                        declared=declared)
+                        declared=declared, tail=None if tail is None else tail.ty,
+                        bloom_borrows=True)
     row = stdlib_row(module, name, arg_types)
     if row is None:
         return None
@@ -81,9 +83,15 @@ def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef
     return yielded
 
 
-#: The registry stdlib modules whose calls the pass does not type yet (P6.D7.2). A call
-#: of a function of one of them stops the walk of its body.
-UNTYPED_STDLIB_MODULES = frozenset({"sys/process", "net/socket"})
+def _stdlib_tail(func: StdlibFunction) -> Optional[Tail]:
+    """The tail of a stdlib function whose last parameter is `...T`: its row holds `T[]`,
+    and the tail borrows as each parameter of a row does."""
+    if not func.is_variadic or not func.params:
+        return None
+    ty = func.params[-1]
+    if not isinstance(ty, DynamicArrayType):
+        er.raise_internal_error("CE0000", detail="a variadic stdlib row whose tail is no T[]")
+    return Tail(len(func.params) - 1, ty, ParamMode.BORROW.convention)
 
 
 def _row_parameter_name(ty: Type) -> str:

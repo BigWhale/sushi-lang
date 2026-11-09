@@ -11,7 +11,7 @@ generator used rather than spelled out here.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, Optional, Sequence
 
 from llvmlite import ir
 
@@ -43,11 +43,18 @@ _SCALARS = {
 }
 
 
+def _named_structs() -> dict[str, Callable[[], ir.Type]]:
+    from sushi_lang.sushi_stdlib.src.type_definitions import (
+        get_datagram_type, get_process_output_type,
+    )
+    return {"Datagram": get_datagram_type, "ProcessOutput": get_process_output_type}
+
+
 def llvm_value_type(ty) -> Optional[ir.Type]:
     """The LLVM type a Sushi type crosses as, BY VALUE, or None if it cannot."""
     from sushi_lang.sushi_stdlib.src.type_definitions import (
-        get_byte_array_type, get_datagram_type, get_dynamic_array_type,
-        get_maybe_type, get_string_type, get_tuple_type,
+        get_byte_array_type, get_dynamic_array_type, get_maybe_type, get_string_type,
+        get_tuple_type,
     )
 
     scalar = _SCALARS.get(ty)
@@ -66,10 +73,11 @@ def llvm_value_type(ty) -> Optional[ir.Type]:
     if is_tuple_type(ty):
         elements = [llvm_value_type(element) for element in tuple_elements(ty)]
         return None if any(e is None for e in elements) else get_tuple_type(elements)
-    if isinstance(ty, UnknownType) and ty.name == "Datagram":
-        # The one named struct a registry primitive answers. Sized from the same
-        # helper the generator used, so the Result layout matches byte for byte.
-        return get_datagram_type()
+    named = _named_structs().get(ty.name) if isinstance(ty, UnknownType) else None
+    if named is not None:
+        # A named struct that a registry primitive answers. Sized from the same helper
+        # the generator used, so the Result layout matches byte for byte.
+        return named()
     return None
 
 
@@ -117,34 +125,6 @@ def llvm_function_type(sig: Signature) -> ir.FunctionType:
         if llvm_type is None:
             raise_internal_error("CE0145", type=display_type(param.ty))
     return ir.FunctionType(llvm_return_type(sig), params)
-
-
-def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str,
-                       sig: Signature, to_i1: bool) -> ir.Value:
-    """Emit one registry stdlib call of the AST, straight from its row.
-
-    A `cstr` argument is marshalled through `emit_cstr_arg`, the one C-string seam, and
-    is freed at scope exit like an FFI argument (#292); the callee takes `i8*` and frees
-    nothing. Everything else crosses as the value it already is -- a descriptor a bare
-    i32, an offset a bare i64, a `u8[]` its descriptor by value, a `string` its fat
-    pointer -- and each is a BORROW: no callee here frees what it was handed.
-    """
-    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg, emit_cstr_arg
-
-    if len(expr.args) != sig.arity:
-        # A compiler bug, not a user error: the layer's `validate_*_call` already
-        # refused a wrong count with CE2009.
-        raise_internal_error("CE0023", method=func_name,
-                             expected=sig.arity, got=len(expr.args))
-
-    args = []
-    for param, written in zip(sig.params, expr.args, strict=True):
-        if param.as_cstr:
-            args.append(emit_cstr_arg(codegen, written))
-        else:
-            args.append(as_param_value(codegen, param, emit_borrowed_arg(codegen, written)))
-    result = emit_row_call(codegen, func_name, symbol, sig, args)
-    return codegen.utils.as_i1(result) if to_i1 else result
 
 
 def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, symbol: str,

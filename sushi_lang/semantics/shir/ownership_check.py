@@ -8,7 +8,8 @@ answers of `typecheck`:
   value of a `Destructure`. The value of a reference `let` is a `Borrow` of its place, and
   no consuming use: the local points into the place;
 - the value of a `Return`;
-- an argument of a `Call` whose convention is `Owned`, and a bloom argument;
+- an argument of a `Call` whose convention is `Owned`, and a bloom argument with no
+  convention (a bloom into a stdlib row borrows, ir.md 7.4);
 - each field of a `StructInit`, each payload of an `EnumInit`, each part of a
   `TupleInit`, and the value of each `Single` run of an `ArrayInit` (a repeated value is
   a borrow, and each slot takes its own copy);
@@ -89,7 +90,8 @@ def _call(node: e.Call, typeck: TypeckResults,
                 and receiver_convention(callee.method) is Convention.OWNED)):
         yield callee.recv
     for position, arg in enumerate(node.args):
-        if arg.bloom or typeck.convention_of(node.shir_id, position) is Convention.OWNED:
+        convention = typeck.convention_of(node.shir_id, position)
+        if convention is Convention.OWNED or (arg.bloom and convention is None):
             yield arg.value
 
 

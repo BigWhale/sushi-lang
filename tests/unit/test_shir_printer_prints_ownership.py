@@ -32,7 +32,7 @@ ShirBody sample
   block  :
     Assign(LocalRef(_5), move LocalRef(_0), is_init: true)
     Assign(LocalRef(_5), adopt Call(Named(GlobalRef(@keep)), [(adopt LocalRef(_5), Owned), \
-(Lit(1), Guaranteed), (adopt LocalRef(_2)..., Guaranteed)]), is_init: false)
+(Lit(1), Guaranteed), (adopt LocalRef(_2)..., Owned)]), is_init: false)
     Destructure([_6, _], adopt TupleInit([adopt LocalRef(_5), adopt Lit(2)]))
     Assign(LocalRef(_7), adopt ArrayInit(Fixed, [Repeat(Lit(7), Lit(3)), Single(adopt Lit(8))]), \
 is_init: true)
