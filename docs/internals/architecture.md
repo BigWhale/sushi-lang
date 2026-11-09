@@ -110,7 +110,7 @@ then per unit, in one loop:
 | `finite-types` | a type that holds itself inline ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | the derived `hash()` and `clone()` | `semantics/passes/derive.py` |
 | `shadowing` | an extension method with the name of a built-in ([CE2097](../error-catalog.md#ce2097)) | `semantics/semantic_analyzer.py` |
-| `effects` | which functions destroy a `poke` parameter, over all units | `semantics/passes/borrow/destroy_effects.py` |
+| `effects` | which functions destroy a `poke` parameter, over all units | `semantics/passes/effects.py` |
 | `scope` | declarations, scopes and the bare-name ladder ([CE1001](../error-catalog.md#ce1001), [CE2105](../error-catalog.md#ce2105)) | `semantics/passes/scope.py` |
 | `typecheck` | types, inference, return paths ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) | `semantics/passes/types/` |
 | `lift` | each lambda becomes a top-level function and an environment | `semantics/passes/lift.py` |

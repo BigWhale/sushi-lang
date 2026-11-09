@@ -230,7 +230,7 @@ class SemanticAnalyzer:
                           compiled library ships, then warn
                           where an own extension hides an        _warn_hidden_imported_extensions  here
                           imported one (C3)
-            effects       destroy-effect summary (AST)           _compute_effects                  passes/borrow/destroy_effects.py
+            effects       destroy-effect summary (AST)           _compute_effects                  passes/effects.py
             scope         scope and variable analysis (AST)      _check_units                      passes/scope.py
             lowering      the SHIR body of each declaration      _check_units                      shir/lowering.py
             typecheck     type validation and inference (SHIR)   _check_units                      passes/types/
@@ -824,7 +824,7 @@ class SemanticAnalyzer:
         """effects: which functions destroy a `poke` parameter, transitively (#168)."""
         # Computed ONCE across EVERY unit -- the borrow pass runs per unit, so a per-unit
         # summary would make a cross-unit callee invisible.
-        from sushi_lang.semantics.passes.borrow import compute_destroy_effects
+        from sushi_lang.semantics.passes.effects import compute_destroy_effects
         return compute_destroy_effects(
             unit.ast for unit in compilation_order if unit.ast is not None
         )

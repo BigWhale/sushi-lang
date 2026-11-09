@@ -28,7 +28,7 @@ each named for the stage it runs.
 | `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
 | `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)), or with a perk method that a binary or hybrid library ships ([CE4007](../error-catalog.md#ce4007)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
-| `effects` | which functions destroy a `poke` parameter, transitively; on the AST | `semantics/passes/borrow/destroy_effects.py` |
+| `effects` | which functions destroy a `poke` parameter, transitively; on the AST | `semantics/passes/effects.py` |
 | `scope` | scope and variable analysis; on the AST | `semantics/passes/scope.py` |
 | `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque; on SHIR, into `TypeckResults` | `semantics/passes/types/` |
 | `lift` | the symbol and the environment of each lambda; on SHIR, into `LiftResults` | `semantics/passes/lift.py` |
@@ -1031,7 +1031,7 @@ not import is [`CE3022`](../error-catalog.md#ce3022), and two imported public on
 
 ## The `effects` pass: the destroy-effect summary
 
-**File:** `semantics/passes/borrow/destroy_effects.py`
+**File:** `semantics/passes/effects.py`
 
 Which functions destroy a `poke` parameter, transitively. The `borrow` pass reads
 the summary to decide whether a call invalidates the caller's value.

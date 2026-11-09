@@ -34,7 +34,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable, Optional
 from dataclasses import dataclass, field
 
-from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet
@@ -65,7 +64,6 @@ class BorrowState:
     holds_caller_value_on_every_path: bool = False
     is_destroyed: bool = False          # released by an explicit `.destroy()`
     is_argv_view: bool = False          # main's `string[] args`; moving it frees argv
-    is_unit_var: bool = False           # a `var`: borrowable, never moved out of (CE2436)
     is_borrowed_binding: bool = False
     is_let_borrow: bool = False
     is_borrow_param: bool = False
@@ -80,7 +78,7 @@ class BorrowState:
     move_reported_by: Optional[Owner] = None  # the walk whose CE2412 reports the move
     borrows_from: tuple[Owner, ...] = ()      # the root owners a `let`-borrow reads out of
     is_lent_iterator: bool = False            # a `let`-borrow that owns its iterator value
-    lent_value: Optional[Expr] = None         # the value a lent iterator `let` was bound to
+    lent_value: Optional[ShirExpr] = None        # the value a lent iterator `let` was bound to
     views_storage_of: Optional[ShirExpr] = None  # a direct walk: the container it walks
     covered_by: Optional[Owner] = None        # the walk whose freeze covers this one
     invalidated_at: Optional[Span] = None     # where that owner changed or was released

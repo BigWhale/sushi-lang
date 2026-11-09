@@ -7,7 +7,6 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType
@@ -122,7 +121,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
 
 def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
                           span: Optional[Span], what: str,
-                          receiver: Optional[Expr | e.ShirExpr] = None,
+                          receiver: Optional[e.ShirExpr] = None,
                           *, rebind: bool = False) -> bool:
     """THE gate: a write that cannot reach the value it appears to write is rejected.
 
@@ -132,7 +131,7 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
     position is an argument and not a second gate -- one of those grew beside this one
     and covered a single kind, so a match binding was rebindable and freed the owner's
     payload (#590). `receiver` is the receiver of a write through a place: the base of a
-    SHIR field, or an AST receiver of a port template.
+    SHIR field.
     """
     # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
     # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
@@ -179,7 +178,7 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
     return False
 
 
-def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr | e.ShirExpr,
+def reject_write_through_slice(checker: 'BorrowChecker', receiver: e.ShirExpr,
                                 span: Optional[Span], what: str) -> bool:
     """CE2426 for a write whose receiver crosses a slice (S4). True when refused.
 
@@ -190,11 +189,10 @@ def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr | e.Shir
     if view is None:
         return False
     text = spelled(checker, view)
-    array = view.base if isinstance(view, e.Slice) else view.array
     diag = checker.err.emit_with(er.ERR.CE2426, span, name=text)
     if view.loc is not None:
         diag.note_at(f"'{text}' is a slice, a read-only view of the storage of "
-                     f"'{spelled(checker, array)}'", view.loc)
+                     f"'{spelled(checker, view.base)}'", view.loc)
     diag.help(f"the write ({what}) would go through a view, and a growth would move "
               "storage that the array keeps; write to the array directly, or copy the "
               "part with `.ss(start, count)`")

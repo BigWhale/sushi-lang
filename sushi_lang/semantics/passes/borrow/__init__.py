@@ -45,7 +45,6 @@ from . import arms  # noqa: F401
 from .borrowed_returns import BodyReturn, body_return
 from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
-from .destroy_effects import compute_destroy_effects
 from .flow import FlowFacts, LoopFrame, record_exit, terminates
 from .methods import MUTATING_METHODS
 from .iterators import write_heap_decisions
@@ -299,5 +298,4 @@ __all__ = [
     'MUTATING_METHODS',
     'READONLY_RECEIVERS',
     'binds_a_bare_literal_string',
-    'compute_destroy_effects',
 ]

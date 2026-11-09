@@ -95,27 +95,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "the writer keeps it zero"),
 )
 
-# -- the AST helpers of borrow that the switch left with no caller (P2.6a) ------------
-# Each one moves to SHIR inputs in the borrow stage of its construct group in the
-# migration plan, and that stage deletes the entry.
-_BORROW = "sushi_lang/semantics/passes/borrow/"
-
-
-def _kept(tier: str, groups: str) -> str:
-    return (f"kept for Tier {tier} ({groups}): the borrow stage of its construct group "
-            "moves the helper to SHIR inputs")
-
-
-def _ast_probe(group: str) -> str:
-    return (f"a port template: it reads the AST, which no SHIR pass has, and no pass reaches "
-            f"it; group {group} ports it to SHIR inputs before a SHIR caller is connected")
-
-
-WHITELIST += (
-    (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),
-    (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
-)
-
 _SEMANTICS = "sushi_lang/semantics/"
 
 WHITELIST += (

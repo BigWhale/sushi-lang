@@ -3,28 +3,11 @@
 `read_type`, `borrow_owner` and `view_receiver` read a SHIR node: the type of the value of
 a node, the owner (a local or a `var`) that a borrow of a place is counted on and that a
 binding into the place freezes, and the receiver of a container get-out.
-The other probes read the AST. They live together and share `unwrap_try` because a
-narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went unstamped.
-
-Port templates: the probes that read the AST take an AST node, and no SHIR pass has one.
-No pass reaches them today. The group that checks each construct ports its probes to SHIR
-inputs before a SHIR caller is connected: D1 a `var` (`unit_variables`).
 """
 
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
-from sushi_lang.semantics.ast import (
-    ArrayLiteral,
-    Call,
-    DotCall,
-    DynamicArrayFrom,
-    DynamicArrayNew,
-    Expr,
-    IndexAccess,
-    MethodCall,
-    Name,
-)
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, walk_place
@@ -128,7 +111,7 @@ def storage_state(checker: 'BorrowChecker', node: e.StorageRef) -> BorrowState:
     state = checker.borrow_state.get(symbol)
     if state is None:
         state = BorrowState(name=checker.decl_name(node.decl), local=symbol,
-                            var_type=read_type(checker, node), is_unit_var=True)
+                            var_type=read_type(checker, node))
         checker.borrow_state[symbol] = state
     return state
 
@@ -136,48 +119,30 @@ def storage_state(checker: 'BorrowChecker', node: e.StorageRef) -> BorrowState:
 def chain_call_boundary(expr: object) -> Optional[Span]:
     """The boundary that keeps a write receiver from reaching a root, or None (#352).
 
-    A write receiver must reach its root -- a NAME, or the local or the `var` of a SHIR
-    place --
-    through member and index steps only. Whatever else the walk stops at (a method call, a `??`, a plain call, an
-    inline constructor) yields a temporary copy, so a write receiver whose chain
-    crosses it cannot reach the storage it appears to write. Deliberately inverted --
-    "a Name is fine" rather than a list of boundary kinds -- so a new expression kind
+    A write receiver must reach its root -- the local, the `var` or the constant of a
+    SHIR place -- through member and index steps only. Whatever else the walk stops at (a
+    method call, a `??`, a plain call, an inline constructor) yields a temporary copy, so
+    a write receiver whose chain crosses it cannot reach the storage it appears to write. Deliberately inverted --
+    "a root is fine" rather than a list of boundary kinds -- so a new expression kind
     is rejected, never silently writable. The boundary's span is the second location
     of the CE2429 diagnostic. A constant is storage too: typecheck refuses a write of it
     (CE2096), also in a body that goes on to this pass with that error.
     """
     end = walk_place(expr, Step.MEMBER | Step.INDEX).node
-    if end is None or isinstance(end, (Name, e.LocalRef, e.StorageRef, e.ConstRef)):
+    if end is None or isinstance(end, (e.LocalRef, e.StorageRef, e.ConstRef)):
         return None
     return end.loc
 
 
-def slice_on_path(expr: object) -> Optional[IndexAccess | e.Slice]:
+def slice_on_path(expr: object) -> Optional[e.Slice]:
     """The slice a write through `expr` crosses, or None (S4, docs/design/slices.md).
 
     A slice is a read-only view: a write through it is lost from no one, but a growth
     through it would move storage that the array keeps.
     """
     for node in walk_place(expr, Step.MEMBER | Step.INDEX).path:
-        if (isinstance(node, IndexAccess) and node.is_slice) or isinstance(node, e.Slice):
+        if isinstance(node, e.Slice):
             return node
-    return None
-
-
-def receiver_type(checker: 'BorrowChecker', receiver: Optional[Expr]) -> Optional[Type]:
-    """The type of a get-out's receiver: a place, or a temporary that makes a new value.
-
-    The typecheck pass stamps the type of each temporary: a call carries what it answers,
-    and an array literal, a `from([...])` and a `new()` carry the array they make.
-    """
-    ty = read_type(checker, receiver)
-    if ty is not None:
-        return ty
-    match receiver:
-        case Call() | MethodCall() | DotCall():
-            return checker.types.resolve_named(receiver.inferred_return_type)
-        case ArrayLiteral() | DynamicArrayFrom() | DynamicArrayNew():
-            return receiver.resolved_type
     return None
 
 
@@ -201,18 +166,3 @@ def read_type(checker: 'BorrowChecker', node: object) -> Optional[Type]:
     if isinstance(node, e.ExprNode):
         return checker.answers().type_of(node.shir_id)
     return None
-
-
-def unit_variables(checker: 'BorrowChecker'):
-    """Every `var` this function can name, `(name, ConstSig)` -- the unit's own first.
-
-    A unit variable is storage no function owns, so it gets a `BorrowState` at function
-    entry (`is_unit_var`) rather than at a `let`: borrowable, freezable by a `let`-borrow
-    out of it, and never moved out of (docs/design/unit-storage.md).
-    """
-    constants = checker.tables.constants
-    own = (constants.by_unit.get(checker.unit_name, {})
-           if checker.unit_name is not None else {})
-    visible = {**constants.by_name, **own}
-    return [(name, sig) for name, sig in visible.items() if sig.is_var]
-
