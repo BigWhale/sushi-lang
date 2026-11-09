@@ -700,8 +700,8 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 | Gate | Mechanism | When |
 |---|---|---|
 | No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
-| A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
-| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (37 files match: the declaration round and the families that still take an AST node) | when the old backend is deleted |
+| A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | **In force**: `tests/unit/test_body_passes_import_no_ast.py` |
+| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty | **In force** with one exception: `tests/unit/test_backend_imports_no_ast.py` |
 
 Two sibling gates are in force. The ruff rule `TID251` (`pyproject.toml`) allows no
 `llvmlite` import outside `backend/` and `sushi_stdlib/`, so `semantics` names no LLVM
@@ -711,7 +711,21 @@ holds the rule that `semantics` never imports `backend`.
 The second gate reads the BODY modules only. The declaration half of `typecheck` and
 `borrow` stays on the AST: a module that reads declarations only, and the declaration half
 of a driver module. SHIR has no declaration, and question 4 of 6.1 allows a read of a
-declaration. Ruled 2026-10-11.
+declaration. Ruled 2026-10-11. As built, the gate scans each import of the AST (the node
+module, `ast_walk` and the AST builder) in `passes/types/`, `passes/borrow/` and
+`passes/lift.py`. A body module imports none. Each declaration module of `typecheck` is a
+row of the gate, with each name that it may import: a declaration node, a walk of the
+declarations, and the types that the source writes. A row names no expression and no
+statement, with one named exception: the link name of an extern declaration. `borrow` has no
+declaration module, and `effects` is a whole-program pass with its own module
+(`passes/effects.py`, S4).
+
+The third gate has one exception: the declaration round of the backend reads the
+declarations of the AST (8.2), and the declaration table of 6.3 does not exist. The gate
+names each backend module that still imports the AST, with each name: the declaration
+round (`codegen_llvm.py`, `driver.py`, `functions/`), the stdlib modules of the `use`
+declarations (`stdlib_linker.py`), and the manifest of a library (`library_manifest.py`),
+which writes no LLVM. A row may only go. The SLIR emitter (`backend/slir/`) imports no AST.
 
 ---
 
@@ -770,7 +784,7 @@ writers: `scope` writes the names, and `typecheck` fills each capture's type
 it. Three passes move to SHIR: `typecheck`, `lift`, `borrow`.**
 
 `effects` has the same problem from the other side. It is a WHOLE-PROGRAM pass
-(`passes/borrow/destroy_effects.py`): it walks every body once, before the per-unit loop,
+(`passes/effects.py`): it walks every body once, before the per-unit loop,
 and computes which functions destroy a `poke` parameter, transitively. At that point no
 SHIR exists, because SHIR bodies are built inside the per-unit loop. So `effects` cannot
 move without a change to the loop, and it does not need to: it reads bodies and writes
