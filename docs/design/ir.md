@@ -423,8 +423,7 @@ The new pipeline also corrects faults of the old pipeline that changed no rule. 
 is named here is stated in the section that the text gives:
 
 - a `bool` that the program reads through a `peek` reference prints as `true` or `false`,
-  where the old pipeline printed `1` or `0` (#1275). The CHANGELOG of the merge names it as a
-  fix
+  where the old pipeline printed `1` or `0` (#1275)
 - a valid program that the old pipeline stopped with an internal error compiles: a function
   value in a constant, in a payload or a field of a constant, or in a `var` that the program
   gives as an argument (CE0055; 7.3, 8.5); `.clone()` of a named function (CE0055); a method
@@ -434,13 +433,13 @@ is named here is stated in the section that the text gives:
   (CE0149; 4.3)
 - an invalid program that the old pipeline stopped with an internal error gets its own
   diagnostic: a repeat count of a fixed literal that the compiler cannot read, in an argument
-  position, is CE2017 (CE0042 before); a static that the type does not have, where no position
-  gives the instance, is CE2102 (CE0055 before)
-- a diagnostic that the old pipeline did not give, or gave with a false follow-on: a call of
-  a static that the type does not have is CE2102 (the old pipeline gave nothing), and a wrong
-  count of a static adds no CE2427 for a parameter that does not exist (7.3); the template check of a function whose copies grow
-  without end gives its faults beside CE0151 (4.3); a `let peek` of a value that is no place
-  is CE2404 alone, with no CE2412 at a later change of the owner (7.9)
+  position, is CE2017 (CE0042 before); a static that the type does not have is CE2102 (CE0055
+  before when no position gives the instance, and no diagnostic when a position gives it)
+- a wrong count of a static adds no CE2427 for a parameter that does not exist (7.3)
+- the template check of a function whose copies grow without end gives its faults beside
+  CE0151 (4.3)
+- a `let peek` of a value that is no place is CE2404 alone, with no CE2412 at a later change
+  of the owner (7.9)
 
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.
@@ -509,9 +508,9 @@ of an owning value, the drop set and the order of `drop()`, the derived methods 
 concrete type, the layout, E3 ([CE2084](../error-catalog.md#ce2084)) and an owning lambda
 parameter ([CE2094](../error-catalog.md#ce2094)). Any other error from an instance is
 [CE0149](../error-catalog.md#ce0149): a fault that the template check missed. A type argument
-that holds a reference in a field (`Box@(peek i32)`) is no CE2419, in the template check and in
+that holds a reference in a field (`Box@(peek i32)`) is no [CE2419](../error-catalog.md#ce2419), in the template check and in
 each copy. The template check runs also when the copies of the function grow without end, so
-its faults come beside CE0151.
+its faults come beside [CE0151](../error-catalog.md#ce0151).
 
 So the CHECK is per template, and every fact that code generation needs is per instance.
 This settles Q1: SHIR is built per body, and the template check is one more body.
@@ -1123,7 +1122,7 @@ method in `_ARRAY_METHODS`. The call answers the type of its row after each faul
 `starts_with` and `eq_range` take a `T[]`, a `T[N]` and an empty `new()` as their argument. The
 slot argument of `push` and `insert` is `Owned`, because the slot takes it by position. Every
 other argument is `Guaranteed`, and a `nom` on it is [CE2427](../error-catalog.md#ce2427). A
-repeat count of a fixed literal that the compiler cannot read is CE2017, also in an argument
+repeat count of a fixed literal that the compiler cannot read is [CE2017](../error-catalog.md#ce2017), also in an argument
 position.
 
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
@@ -1147,7 +1146,7 @@ writes the global row of the node: the symbol of the global of the `var`, from
 `global_symbol` (`semantics/unit_symbols.py`). Another unit's private `var` is
 [CE3005](../error-catalog.md#ce3005), bare or behind an alias, and a bare name that two
 imports bring is [CE3012](../error-catalog.md#ce3012), as for a constant. A rebind of a
-private `var` of another unit behind an alias is CE3005 one time, and the text names a
+private `var` of another unit behind an alias is [CE3005](../error-catalog.md#ce3005) one time, and the text names a
 variable. A rebind of a
 `var` checks its value at the type of the `var`, as a rebind of a local does: a value that
 does not fit is CE2002 at the statement. A `var` has an address, so a field write and an
@@ -1255,10 +1254,12 @@ solves the instance through the solver that the AST half shares
 type is [CE2084](../error-catalog.md#ce2084); then the argument is compared with the
 parameter of the instance ([CE2006](../error-catalog.md#ce2006), `compare_argument`) and its
 `nom` marker with the declared mode ([CE2427](../error-catalog.md#ce2427)). The call answers
-the `Result` of the instance. An adapter call whose method type parameter nothing solves is
-CE2063, and the pass then checks no mode of its argument. The receiver of each is `Owned`
-(8.3), and the read-through of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
-arm too (see "An array" above). The hash of an array is the `array_hash` family, which a
+the `Result` of the instance. The receiver of each is `Owned` (8.3), and the read-through
+of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
+arm too (see "An array" above). The iterator family has its arm too
+(`check_iterator_method`, `passes/types/visit/iterator_methods.py`). It solves an adapter
+with the same solver. A method type parameter that nothing solves is [CE2063](../error-catalog.md#ce2063), and the pass
+then checks no mode of the arguments. The hash of an array is the `array_hash` family, which a
 `Hashable` implementation overrides. Its call is a contract call, which SLIR lowering makes
 the intrinsic `hash` (7.6, 8.6). The arm of the family is in `visit/contract_calls.py`,
 with the arms of the `derived_hash` and the `contract` families.
@@ -1986,8 +1987,8 @@ the top of the body.
 The iterator of a `Protocol` or an `IteratorValue` walk has no SHIR local. The `next()`
 callee is the `Protocol` answer, keyed by the loop's `shir_id`, and SHIR-to-SLIR lowering
 makes the SLIR local that holds the iterator. An iterable of any other type is CE2033, and
-an iterable that names nothing gives the error of the unknown name; the loop then has no
-kind, and the body does not reach `borrow` (7.9). No pass before it names that local:
+an iterable that names nothing gives the error of the unknown name; in both cases the loop
+has no kind, and the body does not reach `borrow` (7.9). No pass before it names that local:
 `borrow` keys its facts on the loop's `shir_id`.
 
 Whether a `Protocol` or an `IteratorValue` walk takes its iterator or walks it in place,
@@ -2498,7 +2499,7 @@ literal that owns, as the scrutinee, builds NO tuple (ruling 3 of `tuples.md`): 
 is a root of its own, which the match reads; a part is a consuming use only when the match
 consumes (`match nom (a, b):` takes each part), and a binder of a part views that part, so
 its owners are the owners of the part. A binder of a part of a tuple literal is a view of that
-part, and CE2411 and CE2412 at it carry a note at the binder. A tuple literal of plain parts
+part, and [CE2411](../error-catalog.md#ce2411) and [CE2412](../error-catalog.md#ce2412) at it carry a note at the binder. A tuple literal of plain parts
 is checked as above. A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
@@ -2622,7 +2623,7 @@ changes each let-borrow of the owner (CE2412 at a later use of it). Then the own
 (`record_owners`), and the local has a region row to its last use. A binder of a match that
 only borrows a root that is no place is CE2404: a root that a name keeps through a `??`, a
 get-out or an `or_err` is borrowed. A `let peek` or a `let poke` whose value is no place is
-CE2404, and the reference freezes no owner, so a later change of the owner is no CE2412. The
+[CE2404](../error-catalog.md#ce2404), and the reference freezes no owner, so a later change of the owner is no [CE2412](../error-catalog.md#ce2412). The
 binders of one pattern are siblings, and their
 region is over the arm. A `poke` of a `var` changes the `var` for each let-borrow of it. An
 extension receiver is read before the arguments and takes its borrow after them, so a
