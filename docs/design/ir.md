@@ -3226,7 +3226,14 @@ of it. So it has no state of 8.10 rule 3 and no flag. Three rules make the diffe
 from a local. A read by value of a `Global` that owns is in a borrowed position (a
 `Guaranteed` argument, a part of an interpolation), and it is a `Copy` of the place, as an
 owning field of a local is (8.9, `Field` read): a read of the value that the `Global`
-keeps, a shallow load. It is no deep copy (that is a `Clone`, 8.7) and never a `Move`. A by-address use (a `peek` or a
+keeps, a shallow load. It is no deep copy (that is a `Clone`, 8.7) and never a `Move`.
+The `Copy` is read when the call that takes it executes, so when an earlier part of the
+same statement rebinds the `var` (`println("{text}{bump()}")`, where `bump()` rebinds
+`text`), the read sees the new value. A read before the call would hold the old value,
+and the rebind frees that value before the call reads it. `main` reads the `var` early
+and prints freed memory for a heap string: that is a fault of `main`, and the branch does
+not keep it. A plain `var` is read into a temporary before the call (8.9, `StorageRef`),
+because its old value stays valid. A by-address use (a `peek` or a
 `poke` argument, a receiver, a `match` scrutinee) uses the `Global` where it is. No scope
 exit and no `return` drops a `Global`, and the program does not drop it at its exit
 (`unit-storage.md`). The one `Drop` of a `Global` is the drop of the old value of a

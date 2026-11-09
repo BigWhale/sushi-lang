@@ -68,9 +68,10 @@ def test_a_drop_of_a_global_with_a_statement_before_its_store_is_refused():
 
 
 @pytest.mark.parametrize("dropped,stored", [
-    (TEXT, OTHER), (p.Field(LAST, 0), LAST), (p.Index(NAMES, ZERO), NAMES),
-    (TEXT, _local(2)),
-], ids=["another global", "the struct of the field", "the array of the element", "a local"])
+    (TEXT, OTHER), (p.Field(LAST, 0), LAST), (p.Field(LAST, 0), p.Field(LAST, 1)),
+    (p.Index(NAMES, ZERO), NAMES), (TEXT, _local(2)),
+], ids=["another global", "the struct of the field", "a sibling field",
+        "the array of the element", "a local"])
 def test_a_drop_of_a_global_before_a_store_into_another_place_is_refused(
         dropped: p.Place, stored: p.Place):
     _refused(_function([BLANK, STRING, STRING],
