@@ -1,4 +1,4 @@
-"""No definition under `sushi_lang/` lives with no live caller, no template and no row.
+"""No definition under `sushi_lang/` lives with no live caller and no row.
 
 vulture sees a name as used when any code names it. So a function that only dead code
 names is invisible to it. This scan reads the source alone. It finds each function and
@@ -9,12 +9,8 @@ read nothing. The live roots are the top level of every module, a definition tha
 decorator registers, the entry points of the two programs, and the `WHITELIST` rows of a
 reflective reader.
 
-A port template (a `PORT_TEMPLATES` row of `test_imports_name_what_exists.py`, or a
-`WHITELIST` row kept for a later group) is not a root. What a template reaches needs no
-row: it belongs to the group of the template, and it dies with it. When the group ports
-the template and deletes its row, a definition that only the template reached is
-reported here. `KEPT` names the few definitions that neither the live code nor a template
-reaches, and that a later group or a reflective reader needs. It may only get shorter.
+`KEPT` names the few definitions that the live code does not reach, and that a later
+group or a reflective reader needs. It may only get shorter.
 """
 from __future__ import annotations
 
@@ -24,14 +20,12 @@ from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from test_imports_name_what_exists import PORT_TEMPLATES
 from vulture_whitelist import WHITELIST
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "sushi_lang"
 ENTRY_POINTS = {("sushi_lang/compiler/__init__.py", "main"),
                 ("sushi_lang/packager/__init__.py", "main")}
-TEMPLATE_REASONS = ("kept for ", "a port template")
 #: A decorator that registers nothing: the definition is reached only by its name.
 PLAIN_DECORATORS = frozenset({"dataclass", "property", "staticmethod", "classmethod",
                               "abstractmethod", "cached_property", "contextmanager",
@@ -192,17 +186,12 @@ def _row_matches(path: str, name: str, d: Definition) -> bool:
 
 
 def unexplained(sources: dict[str, str], kept) -> tuple[list[str], set[str]]:
-    """The definitions that no live root, no template row and no `kept` row reaches, and
-    the definitions that only a `kept` row reaches."""
+    """The definitions that no live root and no `kept` row reaches, and the definitions
+    that only a `kept` row reaches."""
     every, tops, names, aliases = scan(sources)
     roots = [d for d in tops if d.registered or (d.path, d.qualname) in ENTRY_POINTS]
-    roots += [d for d in every if any(_row_matches(p, n, d) for p, n, reason in WHITELIST
-                                      if not reason.startswith(TEMPLATE_REASONS))]
-    templates = [d for d in every
-                 if (d.path.removeprefix("sushi_lang/"), d.qualname) in PORT_TEMPLATES
-                 or any(_row_matches(p, n, d) for p, n, reason in WHITELIST
-                        if reason.startswith(TEMPLATE_REASONS))]
-    explained = reach(every, roots + templates, names, aliases)
+    roots += [d for d in every if any(_row_matches(p, n, d) for p, n, _reason in WHITELIST)]
+    explained = reach(every, roots, names, aliases)
     by_kept = reach(every, [d for d in every if _key(d) in kept], set(), aliases)
     return (sorted(_key(d) for d in every if id(d) not in explained | by_kept),
             {_key(d) for d in every if id(d) in by_kept and id(d) not in explained})
@@ -216,7 +205,7 @@ def _package_sources() -> dict[str, str]:
 def test_no_definition_lives_by_a_template():
     dead, _kept = unexplained(_package_sources(), KEPT)
     assert not dead, (
-        f"{len(dead)} definitions have no live caller, and no port template reaches them. "
+        f"{len(dead)} definitions have no live caller. "
         "Delete each one, or name it in KEPT (tests/unit/"
         "test_no_definition_lives_by_a_template.py) with the later group that needs it:\n  "
         + "\n  ".join(dead))

@@ -20,13 +20,6 @@ IGNORE_DECORATORS: dict[str, str] = {}
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
 _TYPES = "sushi_lang/semantics/passes/types/"
-_TIER_A = ("kept for Tier A (Phase 3): the typecheck stage of its construct group moves "
-           "the helper to SHIR inputs")
-_TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct group moves "
-           "the helper to SHIR inputs")
-_TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
-           "the helper to SHIR inputs")
-
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
