@@ -1125,8 +1125,14 @@ opaque type parameter has no other rule: `v as T` with `v` of the type `T` calls
 each other cast to or from `T` is CE2014 with a note at the parameter. A cast between two
 error types that a declared conversion joins (`find_conversion`) calls it: the conversion
 row is the `Conversion` callee, whose `DeclId` names the written name `<source>.as` of the
-body. One cast is not typed yet, and it stops the walk of the body with `typecheck, Cast`: a
-cast to or from `ptr`.
+body. A cast to or from `ptr` (S25) is [CE2014](../error-catalog.md#ce2014), as any other
+pair that is not numeric: a `ptr` cannot be made from an integer, and an integer cannot be
+made from a `ptr` (`docs/ffi.md`, "No danger zone, no `ptr`"). This is the answer of `main`:
+probes `p07_ptr_cast_from_int` (`0 as ptr`) and `p08_ptr_cast_to_int` (`p as i64`),
+`.superpowers/sdd/probes/P6/`, at `00633e4bd`, are CE2014 at the cast. A cast of a `ptr` to
+`ptr` is a cast to the type of its operand, and calls nothing. So a `ptr` cast is no `Cast`
+rvalue of SLIR. Not built yet: a cast to or from `ptr` stops the walk of the body with
+`typecheck, Cast`; P6.D5.1 (Task 104) builds the refusal and removes this note.
 An integer literal directly under a cast to an integer type, also under a negation there,
 has the target type, and the pass does not check its range: the cast keeps the bits that
 the type holds (`300 as u8` is 44). The fold reads that operand at the target type too
@@ -1576,7 +1582,8 @@ source; no pass fills it (S5). Ruled 2026-10-28 (R19). A member `ns.m` behind
 an alias is a `ConstRef`, a `StorageRef` or a `GlobalRef`, by what the namespace holds.
 A C global of an `unsafe external` block is a `GlobalRef` with the written name and its
 alias (`libc.environ`), as a C function is (`libc.abs`). A read and a write of it are the
-same node; `typecheck` refuses the write (CE5016). A type and a name that the namespace
+same node; `typecheck` refuses the write (CE5016). SLIR lowering makes the read the place
+`Global` of 8.4 (S25). A type and a name that the namespace
 does not hold stay holes. Ruled 2026-10-12.
 `from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, never a `Call`. The two
 have the same runs when `from([])` is empty, so `Dynamic.new` keeps the written form:
@@ -1811,11 +1818,18 @@ declared mode (a `poke u8[]` is `Inout`), and each value of the variadic tail of
 on an argument is not compared with the mode: C takes nothing from Sushi. A value in the
 tail is a number, a `bool` or a `string`; a value that C cannot hold as itself is
 [CE5005](../error-catalog.md#ce5005) at the argument. The call yields the declared return
-type, with no channel, and the row carries the declaring unit of the block. `typecheck`
-types an extern whose declared parameters are numbers, `string` and byte buffers (`u8[]`,
-bare, `peek` or `poke`), and whose return is a number or `~`. The call of any other extern
-(a `ptr`, a nullable pointer, a `string` return) stops at `Call(extern)`, and so does a
-`ptr` value in the tail.
+type, with no channel, and the row carries the declaring unit of the block.
+
+**The `ptr` world at a call** (S25, decision E8). A `ptr` is a plain scalar: a `Copy`
+operand that never drops. A `Maybe@(ptr)` and a `Maybe@(string)` parameter or return is a
+plain `Maybe` operand. A `string` return is a fresh value that owns (`ADOPT`, 7.9). A `ptr`
+value in the tail of a `var_arg` extern is a `Guaranteed` scalar. `errno()` is an
+intrinsic with no operand that answers an `i32`. The boundary rules are those of 8.6.
+Not built yet: `typecheck` types only an extern whose declared parameters are numbers,
+`string` and byte buffers (`u8[]`, bare, `peek` or `poke`), and whose return is a number or
+`~`. The call of any other extern (a `ptr`, a nullable pointer, a `string` return) stops at
+`Call(extern)`, and so do a `ptr` value in the tail and `errno()`. P6.D5.1 (Task 104)
+builds these rules and removes this note.
 
 `BuiltinMethod` names a row of `METHOD_TYPE_REGISTRY`, so the iterator adapters, `or_err`,
 `map_err`, the container methods and the string methods are one variant. The row of a
@@ -3190,6 +3204,19 @@ part of a field write or an element write. Not built yet: SLIR lowering stops on
 that owns (`slir, StorageRef owning`). P6.D1.1 (Task 99) builds these rules and removes
 this note.
 
+**An extern variable** (S25, decision E8) is a `Global` place too. Its symbol is the link
+name of its declaration (`var i32 optind = "optind"` gives `optind`), and its type is the
+declared type: a number, a `bool`, a `ptr` or a `Maybe@(ptr)` (`docs/ffi.md`). The
+declaration round declares it `external` in each module, and no module defines it. It is
+read-only: a write is [CE5016](../error-catalog.md#ce5016) in `typecheck`, so no `Assign`
+into it reaches SLIR. A read is a `Copy` of the place, and the emitter loads the global at
+the moment of the read, as `main` does (probe `p06_extern_variable_read`,
+`.superpowers/sdd/probes/P6/`, at `00633e4bd`: `@optind = external global i32` and a
+`load` at each read). A `Maybe@(ptr)` read tests the pointer, and NULL is `None`; a plain
+`ptr` read that finds NULL ends the program with [RE2025](../error-catalog.md#re2025), as a
+return does (8.6). Not built yet: `typecheck` stops on the read (`GlobalRef`) and on the
+write (`Assign`); P6.D5.2 (Task 105) builds this rule and removes this note.
+
 ### 8.5 Constants
 
 ```
@@ -3510,6 +3537,36 @@ first byte, read from the descriptor at its address (`Inout`, `InGuaranteed`) or
 value (`Guaranteed`); a value of the variadic tail gets the C promotion (a narrow integer and
 a `bool` to `i32`, an `f32` to `f64`). A C function that answers `~` writes `~` into the
 place of the call.
+
+**The `ptr` world at the boundary** (S25, decision E8). The extern emitter
+(`backend/slir/externs.py`) is the one seam of these rules, and each one is what `main`
+does (probes `p03_extern_string_return`, `p04_extern_maybe_parameters` and
+`p05_errno_after_failure`, `.superpowers/sdd/probes/P6/`, measured with `--dump-ll` at
+`00633e4bd`):
+
+- A `ptr` operand crosses as the pointer itself.
+- A `Maybe@(ptr)` or a `Maybe@(string)` argument: `None` crosses as a null pointer, and
+  `Some(v)` crosses as `v`, marshalled as a plain value (a `string` gets the C copy of
+  `emit_cstr_arg`, freed right after the call). `main` reads the tag and joins a null and
+  the payload with a `phi` before the call.
+- A `Maybe@(ptr)` return: NULL is `None`, any other pointer is `Some(p)`. A `Maybe@(string)`
+  return: NULL is `None`, any other pointer is `Some` of an OWNED copy.
+- A `string` return is an owned copy of the C string, never a view: `main` calls `llvm_strlen`,
+  `malloc` and `memcpy` and sets the owned field of the string to 1, and the caller drops
+  the copy. A plain `string` or `ptr` return that is NULL ends the program with
+  [RE2025](../error-catalog.md#re2025).
+- `errno()` is an intrinsic (a row of `INTRINSICS`): one call of the platform function
+  (`__error` on macOS, `__errno_location` on Linux) and a `load` of the `i32`. Probe
+  `p05_errno_after_failure` reads 2 (`ENOENT`) after a failed `remove`. Lowering keeps the
+  source order, so a read of `errno()` directly after the failed call sees its value.
+
+The `foreign_ptr` methods (`p.load_i32(off)`, `p.store_i32(off, v)`, `p.to_string(off)`,
+...) are a `Builtin` family with an arm in `FAMILY_ARMS` and a receiver rule in
+`method_effects.py`: the receiver is a `Guaranteed` scalar, and the family leaves
+`NO_RECEIVER_RULE_FAMILIES` (8.3). `to_string` answers an owned copy (`ADOPT`), and
+`load_ptr` a `Maybe@(ptr)` with NULL as `None`. The emitter family takes operands (Q7).
+Not built yet: P6.D5.1 (Task 104) builds the boundary rules and `errno()`, and P6.D5.2
+(Task 105) builds the `foreign_ptr` family. Each removes its part of this note.
 
 A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
@@ -4102,6 +4159,10 @@ Runs after lowering, before the backend. It checks:
   `StorageDead` or a `Drop` of the root ends that permission, and so does the end of the
   block. Any other read or move of the root after a part move is a use after a move
 - no `Move` out of a `Global`: a `Global` is never a `Move` operand, also when it owns
+- the `ptr` quarantine (S25): no `ptr` and no `Maybe@(ptr)` is a parameter or the return of
+  a public function that is not an extern. `public_signatures.py` stays the language rule
+  (CE5002, CE5008), and the verifier only checks it again. Not built yet: P6.D5.2 (Task
+  105) builds this rule
 - every block ends in exactly one terminator, and every `BlockId` exists
 - every `Drop` targets an owning type
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
