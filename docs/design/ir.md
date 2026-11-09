@@ -883,7 +883,8 @@ argument and a `print` argument by the index in the arguments, a part of an `Int
 the index in the parts (a text part has no row), a capture by the `LocalId` of the captured
 local, and a target of a `Destructure` by its path: the index of the target, then the index
 in each `Nested` level (`(1, 0)` is `b` in `let (a, (b, c)) = v`). The callee row holds the
-`Callee` of 7.6 with its type arguments and the declaring unit (`ResolvedCall`). A
+`Callee` of 7.6 with its type arguments, the declaring unit and the variadic tail
+(`ResolvedCall`, 7.4). A
 `Builtin` and a `BuiltinStatic` name their row of `METHOD_TYPE_REGISTRY` by the family and
 the method (`BuiltinMethod`). The conversion row of a `Cast` and of a `Try` holds a
 `Conversion` callee, or `NoConversion` for a numeric cast and for a `??` that keeps its
@@ -1668,13 +1669,29 @@ in SHIR, and SHIR-to-SLIR lowering folds them into one synthesized owned array.
 `T` of `...T`, in the one argument check (`check_arguments`, with a tail parameter), and
 writes its argument row. `borrow` reads each value of the tail as an `Owned` argument:
 it moves into the array. SLIR lowering makes one temporary `T[]` local for each call, with
-ONE `Aggregate(AggArray)` of the values in the written order (8.7), and passes it
-`Owned`: the callee owns the array. The tail of `run` (`<sys/process>`) is the one
-exception: a `Stdlib` callee borrows each operand (8.6). An empty tail is the empty array `{0, 0, null}`, the
-`from([])` of 8.9. A bloom `arr...` passes the array operand itself, as a `Move`, and a
+ONE `Aggregate(AggArray)` of the values in the written order (8.7), and passes it with
+the convention of the tail parameter, `Guaranteed`: the caller owns the array (the tail
+row, below). An empty tail is the empty array `{0, 0, null}`, the
+`from([])` of 8.9. A bloom `arr...` moves the array operand itself into that temporary, and a
 bloom into a parameter that is not variadic stays
 [CE0120](../error-catalog.md#ce0120) (ruling of Task 85). The same arm serves a call
-behind an alias and a generic variadic function.
+behind an alias. A generic function has no variadic tail: the collect pass refuses it
+([CE0114](../error-catalog.md#ce0114)).
+
+**The tail row.** Which arguments are the tail is a fact of the callee row:
+`ResolvedCall.tail` is a `Tail(position, ty, convention)`. `position` is the index of the
+first argument of the tail (the count of the fixed parameters), `ty` is the type `T[]` of
+the tail parameter, and `convention` is the convention of the tail parameter. The tail
+parameter has no `nom` (a consuming variadic `nom ...T` is not designed,
+`borrow-model.md` section 11), so it is `Guaranteed`, as every other parameter with no
+mode: in the callee the tail is a borrow, and a consuming use of it is CE2411, as in
+`main`. So the CALLER owns the temporary array: each value of the tail moves into it, the
+call borrows it, and it drops at the end of the statement. A bloom moves its array into
+that temporary, so a later use of the source is CE2405. One arm serves the tail of `run`,
+whose row borrows each operand too. `typecheck` writes the row, and SLIR lowering reads it.
+A call with no tail row has one operand for each argument. A bloom is the one value of the
+tail: a bloom after a value of the tail is CE0120, and so is a bloom of a value that is no
+name, as in `main`.
 
 **A function value of a variadic function** (decision E6). `main` takes it with no
 diagnostic and makes wrong code (probe `p01_variadic_fn_value` and
@@ -3871,7 +3888,7 @@ backstop of the checker, as on the AST backend.
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides (`semantics/slir/lower_takes.py`). An OWNED value (`MOVE` or `ADOPT`): the place of each `Place` target is evaluated first, from left to right (its indexes and their checks), then each binder and each place of a plain element takes the `Copy` of its `Field` place, then each `_` over an owning part drops that part, then each binder and each place of an owning element takes the `Move` of its `Field` place: a local drops its old value first (rule 6), and a field or an element drops its old part. So the moves of the parts of the one root stand last in one block (8.13), and the value is spent whole and gets no drop (8.13, "no local is ever partially moved"). A destructure that moves no part keeps the value whole in its temporary, which drops at the end of the statement. An owning binder gets its flag after its write. A BORROWED value (`REJECT`) is read where it is (a view of a temporary keeps the temporary in a hidden owner local of the block, as a `let` does), and each binder of an owning element is a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of its region row, or over that hidden owner. A plain element is a `Copy` in both cases. A `Place` target of an owning element that is a `Guaranteed` parameter drops its old value only when the callee owns it (8.10, rule 5), and one that is a `poke` address local drops the old value at its address (rule 8), as its rebind does |
 | `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns (8.4) is read in a borrowed position (a `Guaranteed` argument, a part of an interpolation) as a `Copy` of the place, a shallow load and no deep copy, with no temporary, because a temporary would own a second copy of the value. Its rebind is `Drop(Global)`, then the `Assign` (8.10, rule 6), and the write of an owning field or element of it drops the old part first, as for a local. A by-address use reads the `Global` where it is, and so does a `match` scrutinee, which no temporary copies. No exit drops it. A region over a `var` (a `let`-borrow of it, a lent iterator over it, a bare binder of its payload) names the `Global` as its owner |
 | `Take` | with a `move` row (on the `Take`, or on the `Field` of a `nom` argument): the operand is the `Move` of `Field(local, index)`, and the `Drop(Field(local, i))` of each other owning field of the receiver stands right before the statement that consumes the operand (the call or the store, 8.10 rule 3), after every other operand of that statement: an exit before it (the error path of a `Try` in a later argument) finds the local whole and drops it whole. Two or more takes of one local in one statement (`f(nom w.a, nom w.b)`, `Pair(nom w.a, nom w.b)`) are one take: the local moves one time, and a field drops only when no take of the statement moves it. The `Move` spends the whole local (8.13): it gets no drop, so `drop()` does not run (`borrow-model.md` §10c; `semantics/slir/lower_takes.py`). A `Take` with any other row is its place |
-| a variadic tail | one temporary `T[]` local for each call: ONE `Aggregate(AggArray)` of the values of the tail, in the written order, an owning value a `Move` of its temporary, a plain value a `Copy` or a constant (8.7), and the local is the `Owned` argument of the call (7.4). An empty tail is the empty array `{0, 0, null}`. A bloom `arr...` is the `Move` of the array operand itself, with no temporary. Not built yet: P6.D3.1 (Task 102) |
+| a variadic tail | one temporary `T[]` local for each call: ONE `Aggregate(AggArray)` of the values of the tail, in the written order, an owning value a `Move` of its temporary, a plain value a `Copy` or a constant (8.7), and the local is the argument of the call with the convention of the tail parameter, `Guaranteed` (7.4): it drops at the end of the statement. An empty tail is the empty array `{0, 0, null}`. A bloom `arr...` is the `Move` of the array operand itself into the temporary. Not built yet: P6.D3.1 (Task 102) |
 | a `string` argument to an `i8*` callee | a `Guaranteed` operand of the call. The emitter makes the C copy at the call (`emit_cstr_arg`) and frees it right after the call (8.6): the copy lives for the call alone, so no SLIR local holds it and no drop of 8.10 reads it. `run()` stays the one exception |
 
 A condition (of an `If` or a `While`) is evaluated in a scope of its own, whose
