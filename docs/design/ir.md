@@ -3139,6 +3139,19 @@ A `Global` carries the declared type of its `var`, because no local of the funct
 it: a projection of a `Global` is typed from it, as a projection of a local is typed from
 the type of the local.
 
+**A `Global` that owns** (S21) is a place as a local is, with no scope. It always holds a
+value: the declaration round gives it its value before `main` (8.2), and nothing moves out
+of it. So it has no state of 8.10 rule 3 and no flag. Three rules make the difference
+from a local. A read by value of a `Global` that owns is a `Guaranteed` operand of its
+place (a `Copy` of the `Global`), and never a `Move`. A by-address use (a `peek` or a
+`poke` argument, a receiver, a `match` scrutinee) uses the `Global` where it is. No scope
+exit and no `return` drops a `Global`, and the program does not drop it at its exit
+(`unit-storage.md`). The one `Drop` of a `Global` is the drop of the old value of a
+rebind (8.10, rule 6), and the one `Drop` of a part of a `Global` is the drop of the old
+part of a field write or an element write. Not built yet: SLIR lowering stops on a `var`
+that owns (`slir, StorageRef owning`). P6.D1.1 (Task 99) builds these rules and removes
+this note.
+
 ### 8.5 Constants
 
 ```
@@ -3663,7 +3676,7 @@ backstop of the checker, as on the AST backend.
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2). An owning field in a `let` is a view local (8.2) in a region over the root of the place, and a view of a temporary keeps the temporary in a hidden owner local of the block; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) an owning field is a `Copy` of the place |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6). Over an owning field, rule 6 of 8.10: the new value goes into a temporary unless it is a constant, then `Drop(Field(place, index))` of the old field before the store, which moves the temporary (`part_write`) |
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides (`semantics/slir/lower_takes.py`). An OWNED value (`MOVE` or `ADOPT`): the place of each `Place` target is evaluated first, from left to right (its indexes and their checks), then each binder and each place of a plain element takes the `Copy` of its `Field` place, then each `_` over an owning part drops that part, then each binder and each place of an owning element takes the `Move` of its `Field` place: a local drops its old value first (rule 6), and a field or an element drops its old part. So the moves of the parts of the one root stand last in one block (8.13), and the value is spent whole and gets no drop (8.13, "no local is ever partially moved"). A destructure that moves no part keeps the value whole in its temporary, which drops at the end of the statement. An owning binder gets its flag after its write. A BORROWED value (`REJECT`) is read where it is (a view of a temporary keeps the temporary in a hidden owner local of the block, as a `let` does), and each binder of an owning element is a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of its region row, or over that hidden owner. A plain element is a `Copy` in both cases. A `Place` target of an owning element that is a `Guaranteed` parameter drops its old value only when the callee owns it (8.10, rule 5), and one that is a `poke` address local drops the old value at its address (rule 8), as its rebind does |
-| `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`) |
+| `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns (8.4) is read by value as a `Guaranteed` `Copy` of the `Global`, with no temporary, because a temporary would own a second copy of the value. Its rebind is `Drop(Global)`, then the `Assign` (8.10, rule 6), and the write of an owning field or element of it drops the old part first, as for a local. A by-address use reads the `Global` where it is. No exit drops it. Not built yet: a `var` that owns stops the lowering (`slir, StorageRef owning`) until P6.D1.1 (Task 99) |
 | `Take` | with a `move` row (on the `Take`, or on the `Field` of a `nom` argument): the operand is the `Move` of `Field(local, index)`, and the `Drop(Field(local, i))` of each other owning field of the receiver stands right before the statement that consumes the operand (the call or the store, 8.10 rule 3), after every other operand of that statement: an exit before it (the error path of a `Try` in a later argument) finds the local whole and drops it whole. Two or more takes of one local in one statement (`f(nom w.a, nom w.b)`, `Pair(nom w.a, nom w.b)`) are one take: the local moves one time, and a field drops only when no take of the statement moves it. The `Move` spends the whole local (8.13): it gets no drop, so `drop()` does not run (`borrow-model.md` §10c; `semantics/slir/lower_takes.py`). A `Take` with any other row is its place |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | a `Guaranteed` operand of the call. The emitter makes the C copy at the call (`emit_cstr_arg`) and frees it right after the call (8.6): the copy lives for the call alone, so no SLIR local holds it and no drop of 8.10 reads it. `run()` stays the one exception |
@@ -3854,7 +3867,11 @@ locals, and the locals that own nothing, and nothing else:
    the new value into a temporary, unless it is a constant; then each index of the place
    and its bounds check; then `Drop(Field(p, i))` or `Drop(Index(a, i))`; then the store,
    which moves the temporary. A field and an element always hold a value, so the old part
-   always drops.
+   always drops. A rebind of a `Global` that owns (8.4) follows the same order: the new
+   value into a temporary, unless it is a constant; then `Drop(Global)`; then the
+   `Assign`, which moves the temporary. A `Global` always holds a value, so the old value
+   always drops, and it gets no flag. Rule 2 does not apply to a `Global`: no scope exit
+   drops it. Not built yet: P6.D1.1 (Task 99) builds the rebind of a `Global` that owns.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
    the loop owns, are owning locals of the loop scope under rules 1 to 4: the end, a
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
@@ -4003,6 +4020,10 @@ Runs after lowering, before the backend. It checks:
   owns. It does not change the state of the root. A `Drop` of any other place that is no
   local, a `Drop` of a part of a global, and a `DropIfSet` of a place that is no local, are
   not checked yet (CE0000)
+- a `Drop` of a `Global` (8.4, S21): only directly before an `Assign` into the same
+  `Global`, and a `Drop` of a part of a `Global` only directly before an `Assign` into the
+  same part. No `DropIfSet` of a `Global`. Not built yet: P6.D1.1 (Task 99) builds this
+  rule; until then a `Drop` of a `Global` is CE0000, as the item above says
 - a `Move` of a sub-place (a `Field`, a `Downcast`) is a `Move` of its root local, and
   no local is ever PARTIALLY moved: lowering drops the sibling owning fields first (8.9,
   `Take`), or the sibling payloads of a pattern take, because an arm takes the variant
@@ -4015,7 +4036,7 @@ Runs after lowering, before the backend. It checks:
   is a projection of the other (the parts are disjoint). A write, a `StorageLive`, a
   `StorageDead` or a `Drop` of the root ends that permission, and so does the end of the
   block. Any other read or move of the root after a part move is a use after a move
-- no `Move` out of a `Global`
+- no `Move` out of a `Global`: a `Global` is never a `Move` operand, also when it owns
 - every block ends in exactly one terminator, and every `BlockId` exists
 - every `Drop` targets an owning type
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
