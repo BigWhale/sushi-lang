@@ -19,7 +19,8 @@ import sushi_lang.internals.errors as er
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.semantics.library_registry import LibraryRegistry, library_unit
+from sushi_lang.semantics.library_registry import (
+    KEPT_STORAGE_KINDS, LibraryRegistry, library_unit)
 from sushi_lang.semantics.library_templates import (
     TemplateSourceError, apply_template_bindings, deserialize_perk_impl,
     parse_one_declaration)
@@ -266,14 +267,14 @@ class LibraryRegistration:
             yield sig
 
     def kept_constant_names(self) -> frozenset[str]:
-        """The constants a library declares and does not export, by name.
+        """The constants and the variables a library declares and does not export, by name.
 
         The scope pass asks, so a mention reaches the type pass and hears whose the
         declaration is instead of hearing that there is none (#487).
         """
         kept = self.tables.library_not_exported
         return frozenset(name for name, (_lib, kind) in kept.items()
-                         if kind == "constant")
+                         if kind in KEPT_STORAGE_KINDS)
 
     # -- the manifests ------------------------------------------------------------
 

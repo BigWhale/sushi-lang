@@ -1,0 +1,12 @@
+# A binary library: the consumer calls a perk method of a perk implementation of the library.
+# The call names the link symbol of the manifest (ir.md 8.6, S26).
+# BUILD_LIB_BINARY: lc_callee_lib.sushi -> lc_bin.slib
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS
+use <lib/lc_bin>
+
+fn main() i32:
+    let Crate c = Crate(7, "box")
+    println(c.weigh())
+    return 0

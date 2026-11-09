@@ -40,6 +40,7 @@ from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import Free, Indirect
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
+from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.typesys import FunctionType, Type, deref_type
 from sushi_lang.semantics.visibility import VALUE_VERB
 
@@ -132,8 +133,7 @@ def _value(validator: TypeValidator, node: e.GlobalRef, sig: FuncSig, decl: Decl
     function_type = function_type_of_sig(sig)
     if function_type is None:
         dispatch.stop(visit.STAGE, node, state="of a variadic function")
-    unit = None if sig.link_symbol else sig.unit_name
-    validator.body_answers().record_callee(node.shir_id, ResolvedCall(Free(decl), type_args, unit))
+    validator.body_answers().record_callee(node.shir_id, user_callee(Free(decl), sig, type_args))
     return replace(resolve_variable_type(validator, function_type, node.loc), captures=())
 
 

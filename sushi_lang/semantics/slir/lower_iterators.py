@@ -278,7 +278,7 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
     if isinstance(kind, Protocol):
         method = cast(Method, kind.next.callee)
         item, peeks = kind.item, False
-        target = calls.user_method(low, method, kind.next, span)
+        target = calls.user_method(low, method, kind.next)
         args: tuple[tuple[p.Operand, Convention], ...] = (
             (p.Copy(iterator), method.receiver),)
     else:

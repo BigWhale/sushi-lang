@@ -42,7 +42,8 @@ from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalTable
-    from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
+    from sushi_lang.semantics.passes.collect.functions import (
+        ExtensionTable, FuncSig, FunctionTable)
     from sushi_lang.semantics.passes.collect.perks import PerkImplementationTable
     from sushi_lang.semantics.slir.verify import Check
 
@@ -80,9 +81,12 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     ) -> Optional[DeclaredParams]:
     """The declared parameters of the function that `callee` names. A free function is the
     function of its name in the unit whose symbol is the symbol of the callee; the name of a
-    pack instance has a dot too. A method or a static has the written name `<type>.<method>`:
+    pack instance has a dot too. An instance of a template of a binary library has no unit, and
+    the flat view holds it. A method or a static has the written name `<type>.<method>`:
     it is the extension of that name whose symbol is the symbol of the callee, else the method of
     the perk implementation of that symbol, and an instance method has its receiver first. A
+    function, a method or a static of a binary or a hybrid library is the row whose
+    `link_symbol` is the symbol of the callee, as the `libraries` step files it. A
     conversion `<source>.as` has one `Owned` parameter. A function of a registry stdlib module is the row of its
     module, and each of its parameters borrows. A C function is the declaration of `externals`
     whose link name is the symbol of the callee: each parameter has the convention of its
@@ -90,17 +94,21 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
     if callee.module is not None:
         arity = stdlib_arity(callee.module, callee.name)
         return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
-    for unit, own in funcs.by_unit.items():
-        sig = own.get(callee.name)
-        if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
+    rows: list[tuple[Optional[str], Optional[FuncSig]]] = [
+        (unit, own.get(callee.name)) for unit, own in funcs.by_unit.items()]
+    rows.append((None, funcs.by_name.get(callee.name)))
+    for unit, sig in rows:
+        if sig is None or (unit is None and sig.unit_name is not None):
+            continue
+        if callee.symbol in (sig.link_symbol, function_symbol(callee.name, unit)):
             return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
     owner, dot, method = callee.name.rpartition(".")
     if dot and method == CONVERSION_METHOD:
         return _conversion_params(owner, callee.symbol)
     if dot:
         for record in extensions.signatures_named(method):
-            if method_symbol(record.target_type, method, record.unit_name,
-                             record.method_type_args) == callee.symbol:
+            if callee.symbol in (record.link_symbol, method_symbol(
+                    record.target_type, method, record.unit_name, record.method_type_args)):
                 receiver = () if record.is_static else (
                     receiver_mode(record.self_mode).convention,)
                 return DeclaredParams(receiver + tuple(

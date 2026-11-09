@@ -1,0 +1,7 @@
+# A library whose public constant is a private function of it. The consumer reads the
+# constant; the thunk of the constant names the link symbol of the private function.
+
+fn secret(i32 x) i32:
+    return x + 40
+
+public const fn(i32) -> i32 BUMP = secret

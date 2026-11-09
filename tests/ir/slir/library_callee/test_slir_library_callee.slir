@@ -1,0 +1,37 @@
+unit test_slir_library_callee
+
+fn apply(_1: fn(i32) -> i32 @guaranteed, _2: i32 @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = call indirect(copy _1)(copy _2 @guaranteed)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32
+    let _2: ~
+    let _3: fn(i32) -> i32
+    let _4: i32
+    let _5: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @twice(const 21_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = call builtin println@(i32)(copy _1 @guaranteed)
+    StorageDead(_2)
+    StorageDead(_1)
+    StorageLive(_3)
+    _3 = closure(const fn slir_callee_lib$twice)
+    StorageLive(_4)
+    _4 = call @apply(copy _3 @guaranteed, const 21_i32 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin println@(i32)(copy _4 @guaranteed)
+    StorageDead(_5)
+    StorageDead(_4)
+    StorageDead(_3)
+    _0 = const 0_i32
+    return
+}

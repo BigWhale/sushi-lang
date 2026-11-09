@@ -3,8 +3,9 @@
 
 A named function as a value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no
 environment. The symbol comes from the callee row of the `GlobalRef`, as for a call of the
-function. A call of a function value is `Indirect(Operand)`, and the operand is the closure
-value: a copy of its place, or a temporary of the statement. SLIR does not see the layout.
+function: a function of a binary or a hybrid library has its link symbol. A call of a
+function value is `Indirect(Operand)`, and the operand is the closure value: a copy of its
+place, or a temporary of the statement. SLIR does not see the layout.
 
 A `Lambda` cuts one `SlirFunction` from the tables of the enclosing body, with the symbol of
 `LiftResults`. Its environment is `_1`, `InGuaranteed`, its declared parameters come after it,
@@ -18,7 +19,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.channel import channel_result
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.ownership import Ownership
@@ -33,8 +33,9 @@ from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
-from sushi_lang.semantics.slir.function import STAGE, SlirFunction
+from sushi_lang.semantics.slir.function import SlirFunction
 from sushi_lang.semantics.slir.lower_generics import free_function_name
+from sushi_lang.semantics.slir.lower_symbols import callee_symbol
 from sushi_lang.semantics.slir.lower_values import Learned, Value, until_stable
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, StructType, Type
 from sushi_lang.semantics.unit_symbols import function_symbol
@@ -53,10 +54,8 @@ def function_value(low: Lowering, node: e.GlobalRef) -> Value:
     if resolved is None or not isinstance(resolved.callee, Free):
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail="a function value with no callee reached SLIR")
-    if resolved.unit is None:
-        raise StageStop(STAGE, "library function", node.loc)
     name = free_function_name(low.decls, node.decl, resolved.callee.decl)
-    symbol = function_symbol(name, resolved.unit)
+    symbol = callee_symbol(resolved, lambda unit: function_symbol(name, unit))
     return r.Aggregate(r.AggClosure(low.type_of(node)), (p.Const(k.FnRef(symbol)),))
 
 

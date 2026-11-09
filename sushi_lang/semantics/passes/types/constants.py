@@ -54,8 +54,15 @@ def validate_constant(self, const: ConstDef) -> None:
     """Validate the declared type of a constant, then walk its initializer, in the scope its
     initializer resolves in."""
     from .signatures import unit_tables
-    with in_body_scope(self, "namespaces", const, unit_tables(self)):
-        _validate_constant(self, const)
+    # The initializer of a compiled library's constant names what its library unit may
+    # name, a private function of the library included.
+    outer = self.in_library_body
+    self.in_library_body = self.in_library_unit or const.scope_unit is not None
+    try:
+        with in_body_scope(self, "namespaces", const, unit_tables(self)):
+            _validate_constant(self, const)
+    finally:
+        self.in_library_body = outer
 
 
 def _validate_constant(self, const: ConstDef) -> None:

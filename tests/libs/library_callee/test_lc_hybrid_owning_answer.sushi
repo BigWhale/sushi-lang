@@ -1,0 +1,14 @@
+# A hybrid library: the consumer calls a free function of the library takes an owning argument and gives an owning answer.
+# The call names the link symbol of the manifest (ir.md 8.6, S26).
+# BUILD_LIB_HYBRID: lc_callee_lib.sushi -> lc_hyb.slib
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 42!\n"
+# EXPECT_NO_LEAKS
+use <lib/lc_hyb>
+
+fn main() i32:
+    let i32 n = 42
+    let string s = "Mostly Harmless {n}"
+    let string loud = shout(nom s)
+    println(loud)
+    return 0

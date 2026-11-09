@@ -36,6 +36,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.lower_generics import free_callee_name, unqualified
+from sushi_lang.semantics.slir.lower_symbols import callee_symbol
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
 from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.type_predicates import generic_base_of
@@ -118,12 +119,11 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     if isinstance(callee, Indirect):
         return closures.indirect(low, node, callee)
     if isinstance(callee, Free):
-        if resolved.unit is None:
-            raise StageStop(STAGE, "library function", node.loc)
         name = free_callee_name(low.decls, node, callee)
-        return st.Direct(function_symbol(name, resolved.unit), name)
+        return st.Direct(callee_symbol(resolved, lambda unit: function_symbol(name, unit)),
+                         name)
     if isinstance(callee, (Method, Static)):
-        return user_method(low, callee, resolved, node.loc)
+        return user_method(low, callee, resolved)
     if isinstance(callee, Stdlib):
         name = unqualified(low.decls.name_of(callee.decl))
         types = [low.type_of(arg.value) for arg in node.args]
@@ -148,19 +148,18 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     raise StageStop(STAGE, type(callee).__name__, node.loc)
 
 
-def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall,
-                span: Span) -> st.Direct:
+def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) -> st.Direct:
     """An extension method or a static by its symbol and its written name `<type>.<method>`,
-    and a perk method by the perk symbol of the implementation of the receiver type."""
+    and a perk method by the perk symbol of the implementation of the receiver type. A method
+    or a static of a binary or a hybrid library has the link symbol of its row."""
     owner = callee.ty if isinstance(callee, Static) else deref_type(low.type_of(callee.recv))
     name = low.decls.name_of(callee.decl)
     method = unqualified(name)
     if (isinstance(callee, Method) and owner is not None
             and low.tables.perk_impls.get_method(owner, method) is not None):
         return st.Direct(method_symbol(owner, method, None), name)
-    if resolved.unit is None:
-        raise StageStop(STAGE, "library function", span)
-    return st.Direct(method_symbol(owner, method, resolved.unit, resolved.type_args), name)
+    return st.Direct(callee_symbol(resolved, lambda unit: method_symbol(
+        owner, method, unit, resolved.type_args)), name)
 
 
 def argument(low: Lowering, node: e.Call, index: int,

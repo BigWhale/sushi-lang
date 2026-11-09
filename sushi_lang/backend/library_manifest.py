@@ -692,6 +692,11 @@ class LibraryManifestGenerator:
                   bindings.setdefault(_binding_key(node, unit_name), {}))
             if rejected:
                 break
+        # A public constant ships as source too, and its value can name a private function.
+        for unit in own_units(units):
+            for const in (unit.ast.constants if unit.ast is not None else ()):
+                if const.is_public and not isinstance(const, VarDef) and not rejected:
+                    _walk(const, const, unit.name, None)
 
         def listed(kind: _ClosureKind) -> list[tuple]:
             return [(node, src, u) for (u, _n), (node, src) in kind.shipped.items()]

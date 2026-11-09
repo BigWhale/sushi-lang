@@ -1,0 +1,39 @@
+# The library of the library-callee fixtures. Each fixture builds it as a binary or a
+# hybrid library, so each call of the consumer names a symbol that the bitcode defines.
+
+public struct Crate:
+    i32 weight
+    string label
+
+public extend Crate heavy() bool:
+    return self.weight > 100
+
+public extend Crate static of(i32 weight) Crate:
+    return Crate(weight, "made")
+
+public perk Weigh:
+    fn weigh() i32
+
+extend Crate with Weigh:
+    fn weigh() i32:
+        return self.weight
+
+public fn shout(nom string s) string:
+    return "{s}!"
+
+public fn twice(i32 x) i32:
+    return x * 2
+
+public error LibError:
+    Odd
+
+public error AppError:
+    Lib(LibError)
+
+extend LibError as AppError:
+    return AppError.Lib(self)
+
+public fn half(i32 n) i32 | LibError:
+    if (n % 2 == 1):
+        return Result.Err(LibError.Odd)
+    return Result.Ok(n / 2)

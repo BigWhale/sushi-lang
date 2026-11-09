@@ -129,6 +129,7 @@ from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Free, Intrinsic, Method, Static)
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
+from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
@@ -217,9 +218,7 @@ def _check_function_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRe
     if any(p.is_variadic or p.ty is None for p in sig.params):
         visit.stop_at(validator, node)
     answers = validator.body_answers()
-    # A private function of a binary library has its own link symbol (D6).
-    unit = None if sig.link_symbol else sig.unit_name
-    answers.record_callee(node.shir_id, ResolvedCall(Free(decl), type_args, unit))
+    answers.record_callee(node.shir_id, user_callee(Free(decl), sig, type_args))
     record_call_sources(validator, node, sig)
     function_type = function_type_of_sig(sig)
     if function_type is not None:
@@ -445,10 +444,8 @@ def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name
     of the method, or its bare return value, also after an error of an argument. A method
     with a `peek` return has the source row of the call."""
     method: ExtensionMethod = found.method
-    # A method of a binary library has its own link symbol, as a function has (D6).
-    unit = None if method.link_symbol else method.unit_name
     validator.body_answers().record_callee(
-        node.shir_id, ResolvedCall(callee, method.method_type_args, unit))
+        node.shir_id, user_callee(callee, method, method.method_type_args))
     return check_method_arguments(validator, node, owner, name, method, callee, found.typed)
 
 

@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Optional, Union
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics import integer_ops
+from sushi_lang.semantics.library_registry import KEPT_STORAGE_KINDS
 from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.calls.structs import check_struct_fields
@@ -145,7 +146,7 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
     written = validator.decl_name(node.const_id)
     record = constant_record(validator, written)
     if record is None:
-        if reject_private_kept(validator, written, node.loc, kinds={"constant"}):
+        if reject_private_kept(validator, written, node.loc, kinds=KEPT_STORAGE_KINDS):
             return None
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"the constant '{written}' has no record")

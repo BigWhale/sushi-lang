@@ -1,0 +1,4 @@
+# The library of the SLIR golden of a library callee.
+
+public fn twice(i32 x) i32:
+    return x * 2

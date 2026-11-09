@@ -1,0 +1,14 @@
+# A binary library: the consumer calls a public constant of the library whose value is a private function of it.
+# The call names the link symbol of the manifest (ir.md 8.6, S26).
+# BUILD_LIB_BINARY: lc_const_lib.sushi -> lc_cbin.slib
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_NO_LEAKS
+use <lib/lc_cbin>
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return f(x)
+
+fn main() i32:
+    println(apply(BUMP, 2))
+    return 0

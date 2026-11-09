@@ -41,10 +41,13 @@ if TYPE_CHECKING:
 class ResolvedCall:
     """The callee of a call, with the type arguments of a generic function or method and,
     for a free function or an extension method, the name of the unit that declares it (C5).
-    SLIR lowering makes the symbol of a free function from it."""
+    SLIR lowering makes the symbol of a free function from it. A function, a method or a
+    static of a binary or a hybrid library has no unit: its symbol is the `link_symbol` of
+    the manifest (ir.md 8.6, S26)."""
     callee: Callee
     type_args: tuple[Type, ...] = ()
     unit: Optional[str] = None
+    link_symbol: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)

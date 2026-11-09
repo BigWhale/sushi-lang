@@ -37,6 +37,7 @@ from sushi_lang.semantics.passes.types.visit.signature_methods import unsolved_h
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import BuiltinStatic, Method
 from sushi_lang.semantics.shir.typeck import ResolvedCall
+from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.typesys import IteratorType, Type, UnknownType, deref_type
 
@@ -149,5 +150,4 @@ def next_call(validator: TypeValidator, value: e.ShirExpr, owner: Type,
                     receiver_mode(method.self_mode).convention)
     if perk is not None:
         return ResolvedCall(callee)
-    return ResolvedCall(callee, method.method_type_args,
-                        None if method.link_symbol else method.unit_name)
+    return user_callee(callee, method, method.method_type_args)
