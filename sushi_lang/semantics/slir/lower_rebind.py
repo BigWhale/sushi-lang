@@ -1,11 +1,11 @@
-"""SHIR to SLIR: the rebind of a local and of a `var`, and the place of a `var` (docs/design/ir.md 8.9, 8.10).
+"""SHIR to SLIR: the rebind of a local (docs/design/ir.md 8.9, 8.10).
 
 A rebind of a local writes the new value first, then drops the old one, then stores, then
 writes the flag (rules 4 and 6). A by-value parameter that holds the value of the caller
 drops nothing (rule 5), and an address local drops the old value at its address (rule 8).
 `s := s.concat(x)` of a local that holds a value of its own is the concat peephole: one
-call of `string.concat_in_place` and no drop (8.9). A `var` is a `Global` place, and a
-`var` that owns stops (`StorageRef owning`). Each arm is a free function that takes the
+call of `string.concat_in_place` and no drop (8.9). The rebind of a `var` is in
+`lower_globals.py`. Each arm is a free function that takes the
 `Lowering` of `lower.py` first. This module reads `lower.py` for its types only.
 """
 from __future__ import annotations
@@ -17,7 +17,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.method_effects import CONCAT_IN_PLACE, STRING_FAMILY
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Builtin
@@ -25,7 +24,6 @@ from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
-from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.ids import LocalId
 from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit
 from sushi_lang.semantics.typesys import BuiltinType
@@ -109,29 +107,3 @@ def concat_in_place(low: Lowering, stmt: s.Assign, target: e.LocalRef,
                             ((p.Copy(held), Convention.INOUT), argument)),
                   BuiltinType.BLANK, stmt.loc)
     return True
-
-
-def rebind_global(low: Lowering, stmt: s.Assign, target: e.StorageRef) -> None:
-    """`v := x` of a `var`: the new value, then the store into its global. A plain
-    `var` drops nothing. `and` and `or` go into a temporary first, because the right
-    operand can read the `var` again."""
-    place = global_place(low, target)
-    value = low.value(stmt.value)
-    if isinstance(value, ShortCircuit):
-        value = r.Use(p.Copy(p.Local(low.temporary(value, low.type_of(stmt.value),
-                                                   stmt.value.loc))))
-    low.write(place, value, stmt.loc)
-
-
-def global_place(low: Lowering, ref: e.StorageRef) -> p.Global:
-    """The `Global` of the `var` that `ref` names, by the symbol of its typecheck row. A
-    `var` that owns stops (`StorageRef owning`): its rebind drops, and that is group
-    D1."""
-    symbol = low.typeck.global_of(ref.shir_id)
-    if symbol is None:
-        er.raise_internal_error("CE0000", span=ref.loc,
-                                detail="a unit variable with no global reached SLIR")
-    ty = low.type_of(ref)
-    if low.owns(ty):
-        dispatch.stop(STAGE, ref, state="owning")
-    return p.Global(symbol, ty)

@@ -1,0 +1,28 @@
+# A field write into a `var` struct that owns, and an element write into a `var`
+# fixed array of strings, drop the old part first. The last parts are literals.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a 1\nb 2\np-0 y\np-1 y\n"
+
+struct Entry:
+    string name
+    i32 count
+
+var Entry last = Entry("none", 0)
+var string[2] pair = ["x", "y"]
+
+fn record(string n) ~:
+    last.name := "{n}"
+    last.count := last.count + 1
+
+fn main() i32:
+    record("a")
+    println("{last.name} {last.count}")
+    record("b")
+    println("{last.name} {last.count}")
+    foreach(i in 0..2):
+        pair[0] := "p-{i}"
+        println("{pair[0]} {pair[1]}")
+    last.name := "end"
+    pair[0] := "x"
+    return 0

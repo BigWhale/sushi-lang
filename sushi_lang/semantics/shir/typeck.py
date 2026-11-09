@@ -166,6 +166,12 @@ class TypeckResults(SideTable):
         """The symbol of the global of the `var` that a `StorageRef` names."""
         return self._globals.get(node)
 
+    def global_type(self, symbol: str) -> Optional[Type]:
+        """The type of the `var` whose global is `symbol`, from a `StorageRef` of the body
+        that names it; None when the body names no such `var`."""
+        return next((self._node_types.get(node) for node, held in self._globals.items()
+                     if held == symbol), None)
+
     def sources_of(self, call: ShirId) -> Optional[tuple[int, ...]]:
         """The source positions of a call of a callable with a `peek` return: the index of
         each argument in the source set, and -1 for the receiver. None for any other call."""

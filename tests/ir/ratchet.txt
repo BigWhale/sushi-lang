@@ -219,6 +219,7 @@ tests/array/fixed_array_rebind/test_fixed_rebind_struct_elements.sushi
 tests/array/fixed_array_rebind/test_fixed_rebind_through_poke_plain.sushi
 tests/array/fixed_array_rebind/test_fixed_rebind_through_poke_strings.sushi
 tests/array/fixed_array_rebind/test_fixed_rebind_unit_variable.sushi
+tests/array/fixed_array_rebind/test_fixed_rebind_unit_variable_strings.sushi
 tests/array/fixed_element_receiver/test_fixed_element_evaluated_once.sushi
 tests/array/fixed_receiver/test_err_fixed_peek_fill.sushi
 tests/array/fixed_receiver/test_fixed_field_owning.sushi
@@ -233,6 +234,7 @@ tests/array/free_contract/test_free_leaves_zero_capacity.sushi
 tests/array/free_contract/test_free_then_extend_insert.sushi
 tests/array/free_contract/test_free_then_push_i32.sushi
 tests/array/free_contract/test_free_then_push_string.sushi
+tests/array/free_contract/test_free_unit_var_no_leak.sushi
 tests/array/free_owning/test_run_array_free_owning.sushi
 tests/array/from_empty/test_from_empty_bare_extension_return.sushi
 tests/array/from_empty/test_from_empty_call_argument.sushi
@@ -300,6 +302,7 @@ tests/array/insert_remove/test_arr_insert_inner_receiver.sushi
 tests/array/insert_remove/test_arr_insert_nested_rows.sushi
 tests/array/insert_remove/test_arr_insert_owning.sushi
 tests/array/insert_remove/test_arr_insert_positions.sushi
+tests/array/insert_remove/test_arr_insert_receivers.sushi
 tests/array/insert_remove/test_arr_insert_results.sushi
 tests/array/insert_remove/test_arr_remove_plain.sushi
 tests/array/insert_remove/test_err_arr_insert_arity.sushi
@@ -408,6 +411,7 @@ tests/array/nested/spelling/test_run_nested_result_maybe.sushi
 tests/array/nested/spelling/test_run_nested_return_types.sushi
 tests/array/nested/spelling/test_run_nested_struct_field.sushi
 tests/array/nested/spelling/test_run_nested_type_positions.sushi
+tests/array/nested/spelling/test_run_nested_unit_variable.sushi
 tests/array/numeric_reductions/test_array_add_up_u8_wraps.sushi
 tests/array/numeric_reductions/test_array_min_max_f64.sushi
 tests/array/numeric_reductions/test_array_min_max_first_of_equals.sushi
@@ -2519,6 +2523,7 @@ tests/generics/maybe_intern/test_maybe_intern_enum_array.sushi
 tests/generics/maybe_intern/test_maybe_intern_fn_named_error.sushi
 tests/generics/maybe_intern/test_maybe_intern_list_get_pop.sushi
 tests/generics/maybe_intern/test_maybe_intern_struct_array.sushi
+tests/generics/maybe_intern/test_maybe_intern_var_cache.sushi
 tests/generics/member_of_instance_argument/test_array_zip_len_solves_a_generic.sushi
 tests/generics/member_of_instance_argument/test_dynamic_array_element_field_solves_a_generic.sushi
 tests/generics/member_of_instance_argument/test_fixed_array_element_field_solves_a_generic.sushi
@@ -2871,6 +2876,7 @@ tests/ir/slir/externs/test_slir_extern_var_arg.sushi
 tests/ir/slir/generics/test_slir_instance_body.sushi
 tests/ir/slir/generics/test_slir_method_template_copy.sushi
 tests/ir/slir/generics/test_slir_part_over_a_borrow.sushi
+tests/ir/slir/globals/test_slir_owning_global.sushi
 tests/ir/slir/hashmaps/test_slir_hashmap_methods.sushi
 tests/ir/slir/interp/test_slir_interp.sushi
 tests/ir/slir/iterators/test_slir_adapter_chain.sushi
@@ -5168,6 +5174,7 @@ tests/strings/in_place_append/test_append_in_branches.sushi
 tests/strings/in_place_append/test_append_is_linear.sushi
 tests/strings/in_place_append/test_append_poke_param.sushi
 tests/strings/in_place_append/test_append_self.sushi
+tests/strings/in_place_append/test_append_unit_var.sushi
 tests/strings/interpolation/test_concat_only.sushi
 tests/strings/interpolation/test_interpolation_arithmetic.sushi
 tests/strings/interpolation/test_interpolation_basic.sushi
@@ -5623,6 +5630,7 @@ tests/types/match_literals/test_match_literal_u8_dispatch.sushi
 tests/types/match_literals/test_match_literal_widths.sushi
 tests/types/match_literals/test_match_string_basics.sushi
 tests/types/match_literals/test_match_string_binding_modes.sushi
+tests/types/match_literals/test_match_string_borrowed.sushi
 tests/types/match_literals/test_match_string_bytes.sushi
 tests/types/match_literals/test_match_string_nested.sushi
 tests/types/match_literals/test_match_string_temporary.sushi
@@ -5975,9 +5983,14 @@ tests/units/struct_after_enum/test_err_struct_after_enum.sushi
 tests/units/struct_after_enum/test_err_struct_after_enum_uses.sushi
 tests/units/struct_after_enum/test_err_struct_after_generic_enum.sushi
 tests/var/basics/test_err_var_is_not_an_array_size.sushi
+tests/var/basics/test_var_drop_type_rebind.sushi
 tests/var/basics/test_var_field_write.sushi
+tests/var/basics/test_var_foreach_poke.sushi
+tests/var/basics/test_var_mutating_method.sushi
+tests/var/basics/test_var_passed_as_borrow.sushi
 tests/var/basics/test_var_poke_peek_borrow.sushi
 tests/var/basics/test_var_read_and_rebind.sushi
+tests/var/basics/test_var_string_rebind.sushi
 tests/var/borrow/test_err_var_move_let.sushi
 tests/var/borrow/test_err_var_move_nom_arg.sushi
 tests/var/borrow/test_err_var_move_return.sushi
@@ -5992,9 +6005,22 @@ tests/var/initializer/test_err_var_init_call.sushi
 tests/var/initializer/test_err_var_init_hashmap_new.sushi
 tests/var/initializer/test_err_var_init_names_var.sushi
 tests/var/initializer/test_err_var_init_nonempty_from.sushi
+tests/var/initializer/test_var_empty_containers.sushi
 tests/var/initializer/test_var_enum_rebind.sushi
+tests/var/initializer/test_var_init_from_constants.sushi
+tests/var/initializer/test_var_maybe_hashmap_cache.sushi
 tests/var/namespaces/test_err_poke_constant_behind_alias.sushi
 tests/var/namespaces/test_var_behind_alias.sushi
+tests/var/owning_storage/test_err_var_bulk_write_from_itself.sushi
+tests/var/owning_storage/test_err_var_implicit_borrow_beside_poke.sushi
+tests/var/owning_storage/test_err_var_rebind_under_let_borrow.sushi
+tests/var/owning_storage/test_var_foreach_owning_list.sushi
+tests/var/owning_storage/test_var_list_push_rebind.sushi
+tests/var/owning_storage/test_var_owning_borrowed_arguments.sushi
+tests/var/owning_storage/test_var_owning_cross_unit.sushi
+tests/var/owning_storage/test_var_owning_match_and_hole.sushi
+tests/var/owning_storage/test_var_owning_part_writes.sushi
+tests/var/owning_storage/test_var_string_rebind_loop.sushi
 tests/var/visibility/test_err_private_var_cross_unit.sushi
 tests/var/visibility/test_err_private_var_rebind_cross_unit.sushi
 tests/var/visibility/test_err_public_var_private_type.sushi

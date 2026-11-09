@@ -126,7 +126,7 @@ class Flow:
             for operand, _ in stmt.args:
                 self.operand(configs, operand, span)
             self.write(configs, stmt.dest, span, None)
-        elif isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index)):
+        elif isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index, p.Global)):
             self.read(configs, stmt.place, span)
         elif isinstance(stmt, st.Drop):
             self.drop(configs, self.check.dropped(stmt), span)

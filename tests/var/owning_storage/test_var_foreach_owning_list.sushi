@@ -1,0 +1,19 @@
+# A `foreach` over `.iter()` of a `var List@(string)` lends each item, and a `poke`
+# walk changes the items where they are. The rebind at the end drops the list.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "one\ntwo\none!\ntwo!\n"
+
+var List@(string) words = List.new()
+
+fn main() i32:
+    words.push("{'one'}")
+    words.push("{'two'}")
+    foreach(w in words.iter()):
+        println(w)
+    foreach(poke w in words.iter()):
+        w := "{w}!"
+    foreach(w in words.iter()):
+        println(w)
+    words := List.new()
+    return 0

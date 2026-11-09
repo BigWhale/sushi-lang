@@ -29,10 +29,10 @@ temporary of a new value. A value with no row is read with `Copy`. A literal and
 of a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes
 into the place that takes it (the local of a `let`, `_0`), else into a temporary of its
 statement. The store that consumes a `move` operand marks its local moved, not the place
-where the operand is built. A `var` is a `Global` place (`lower_rebind.global_place`), and a
-`var` that owns stops (`StorageRef owning`). A read of a `var` by value goes into a temporary of the
-statement first, because any call of the statement can change a `var`; a by-address
-argument, a receiver and a value that its statement stores at once read it where it is.
+where the operand is built. A `var` is a `Global` place (`lower_globals.py`). A read of a plain
+`var` by value goes into a temporary of the statement first, because any call of the
+statement can change a `var`; a by-address argument, a receiver, a value that its statement
+stores at once and a borrowed read of a `var` that owns read it where it is.
 Drop placement (`drops.py`) places every drop, every flag write
 and every `StorageDead`, and joins the state of the locals at a join.
 
@@ -82,6 +82,7 @@ from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_conversions as conversions
 from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
+from sushi_lang.semantics.slir import lower_globals as globals_
 from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_takes as takes
 from sushi_lang.semantics.slir import lower_try as tries
@@ -399,7 +400,7 @@ class Lowering:
             agg.field_write(self, stmt, target)
             return
         if isinstance(target, e.StorageRef) and not stmt.is_init:
-            rebinds.rebind_global(self, stmt, target)
+            globals_.rebind_global(self, stmt, target)
             return
         if not isinstance(target, e.LocalRef):
             dispatch.stop(STAGE, target)
@@ -487,7 +488,8 @@ class Lowering:
         literal and a name of a constant are a constant with any other row: an `adopt` of a
         string constant takes a literal, which owns no heap. A read of a `var` goes into a
         temporary of the statement, unless `in_place` reads it where it is. A slice of a
-        `var` is a view, which owns nothing: it gets no temporary."""
+        `var` is a view, which owns nothing, and a value that owns would own a second copy
+        in a temporary: neither gets one (ir.md 8.4)."""
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             er.raise_internal_error("CE0000", span=expr.loc,
@@ -498,7 +500,8 @@ class Lowering:
             if row is Ownership.MOVE:
                 return p.Move(place)
             root = walk_place(expr, Step.MEMBER | Step.INDEX).node
-            if in_place or isinstance(expr, e.Slice) or not isinstance(root, e.StorageRef):
+            if in_place or isinstance(expr, e.Slice) or not isinstance(root, e.StorageRef) \
+                    or self.owns(self.type_of(expr)):
                 return p.Copy(place)
             return p.Copy(p.Local(self.temporary(r.Use(p.Copy(place)), self.type_of(expr),
                                                  expr.loc)))

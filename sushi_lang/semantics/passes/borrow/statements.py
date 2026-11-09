@@ -166,8 +166,11 @@ def _check_rebind(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> N
 
 def _check_storage_rebind(checker: 'BorrowChecker', node: s.Assign) -> None:
     """`v := x` of a `var`: storage with an address of its own, so the rebind is legal in
-    every body, and the value is a consuming use."""
+    every body, and the value is a consuming use. The rebind drops the old value of a
+    `var` that owns, so it changes each `let`-borrow out of it (CE2412 at a later use)."""
     arms.check(checker, node.value)
+    check_owner_not_borrowed(checker, checker.answers().global_of(node.target.shir_id),
+                             node.loc, "assign", place=node.target)
     consume(checker, node.value)
 
 

@@ -1,20 +1,22 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "slir, StorageRef owning"
+# EXPECT_STDERR_CONTAINS: "slir, ConstRef out of range"
 # EXPECT_DUMP_SLIR: test_err_slir_stopped_function.slir
 #
-# The SLIR lowering finishes `answer`, and it stops in `rename` at the rebind of a `var`
-# that owns, which it does not lower yet. The dump prints the SLIR of `answer` and of
-# `main` in full, and one line for `rename`. A stop of the SLIR lowering comes before the
-# stop of the next stage, so the program stops at `slir, StorageRef owning`.
+# The SLIR lowering finishes `answer`, and it stops in `bits` at the read of a constant
+# whose value its type cannot hold (the R14 guard), which it does not lower. The dump
+# prints the SLIR of `answer` and of `main` in full, and one line for `bits`. A stop of
+# the SLIR lowering comes before the stop of the next stage, so the program stops at
+# `slir, ConstRef out of range`.
 
-var string NAME = "Ford"
+const i32 BITS = 0xDEADBEEF
 
 fn answer() i32:
     return 42
 
-fn rename() ~:
+fn bits() i32:
     if (answer() == 42):
-        NAME := "Mostly Harmless"
+        return BITS
+    return 0
 
 fn main() i32:
     return 0

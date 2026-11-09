@@ -1,0 +1,17 @@
+# An owning `public var` of a second unit: this unit declares it external, reads it and
+# rebinds it, and the declaring unit rebinds it too. Each rebind drops the old value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "start 5\nmain! 5\nunit+ 5\nend\n"
+
+use "helpers/current"
+
+fn main() i32:
+    println("{current} {current_len()}")
+    current := "{'main'}!"
+    println("{current} {current_len()}")
+    set_current("unit")
+    println("{current} {current_len()}")
+    current := "end"
+    println(current)
+    return 0

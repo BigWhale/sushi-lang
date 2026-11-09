@@ -1,0 +1,31 @@
+# An owning `var` is a `match` scrutinee and a hole of an interpolation. A string match
+# and an enum match both read the global where it is, and a bare binder of the payload
+# borrows it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "mode busy\nname Arthur\nnone\n"
+
+var string mode = "idle"
+var Maybe@(string) name = Maybe.None
+
+fn set(string m, string n) ~:
+    mode := "{m}"
+    name := Maybe.Some("{n}")
+
+fn report() ~:
+    match mode:
+        "busy" -> println("mode {mode}")
+        _ -> println("other {mode}")
+    match name:
+        Maybe.Some(n) -> println("name {n}")
+        Maybe.None -> println("none")
+
+fn main() i32:
+    set("busy", "Arthur")
+    report()
+    mode := "idle"
+    name := Maybe.None
+    match name:
+        Maybe.Some(n) -> println("name {n}")
+        Maybe.None -> println("none")
+    return 0

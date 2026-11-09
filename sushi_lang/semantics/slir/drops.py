@@ -227,6 +227,11 @@ class DropPlacement:
         take, a `_` of a destructure, ir.md 8.9). The root keeps its state."""
         return [st.Drop(place, span)]
 
+    def drop_global(self, place: p.Global, span: Span) -> list[st.SlirStatement]:
+        """The drop of the old value of a `Global` that owns, right before its store at a
+        rebind (rule 6). A `Global` always holds a value and has no flag."""
+        return [st.Drop(place, span)]
+
     def drop_step(self, local: LocalId, span: Span) -> st.Drop:
         """The drop of the answer of a step of a walk that holds an owned item, on an edge
         that does not take the item (rule 7)."""

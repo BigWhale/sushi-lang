@@ -1,0 +1,32 @@
+# A `var string` takes an owned string in a loop that ends with `break`, and in a loop
+# that ends with `return`. Each rebind drops the old value one time. The last value is a
+# literal, because a unit variable is never destroyed at exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a0\na01\na012\nfound 1 b1\ndone\n"
+
+var string text = "a"
+
+fn grow_until(i32 limit) ~:
+    let i32 i = 0
+    while (true):
+        text := "{text}{i}"
+        println(text)
+        i := i + 1
+        if (i == limit):
+            break
+
+fn find(i32 limit) i32:
+    foreach(i in 0..limit):
+        text := "b{i}"
+        if (i == 1):
+            return i
+    return -1
+
+fn main() i32:
+    grow_until(3)
+    let i32 n = find(5)
+    println("found {n} {text}")
+    text := "done"
+    println(text)
+    return 0

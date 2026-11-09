@@ -899,10 +899,9 @@ def test_a_projection_that_does_not_fit_the_type_of_the_global_is_refused(projec
              "typed places")
 
 
-@pytest.mark.parametrize("target", [p.Downcast(_local(1), "Some"), p.Global("unit$log", STRING)],
-                         ids=["projection", "global"])
-def test_a_drop_of_a_place_that_is_no_local_is_not_checked_yet(target: p.Place):
-    _not_checked(_function([BLANK, PAIR], _block(0, _ret(), st.Drop(target, BAD))))
+def test_a_drop_of_a_place_that_is_no_local_is_not_checked_yet():
+    _not_checked(_function([BLANK, PAIR], _block(
+        0, _ret(), st.Drop(p.Downcast(_local(1), "Some"), BAD))))
 
 
 def test_a_drop_if_set_of_a_projection_is_not_checked_yet():
@@ -1395,11 +1394,6 @@ def test_a_drop_of_an_element_after_a_move_of_its_array_is_refused():
         st.Drop(p.Index(_local(1), ZERO), BAD))), "no use after a move")
 
 
-def test_a_drop_of_an_element_of_a_global_is_not_checked_yet():
-    _not_checked(_function([BLANK], _block(
-        0, _ret(), st.Drop(p.Index(p.Global("unit$names", STRINGS), ZERO), BAD))))
-
-
 # -- the field of an owning struct (ir.md 8.10 rule 6, 8.13) -----------------------------
 
 def _named(index: int) -> list[st.SlirStatement]:
@@ -1613,11 +1607,6 @@ def test_a_move_into_a_view_return_slot_is_refused():
     _refused(_view_return(_function([STRING, STRING], _block(
         0, _ret(), _live(1), _text(1), _set(0, r.Use(_move(1)), BAD), _dead(1)))),
         "a view local")
-
-
-def test_a_drop_of_a_field_of_a_global_is_not_checked_yet():
-    _not_checked(_function([BLANK], _block(
-        0, _ret(), st.Drop(p.Field(p.Global("unit$named", NAMED), 0), BAD))))
 
 
 # -- one take of two or more parts of one root (ir.md 8.13) -------------------------------

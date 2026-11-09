@@ -296,11 +296,12 @@ def _viewed_array(value: e.ShirExpr) -> e.ShirExpr:
 def _place_of(value: e.ShirExpr) -> Optional[tuple]:
     """The storage that a value names: its root local and the name of each field, or None
     when it names none. A call result, a literal and an element name no storage that a
-    second expression can share."""
+    second expression can share. The root of a `var` is its declaration."""
     walked = walk_place(value, Step.MEMBER)
-    if walked.local is None:
+    root = walked.node.decl if isinstance(walked.node, e.StorageRef) else walked.local
+    if root is None:
         return None
-    return (walked.local, *(step.name for step in reversed(walked.path)))
+    return (root, *(step.name for step in reversed(walked.path)))
 
 
 def _written_borrow(arg: e.Arg, convention: Optional[Convention]) -> Optional[BorrowMode]:

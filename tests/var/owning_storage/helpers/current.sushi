@@ -1,0 +1,9 @@
+# The unit that declares an owning public variable, and a function that rebinds it.
+
+public var string current = "start"
+
+public fn set_current(string v) ~:
+    current := "{v}+"
+
+public fn current_len() i32:
+    return current.len()

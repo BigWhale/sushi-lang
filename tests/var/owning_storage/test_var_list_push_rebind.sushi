@@ -1,0 +1,22 @@
+# A `var List@(string)` takes owned strings through `push`, a mutating method that
+# writes the list where it is. A rebind drops the old list and each string in it.
+# The last value is an empty list, which owns no heap.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n0\n1\n"
+
+var List@(string) log = List.new()
+
+fn note(string what) ~:
+    log.push("{what}!")
+
+fn main() i32:
+    note("one")
+    note("two")
+    println(log.len())
+    log := List.new()
+    println(log.len())
+    note("three")
+    println(log.len())
+    log := List.new()
+    return 0

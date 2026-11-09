@@ -95,13 +95,13 @@ def _points_into(stmt: s.Match) -> bool:
 
 def _scrutinee(low: Lowering, expr: e.ShirExpr, *, place: bool) -> p.Operand:
     """The operand that each test reads. A place (a local, a field, an element, and a part
-    of a `var` when a test needs a place) is read where it is, so a `poke` binder writes
-    it. A literal or a constant is read as a constant when no test needs a place. A
+    of a `var` when a test needs a place, and a `var` that owns) is read where it is, so a
+    `poke` binder writes it. A literal or a constant is read as a constant when no test needs a place. A
     constant where a test needs a place (a constant of an enum), a local that the match
     takes (`match nom r:`), and a new value go into a temporary of the match statement,
     which drops it at its end."""
     value: Value
-    if isinstance(expr, (e.LocalRef, e.Field, e.Index, e.Lit, e.ConstRef)):
+    if isinstance(expr, (e.LocalRef, e.Field, e.Index, e.Lit, e.ConstRef, e.StorageRef)):
         operand = low.operand(expr, in_place=place)
         if isinstance(operand, p.Copy) or (isinstance(operand, p.Const) and not place):
             return operand

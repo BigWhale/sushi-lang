@@ -95,9 +95,7 @@ def part_drop(check: Check, stmt: st.Drop) -> None:
     (ir.md 8.10, rule 6). Its root is a local that is no view, and its type owns. The
     dataflow reads the root, which must hold a value, and does not change its state."""
     root = check.place(stmt.place, stmt.span).root
-    if not isinstance(root, p.Local):
-        check.not_checked(f"a drop of {show(stmt.place)}, a part of a global", stmt.span)
-    if root.id in check.views:
+    if isinstance(root, p.Local) and root.id in check.views:
         check.fail(VIEW, f"{show(stmt.place)} is a part of a view, which owns nothing to drop",
                    stmt.span)
     ty = check.operand_type(p.Copy(stmt.place), stmt.span)

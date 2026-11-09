@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.borrowed_return import RECEIVER_POSITION
 from sushi_lang.semantics.method_effects import answers_view
@@ -34,6 +33,7 @@ from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.slir import lower_aggregate as agg
+from sushi_lang.semantics.slir import lower_globals as globals_
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -132,9 +132,9 @@ def held_root(low: Lowering, value: e.ShirExpr) -> ShirId:
 
 
 def _owner(low: Lowering, owner: ShirLocalId | str, span: Span) -> p.Place:
-    """The place of an owner of a region row: a local. A `var` that owns stops in SLIR."""
+    """The place of an owner of a region row: a local, or the `Global` of a `var`."""
     if isinstance(owner, str):
-        raise StageStop(STAGE, "StorageRef owning", span)
+        return globals_.owner_place(low, owner, span)
     return low.local_place(owner, span)
 
 

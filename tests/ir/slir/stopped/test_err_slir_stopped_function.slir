@@ -8,7 +8,7 @@ fn answer() -> i32 {
     return
 }
 
-fn rename: stopped (slir, StorageRef owning)
+fn bits: stopped (slir, ConstRef out of range)
 
 fn main() -> i32 {
     let _0: i32

@@ -170,12 +170,18 @@ def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
 
     A field read, an element read and a slice whose value owns a resource are a shared
     borrow of their ROOT owner by the same rule: the callee reads storage that a `poke` of
-    the owner can move. A plain field and a plain element are a copy.
+    the owner can move. A plain field and a plain element are a copy. A `var` that owns is
+    counted on its state (`storage_state`).
     """
     walked = walk_place(arg, Step.MEMBER | Step.INDEX)
-    if walked.local is None:
+    if isinstance(walked.node, e.StorageRef):
+        if checker.answers().global_of(walked.node.shir_id) is None:
+            return
+        state: Optional[BorrowState] = storage_state(checker, walked.node)
+    elif walked.local is None:
         return
-    state = checker.borrow_state.get(walked.local)
+    else:
+        state = checker.borrow_state.get(walked.local)
     if state is None or state.is_moved:
         return
     owns = (checker.types.type_class(read_type(checker, arg)) if walked.path

@@ -29,11 +29,11 @@ Then `verify_regions.py` checks the view locals and the borrow regions, and the 
 `verify_flow.py` checks the moves and the drops of each local on each path. A view local
 owns nothing, so the rule of the drops does not read it. The checks of a call are in
 `verify_calls.py`, the checks of an array value, a length and a slice in `verify_arrays.py`,
-and the names of the rules in `verify_rules.py`.
+the drop of a `Global` in `verify_globals.py`, and the names of the rules in `verify_rules.py`.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
-the internal error CE0000: a `Drop` of a place that is no local and no element, and a
-`DropIfSet` of a place that is no local. A projection of a `Global` is typed from the type that the
+the internal error CE0000: a `Drop` of a place that is no local, no element and no `Global`,
+and a `DropIfSet` of a place that is no local and no `Global`. A projection of a `Global` is typed from the type that the
 `Global` carries.
 """
 from __future__ import annotations
@@ -64,6 +64,7 @@ from sushi_lang.semantics.slir.verify_arrays import (
     array_value, length_or_slice, part_drop,
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
+from sushi_lang.semantics.slir.verify_globals import drops_a_global, global_drops
 from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_values import (
     capture_places, closure_value, copies_with_no_transfer, iterator_value, stack_iterators)
@@ -204,6 +205,7 @@ class Check:
 
     def block(self, block: SlirBlock) -> None:
         where = f"bb{block.id.index}"
+        global_drops(self, block)
         for index, stmt in enumerate(block.statements):
             span = getattr(stmt, "span", None)
             if not isinstance(span, Span):
@@ -466,6 +468,8 @@ class Check:
         return stmt.place.id
 
     def drop(self, stmt: st.Drop | st.DropIfSet) -> None:
+        if drops_a_global(stmt):
+            return
         if isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index)):
             part_drop(self, stmt)
             return
