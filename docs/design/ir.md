@@ -1704,11 +1704,18 @@ of a variadic function is [CE2093](../error-catalog.md#ce2093) at the name, with
 reason "a variadic function has no function type". This is a user-visible change, and the
 CHANGELOG names it.
 
-Not built yet: `typecheck` stops on a tail and on a bloom (`Call(function)`, and
-`Call(alias)` behind an alias), and on a function value of a variadic function
-(`GlobalRef of a variadic function`); the AST fold `build_variadic_array` makes the array at
-emit time. P6.D3.1 (Task 102) builds these rules, deletes the AST fold and removes this
-note.
+`typecheck` gives the tail of a free function, bare or behind an alias, through
+`variadic_tail` (`passes/types/visit/variadic_tails.py`), and the one argument check takes
+it (`check_arguments(..., tail=)`): a value that does not fit is CE2006 at the value, with
+the index of the argument and the element type, and a bloom is CE2006 at the whole
+`xs...` with the type `T[]`. A `nom` marker on a value of the tail is inert, as in `main`.
+The target `GlobalRef` of the call answers the declared signature, with the tail as its
+parameter `T[]`. `borrow` reads the `Owned` row of each value and of a bloom as a consuming
+use, so a field of a struct is CE2411 there and a later use of a bloomed local is CE2405.
+SLIR lowering makes the temporary in `slir/lower_variadic.py`. The callee drops nothing of
+its tail. The AST fold `build_variadic_array` is gone; `_emit_run` of `<sys/process>`
+still names it, and D7.2 (Task 103) lowers `run` through the same arm: its `Stdlib` row
+gets the tail row too.
 
 ### 7.5 Statements
 
@@ -2276,8 +2283,8 @@ each arm and each body is walked (`misses_an_answer` and `KNOWN_WITH`,
 - an unknown statement is not walked. The `let` form of an unknown `Destructure` declares
   each binder that has a type, so a later statement can name it;
 - an unknown argument borrows its place as its `peek` or `poke` marker is written, and it
-  takes no convention. A bloom argument (`xs...`) is unknown too: in such a body
-  `typecheck` refused it;
+  takes no convention. A bloom argument (`xs...`) that `typecheck` refused is unknown
+  too;
 - at a consuming use, an unknown value gets `ADOPT` (`consume.decide`): it moves no local and
   it is no error.
 
@@ -2922,8 +2929,7 @@ symbol, with the receiver first (`declared_params`).
 
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or one of these names: `bloom` for a bloom
-argument (the label goes with P6.D3.1, Task 102, which lowers the bloom by 7.4), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
+class, or `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
 progress of each function. The pipeline reports one stop after the analysis: a stop of
@@ -3888,7 +3894,7 @@ backstop of the checker, as on the AST backend.
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides (`semantics/slir/lower_takes.py`). An OWNED value (`MOVE` or `ADOPT`): the place of each `Place` target is evaluated first, from left to right (its indexes and their checks), then each binder and each place of a plain element takes the `Copy` of its `Field` place, then each `_` over an owning part drops that part, then each binder and each place of an owning element takes the `Move` of its `Field` place: a local drops its old value first (rule 6), and a field or an element drops its old part. So the moves of the parts of the one root stand last in one block (8.13), and the value is spent whole and gets no drop (8.13, "no local is ever partially moved"). A destructure that moves no part keeps the value whole in its temporary, which drops at the end of the statement. An owning binder gets its flag after its write. A BORROWED value (`REJECT`) is read where it is (a view of a temporary keeps the temporary in a hidden owner local of the block, as a `let` does), and each binder of an owning element is a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of its region row, or over that hidden owner. A plain element is a `Copy` in both cases. A `Place` target of an owning element that is a `Guaranteed` parameter drops its old value only when the callee owns it (8.10, rule 5), and one that is a `poke` address local drops the old value at its address (rule 8), as its rebind does |
 | `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns (8.4) is read in a borrowed position (a `Guaranteed` argument, a part of an interpolation) as a `Copy` of the place, a shallow load and no deep copy, with no temporary, because a temporary would own a second copy of the value. Its rebind is `Drop(Global)`, then the `Assign` (8.10, rule 6), and the write of an owning field or element of it drops the old part first, as for a local. A by-address use reads the `Global` where it is, and so does a `match` scrutinee, which no temporary copies. No exit drops it. A region over a `var` (a `let`-borrow of it, a lent iterator over it, a bare binder of its payload) names the `Global` as its owner |
 | `Take` | with a `move` row (on the `Take`, or on the `Field` of a `nom` argument): the operand is the `Move` of `Field(local, index)`, and the `Drop(Field(local, i))` of each other owning field of the receiver stands right before the statement that consumes the operand (the call or the store, 8.10 rule 3), after every other operand of that statement: an exit before it (the error path of a `Try` in a later argument) finds the local whole and drops it whole. Two or more takes of one local in one statement (`f(nom w.a, nom w.b)`, `Pair(nom w.a, nom w.b)`) are one take: the local moves one time, and a field drops only when no take of the statement moves it. The `Move` spends the whole local (8.13): it gets no drop, so `drop()` does not run (`borrow-model.md` §10c; `semantics/slir/lower_takes.py`). A `Take` with any other row is its place |
-| a variadic tail | one temporary `T[]` local for each call: ONE `Aggregate(AggArray)` of the values of the tail, in the written order, an owning value a `Move` of its temporary, a plain value a `Copy` or a constant (8.7), and the local is the argument of the call with the convention of the tail parameter, `Guaranteed` (7.4): it drops at the end of the statement. An empty tail is the empty array `{0, 0, null}`. A bloom `arr...` is the `Move` of the array operand itself into the temporary. Not built yet: P6.D3.1 (Task 102) |
+| a variadic tail | one temporary `T[]` local for each call: ONE `Aggregate(AggArray)` of the values of the tail, in the written order, an owning value a `Move` of its temporary, a plain value a `Copy` or a constant (8.7), and the local is the argument of the call with the convention of the tail parameter, `Guaranteed` (7.4): it drops at the end of the statement. An empty tail is the empty array `{0, 0, null}`. A bloom `arr...` is the `Move` of the array operand itself into the temporary (`slir/lower_variadic.py`) |
 | a `string` argument to an `i8*` callee | a `Guaranteed` operand of the call. The emitter makes the C copy at the call (`emit_cstr_arg`) and frees it right after the call (8.6): the copy lives for the call alone, so no SLIR local holds it and no drop of 8.10 reads it. `run()` stays the one exception |
 
 A condition (of an `If` or a `While`) is evaluated in a scope of its own, whose
