@@ -1,6 +1,6 @@
-# A tail of `...string` takes temporaries that own. The caller leaves a loop by `break` and
-# its body by an early `return`. Each value moves into the array of the tail, and the callee
-# drops the array once.
+# A tail of `...string` takes temporaries that own, in a loop that the caller leaves by
+# `break`, and in a `return` that leaves the loop early. Each value moves into the array of
+# the call, and the caller drops the array once, at the end of the statement.
 # EXPECT_STDOUT_EXACT: "8\n18\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

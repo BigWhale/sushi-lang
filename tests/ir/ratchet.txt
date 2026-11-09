@@ -6458,6 +6458,7 @@ tests/variadic/tail_lowering/test_bloom_local_and_nom_param.sushi
 tests/variadic/tail_lowering/test_err_bloom_borrowed_param.sushi
 tests/variadic/tail_lowering/test_err_bloom_not_sole.sushi
 tests/variadic/tail_lowering/test_err_tail_borrowed_field.sushi
+tests/variadic/tail_lowering/test_err_tail_same_owner_twice.sushi
 tests/variadic/tail_lowering/test_err_variadic_fn_value.sushi
 tests/variadic/tail_lowering/test_tail_behind_alias.sushi
 tests/variadic/tail_lowering/test_tail_empty.sushi

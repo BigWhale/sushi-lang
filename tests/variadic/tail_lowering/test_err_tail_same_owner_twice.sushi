@@ -1,0 +1,11 @@
+# Each value of the tail moves into the array of the call. So one owning local in two
+# positions of the tail is a use after its move.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+fn tot2(...string xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let string w = "Mostly {'Harmless'}"
+    println(tot2(w, w))
+    return 0
