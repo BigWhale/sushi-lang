@@ -1300,8 +1300,18 @@ first is CE2006 too. The call yields the return type of its row (`stdlib_row`,
 names interned), also after an error of an argument. A member of a family whose first
 argument has no row yields nothing, so the `let` that takes it says nothing more. The
 reference of the target answers the function type of the row, with the `Result` of the
-row as its channel. Only `<math>` and `<time>` are typed: a call of a function of any
-other registry module stops the walk (`Call(stdlib)`).
+row as its channel.
+
+**Every registry module is typed by its rows** (S24). There is no set of typed modules:
+each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_row`, the one reader).
+The call answers the type of the row. An answer that owns (`getcwd` answers `string |
+ProcessError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
+value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
+callee whose last parameter is a variadic tail (7.4), so its row is typed with the tail of
+S22. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. Not built yet: only `<math>`
+and `<time>` are typed (`TYPED_STDLIB_MODULES`), and a call of a function of any other
+registry module stops the walk (`Call(stdlib)`). P6.D7.1 (Task 100) and P6.D7.2 (Task 103)
+delete that set and remove this note.
 
 **A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
 that the program writes: an explicit type argument, a written type, and a generic function
@@ -1646,7 +1656,8 @@ in SHIR, and SHIR-to-SLIR lowering folds them into one synthesized owned array.
 writes its argument row. `borrow` reads each value of the tail as an `Owned` argument:
 it moves into the array. SLIR lowering makes one temporary `T[]` local for each call, with
 ONE `Aggregate(AggArray)` of the values in the written order (8.7), and passes it
-`Owned`: the callee owns the array. An empty tail is the empty array `{0, 0, null}`, the
+`Owned`: the callee owns the array. The tail of `run` (`<sys/process>`) is the one
+exception: a `Stdlib` callee borrows each operand (8.6). An empty tail is the empty array `{0, 0, null}`, the
 `from([])` of 8.9. A bloom `arr...` passes the array operand itself, as a `Move`, and a
 bloom into a parameter that is not variadic stays
 [CE0120](../error-catalog.md#ce0120) (ruling of Task 85). The same arm serves a call
@@ -1783,7 +1794,8 @@ built-in container (`List.new`, `List.with_capacity`, `HashMap.new`, `Own.alloc`
 same row: `ty` is the instance that the call builds, which its position gives, and
 `method` is the row of the family of the container (`CONTAINER_STATIC_FAMILIES`).
 
-A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`): a row of
+A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`, and by
+S24 each other module of 7.3): a row of
 the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
 a member of a `<math>` family (`abs`, `min`, `max`, `divmod`). `decl` names the written
 name, bare or behind an alias, and `module` is the `use` path of the module (`math`). It is
@@ -3454,6 +3466,23 @@ row of the call (`stdlib_row`), declare the generated function of the symbol fro
 row and call it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
 `<time>` sleep answers a bare status, and the call builds its `Result` from it
 (`status_result.py`: a negative status is `Result.Err`).
+
+**Every module of `STDLIB_EMITTERS` takes operands** (S24). Each module (`time`,
+`sys/env`, `sys/process`, `math`, `random`, `io/files`, `net/socket`) gets the operand form
+that `<math>` and `<time>` have: the row of the call, the declaration of the generated
+function of the symbol from that row, and the call (`emit_stdlib_row`). The
+`<time>`/`<sys/env>` status contract stays one seam (`status_result.py`). `run` lowers
+after the tail of S22: its last operand is the temporary `string[]` of the tail (7.4),
+which the caller keeps. The row borrows it as `Guaranteed`, as each operand of a `Stdlib`
+callee, and the temporary drops at the end of the statement, as in `main`
+(`build_variadic_array(..., callee_owns=False)` in `_emit_run`). `exit` is
+no intrinsic in `main`: probe `p09_exit_lowering` (`.superpowers/sdd/probes/P6/`, at
+`00633e4bd`) shows `call void @sushi_exit(i32 3)` and then `unreachable` (`_emit_exit`,
+`backend/expressions/calls/stdlib/process.py`). So `exit` lowers to a `Call` of
+`Direct(sushi_exit, exit, sys/process)` whose block ends in the `Unreachable` terminator
+(8.8). Not built yet: the rows of
+the other modules keep the AST entry `emit_registry_call` (`signatures.py`), which P6.D7.1
+(Task 100) and P6.D7.2 (Task 103) delete. They remove this note.
 
 **A `cstr` parameter of a registry row** (S23, decision E3 (a)). Its operand is a
 `Guaranteed` `string`, as each operand of a `Stdlib` callee is (8.3). The emitter of the
