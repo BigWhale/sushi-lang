@@ -69,6 +69,13 @@ class Convention(Enum):
         return self in (Convention.IN_GUARANTEED, Convention.INOUT)
 
 
+def bloom_moves(convention: Optional[Convention]) -> bool:
+    """Whether a bloom `arr...` moves its array: its row takes it over (`Owned`), or its row
+    has no convention. A bloom with a `Guaranteed` row (the tail of `run`) borrows its source
+    (docs/design/ir.md 7.4)."""
+    return convention is None or convention.consumes
+
+
 _CONVENTIONS: Mapping[ParamMode, Convention] = MappingProxyType({
     ParamMode.BORROW: Convention.GUARANTEED,
     ParamMode.NOM: Convention.OWNED,

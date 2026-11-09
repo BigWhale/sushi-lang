@@ -2,7 +2,8 @@
 
 The completeness checks of the two tables and their printer read this one sample. It is
 data: no source text, no AST, no lowering and no pass. The body holds each consuming
-position, a position of each kind that is not consuming, an iterator producer and a lazy
+position, a position of each kind that is not consuming, a bloom that moves, a bloom that
+borrows and a bloom with no convention (it moves), an iterator producer and a lazy
 adapter, the loops that need a walk-in-place answer and a loop that needs none, and a
 lambda. The `TypeckResults` holds only the rows that the ownership check reads: the
 conventions of the arguments, the callees of the iterator calls and the loop kinds.
@@ -26,6 +27,8 @@ The body, in the source spelling that it stands for:
         foreach(line in it):
             ~
         let fn(i32) -> i32 g = |i32 v| v + k
+        show(xs...)
+        drain(xs...)
         return Result.Ok(~)
 """
 from __future__ import annotations
@@ -62,7 +65,7 @@ CONSUMED: dict[str, int] = {
     "s_ref": 2, "keep_call": 3, "t_arg": 3, "xs_bloom": 3, "pair": 4, "t_part": 4,
     "two": 4, "array": 5, "eight": 5, "some": 6, "nine": 6, "b_ref": 7,
     "conversion": 8, "fail_call": 8, "k_ref": 9, "map_call": 12, "double_ref": 12, "lambda": 15,
-    "sum": 15, "ok": 16, "blank": 16,
+    "sum": 15, "drain_bloom": 17, "ok": 18, "blank": 18,
 }
 
 #: The lambda captures `k`.
@@ -136,6 +139,10 @@ def sample() -> Sample:
                block(15, stmt(s.Return, 15, expr("sum", e.Binary, 15, "+", local(None, 13, 15),
                                                  local(None, 4, 15)))),
                True)
+    show = call("show_call", 16, e.Named(expr(None, e.GlobalRef, 16, decls.refer("show"))),
+                e.Arg(local("show_bloom", 2, 16), None, bloom=True))
+    drain = call("drain_call", 17, e.Named(expr(None, e.GlobalRef, 17, decls.refer("drain"))),
+                 e.Arg(local("drain_bloom", 2, 17), None, bloom=True))
     statements = [
         stmt(s.Assign, 2, local(None, 5, 2), local("s_ref", 0, 2), True),
         stmt(s.Assign, 3, local(None, 5, 3), keep, False),
@@ -160,8 +167,10 @@ def sample() -> Sample:
         loop("value_loop", 12, mapped, 10),
         loop("protocol_loop", 14, local("it_ref", 3, 14), 11),
         stmt(s.Assign, 15, local(None, 12, 15), lam, True),
-        stmt(s.Return, 16, expr("ok", e.EnumInit, 16, decls.refer("Result"), "Ok",
-                                [e.Arg(lit("blank", e.BlankConst(), 16), None)], span(16))),
+        stmt(s.ExprStmt, 16, show),
+        stmt(s.ExprStmt, 17, drain),
+        stmt(s.Return, 18, expr("ok", e.EnumInit, 18, decls.refer("Result"), "Ok",
+                                [e.Arg(lit("blank", e.BlankConst(), 18), None)], span(18))),
     ]
     conventions = [Convention.OWNED, Convention.GUARANTEED, Convention.GUARANTEED,
                    Convention.INOUT, Convention.GUARANTEED]
@@ -177,7 +186,7 @@ def _typeck(decls: DeclNames, named: dict[str, e.ExprNode | s.Loop]) -> TypeckRe
     """The rows of `TypeckResults` that the ownership check reads."""
     table = TypeckResults()
     conventions = {"keep_call": (Convention.OWNED, Convention.GUARANTEED, Convention.OWNED),
-                   "map_call": (Convention.OWNED,)}
+                   "map_call": (Convention.OWNED,), "show_call": (Convention.GUARANTEED,)}
     for name, answers in conventions.items():
         for position, convention in enumerate(answers):
             table.record_convention(named[name].shir_id, position, convention)

@@ -177,7 +177,9 @@ class BorrowChecker:
             self.next_stage(decl, body, tables=tables, filename=filename)
 
     def has_an_error(self) -> bool:
-        """Whether the body, this unit or the program has an error so far."""
+        """Whether the body, this unit or the program has an error so far. An error of
+        another unit counts too (`program_failed`), so `dispatch.unhandled` then ends the
+        walk with no CE0000, and an internal fault of this unit stays hidden."""
         return (self.typecheck_failed or self.reporter.has_offered_errors
                 or self.program_failed())
 

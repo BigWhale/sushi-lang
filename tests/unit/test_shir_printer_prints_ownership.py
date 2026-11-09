@@ -47,6 +47,8 @@ heap: false), "map"), [(adopt GlobalRef(@double), Owned)], iterator: lent, heap:
     Loop(Items(LocalRef(_3), _11, Bare), [], in_place: true)
     Assign(LocalRef(_12), adopt Lambda([(_13, Guaranteed)], [Return(adopt Binary(+, LocalRef(_13), \
 LocalRef(_4)))], expr_body: true, symbol: "sample$lambda_0", env: [(adopt _4)]), is_init: true)
+    ExprStmt(Call(Named(GlobalRef(@show)), [(LocalRef(_2)..., Guaranteed)]))
+    ExprStmt(Call(Named(GlobalRef(@drain)), [adopt LocalRef(_2)...]))
     Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 """
 

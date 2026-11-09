@@ -10,29 +10,27 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 (`backend/slir/`).
 
 The lowering handles the parameters, a `let`, a rebind (`lower_rebind.py`, the concat
-peephole included), a call statement, a `return`, an
-`if`, a `match`, a `while`, a counted loop over a range and a direct walk
-(`lower_iterators.py`) with their `break` and `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
-and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
-of an array, a field read and write, an element read and write with its bounds check, a
-slice, a destructure, a call, a function value and its call and a lambda
-(`lower_closures.py`), an
-interpolation, a `??`, a cast and the call of a conversion (`lower_conversions.py`), `clone`, `expect`, `realise` and
-`err` (`lower_copies.py`), a borrowed view in a view local with its region, and a take of an
-owning value (`lower_takes.py`). The
-operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
-a `move` row gives `Move`; an `adopt` row gives
-`Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
-temporary of a new value. A value with no row is read with `Copy`. A literal and a name
-of a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes
-into the place that takes it (the local of a `let`, `_0`), else into a temporary of its
-statement. The store that consumes a `move` operand marks its local moved, not the place
-where the operand is built. A `var` is a `Global` place (`lower_globals.py`). A read of a plain
-`var` by value goes into a temporary of the statement first, because any call of the
-statement can change a `var`; a by-address argument, a receiver, a value that its statement
-stores at once and a borrowed read of a `var` that owns read it where it is.
-Drop placement (`drops.py`) places every drop, every flag write
-and every `StorageDead`, and joins the state of the locals at a join.
+peephole included), a call statement, a `return`, an `if`, a `match`, a `while`, a counted
+loop over a range and a direct walk (`lower_iterators.py`) with their `break` and
+`continue`, an `assert`, over literals, names of constants, locals, the operators, `and` and
+`or` as control flow, the construction of an enum variant, of a struct, of a tuple and of an
+array, a field read and write, an element read and write with its bounds check, a slice, a
+destructure, a call, a function value and its call and a lambda (`lower_closures.py`), an
+interpolation, a `??`, a cast and the call of a conversion (`lower_conversions.py`),
+`clone`, `expect`, `realise` and `err` (`lower_copies.py`), a borrowed view in a view local
+with its region, and a take of an owning value (`lower_takes.py`). The operand of a value is
+the answer of `borrow` and the shape of the value alone (ir.md 7.9): a `move` row gives
+`Move`; an `adopt` row gives `Copy` of a place, a constant for a literal or a name of a
+constant, and `Move` of the temporary of a new value. A value with no row is read with
+`Copy`. A literal and a name of a constant take the value that typecheck wrote for them
+(ir.md 8.5). A new value goes into the place that takes it (the local of a `let`, `_0`),
+else into a temporary of its statement. The store that consumes a `move` operand marks its
+local moved, not the place where the operand is built. A `var` is a `Global` place
+(`lower_globals.py`). A read of a plain `var` by value goes into a temporary of the
+statement first, because any call of the statement can change a `var`; a by-address
+argument, a receiver, a value that its statement stores at once and a borrowed read of a
+`var` that owns read it where it is. Drop placement (`drops.py`) places every drop, every
+flag write and every `StorageDead`, and joins the state of the locals at a join.
 
 A local whose state differs between the paths of a join gets a drop flag right after it
 (ir.md 8.10, rule 4), and so does a local whose state at a loop header is not the state
@@ -40,11 +38,12 @@ that a back edge brings. The walk finds such a local only at the join, after the
 that must make the flag. So a walk records what it finds (`Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
-The symbol, the unit and the return type of the function are facts of its declaration
-(ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
-(`extension_decl_symbol`), the body of a perk method the perk symbol, and its receiver is `_1`. The unit is the declaring unit; a
-function that has none (a lifted lambda, the instance of a template of a binary library)
-goes into the module of the unit that holds its body.
+The symbol, the unit and the return type of the function are facts of its declaration (ir.md
+6.4); the body of an extension method or of a static takes the symbol of the method
+(`extension_decl_symbol`), the body of a perk method the perk symbol, and its receiver is
+`_1`. The unit is the declaring unit; a function that has none (a lifted lambda, the
+instance of a template of a binary library) goes into the module of the unit that holds its
+body.
 """
 from __future__ import annotations
 

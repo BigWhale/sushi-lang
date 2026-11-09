@@ -329,7 +329,9 @@ class TypeValidator:
         self.next_stage(decl, body, tables=self.tables, filename=filename)
 
     def has_an_error(self) -> bool:
-        """Whether this unit or the program has an error so far."""
+        """Whether this unit or the program has an error so far. An error of another unit
+        counts too (`program_failed`), so `dispatch.unhandled` then ends the walk with no
+        CE0000, and an internal fault of this unit stays hidden."""
         return bool(self.errors_offered()) or self.program_failed()
 
     def errors_offered(self) -> int:

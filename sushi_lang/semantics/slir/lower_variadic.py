@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.param_modes import Convention, bloom_moves
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.typeck import Tail
 from sushi_lang.semantics.slir import lower_aggregate as agg
@@ -30,8 +30,7 @@ def tail_argument(low: Lowering, node: e.Call, tail: Tail) -> tuple[p.Operand, C
     values = node.args[tail.position:]
     array: Value
     if len(values) == 1 and values[0].bloom:
-        bloom = low.typeck.convention_of(node.shir_id, tail.position)
-        if bloom is not None and not bloom.consumes:
+        if not bloom_moves(low.typeck.convention_of(node.shir_id, tail.position)):
             return low.operand(values[0].value), tail.convention
         array = r.Use(low.operand(values[0].value))
     else:

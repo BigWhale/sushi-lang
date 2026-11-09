@@ -55,7 +55,7 @@ from sushi_lang.semantics.generics.iterators import (
     answers_an_iterator, is_lazy_adapter, produces_from_a_container)
 from sushi_lang.semantics.method_effects import ITERATOR_FAMILY, receiver_convention
 from sushi_lang.semantics.ownership import Ownership
-from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.param_modes import Convention, bloom_moves
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import exprs as e
@@ -91,7 +91,7 @@ def _call(node: e.Call, typeck: TypeckResults,
         yield callee.recv
     for position, arg in enumerate(node.args):
         convention = typeck.convention_of(node.shir_id, position)
-        if convention is Convention.OWNED or (arg.bloom and convention is None):
+        if convention is Convention.OWNED or (arg.bloom and bloom_moves(convention)):
             yield arg.value
 
 

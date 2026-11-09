@@ -3,7 +3,8 @@
 A closed set of choices is one table, so a new module adds one row. Every module
 path the semantic side can answer a free function for has a row in
 `STDLIB_EMITTERS`, and no row names a module the semantic side does not know: a
-module the registry answers and the table misses crashes as CE0055 in the backend.
+module the registry answers and the table misses is the internal error CE0000 in the
+emitter (`backend/slir/emit.py`, `_stdlib`).
 """
 from __future__ import annotations
 

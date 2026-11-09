@@ -31,7 +31,9 @@ def unhandled(stage: str, node: Any, *, state: Optional[str] = None,
               after_an_error: bool = False) -> NoReturn:
     """CE0000 at `node`: the stage `stage` does not handle the construct, or the construct
     in the `state` that it has. In a body that has an error (`after_an_error`), the walk of
-    the body ends instead."""
+    the body ends instead. The callers count an error of ANY unit of the program as such an
+    error (`program_failed`), so a construct that a stage does not handle shows no CE0000 in
+    a program that fails for another reason: the internal fault stays hidden."""
     if after_an_error:
         raise AfterAnError
     construct = type(node).__name__ if state is None else f"{type(node).__name__} {state}"

@@ -80,8 +80,8 @@ def test_a_call_of_a_library_function_with_a_wrong_argument_count_is_refused():
     call = st.Call(p.Local(LocalId(1)), st.Direct("lc_callee_lib$shout", "shout"), (), BAD)
     block = SlirBlock(BlockId(0), (call,), tm.Return(BAD))
     function = SlirFunction("unit$probe", "probe", "unit", (),
-                            (SlirLocal(LocalId(0), BLANK, None, None),  # type: ignore[arg-type]
-                             SlirLocal(LocalId(1), STRING, None, None)),  # type: ignore[arg-type]
+                            (SlirLocal(LocalId(0), BLANK, None, None),
+                             SlirLocal(LocalId(1), STRING, None, None)),
                             (block,), BlockId(0))
     with pytest.raises(InternalCompilerError) as caught:
         verify_function(function, drops=frozenset(),
