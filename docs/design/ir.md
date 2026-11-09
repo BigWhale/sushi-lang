@@ -3277,8 +3277,18 @@ one LLVM array constant of its elements. The converter of an enum constant write
 value and an array value in a payload element by element, at the offsets of the layout
 authority. The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
-initializer with a range error. A value that its type cannot hold stops the lowering
-(`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
+initializer with a range error. A value that its type cannot hold is not lowered, so
+lowering decides no value and the verifier rule holds.
+
+**The R14 guard after the stop code** (S27, decision E4 (a)). The rule stays: a
+`ConstRef` whose value its type cannot hold is not lowered. When the stop code goes
+(P6.last.1), the guard becomes an internal error (CE0000, `raise_internal_error`) with the
+detail "a constant value that its type cannot hold". The fault is in the constant
+evaluator (#1273 to #1275), and ruling R-AF fixes it after the merge, not on this branch.
+So `tests/literals/hex_literals/test_hex_literals_constants.sushi` stays red by name at Gate
+6, with R-AF as the reason, until #1273 lands. Not built yet: today the guard stops the
+lowering (`slir, ConstRef out of range`, `slir/lower.py`); P6.last.1 (Task 108) makes it the
+internal error and removes this note.
 
 ### 8.6 Statements
 
