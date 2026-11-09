@@ -1355,7 +1355,8 @@ extension copy.
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
-next body, so every unit is lowered and every earlier error is found.
+next body, so every unit is lowered and every earlier error is found. This paragraph and the
+label of a stop below go in P6.last.1 (S28, 8.2).
 
 **The label of a stop at a call.** Only `typecheck` stops on a `Call` with the kind of its
 target. One function makes the label, `construct_of` (`semantics/shir/dispatch.py`), from
@@ -2319,7 +2320,7 @@ each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
 one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
 too: a class with no row is an internal error at the span of the node, and the arm of a
 construct that the pass does not check yet stops the walk of its body with the stop code
-(`borrow, <class>`). The walk of a block reads the statements that a path reaches
+(`borrow, <class>`; the stop goes in P6.last.1, S28, 8.2). The walk of a block reads the statements that a path reaches
 (`reached_statements`, 7.2). A call of a built-in method has its
 arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each
 method of the primitive family and of the `string` family, the derived `clone` of a struct
@@ -2901,6 +2902,18 @@ progress of each function. The pipeline reports one stop after the analysis: a s
 `typecheck`, else of `lift`, else of `borrow`, else an error hole, else a stop of the
 lowering. When nothing stopped, the program goes on to the backend.
 
+**No stop code after the migration** (S28). Each "while the migration is in progress"
+paragraph of this file goes: the one of `typecheck` (7.3), of `borrow` (7.9), of the
+lowering (here) and of the emitter (below). A construct that a stage does not handle is
+then an internal error (CE0000, `raise_internal_error`), never a stop. The dump line
+`fn <name>: stopped (slir, <construct>)` goes, and so do the label of a stop at a call
+(7.3), `construct_of` (`semantics/shir/dispatch.py`), `StageStop` (`semantics/shir/stop.py`),
+`stop` (`backend/slir/state.py`), the stop-code census of the runner (`tests/stop_census.py`)
+and the fixtures that pin a stop (decision E5 (a)). CE0155 becomes a retired code, with its
+history in its `doc`. The status line of this file says BUILT in P7.3, not in this text. Not
+built yet: P6.last.1 (Task 108) deletes the stop code and these paragraphs, and removes
+this note.
+
 **An initializer body.** The SLIR stage does not lower the initializer body of a constant or
 a `var` (6.3). The body gives `typecheck` and `borrow` a SHIR node to check, and nothing
 more. The value of the constant is the value of the constant evaluator (Q5). The backend
@@ -3011,6 +3024,7 @@ writes the first object, so no object, no binary and no `.ll` text is written. T
 serves the migration alone: when no shape stops the emitter, the path can again build and
 write one unit at a time. A stop of the emitter renders as a stop of the analysis does
 (one `except StageStop` in `compile_multi_file`): it is a limit of the compiler, not a bug.
+This paragraph goes in P6.last.1 (S28, above).
 
 ### 8.3 Conventions
 
