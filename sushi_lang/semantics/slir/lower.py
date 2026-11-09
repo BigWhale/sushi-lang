@@ -42,9 +42,8 @@ that a back edge brings. The walk finds such a local only at the join, after the
 that must make the flag. So a walk records what it finds (`Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
-The construct of a stop is the SHIR class of the node, or one of these names:
-`bloom` for a bloom argument, and `ConstRef out of range` for a name
-of a constant whose value its type cannot hold. The symbol, the unit and the return type of the function are facts of its declaration
+The construct of a stop is the SHIR class of the node, or `ConstRef out of range` for a
+name of a constant whose value its type cannot hold. The symbol, the unit and the return type of the function are facts of its declaration
 (ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
 (`extension_decl_symbol`), the body of a perk method the perk symbol, and its receiver is `_1`. The unit is the declaring unit; a
 function that has none (a lifted lambda, the instance of a template of a binary library)

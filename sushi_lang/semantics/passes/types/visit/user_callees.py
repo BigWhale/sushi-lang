@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Optional, Protocol
 
 from sushi_lang.semantics.shir.callee import Callee
-from sushi_lang.semantics.shir.typeck import ResolvedCall
+from sushi_lang.semantics.shir.typeck import ResolvedCall, Tail
 from sushi_lang.semantics.typesys import Type
 
 
@@ -19,9 +19,9 @@ class Declared(Protocol):
     link_symbol: Optional[str]
 
 
-def user_callee(callee: Callee, declared: Declared,
-                type_args: tuple[Type, ...] = ()) -> ResolvedCall:
+def user_callee(callee: Callee, declared: Declared, type_args: tuple[Type, ...] = (),
+                tail: Optional[Tail] = None) -> ResolvedCall:
     """The row of `callee`: the unit of `declared`, or its link symbol."""
     if declared.link_symbol:
-        return ResolvedCall(callee, type_args, None, declared.link_symbol)
-    return ResolvedCall(callee, type_args, declared.unit_name)
+        return ResolvedCall(callee, type_args, None, declared.link_symbol, tail)
+    return ResolvedCall(callee, type_args, declared.unit_name, tail=tail)

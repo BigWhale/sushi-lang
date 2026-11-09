@@ -30,11 +30,20 @@ from sushi_lang.semantics.shir.callee import Callee, Conversion
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.loop_kind import LoopKind
 from sushi_lang.semantics.shir.side_table import SideTable, row_table, write_once
-from sushi_lang.semantics.typesys import FunctionType, Type
+from sushi_lang.semantics.typesys import DynamicArrayType, FunctionType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.const_eval import ConstantValue
+
+
+@dataclass(frozen=True, slots=True)
+class Tail:
+    """The variadic tail of a call: the index of its first argument, the type `T[]` of the
+    tail parameter, and the convention of that parameter (ir.md 7.4, S22)."""
+    position: int
+    ty: DynamicArrayType
+    convention: Convention
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,11 +52,12 @@ class ResolvedCall:
     for a free function or an extension method, the name of the unit that declares it (C5).
     SLIR lowering makes the symbol of a free function from it. A function, a method or a
     static of a binary or a hybrid library has no unit: its symbol is the `link_symbol` of
-    the manifest (ir.md 8.6, S26)."""
+    the manifest (ir.md 8.6, S26). A callee with a variadic tail has its `Tail`."""
     callee: Callee
     type_args: tuple[Type, ...] = ()
     unit: Optional[str] = None
     link_symbol: Optional[str] = None
+    tail: Optional[Tail] = None
 
 
 @dataclass(frozen=True, slots=True)

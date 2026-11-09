@@ -4,6 +4,12 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A function value of a variadic function is refused.** `let fn(i32[]) -> i32 f = sum`,
+  where `sum` takes `...i32`, is now `CE2093` at the name. Before, it compiled to a binary
+  that freed the array two times or read two integers as an array.
+
 ## [0.16.0] - 2026-10-11
 
 Sushi has iterators as values. An `Iterator@(T)` is a type a program can write, with lazy

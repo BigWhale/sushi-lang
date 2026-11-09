@@ -9,7 +9,7 @@ alias stops the walk. A call whose target is any other value is an `Indirect` ca
 function type of the value gives each argument its type and its convention. A field of a
 function type that no method of the struct names is an `Indirect` callee too. A name of a
 constant or of a `var` is no callee (CE2008), and any other value that is no function is
-CE2092.
+CE2092. A variadic function has no function type, so it is no value (CE2093, decision E6).
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from sushi_lang.semantics.passes.types.visibility import (
     name_was_refused, reject_ambiguous_name, reject_private_name, reject_undefined_function)
 from sushi_lang.semantics.passes.types.visit.generic_calls import declared_or_late_instance
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
-from sushi_lang.semantics.shir import dispatch, exprs as e
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Free, Indirect
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
@@ -129,10 +129,15 @@ def _value(validator: TypeValidator, node: e.GlobalRef, sig: FuncSig, decl: Decl
            type_args: tuple[Type, ...] = ()) -> Optional[Type]:
     """The callee row and the type of the value. A function value of a named function captures
     nothing, so the value owns nothing. A private function of a binary library has its own
-    link symbol. A variadic function has no function type yet, so it stops."""
+    link symbol. A variadic function has no function type (CE2093, decision E6)."""
+    if any(param.is_variadic for param in sig.params):
+        er.emit(validator.reporter, er.ERR.CE2093, node.loc, name=validator.decl_name(node.decl),
+                reason="a variadic function has no function type")
+        return None
     function_type = function_type_of_sig(sig)
     if function_type is None:
-        dispatch.stop(visit.STAGE, node, state="of a variadic function")
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="a function value of a function with no type")
     validator.body_answers().record_callee(node.shir_id, user_callee(Free(decl), sig, type_args))
     return replace(resolve_variable_type(validator, function_type, node.loc), captures=())
 

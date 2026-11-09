@@ -1,0 +1,16 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_DUMP_SLIR: test_slir_variadic_bloom.slir
+#
+# A bloom `xs...` moves the array itself into the temporary of the tail. The temporary is
+# the `Guaranteed` argument of the call, and it drops at the end of the statement (ir.md
+# 7.4, 8.9).
+
+fn count(...string xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let string[] words = from(["a", "b", "{'c'}"])
+    println(count(words...))
+    return 0

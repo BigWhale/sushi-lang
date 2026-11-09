@@ -28,6 +28,10 @@ questions, each a keyword:
   ``field_names``    per parameter, the field that it fills, for a mismatch code whose
                      text names the field (a struct construction: CE2028, CE2083).
   ``compares_nom``   False for a C function, whose `nom` marker is inert (no CE2427).
+  ``tail``           the type `T[]` of the variadic tail parameter. The arguments after
+                     the fixed prefix are its values, each at `T`, or one bloom `arr...`
+                     at `T[]`. Each takes the convention `Owned`: it moves into the array
+                     (docs/design/ir.md 7.4, S22).
 
 The codes travel IN, so this module spells neither the arity code nor the mismatch code.
 That is what lets the enum constructor read the same check with CE2049/CE2050, which name
@@ -50,7 +54,8 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.source_text import source_text
-from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type, deref_type
+from sushi_lang.semantics.typesys import (
+    BorrowMode, DynamicArrayType, ReferenceType, Type, deref_type)
 
 from .compatibility import types_compatible
 
@@ -90,6 +95,7 @@ def check_arguments(
     field_names: Sequence[str] = (),
     compares_nom: bool = True,
     typed: Mapping[int, Optional[Type]] = NOTHING_TYPED,
+    tail: Optional[DynamicArrayType] = None,
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
@@ -102,7 +108,7 @@ def check_arguments(
     takes nothing from Sushi, so its `nom` marker is inert. `typed` holds, by index, the
     answer of each argument that the caller checked to solve the parameter types.
     """
-    arity_ok = (len(args) >= len(params) if minimum_arity
+    arity_ok = (len(args) >= len(params) if minimum_arity or tail is not None
                 else len(args) == len(params))
     if not arity_ok:
         er.emit(validator.reporter, arity_code, loc,
@@ -132,13 +138,52 @@ def check_arguments(
                 validator.body_answers().record_convention(declared.call, index - 1,
                                                            mode.convention)
 
-    if minimum_arity:
+    if tail is not None:
+        _check_tail(validator, callee_name, args, len(params), tail, mismatch_code,
+                    None if declared is None else declared.call)
+    if minimum_arity or tail is not None:
         return arity_ok
 
     for extra in args[len(params):]:
         if not reject_misplaced_spread(validator, extra):
             visit.check_expr(validator, extra.value)
     return arity_ok
+
+
+def _check_tail(validator: 'TypeValidator', callee_name: str, args: Sequence[e.Arg],
+                start: int, tail: DynamicArrayType, mismatch_code: er.ErrorMessage,
+                call: Optional[ShirId]) -> None:
+    """Each value of the tail at the element type of `tail`, and a bloom at `tail` itself.
+    A bloom is the sole value of the tail, and its value is a name (CE0120). A tail of
+    references is CE0114 of the collect pass, so its values take no convention."""
+    values = args[start:]
+    if isinstance(tail.base_type, ReferenceType):
+        validator.refused_before = True
+        for arg in values:
+            visit.check_expr(validator, arg.value)
+        return
+    for index, arg in enumerate(values, start=start):
+        if arg.bloom:
+            _reject_misplaced_bloom(validator, arg, len(values) == 1)
+        fits = check_argument(validator, callee_name, arg, index + 1,
+                              tail if arg.bloom else tail.base_type,
+                              mismatch_code=mismatch_code)
+        if fits and call is not None:
+            validator.body_answers().record_convention(call, index, ParamMode.NOM.convention)
+
+
+def _reject_misplaced_bloom(validator: 'TypeValidator', arg: e.Arg, sole: bool) -> bool:
+    """CE0120 for a bloom that is not the sole value of the tail, or whose value is no
+    name."""
+    if not sole:
+        message = "bloom argument 'arr...' must be the sole, last trailing argument"
+    elif not isinstance(arg.value, (e.LocalRef, e.StorageRef, e.ConstRef)):
+        message = "bloom source must be a bare array variable, not an arbitrary expression"
+    else:
+        return False
+    er.emit(validator.reporter, er.ERR.CE0120, arg.marker_loc or arg.value.loc,
+            message=message)
+    return True
 
 
 def record_reads(validator: 'TypeValidator', call: ShirId, indexes: Sequence[int]) -> None:
@@ -293,9 +338,9 @@ def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]
 
 
 def argument_span(arg: e.Arg) -> Optional[Span]:
-    """Where a mismatch of an argument stands: a `peek x` or a `poke x` from its marker,
-    any other argument at its value."""
-    if arg.marker in _BORROWS and arg.marker_loc is not None:
+    """Where a mismatch of an argument stands: a `peek x`, a `poke x` and a bloom from its
+    marker, any other argument at its value."""
+    if (arg.marker in _BORROWS or arg.bloom) and arg.marker_loc is not None:
         return arg.marker_loc
     return arg.value.loc
 

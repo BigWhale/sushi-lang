@@ -43,8 +43,9 @@ the channel of the method, or its bare return value.
 A plain type is a primitive, or a struct or an enum that is no instance of a generic type
 and whose name the unit did not lose. Every other target, and a call that another group
 types (a function of a stdlib module other than `<math>` and
-`<time>`, a C function that `visit/extern_calls.py` does not type, a variadic function, a
-method of a type whose name the unit lost), stops the walk of its body. A
+`<time>`, a C function that `visit/extern_calls.py` does not type, a method of a type
+whose name the unit lost), stops the walk of its body. The trailing arguments of a variadic
+function are its tail (`visit/variadic_tails.py`). A
 call of a function or a method with a `peek` return has the source row of the call (`record_call_sources`).
 
 An `Interp` is a `string`, and each hole has a string form; the display type of each hole
@@ -130,6 +131,7 @@ from sushi_lang.semantics.shir.callee import (
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
+from sushi_lang.semantics.passes.types.visit.variadic_tails import variadic_tail
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
@@ -214,21 +216,21 @@ def _check_function_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRe
                          written: str, decl: DeclId, type_args: tuple[Type, ...] = (),
                          typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> Optional[Type]:
     """The callee row, the source row of a `peek` return, the type of the reference, and the
-    arguments through the one argument check. The call yields what the function yields."""
-    if any(p.is_variadic or p.ty is None for p in sig.params):
-        visit.stop_at(validator, node)
+    arguments through the one argument check. The call yields what the function yields.
+    The arguments after the fixed prefix of a variadic function are its tail."""
+    tail = variadic_tail(validator, sig.params)
     answers = validator.body_answers()
-    answers.record_callee(node.shir_id, user_callee(Free(decl), sig, type_args))
+    answers.record_callee(node.shir_id, user_callee(Free(decl), sig, type_args, tail))
     record_call_sources(validator, node, sig)
     function_type = function_type_of_sig(sig)
     if function_type is not None:
         visit.answer(validator, ref, function_type)
-    params = [_parameter_type(validator, param) for param in sig.params]
-    declared = Parameters(node.shir_id, declared_modes(sig.params),
-                          [param.name for param in sig.params])
+    fixed = sig.params if tail is None else sig.params[:tail.position]
+    params = [_parameter_type(validator, param) for param in fixed]
+    declared = Parameters(node.shir_id, declared_modes(fixed), [param.name for param in fixed])
     check_arguments(validator, written, params, node.args, ref.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared,
-                    typed=typed)
+                    typed=typed, tail=None if tail is None else tail.ty)
     return call_yield(validator, sig.ret_type, sig.err_type)
 
 

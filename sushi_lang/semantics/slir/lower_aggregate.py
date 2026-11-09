@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import dispatch
@@ -46,9 +45,6 @@ if TYPE_CHECKING:
 def struct_init(low: Lowering, node: e.StructInit) -> Value:
     """`Aggregate(Struct)` of the instance type, the fields in the written order."""
     ty = _instance(low, node)
-    for arg in node.fields:
-        if arg.bloom:
-            raise StageStop(STAGE, "bloom", arg.value.loc)
     values = [arg.value for arg in node.fields]
     return r.Aggregate(r.AggStruct(ty), in_written_order(low, values, node.written_order))
 

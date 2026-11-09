@@ -31,6 +31,7 @@ from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_copies as copies
 from sushi_lang.semantics.slir import lower_iterators as iters
+from sushi_lang.semantics.slir import lower_variadic as variadic
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
@@ -67,9 +68,7 @@ def call(low: Lowering, node: e.Call) -> Value:
                                     detail="an Iterator.new with no next() reached SLIR")
         return iters.new_value(low, node, next_row, callee(low, node, next_row))
     target = callee(low, node, resolved)
-    value = CallValue(target, receiver(low, resolved.callee, node)
-                      + tuple(argument(low, node, index, arg)
-                              for index, arg in enumerate(node.args)))
+    value = CallValue(target, receiver(low, resolved.callee, node) + arguments(low, node, resolved))
     if (isinstance(resolved.callee, Builtin) and answers_view(resolved.callee.method)
             and low.owns(low.type_of(node))):
         return views.view_of(value, value.args[0][0])
@@ -162,11 +161,19 @@ def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) 
         owner, method, unit, resolved.type_args)), name)
 
 
+def arguments(low: Lowering, node: e.Call,
+              resolved: ResolvedCall) -> tuple[tuple[p.Operand, Convention], ...]:
+    """Each argument of the fixed prefix, then the one operand of a variadic tail
+    (`lower_variadic.py`)."""
+    tail = resolved.tail
+    fixed = node.args if tail is None else node.args[:tail.position]
+    operands = tuple(argument(low, node, index, arg) for index, arg in enumerate(fixed))
+    return operands if tail is None else operands + (variadic.tail_argument(low, node, tail),)
+
+
 def argument(low: Lowering, node: e.Call, index: int,
              arg: e.Arg) -> tuple[p.Operand, Convention]:
     """An argument with the convention of its typecheck row (L8)."""
-    if arg.bloom:
-        raise StageStop(STAGE, "bloom", arg.value.loc)
     convention = low.typeck.convention_of(node.shir_id, index)
     if convention is None:
         er.raise_internal_error("CE0000", span=arg.value.loc,

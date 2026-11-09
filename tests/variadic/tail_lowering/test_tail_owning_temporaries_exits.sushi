@@ -1,0 +1,27 @@
+# A tail of `...string` takes temporaries that own. The caller leaves a loop by `break` and
+# its body by an early `return`. Each value moves into the array of the tail, and the callee
+# drops the array once.
+# EXPECT_STDOUT_EXACT: "8\n18\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn size(...string xs) i32:
+    return xs.len()
+
+fn mk(i32 a) string:
+    return "v{a}"
+
+fn walk(i32 stop) i32:
+    let i32 seen = 0
+    foreach(i in 0..10):
+        if (i == stop):
+            return seen + size(mk(i), mk(i + 1))
+        if (i > 5):
+            break
+        seen := seen + size(mk(i), "{i}", mk(i))
+    return seen
+
+fn main() i32:
+    println(walk(2))
+    println(walk(20))
+    return 0

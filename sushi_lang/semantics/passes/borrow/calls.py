@@ -77,10 +77,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
             "CE0000", span=node.loc,
             detail=f"the typecheck pass gave the borrow pass a call with the callee "
                    f"{type(callee).__name__}, and it stops at that call first")
-    if any(arg.bloom for arg in node.args) and not checker.typecheck_failed:
-        arms.stop_at(checker, node)
-    conventions = [None if arg.bloom else _convention_of(checker, node, position)
-                   for position, arg in enumerate(node.args)]
+    conventions = [_convention_of(checker, node, position)
+                   for position in range(len(node.args))]
     unchanged = unchanged_borrowed_roots(checker, node, conventions)
     if isinstance(callee, Method):
         arms.check(checker, callee.recv)
@@ -317,8 +315,8 @@ def _written_borrow(arg: e.Arg, convention: Optional[Convention]) -> Optional[Bo
 def _convention_of(checker: 'BorrowChecker', node: e.Call,
                    position: int) -> Optional[Convention]:
     """The convention of an argument. In a body with an error of typecheck, an argument with
-    no convention is unknown (None), and so is a bloom argument, which typecheck refused: it
-    borrows as its marker is written, and it takes no convention (docs/design/ir.md 7.9)."""
+    no convention is unknown (None): it borrows as its marker is written, and it takes no
+    convention (docs/design/ir.md 7.9). A bloom that typecheck did not refuse is `Owned`."""
     convention = checker.answers().convention_of(node.shir_id, position)
     if convention is None and not checker.typecheck_failed:
         er.raise_internal_error(

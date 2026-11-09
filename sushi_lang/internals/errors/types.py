@@ -358,7 +358,7 @@ _add(ErrorMessage("CE2092", Severity.ERROR,
 
 _add(ErrorMessage("CE2093", Severity.ERROR,
     "cannot take a function value of '{name}': {reason}",
-    Category.TYPE, "A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method and an FFI external are not function values (#1105)."))
+    Category.TYPE, "A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method, an FFI external and a variadic function are not function values (#1105); a variadic function has no function type."))
 
 _add(ErrorMessage("CE2094", Severity.ERROR,
     "illegal closure capture: {reason}",

@@ -1,0 +1,11 @@
+public fn joined(string sep, ...string parts) string:
+    let string out = ""
+    foreach(part in parts.iter()):
+        out := "{out}{sep}{part}"
+    return out
+
+public fn total(...i32 xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return sum

@@ -8,14 +8,13 @@ from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
 def function_type_of_sig(sig) -> Optional[Type]:
-    """The FunctionType of a function value of this signature, bare or behind an alias."""
+    """The FunctionType of this signature, bare or behind an alias. The tail of a variadic
+    function is its parameter `T[]`: such a function is the target of a call, and no
+    value (CE2093)."""
     from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType
     if sig is None:
         return None
-    for p in sig.params:
-        if getattr(p, "is_variadic", False):
-            return None
     param_types = tuple(p.ty for p in sig.params)
     if any(pt is None for pt in param_types):
         return None
