@@ -716,7 +716,9 @@ module, `ast_walk` and the AST builder) in `passes/types/`, `passes/borrow/` and
 `passes/lift.py`. A body module imports none. Each declaration module of `typecheck` is a
 row of the gate, with each name that it may import: a declaration node, a walk of the
 declarations, and the types that the source writes. A row names no expression and no
-statement, with one named exception: the link name of an extern declaration. `borrow` has no
+statement, with one named exception: the link name of an extern declaration. One row reads
+a body: `externals.py` walks the types that the bodies of a unit write (`body_types`, the
+`ptr` fence CE5009), and no expression of them. `borrow` has no
 declaration module, and `effects` is a whole-program pass with its own module
 (`passes/effects.py`, S4).
 
@@ -725,7 +727,10 @@ declarations of the AST (8.2), and the declaration table of 6.3 does not exist. 
 names each backend module that still imports the AST, with each name: the declaration
 round (`codegen_llvm.py`, `driver.py`, `functions/`), the stdlib modules of the `use`
 declarations (`stdlib_linker.py`), and the manifest of a library (`library_manifest.py`),
-which writes no LLVM. A row may only go. The SLIR emitter (`backend/slir/`) imports no AST.
+which writes no LLVM. Two of these read more than a declaration. The global round of
+`codegen_llvm.py` gives the AST initializer expression of each constant and each `var` to
+the constant evaluator (Q5). `library_manifest.py` walks the body of each exported
+template, for the names that it reads and the types that it writes. A row may only go. The SLIR emitter (`backend/slir/`) imports no AST.
 
 ---
 

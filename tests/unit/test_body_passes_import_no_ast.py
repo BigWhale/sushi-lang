@@ -10,9 +10,12 @@ DECLARATION half of `typecheck` may read the declarations of the AST (ir.md 6.1 
 4, 6.4). SHIR has no declaration. Such a module reads a declaration node, a walk of the
 declarations, and the types that the source writes (question 1). It never reads an
 expression or a statement of a body: `test_no_declaration_row_names_a_body_node` holds
-that, with one named exception, the link name of an extern declaration. The row of a
-module names each name that it may import, and the scan must find each one, so a row
-cannot keep a name that the module no longer imports.
+that, with one named exception, the link name of an extern declaration. One row reads
+more than a declaration: `externals.py` walks the types that the BODIES of a unit write
+(`body_types`, the `ptr` fence CE5009). The walk reads written types and no expression.
+The row of a module names each name that it may import, and the scan must find each one,
+so a row cannot keep a name that the module no longer imports. The table may only get
+shorter (`PINNED`).
 """
 from __future__ import annotations
 
@@ -40,7 +43,8 @@ DECLARATION_MODULES: dict[str, tuple[dict[str, frozenset[str]], str]] = {
         {_AST: frozenset({"ExternalBlock", "ExternalDecl", "MemberAccess", "Program"}),
          _WALK: frozenset({"body_types", "signature_types"})},
         "the extern declarations, the link name that an extern declaration writes, and the "
-        "`ptr` fence over the types that the source writes (CE5009)"),
+        "`ptr` fence CE5009, which walks the types that the signatures AND the bodies of "
+        "the unit write (`body_types`): a read of a body, of its written types only"),
     "sushi_lang/semantics/passes/types/perks.py": (
         {_AST: frozenset({"ExtendWithDef", "FuncDef", "PerkDef", "PerkMethodSignature"}),
          _WALK: frozenset({"is_written", "signature_constraints"})},
@@ -62,6 +66,16 @@ DECLARATION_MODULES: dict[str, tuple[dict[str, frozenset[str]], str]] = {
                           "FuncDef"})},
         "the template check: the header of a template, with an empty body (ir.md 6.2)"),
 }
+
+#: The rows at the day of the pin. A row may leave both; none may join.
+PINNED = frozenset({
+    "sushi_lang/semantics/passes/types/__init__.py", "sushi_lang/semantics/passes/types/constants.py",
+    "sushi_lang/semantics/passes/types/externals.py", "sushi_lang/semantics/passes/types/perks.py",
+    "sushi_lang/semantics/passes/types/public_signatures.py",
+    "sushi_lang/semantics/passes/types/qualified.py",
+    "sushi_lang/semantics/passes/types/signatures.py",
+    "sushi_lang/semantics/passes/types/templates.py",
+})
 
 #: A body node that a declaration row may name, with its reason.
 DECLARATION_PARTS = {"MemberAccess": "the link name of an extern declaration, `ns.NAME`"}
@@ -101,6 +115,13 @@ def test_each_declaration_module_imports_what_its_row_names():
         + "\n  ".join(f"{path}: imports {sorted((m, sorted(n)) for m, n in got.items())}, "
                       f"row {sorted((m, sorted(n)) for m, n in row.items())}"
                       for path, (got, row) in sorted(wrong.items())))
+
+
+def test_no_declaration_row_is_new():
+    grown = sorted(set(DECLARATION_MODULES) - PINNED)
+    assert not grown, f"a row may be deleted and never added: {grown}"
+    stale = sorted(PINNED - set(DECLARATION_MODULES))
+    assert not stale, f"delete the pin row together with the row: {stale}"
 
 
 def test_no_declaration_row_names_a_body_node():
