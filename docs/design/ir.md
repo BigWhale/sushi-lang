@@ -2892,7 +2892,8 @@ While the migration is in progress, a construct that the lowering does not handl
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
 class, or one of these names: `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
-function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
+function of a binary library, whose symbol is its `link_symbol`; the label goes with
+P6.D6.1, Task 101, which lowers the callee by 8.6), `bloom` for a bloom
 argument (the label goes with P6.D3.1, Task 102, which lowers the bloom by 7.4), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
@@ -3572,8 +3573,7 @@ A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
 `symbol` is `method_symbol` of the type of the receiver (the type row of `recv` with no
 `peek` or `poke`, or `ty`), the method and `ResolvedCall.unit`, so two units' private
-methods of one name are two symbols (C5). A row with no declaring unit stops the lowering
-(`slir, library function`). The receiver of a `Method` is the FIRST operand of the call,
+methods of one name are two symbols (C5). The receiver of a `Method` is the FIRST operand of the call,
 with the convention `receiver` of the callee row, and the arguments come after it with the
 conventions of their rows. A `Static` has no receiver. The printer writes the call as `call
 @Counter.bump(copy _1 @inout, const 4_i32 @guaranteed)`. The emitter calls the function
@@ -3594,6 +3594,26 @@ value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no environment (8.7)
 `materialize_function_ref` (`backend/runtime/closures.py`) becomes the emitter of that
 case. A generic function as a value names the instance that its position gives (7.3). The
 `Indirect` call of an `IteratorValue` walk has an iterator value as its operand (8.9).
+
+**A library callee** (S26, decision E7). A function, a method or a static of a binary or a
+hybrid library has no declaring unit in the build: its symbol is its `link_symbol`, from the
+manifest. The `link_symbol` is a fact of the callee row: `typecheck` reads `sig.link_symbol`
+(as `_check_function_call` does to choose `unit = None`) and writes it into
+`ResolvedCall`. SLIR lowering makes `Direct(link_symbol, name)` for a `Free`, a `Method` or
+a `Static` callee of such a row, and a function value of one is
+`Aggregate(AggClosure(ty), [FnRef(link_symbol)])`. The `.slib` format does not change (9,
+Q4). An instance of a template of a binary library is already stated (8.2): it goes into
+the module of the unit that holds its body, with a symbol of that unit. A source library
+needs nothing, because its units are ordinary units of the build. The verifier finds the
+declared parameters of such a callee in the function table that the `libraries` step fills
+from the manifest (8.13). Two carries go with this rule: a public constant of a binary or a
+hybrid library whose value names a private function of the library gives CE1001 in the
+consumer today, because the thunk of the constant names the link symbol of the private
+function; and a private `var` of a binary library named by the consumer must give
+[CE3005](../error-catalog.md#ce3005) (`test_err_lib_binary_private_var`). Not built yet: a
+`Free`, `Method` or `Static` row with no declaring unit stops the lowering (`slir, library
+function`), and so does a function value of one. P6.D6.1 (Task 101) builds this rule and
+the two carries, and removes this note.
 
 ### 8.7 Rvalues
 
@@ -4340,7 +4360,9 @@ the `nom self` of its body, and its symbol is the symbol of `as` on that source 
 target after it (`conversion_symbol`). `as` is a reserved word, so no other method has the
 name. A `Direct` callee with no row is CE0158. Today a free function, a method or a static
 of the build, a conversion, a function of a registry stdlib module and a C function have a
-row: the first emitter of another `Direct` callee (a function of a library) adds its row. The verifier does not check a shape that no lowering makes yet,
+row. A `Direct` callee whose symbol is the `link_symbol` of a function, a method or a static
+of a binary or a hybrid library finds its row in the function table that the `libraries`
+step fills from the manifest (8.6, S26). Not built yet: P6.D6.1 (Task 101) adds that row. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
 place that is no local and no element of a local, and a `DropIfSet` of a place that is no
 local.
