@@ -1,6 +1,6 @@
 """The runner arms SUSHI_SHIR_STRICT=1 for every compile that it starts.
 
-Under the variable, a SHIR hole of a correct program stops the compile with CE0155, so a
+Under the variable, a SHIR hole of a correct program is an internal error (CE0000), so a
 corpus run with the variable proves that lowering is total (Gate 1 of the SHIR migration).
 The front end `tests/run_tests.py` sets it, as it sets the spelling gate. It is part of
 how the runner checks, so no flag selects it off, and a value that the caller gives is

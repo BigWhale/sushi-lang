@@ -54,7 +54,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     and the pass decides its `Ownership`. A callee that destroys its `poke` parameter
     destroys the caller's value (#168). The `nom` marker is compared against the declared
     mode by the typecheck pass (CE2427). A built-in method reads its receiver first. A
-    family that has no arm yet stops the walk. A call of a function value reads the value
+    family that has no arm is an internal error. A call of a function value reads the value
     first, and the modes of its function type gave the conventions. The receiver of an extension method is read
     before the arguments, and it takes the borrow of the convention of its `self` after the
     borrows of the arguments (`check_method_receiver`), so a receiver beside a `poke` of its

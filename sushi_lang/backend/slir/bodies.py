@@ -25,7 +25,7 @@ class SlirBodies:
         finish the SLIR lowering cannot reach the backend: that is an internal error."""
         body = self.shir.body_of(decl)
         outcome = None if body is None else self.slir.outcome_of(body.fn_id)
-        if not isinstance(outcome, SlirFunction):
+        if outcome is None:
             raise_internal_error(
                 "CE0000", detail=f"the body of '{getattr(decl, 'name', decl)}' reached the "
                                  f"backend with no SLIR function")

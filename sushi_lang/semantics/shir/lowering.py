@@ -63,14 +63,11 @@ from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
 from sushi_lang.semantics.shir.lower_binders import written_param_type
 from sushi_lang.semantics.shir.lower_nodes import (
-    STAGE,
     BodyLowerer,
     binder_local,
     stops_on_hole,
 )
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
-from sushi_lang.semantics.shir.stop import ERROR_HOLE
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -94,7 +91,7 @@ class LoweringContext:
     `decls` gives each declaration its id, and `holes` records each hole of the program.
     `lookup` reads what a type name or a namespace before a dot holds. `owner` is the perk
     implementation that holds a perk method, because the method has no field that names
-    its receiver type. `stops` is true when a hole raises the stop code (`stops_on_hole`).
+    its receiver type. `stops` is true when a hole is an internal error (`stops_on_hole`).
     `template` names the template when the body is the body of its template check (ir.md
     4.3).
     """
@@ -213,20 +210,20 @@ def unreported_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) ->
             if hole.codes and not any(offered.get(code) for code in hole.codes)]
 
 
-def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> Optional[StageStop]:
-    """The stop of the first error hole whose codes no error offered (ir.md 7.4), or None.
+def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> None:
+    """CE0000 at the first error hole whose codes no error offered (ir.md 7.4).
 
     An error hole stands for an error that the program always has. When no error of its
     codes came, lowering and the typecheck pass disagree, and the hole could hide a fault
-    in a correct program. The check runs on every compile; the pipeline reports the stop
-    when the analysis reported no error and no stop came before it (`Stops.first`).
+    in a correct program. The pipeline runs the check when the analysis reported no error.
     """
     missed = unreported_error_holes(holes, offered)
-    if not missed:
-        return None
-    hole = missed[0]
-    return StageStop(STAGE,
-                     f"{ERROR_HOLE}, {hole.ast_class} with no {' or '.join(hole.codes)}", hole.loc)
+    if missed:
+        hole = missed[0]
+        er.raise_internal_error(
+            "CE0000", span=hole.loc,
+            detail=f"the error hole of the AST class '{hole.ast_class}' has no error "
+                   f"{' or '.join(hole.codes)}")
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],

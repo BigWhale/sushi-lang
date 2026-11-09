@@ -13,7 +13,7 @@ from sushi_lang.compiler.loader import (
 )
 from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
-from sushi_lang.internals.diagnostics import StageStop, StdlibBuildError, SushiError
+from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -750,9 +750,8 @@ def _write_slir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter
     """`--dump-slir`: the SLIR of each body that reached the SLIR stage, as UTF-8 text.
 
     The units and the bodies are those of `--dump-shir`, in the same order. A body that
-    reached the SLIR stage prints its function, or one line when its lowering stopped; a
-    body that did not reach it (a template check, a body that a pass stopped or refused)
-    does not print (docs/design/ir.md 8.2).
+    reached the SLIR stage prints its function; a body that did not reach it (a template
+    check, a body that a pass refused) does not print (docs/design/ir.md 8.2).
     """
     from sushi_lang.semantics.slir.printer import print_units
 
@@ -815,28 +814,17 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         _write_slir_dump(analyzer, options.dump_slir, reporter)
     if reporter.has_errors:
         return 2
-    # A stage that met a construct it does not handle yet stops the program with the stop
-    # code (docs/design/ir.md 11.1): a stop of the analysis after the dumps, or a stop of
-    # the emitter before any output. ONE place reports both, as a limit of the compiler
-    # and not as a bug of it.
-    try:
-        stop = analyzer.pipeline_stop()
-        if stop is not None:
-            raise stop
-        out_path = _resolve_out_path(options, src_path)
-        use_incremental = (len(compilation_order) > 1 and not options.lib
-                           and not options.no_incremental and not options.dump_ll)
-        if use_incremental:
-            return _compile_incremental(
-                compilation_order, analyzer, out_path, reporter, options,
-                stdlib_units, library_imports, library_linker, unit_manager, cache,
-            )
-        return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
-                                   options, library_linker)
-    except StageStop as stop:
-        from sushi_lang.internals import errors as er
-        er.emit_exception(reporter, stop)
-        return 2
+    analyzer.check_error_holes()
+    out_path = _resolve_out_path(options, src_path)
+    use_incremental = (len(compilation_order) > 1 and not options.lib
+                       and not options.no_incremental and not options.dump_ll)
+    if use_incremental:
+        return _compile_incremental(
+            compilation_order, analyzer, out_path, reporter, options,
+            stdlib_units, library_imports, library_linker, unit_manager, cache,
+        )
+    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
+                               options, library_linker)
 
 
 def codegen_for(analyzer: SemanticAnalyzer,
@@ -977,7 +965,7 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     """Incremental compilation path: per-unit .o caching.
 
     The module of every unit that the cache does not hold is built before the first
-    object is written, so a stop of the emitter (CE0155) leaves no output behind.
+    object is written, so an internal error of the emitter leaves no output behind.
     """
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,

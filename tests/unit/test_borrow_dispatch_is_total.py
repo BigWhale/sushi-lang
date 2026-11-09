@@ -10,8 +10,9 @@ rules:
 2. The table has no row for another class.
 3. A class with no row is an internal error at the span of the node: the backstop is
    located, and a node is never skipped in silence.
-4. The stop arm, the arm of a construct that the pass does not check yet, stops the body
-   with the stop code CE0155 (`borrow, <class>`) at the span of the node.
+4. The arm of a construct that the pass does not check is an internal error (CE0000) that
+   names the stage and the class, at the span of the node. In a body that has an error, it
+   ends the walk of the body instead (`dispatch.AfterAnError`), and nothing reports it.
 5. The two passes read one dispatch: neither looks a class up in its table by itself.
 
 These tests read Python objects and call the dispatch over a node that the test builds.
@@ -27,7 +28,7 @@ import typing
 
 import pytest
 
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import arms, calls
 from sushi_lang.semantics.passes.types import visit
@@ -44,6 +45,10 @@ def _classes() -> set[type]:
 
 def _names(classes: set[type]) -> list[str]:
     return sorted(f"{cls.__module__}.{cls.__name__}" for cls in classes)
+
+
+def _checker(*, failed: bool) -> types.SimpleNamespace:
+    return types.SimpleNamespace(has_an_error=lambda: failed)
 
 
 def _node(cls: type, span: Span) -> object:
@@ -77,38 +82,33 @@ def test_a_class_with_no_row_is_an_internal_error_at_its_span() -> None:
     span = Span(4, 2, 4, 7)
     with pytest.raises(InternalCompilerError) as caught:
         arms.check(object(), NotANode(span))
-    assert not isinstance(caught.value, StageStop)
     assert caught.value.code == "CE0000"
     assert "NotANode" in str(caught.value.params.get("detail"))
     assert caught.value.span == span
 
 
-@pytest.mark.parametrize("cls", sorted(_classes() - {exprs.Call}, key=lambda cls: cls.__name__),
+@pytest.mark.parametrize("cls", sorted(_classes(), key=lambda cls: cls.__name__),
                          ids=lambda cls: cls.__name__)
-def test_the_stop_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
+def test_the_unhandled_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
     span = Span(3, 5, 3, 9)
-    with pytest.raises(StageStop) as caught:
-        arms.stop_at(object(), _node(cls, span))
-    stop = caught.value
-    assert stop.code == "CE0155"
-    assert stop.params == {"stage": "borrow", "construct": cls.__name__}
-    assert stop.span == span
-
-
-def test_the_borrow_pass_never_stops_at_a_call() -> None:
-    """A `Call` stop names the kind of its target, and only the typecheck pass has the call
-    facts for that. The borrow table has a checking arm for `Call`, and a stop at one with
-    no facts is an internal error, never a label that the typecheck pass would not print."""
     with pytest.raises(InternalCompilerError) as caught:
-        arms.stop_at(object(), _node(exprs.Call, Span(3, 5, 3, 9)))
-    assert not isinstance(caught.value, StageStop)
-    assert caught.value.code == "CE0000"
-    assert arms.ARMS[exprs.Call] is not arms.stop_at
+        arms.unhandled(_checker(failed=False), _node(cls, span))
+    fault = caught.value
+    assert fault.code == "CE0000"
+    assert fault.params == {"detail": f"the borrow stage does not handle the construct "
+                                      f"'{cls.__name__}'"}
+    assert fault.span == span
+
+
+def test_the_unhandled_arm_after_an_error_ends_the_walk() -> None:
+    with pytest.raises(dispatch.AfterAnError):
+        arms.unhandled(_checker(failed=True), _node(stmts.Assign, Span(3, 5, 3, 9)))
 
 
 def test_a_callee_that_never_reaches_the_borrow_pass_is_an_internal_error_that_says_so() -> None:
     """The typecheck pass records a `Free`, a `Stdlib`, an `Intrinsic`, a `Builtin`, a
-    `BuiltinStatic`, a `Method` and a `Static` callee, and it stops at every other call.
+    `BuiltinStatic`, a `Method` and a `Static` callee, and every other call is an internal
+    error there.
     A call with another callee row in the borrow pass is a fault of the compiler, and its
     internal error names the callee."""
     call = _node(exprs.Call, Span(6, 4, 6, 12))
@@ -117,20 +117,20 @@ def test_a_callee_that_never_reaches_the_borrow_pass_is_an_internal_error_that_s
         callee_of=lambda _id: row))
     with pytest.raises(InternalCompilerError) as caught:
         calls.check_call(checker, call)  # type: ignore[arg-type]
-    assert not isinstance(caught.value, StageStop)
     assert caught.value.code == "CE0000"
     assert "Conversion" in str(caught.value.params.get("detail"))
 
 
 @pytest.mark.parametrize("module", [arms, visit], ids=["borrow", "typecheck"])
 def test_each_pass_reads_the_one_dispatch(module) -> None:
-    """The lookup of an arm and the stop come from `semantics/shir/dispatch.py`: a pass that
+    """The lookup of an arm and the internal error of a construct that an arm does not
+    handle come from `semantics/shir/dispatch.py`: a pass that
     looks its class up itself has a second dispatch with its own backstop."""
     tree = ast.parse(inspect.getsource(module))
     called = {node.func.attr for node in ast.walk(tree)
               if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
               and isinstance(node.func.value, ast.Name) and node.func.value.id == "dispatch"}
-    assert {"arm_of", "stop"} <= called, (
+    assert {"arm_of", "unhandled"} <= called, (
         f"{module.__name__} does not read the one dispatch of semantics/shir/dispatch.py")
     lookups = [node.lineno for node in ast.walk(tree)
                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)

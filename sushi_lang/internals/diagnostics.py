@@ -55,19 +55,10 @@ class InternalCompilerError(SushiError, RuntimeError):
     code = "CE0000"
 
 
-class StageStop(InternalCompilerError):
-    """CE0155: a stage of the new pipeline does not handle a construct yet.
-
-    The stop code of the move to SHIR (docs/design/ir.md 11.1). It names the stage and the
-    construct, and `semantics/shir/stop.py` records it.
-    """
-
-    code = "CE0155"
-
-    def __init__(self, stage: str, construct: str, span: Optional[Span] = None,
-                 filename: Optional[str] = None) -> None:
-        super().__init__(self.code, span=span, filename=filename, stage=stage,
-                         construct=construct)
+class AfterAnError(Exception):
+    """The walk of a body that has an error met a node that its stage does not handle
+    (`semantics/shir/dispatch.py`). The pass that walks the body catches it and ends the
+    walk; nothing reports it, so the error of the program is the diagnostic."""
 
 
 class AstBuilderICE(InternalCompilerError):

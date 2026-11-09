@@ -76,7 +76,7 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
                                         detail="a borrowed let of a value that is no view")
             written, held = lowered.value, lowered.owners
         else:
-            dispatch.stop(STAGE, value, state="borrowed")
+            dispatch.unhandled(STAGE, value, state="borrowed")
     finally:
         low.holder = None
     owners = ([_owner(low, owner, stmt.loc) for owner in region.owners] if region.owners

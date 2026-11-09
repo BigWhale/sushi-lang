@@ -15,8 +15,8 @@ after it JOIN (`flow.py`). A loop body is walked two rounds: a discovery round, 
 reports nothing and writes no row, gives the facts that come round the back edge, and the
 second round starts from the fixed point and reports.
 
-A construct that the pass does not check yet stops the walk of its body with the stop code
-CE0155 (`borrow, <class>`), and the pass records the stop. The body of a constant or `var`
+A construct that the pass does not check is an internal error; after an error, the walk of
+the body ends there (`AfterAnError`). The body of a constant or `var`
 initializer is walked as any other body: the constant evaluator makes its value, so a
 constant that it names is read, not moved (`consume.source_provenance`). A body that the
 walk finished with no error writes its conditionally moved locals and the region of each
@@ -29,7 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional, Set
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import AfterAnError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.lowering import LoweredProgram
     from sushi_lang.semantics.shir.nodes import ShirBlock
     from sushi_lang.semantics.shir.ownership import OwnershipResults
-    from sushi_lang.semantics.shir.stop import Stops
     from sushi_lang.semantics.shir.typeck import TypeckResults
     from sushi_lang.semantics.tables import SymbolTables
     from .state import Owner
@@ -73,18 +72,19 @@ class BorrowChecker:
     def __init__(self, reporter: Reporter, *,
                  tables: SymbolTables,
                  shir: LoweredProgram,
-                 stops: Stops,
                  next_stage: Callable[..., None],
                  destroy_effects: Dict[str, FrozenSet[int]],
-                 namespaces: Optional[NamespaceTable] = None):
+                 namespaces: Optional[NamespaceTable] = None,
+                 program_failed: Callable[[], bool] = lambda: False):
         self.reporter = reporter
+        # Whether the program has an error that this unit did not report (`has_an_error`).
+        self.program_failed = program_failed
         self.err = PassErrorReporter(reporter)
         # The tables that a type of the body is resolved in: the program's, or the overlay
         # of a template check (`check_body`).
         self.tables = tables
         self.types = TypeQueries(tables)
         self.shir = shir
-        self.stops = stops
         self.next_stage = next_stage
         # fn name -> the poke param indices it destroys (#168), over EVERY unit, so a
         # cross-unit callee is not a blind spot (the `effects` pass).
@@ -138,9 +138,8 @@ class BorrowChecker:
                    filename: Optional[str], typecheck_failed: bool = False) -> None:
         """Walk the SHIR body of `decl`, which lift finished with no error.
 
-        `tables` are the tables that the typecheck pass read the body in. A stop ends the
-        walk: the pass records it with the file of the body. A walk with no stop and with
-        no error checks the table of the body, and gives the body, with the tables that
+        `tables` are the tables that the typecheck pass read the body in. A walk with no
+        error checks the table of the body, and gives the body, with the tables that
         typecheck read it in, to the next stage, the SLIR lowering. A template check never
         goes to SLIR (docs/design/ir.md 4.3). A body whose walk in typecheck reported an
         error (`typecheck_failed`) gives only its diagnostics: it writes no row, and it
@@ -162,9 +161,7 @@ class BorrowChecker:
             check_block(self, body.block)
             if not terminates(body.block):
                 record_exit(self)
-        except StageStop as stop:
-            stop.filename = filename
-            self.stops.borrow_stopped(stop)
+        except AfterAnError:
             return
         finally:
             self._leave()
@@ -179,6 +176,11 @@ class BorrowChecker:
                         ownership, self.shir.decls)
         if not isinstance(body.origin, TemplateCheck):
             self.next_stage(decl, body, tables=tables, filename=filename)
+
+    def has_an_error(self) -> bool:
+        """Whether the body, this unit or the program has an error so far."""
+        return (self.typecheck_failed or self.reporter.has_offered_errors
+                or self.program_failed())
 
     def _enter(self, decl: object, body: ShirBody, tables: SymbolTables) -> None:
         self.tables, self.types = tables, TypeQueries(tables)

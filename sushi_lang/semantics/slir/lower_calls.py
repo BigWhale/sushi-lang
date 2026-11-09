@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.iterators import (
@@ -144,7 +143,9 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
                           (operand_type,) * (1 + len(node.args)))
     if isinstance(callee, Builtin):
         return st.Builtin(callee.method, ())
-    raise StageStop(STAGE, type(callee).__name__, node.loc)
+    er.raise_internal_error("CE0000", span=node.loc,
+                            detail=f"the {STAGE} stage does not handle the callee "
+                                   f"'{type(callee).__name__}'")
 
 
 def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) -> st.Direct:

@@ -1,7 +1,6 @@
-"""The declaration round of a global makes a global, or it stops the compile (ir.md 8.2).
+"""The declaration round of a global makes a global, or it is an internal error (ir.md 8.2).
 
-A constant that the evaluator gives no value stops with `emit, constant with no value`. A
-constant with no type, and a scalar of a type that has no LLVM constant, are internal
+A constant that the evaluator gives no value, a constant with no type, and a scalar of a type that has no LLVM constant, are internal
 errors. No case drops the global in silence. The tests call the round over a stand-in for
 the codegen; they do not run the compiler.
 """
@@ -14,7 +13,7 @@ import pytest
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
 from sushi_lang.backend.types.core import LLVMTypeSystem
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.typesys import BuiltinType
@@ -42,19 +41,22 @@ def _const(ty=BuiltinType.I32) -> SimpleNamespace:
                            scope_unit=None, home_unit=None, link_symbol=None)
 
 
-def test_a_constant_with_no_value_stops() -> None:
-    with pytest.raises(StageStop) as caught:
+NO_VALUE = {"detail": "a constant with no value reached the backend"}
+
+
+def test_a_constant_with_no_value_is_an_internal_error() -> None:
+    with pytest.raises(InternalCompilerError) as caught:
         LLVMCodegen._emit_global_constant(_codegen(None), _const(), "u",  # type: ignore[arg-type]
                                           filename="f.sushi")
-    assert caught.value.params == {"stage": "emit", "construct": "constant with no value"}
+    assert caught.value.params == NO_VALUE
     assert caught.value.span == SPAN
 
 
-def test_a_unit_variable_with_no_value_stops() -> None:
-    with pytest.raises(StageStop) as caught:
+def test_a_unit_variable_with_no_value_is_an_internal_error() -> None:
+    with pytest.raises(InternalCompilerError) as caught:
         LLVMCodegen._emit_unit_variable(_codegen(None), _const(),  # type: ignore[arg-type]
                                         BuiltinType.I32, "u", True, "f.sushi")
-    assert caught.value.params == {"stage": "emit", "construct": "constant with no value"}
+    assert caught.value.params == NO_VALUE
 
 
 def test_a_constant_with_no_type_is_an_internal_error() -> None:

@@ -9,8 +9,8 @@ A literal takes the type of its position when the position gives one of its kind
 its default (`int_literal_default`). An integer literal holds a value at that type
 (`held_value`, ir.md 8.5). A local answers the type that the table holds for it. A constant
 answers its declared type, and its value, from the constant table (Q5). A constant with no
-value stops the walk (`ConstRef with no value`): after an error of its initializer, that
-error is the diagnostic. A `var` answers its declared type, and the symbol of its global.
+value is an internal error: after an error of its initializer, that error is the
+diagnostic. A `var` answers its declared type, and the symbol of its global.
 
 A struct construction is an instance of the struct that its written type names: behind an
 alias, the struct that the namespace holds. Its fields are checked at the types of the
@@ -188,11 +188,11 @@ def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
                            record: Union[ConstSig, StdlibFunction]) -> None:
     """The value row of `node`. A constant with no value after an error of the program
     (its initializer has one) gets no row: the walk goes on, and the body holds that error
-    (`refused_before`). With no error, a constant with no value stops."""
+    (`refused_before`). With no error, a constant with no value is an internal error."""
     value = validator.constant_value(record)
     if value is None:
         if not validator.errors_offered():
-            visit.stop_with_no_value(node)
+            visit.unhandled_with_no_value(validator, node)
         validator.refused_before = True
         return
     validator.body_answers().record_value(node.shir_id, value)
@@ -223,16 +223,16 @@ def check_struct_init(validator: TypeValidator, node: e.StructInit,
 def _constructed_struct(validator: TypeValidator, node: e.StructInit,
                         expected: Optional[Type]) -> Constructed:
     """The struct that the written type of a construction names, or no instance after its
-    error; the walk stops where the name is contested."""
+    error; a contested name is an internal error."""
     written = validator.decl_name(node.decl)
     alias, dot, name = written.rpartition(".")
     if dot:
         binding = validator.namespaces.lookup(alias, name)
         if binding is None or binding.kind != "struct":
-            visit.stop_at(validator, node)
+            visit.unhandled(validator, node)
         name = binding.name
     if type_name_is_contested(validator, name):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     generic = name in validator.generic_struct_table.by_name
     struct = None if generic else validator.struct_table.by_name.get(name)
     if struct is None and not generic:

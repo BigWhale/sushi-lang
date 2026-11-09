@@ -56,12 +56,12 @@ def match(low: Lowering, stmt: s.Match) -> None:
     path of the arm takes it."""
     facts = low.typeck.match_facts_of(stmt.shir_id)
     if facts is None:
-        dispatch.stop(STAGE, stmt)
+        dispatch.unhandled(STAGE, stmt)
     enum = isinstance(facts.scrutinee, EnumType)
     tuple_ = is_tuple_type(facts.scrutinee)
     if not (facts.integer is not None or facts.scrutinee == BuiltinType.STRING or enum
             or tuple_):
-        dispatch.stop(STAGE, stmt)
+        dispatch.unhandled(STAGE, stmt)
     scrutinee: p.Operand | tuple[p.Operand, ...]
     if tuple_ and isinstance(stmt.scrutinee, e.TupleInit) and (
             low.owns(facts.scrutinee) or _points_into(stmt)):
@@ -170,7 +170,7 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
         return _product(low, [_Path()], pattern.elements, _fields(_place(operand), ty),
                         tuple_elements(ty))
     if not isinstance(pattern, pt.Variant):
-        dispatch.stop(STAGE, pattern)
+        dispatch.unhandled(STAGE, pattern)
     payload = variant_of(ty, pattern.variant, pattern.loc)[1]
     base = p.Downcast(_place(operand), pattern.variant)
     return _product(low, [_Path((_Test(pattern, operand, ty),))], pattern.items,

@@ -26,7 +26,7 @@ from sushi_lang.semantics.slir import printer
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
-from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal, SlirStopped
+from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.typesys import (
     ArrayType, BorrowMode, BuiltinType, EnumType, EnumVariantInfo, StructType,
@@ -186,12 +186,6 @@ def _main() -> SlirFunction:
 def test_the_greet_functions_print_as_the_golden() -> None:
     text = printer.print_units([("test_spine_greet", [_decorate(), _shout(), _greet(), _main()])])
     assert text == GREET_GOLDEN.read_text(encoding="utf-8")
-
-
-def test_a_function_whose_lowering_stopped_prints_one_line() -> None:
-    text = printer.print_units([("m", [_main(), SlirStopped("helper", "ExprStmt")])])
-    assert text.endswith("    return\n}\n\nfn helper: stopped (slir, ExprStmt)\n")
-    assert text.startswith("unit m\n\nfn main() -> i32 {\n")
 
 
 def test_blocks_and_locals_print_in_id_order() -> None:

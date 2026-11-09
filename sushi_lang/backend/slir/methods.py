@@ -211,8 +211,8 @@ METHOD_FAMILIES: dict[str, _MethodRow] = {
 
 def emit_method(state: FunctionState, method: BuiltinMethod,
                 statement: st.Call) -> ir.Value:
-    """The value of a method call. A family with no row stops (`emit, <family> method`)."""
+    """The value of a method call. A family with no row is an internal error."""
     row = METHOD_FAMILIES.get(method.family)
     if row is None:
-        state.stop(f"{method.family} method")
+        state.unhandled(f"{method.family} method")
     return row(state, method, statement)

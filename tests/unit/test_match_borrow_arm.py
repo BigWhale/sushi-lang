@@ -5,15 +5,17 @@ and a `Tuple` bind the local of each bare `PatBinding` in them, with the span of
 variant name or of the tuple pattern that holds it. A `nom` binder is no bare binder: the
 arm takes its payload (`pattern_takes.taken_binders`). A `poke` or `peek` binder is no bare
 binder either: it is a reference (`bindings.reference_binders`). A binder at the top of a
-pattern, which no arm writes, stops the walk with `borrow, Match`. The tests run
+pattern, which no arm writes, is an internal error for `Match`. The tests run
 the arm over SHIR built by hand, with a stand-in for the pass; they do not run the
 compiler.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import arms, statements
 from sushi_lang.semantics.passes.borrow.bindings import bare_binders, reference_binders
@@ -124,13 +126,15 @@ def test_the_table_checks_a_match() -> None:
     assert arms.ARMS[s.Match] is statements.check_match
 
 
-def test_a_match_with_a_binder_at_the_top_of_a_pattern_stops_with_borrow_match() -> None:
-    """The stop comes before the arm reads the pass, so the stand-in is never read."""
+def test_a_match_with_a_binder_at_the_top_of_a_pattern_is_an_internal_error() -> None:
+    """The internal error comes before the arm reads the pass: the stand-in only says
+    that the body has no error."""
     scrutinee = e.LocalRef(ShirId(2), SPAN, LocalId(0))
     node = s.Match(ShirId(1), SPAN, scrutinee,
                    [_arm(p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Bare()))),
                     _arm(p.Wildcard(ShirId(20), SPAN))], False)
-    with pytest.raises(StageStop) as caught:
-        statements.check_match(object(), node)  # type: ignore[arg-type]
-    assert caught.value.params == {"stage": "borrow", "construct": "Match"}
+    with pytest.raises(InternalCompilerError) as caught:
+        statements.check_match(SimpleNamespace(has_an_error=lambda: False),  # type: ignore[arg-type]
+                               node)
+    assert caught.value.params == {"detail": "the borrow stage does not handle the construct 'Match'"}
     assert caught.value.span == SPAN

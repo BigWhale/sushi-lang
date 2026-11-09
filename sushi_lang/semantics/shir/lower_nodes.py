@@ -4,7 +4,7 @@ ONE table, `LOWERING`, gives the lowering of each AST body class that lowering h
 keyed on the class (gate: `tests/unit/test_shir_lowering_is_one_table.py`). A class with
 no row is a HOLE: lowering makes a `Hole` that names the AST class, records it, and the
 compile goes on. When the variable that `STRICT_VARIABLE` names
-is `1`, a hole stops the compile with the stop code CE0155 instead, except in a unit whose
+is `1`, a hole is an internal error (CE0000) instead, except in a unit whose
 scope pass reported an error (`stops_on_hole`). The hole of a name with no declaration,
 and of a form that the language always refuses (a named argument outside a struct
 construction, type arguments after a dot or on a struct, a slice with a reversed range,
@@ -77,12 +77,12 @@ from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType,
 #: `tests/unit/test_shir_strict_is_read_once.py`).
 STRICT_VARIABLE = "SUSHI_SHIR_STRICT"
 
-#: The name of this stage in the stop code.
+#: The name of this stage in an internal error.
 STAGE = "lowering"
 
 
 def is_strict() -> bool:
-    """True when the strict variable is `1`: a SHIR fault stops the compile with CE0155."""
+    """True when the strict variable is `1`: a SHIR fault is an internal error."""
     return os.environ.get(STRICT_VARIABLE) == "1"
 
 
@@ -104,7 +104,7 @@ class BodyLowerer:
     `holes` is the record of the program, shared by every body. `fallback` is the span of
     a node that has none of its own: the span of its declaration. `lookup` reads the
     declaration tables; with no lookup, a call on a type name or a namespace is a hole.
-    `stops` is true when a hole raises the stop code (`stops_on_hole`). `template` is true
+    `stops` is true when a hole is an internal error (`stops_on_hole`). `template` is true
     in the body of a template check, the one body that may hold an `Expand` (ir.md 4.5).
     `locals` holds the local of each binder that the body declares, in the order of the
     walk. `copies` holds the copy boundaries of each block that holds copies of an
@@ -209,10 +209,11 @@ class BodyLowerer:
         return _qualified_type(self, receiver)
 
     def hole(self, node: Any) -> Hole:
-        """A construct that lowering does not handle yet; CE0155 when `stops` is true."""
+        """A construct that lowering does not handle; CE0000 when `stops` is true."""
         if self.stops:
-            er.raise_internal_error("CE0155", span=self.span(node), stage=STAGE,
-                                    construct=type(node).__name__)
+            er.raise_internal_error("CE0000", span=self.span(node),
+                                    detail=f"the {STAGE} stage does not handle the construct "
+                                           f"'{type(node).__name__}'")
         return self._record(node, ())
 
     def error_hole(self, node: Any, *codes: str, member: Optional[UnknownMember] = None,
@@ -220,7 +221,7 @@ class BodyLowerer:
         """The hole of a program that always has an error. It never stops the compile.
 
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
-        CE0144) is its diagnostic, not the stop code (ruling of 2026-10-12). A form that
+        CE0144) is its diagnostic, not an internal error (ruling of 2026-10-12). A form that
         the language always refuses with a diagnostic of a later pass is one too: a named
         argument outside a struct construction (CE6104), written type arguments after a
         dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
@@ -229,7 +230,7 @@ class BodyLowerer:
         a `self` in a static method (CE0134).
 
         `codes` are the codes of that error. At the end of the analysis, on every compile,
-        an error hole whose codes no error offered is a stop with CE0155
+        an error hole whose codes no error offered is an internal error
         (`check_error_holes`, ir.md 7.4). In a constant or a `var` initializer,
         the constant evaluator refuses the first node that is not constant (CE0108) before
         the typecheck pass reads the form, so there the hole accepts CE0108 too. The hole

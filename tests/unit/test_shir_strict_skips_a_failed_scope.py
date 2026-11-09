@@ -1,7 +1,7 @@
 """Gate: strict mode never stops on an unresolved name, nor in a unit with a scope error.
 
-Under `SUSHI_SHIR_STRICT=1` a hole stops the compile with the stop code CE0155. Some
-holes are holes of a program that always has an error, and the error, not CE0155, must
+Under `SUSHI_SHIR_STRICT=1` a hole stops the compile with an internal error (CE0000). Some
+holes are holes of a program that always has an error, and the error, not CE0000, must
 be the diagnostic of the program (rulings of 2026-10-12 and 2026-10-14):
 
 - A name with no declaration (`Unresolved`) is a hole, and SHIR has no node for it. The
@@ -23,11 +23,11 @@ The rule has five parts, and this gate holds each one:
 1. `lower_unit` and `lower_copy` take the result of the scope pass as the keyword
    `scope_failed`, with no default, so that no caller can forget it.
 2. The one function that reads the variable is `is_strict`. `stops_on_hole` asks it and
-   reads `scope_failed` too. `BodyLowerer.hole` raises CE0155 only behind `self.stops`.
+   reads `scope_failed` too. `BodyLowerer.hole` raises CE0000 only behind `self.stops`.
 3. The analyzer gives `scope_failed` from the reporter of the unit, which only the scope
    pass has used when lowering starts. A copy that the copy fixpoint places after the
    per-unit loop is lowered with the reporter of its home unit in the same way.
-4. `BodyLowerer.error_hole` records a hole and never raises CE0155.
+4. `BodyLowerer.error_hole` records a hole and never raises CE0000.
 5. The lowerings that call `error_hole` are the ones that `ERROR_HOLES` names, each with
    its reason, and `_name` calls it for an `Unresolved` name. The codes that each one
    names are held by `test_shir_error_holes_carry_codes.py`.
@@ -35,7 +35,7 @@ The rule has five parts, and this gate holds each one:
 The scan reads Python source and signatures; it does not start the compiler. The proof
 on a program is a compile by hand: `SUSHI_SHIR_STRICT=1 ./sushic` on a CE1001 fixture
 gives CE1001, on a fixture of `variadic/pack_name_is_not_a_value/` it gives CE0144, and on
-a fixture of `types/named_args/` it gives CE6104, not CE0155.
+a fixture of `types/named_args/` it gives CE6104, not CE0000.
 """
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def _guards_the_stop_code(node: ast.If) -> bool:
     test = node.test
     guarded = (isinstance(test, ast.Attribute) and test.attr == "stops"
                and isinstance(test.value, ast.Name) and test.value.id == "self")
-    raises = any(isinstance(sub, ast.Constant) and sub.value == "CE0155"
+    raises = any(isinstance(sub, ast.Constant) and sub.value == "CE0000"
                  for stmt in node.body for sub in ast.walk(stmt))
     return guarded and raises
 
@@ -105,11 +105,11 @@ def test_a_hole_stops_only_behind_the_flag() -> None:
     holes = [fn for fn in _functions(_tree(LOWER_NODES)) if fn.name == "hole"]
     assert len(holes) == 1, "BodyLowerer.hole is not found"
     stop_codes = [sub for sub in ast.walk(holes[0])
-                  if isinstance(sub, ast.Constant) and sub.value == "CE0155"]
+                  if isinstance(sub, ast.Constant) and sub.value == "CE0000"]
     guards = [sub for sub in ast.walk(holes[0])
               if isinstance(sub, ast.If) and _guards_the_stop_code(sub)]
     assert len(stop_codes) == 1 and len(guards) == 1, (
-        "BodyLowerer.hole must raise CE0155 once, inside `if self.stops:`")
+        "BodyLowerer.hole must raise CE0000 once, inside `if self.stops:`")
 
 
 def test_the_analyzer_gives_the_result_of_the_scope_pass() -> None:
@@ -127,8 +127,8 @@ def test_the_analyzer_gives_the_result_of_the_scope_pass() -> None:
 def test_an_error_hole_never_stops() -> None:
     holes = [fn for fn in _functions(_tree(LOWER_NODES)) if fn.name == "error_hole"]
     assert len(holes) == 1, "BodyLowerer.error_hole is not found"
-    assert not any(isinstance(sub, ast.Constant) and sub.value == "CE0155"
-                   for sub in ast.walk(holes[0])), "error_hole must not raise CE0155"
+    assert not any(isinstance(sub, ast.Constant) and sub.value == "CE0000"
+                   for sub in ast.walk(holes[0])), "error_hole must not raise CE0000"
 
 
 def _calls_error_hole(node: ast.AST) -> bool:

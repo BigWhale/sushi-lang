@@ -8,7 +8,6 @@ of the SLIR of the program to the backend, `emit.py` the function, its statement
 terminators, `values.py` the places, the operands, the constants and the rvalues, and
 `intrinsics.py` the calls of an intrinsic.
 
-A SLIR shape that the emitter does not handle yet stops the compile with the stop code
-CE0155 (`emit, <SLIR class>`), at the span of its statement, before the pipeline writes
-any output.
+A SLIR shape that the emitter does not handle is an internal error (CE0000), at the span
+of its statement, before the pipeline writes any output.
 """

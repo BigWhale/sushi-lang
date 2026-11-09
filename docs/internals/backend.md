@@ -37,9 +37,9 @@ block, and each SLIR block is one LLVM block. A drop goes through the one destro
 (`emit_value_destructor`), and a call of an intrinsic (`interp`, `print`, `println`)
 through its row of `INTRINSICS` (`backend/slir/intrinsics.py`), which gives LLVM values to
 the string builder or to the print emitter. A SLIR shape that the emitter does not
-handle yet stops the compile with [`CE0155`](../error-catalog.md#ce0155) (`emit, <class>`)
-before any output is written; the incremental path builds the module of every unit
-before it writes the first object for this reason. `backend/functions/` holds the function
+handle is an internal error ([`CE0000`](../error-catalog.md#ce0000)) before any output is
+written; the incremental path builds the module of every unit before it writes the first
+object for this reason. `backend/functions/` holds the function
 manager: `declarations.py`, `helpers.py`, and `main_wrapper.py`, whose `emit_main`
 emits the C `main`. The C `main` calls the Sushi
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
@@ -166,8 +166,8 @@ for the symbol of the body:
   variant and `Discriminant`; a place is a local or the payload field of a downcast enum
   (`payload_field_offsets`).
 
-A shape that the emitter does not handle yet stops the compile with
-[`CE0155`](../error-catalog.md#ce0155) (`emit, <class>`). `and` and `or` are blocks and a
+A shape that the emitter does not handle is an internal error
+([`CE0000`](../error-catalog.md#ce0000)). `and` and `or` are blocks and a
 `SwitchInt` in SLIR, and so is `??`: no emitter evaluates them.
 
 ### The value families

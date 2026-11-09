@@ -15,7 +15,7 @@ call with written type arguments on a type name (`Pair@(i32, i32)(1, 2)`) is CE6
 
 A variant of a generic enum (`Maybe`, `Result`, one of the program) takes the instance of its
 position, else the instance that its payload solves (`visit/constructions.py`). A variant of
-an enum whose name the unit lost (D2) is not typed yet, and stops the walk of its body.
+an enum whose name the unit lost is an internal error.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
-from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
+from sushi_lang.semantics.passes.types.call_facts import declaring_units
 from sushi_lang.semantics.passes.types.arguments import check_arguments
 from sushi_lang.semantics.passes.types.calls.enums import (
     declared_position_answer, refuse_untyped_variant, reject_missing_variant,
@@ -84,7 +84,7 @@ def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Sta
                            expected: Optional[Type]) -> bool:
     """CE2045 for `T.m(...)` on an enum `T` whose dot holds no variant `m` and no method
     `m`. True when it was reported."""
-    if TypecheckCallFacts(validator).declaring_units(target.name):
+    if declaring_units(validator, target.name):
         return False
     return _reject_member(validator, written_name(target.ty), target.name, node.loc,
                           expected)
@@ -101,7 +101,7 @@ def check_hole(validator: TypeValidator, node: Hole,
     call, then CE6104 when the call names an argument (ir.md 7.4). An error hole whose error a pass before typecheck reported
     (`REPORTED_BEFORE`: a name with no declaration, CE1001) has no answer: the walk goes on, so the later faults of the body
     are reported too, and the body does not go on to the next stage. Every other hole
-    stops the walk of its body."""
+    is an internal error."""
     if (node.codes and set(node.codes) <= REPORTED_BEFORE
             and (set(node.codes) <= REPORTED_TO_THE_PROGRAM
                  or any(validator.reporter.errors_offered.get(code) for code in node.codes))):
@@ -134,7 +134,7 @@ def check_hole(validator: TypeValidator, node: Hole,
     member = node.member
     if member is None or not _reject_member(validator, member.written, member.name,
                                             member.name_loc, expected):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
 
 
 def _reject_construction_type_args(validator: TypeValidator, node: Hole) -> None:
@@ -182,12 +182,12 @@ def _reject_member(validator: TypeValidator, written: str, member: str, loc: Spa
 
 def _instance(validator: TypeValidator, node: e.EnumInit,
               expected: Optional[Type]) -> Constructed:
-    """The enum that the construction builds, or no instance after its error. The walk
-    stops where the name of the enum is lost."""
+    """The enum that the construction builds, or no instance after its error. A lost
+    name of the enum is an internal error."""
     written = validator.decl_name(node.decl)
     name = _enum_name(validator, written)
     if name is None or name_is_contested(validator, "enum", name):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     generic = name in validator.generic_enum_table.by_name
     instance = None if generic else validator.enum_table.by_name.get(name)
     if instance is None and not generic:

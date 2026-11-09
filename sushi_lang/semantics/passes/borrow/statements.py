@@ -117,7 +117,7 @@ def check_assign(checker: 'BorrowChecker', node: s.Assign) -> None:
     elif isinstance(node.target, e.StorageRef):
         _check_storage_rebind(checker, node)
     elif not isinstance(node.target, e.LocalRef):
-        arms.stop_at(checker, node)
+        arms.unhandled(checker, node)
     elif node.is_init:
         _check_let(checker, node, node.target.local)
     else:
@@ -331,7 +331,7 @@ def _declare_binder(checker: 'BorrowChecker', local: LocalId, node: s.Destructur
 
 def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
     """A place of a rebind form takes its element: a local is rebound, and a field and an
-    element are written. Typecheck gives a place of no other kind no answer, and stops
+    element are written. A place of no other kind is an internal error of typecheck
     first."""
     if isinstance(place, (e.Field, e.Index)):
         _reject_readonly_place_write(checker, place, place.loc)
@@ -341,7 +341,7 @@ def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
     if isinstance(place, e.StorageRef):
         return
     if not isinstance(place, e.LocalRef):
-        arms.stop_at(checker, place)
+        arms.unhandled(checker, place)
     _reject_readonly_rebind(checker, place, place.loc, None)
     check_owner_not_borrowed(checker, place.local, place.loc, "assign", place=place)
     _reinitialize(checker, place.local)
@@ -434,7 +434,7 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     part is a root of its own."""
     binders = [bare_binders(arm.pattern) for arm in node.arms]
     if any(found is None for found in binders):
-        arms.stop_at(checker, node)
+        arms.unhandled(checker, node)
     references = [reference_binders(arm.pattern) for arm in node.arms]
     roots = in_place_roots(checker, node)
     for root in roots or (node.scrutinee,):
@@ -545,7 +545,7 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
             at = node.loc if binder is None or binder.loc is None else binder.loc
             declare_bare_binders(checker, [(source.binder, at)])
     else:
-        arms.stop_at(checker, node)
+        arms.unhandled(checker, node)
     clear_borrows(checker)
     check_loop_body(checker, node.body, again)
 

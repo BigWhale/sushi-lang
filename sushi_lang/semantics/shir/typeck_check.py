@@ -16,9 +16,9 @@ once (`walk.py`) and asks the table:
 - an integer literal and a `ConstRef` have a value, and a `StorageRef` the symbol of its
   global.
 
-A `ConstRef` of a constant with no value stops the walk (`ConstRef with no value`), so its
-body does not reach this check. An initializer needs no value row: a `var` of an empty
-container has no value, and any other initializer with no value stops the walk.
+A `ConstRef` of a constant with no value is an internal error, so its body does not reach
+this check. An initializer needs no value row: a `var` of an empty container has no value,
+and any other initializer with no value is an internal error.
 
 The captures of a lambda are in `Bindings` and not in the body, so the check cannot count
 them: the type of a capture has no check here.

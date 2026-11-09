@@ -10,10 +10,9 @@ in `shir/lower_nodes.py` and `PRINTERS` in `shir/printer.py`. So this gate holds
    for each member of `ShirPattern`.
 2. Neither table has a row for another class.
 3. A class with no row is an internal error, never a silent skip.
-4. The stop arm, the arm of a construct that the pass does not type yet, stops the body
-   with the stop code CE0155 (`typecheck, <class>`) at the span of the node. A `Call`
-   names the kind of its target too (`typecheck, Call(<kind>)`), from the call facts of
-   the pass, so the gate builds a well-formed `Call` and a validator with empty tables.
+4. The arm of a construct that the pass does not type is an internal error (CE0000) that
+   names the stage and the class, at the span of the node. After an error, it ends the walk
+   of the body instead (`dispatch.AfterAnError`), and nothing reports it.
 
 These tests read Python objects and call the dispatch over a node that the test builds.
 They do not run the compiler.
@@ -26,11 +25,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
-from sushi_lang.semantics.shir import exprs, patterns, stmts
-from sushi_lang.semantics.shir.ids import LocalId, ShirId
+from sushi_lang.semantics.shir import dispatch, exprs, patterns, stmts
 
 _UNIONS = {"ShirStmt": stmts.ShirStmt, "ShirExpr": exprs.ShirExpr,
            "ShirPattern": patterns.ShirPattern}
@@ -51,20 +49,6 @@ def _node(cls: type, span: Span) -> object:
     fields = {each.name: None for each in dataclasses.fields(cls)}
     fields["loc"] = span
     return cls(**fields)
-
-
-def _call(span: Span) -> exprs.Call:
-    """A well-formed `Call`: a method call, with an empty argument list."""
-    local = exprs.LocalRef(ShirId(0), span, LocalId(0))
-    return exprs.Call(ShirId(1), span, exprs.Dotted(local, "len"), [])
-
-
-def _validator_with_empty_tables() -> SimpleNamespace:
-    """What the call facts of a stop read: the tables that name extension methods."""
-    return SimpleNamespace(
-        extension_table=SimpleNamespace(by_type={}),
-        generic_extension_table=SimpleNamespace(by_type={}),
-        perk_impl_table=SimpleNamespace(implementations={}, units={}))
 
 
 @pytest.mark.parametrize("union", list(_UNIONS), ids=list(_UNIONS))
@@ -93,20 +77,24 @@ def test_a_class_with_no_row_is_an_internal_error() -> None:
 
     with pytest.raises(InternalCompilerError) as caught:
         visit.check(object(), NotANode())
-    assert not isinstance(caught.value, StageStop)
     assert caught.value.code == "CE0000"
     assert "NotANode" in str(caught.value.params.get("detail"))
 
 
 @pytest.mark.parametrize("cls", sorted(_classes(), key=lambda cls: cls.__name__),
                          ids=lambda cls: cls.__name__)
-def test_the_stop_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
+def test_the_unhandled_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
     span = Span(3, 5, 3, 9)
-    node = _call(span) if cls is exprs.Call else _node(cls, span)
-    construct = "Call(method)" if cls is exprs.Call else cls.__name__
-    with pytest.raises(StageStop) as caught:
-        visit.stop_at(_validator_with_empty_tables(), node)
-    stop = caught.value
-    assert stop.code == "CE0155"
-    assert stop.params == {"stage": "typecheck", "construct": construct}
-    assert stop.span == span
+    with pytest.raises(InternalCompilerError) as caught:
+        visit.unhandled(SimpleNamespace(has_an_error=lambda: False), _node(cls, span))
+    fault = caught.value
+    assert fault.code == "CE0000"
+    assert fault.params == {"detail": f"the typecheck stage does not handle the construct "
+                                      f"'{cls.__name__}'"}
+    assert fault.span == span
+
+
+def test_the_unhandled_arm_after_an_error_ends_the_walk() -> None:
+    with pytest.raises(dispatch.AfterAnError):
+        visit.unhandled(SimpleNamespace(has_an_error=lambda: True),
+                        _node(stmts.Assign, Span(3, 5, 3, 9)))

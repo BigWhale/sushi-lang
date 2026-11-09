@@ -1,4 +1,4 @@
-"""The state of the emission of one `SlirFunction`, and the stop of the stage `emit`."""
+"""The state of the emission of one `SlirFunction`."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, NoReturn, Optional
 
 from llvmlite import ir
 
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.slir.function import SlirFunction
@@ -15,16 +14,6 @@ from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-
-#: The name of this stage in the stop code.
-STAGE = "emit"
-
-
-def stop(construct: str, span: Optional[Span], filename: Optional[str]) -> NoReturn:
-    """CE0155 `emit, <construct>`: the one stop of the stage `emit`, for a shape that the
-    emitter does not handle yet."""
-    raise StageStop(STAGE, construct, span, filename)
-
 
 @dataclass(slots=True)
 class FunctionState:
@@ -44,11 +33,11 @@ class FunctionState:
     addresses: dict[LocalId, ir.Value] = field(default_factory=dict)
     blocks: dict[BlockId, ir.Block] = field(default_factory=dict)
 
-    def stop(self, shape: object) -> NoReturn:
-        """CE0155 `emit, <class>` for a SLIR shape that the emitter does not handle yet. A
-        string is the name of a construct that the class does not tell apart."""
-        stop(shape if isinstance(shape, str) else type(shape).__name__, self.span,
-             self.filename)
+    def unhandled(self, shape: object) -> NoReturn:
+        """CE0000 for a SLIR shape that the emitter does not handle. A string is the name of
+        a construct that the class does not tell apart."""
+        name = shape if isinstance(shape, str) else type(shape).__name__
+        self.fault(f"no arm for the SLIR shape '{name}'")
 
     def type_of(self, local: LocalId) -> Type:
         """The type of a local. The verifier makes sure that the id of a local is its

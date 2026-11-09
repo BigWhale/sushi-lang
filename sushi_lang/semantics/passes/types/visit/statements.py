@@ -21,13 +21,13 @@ channel (CE2031, CE2039). A `Return` of a bare body checks its value at the decl
 type, and refuses a `Result` constructor (CE2091). A `Return` of an initializer checks its
 value at the declared type of the constant or `var` (CE2002 at `name = value`), and writes
 the value that the constant evaluator gave it (`passes/types/constants.py`). An initializer
-that has no value, and is no empty container, stops the walk.
+that has no value, and is no empty container, is an internal error.
 
 An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
 `While` (ir.md 7.7). A loop over a range with a bare binder is `CountedRange`: its range is
 checked by `ranges.check_range_iterable`, and the binder is an i32. A direct walk is in
-`visit/walks.py`. A loop over any other iterable stops the walk. A `break` and a `continue`
+`visit/walks.py`. A loop over any other iterable is an internal error. A `break` and a `continue`
 have no answer: the scope pass refuses one outside a loop.
 
 A `Match` checks its scrutinee (CE2048, `matching.matchable_type`) and writes its
@@ -126,7 +126,7 @@ def check_assign(validator: TypeValidator, node: s.Assign) -> None:
         visit.check_expr(validator, node.value)
         return
     if node.is_init or not isinstance(target, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     ty = visit.check_expr(validator, target)
     if reject_unwritable_place(validator, target, node.loc):
         visit.check_expr(validator, node.value)
@@ -285,8 +285,8 @@ def check_return(validator: TypeValidator, node: s.Return) -> None:
 
 def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
     """The `Return` of an initializer body: the value at the declared type, as a `let`
-    checks it. An initializer that fits and has no value, and is no empty container, stops
-    the walk. The pass writes no value row: the backend makes the global from the constant
+    checks it. An initializer that fits and has no value, and is no empty container, is
+    an internal error. The pass writes no value row: the backend makes the global from the constant
     evaluator (docs/design/ir.md 7.3, 8.2)."""
     facts = validator.initializer
     if facts is None:
@@ -301,7 +301,7 @@ def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
     if got is None or facts.empty:
         return
     if facts.value is None:
-        visit.stop_with_no_value(node)
+        visit.unhandled_with_no_value(validator, node)
 
 
 def _check_channel_return(validator: TypeValidator, value: e.ShirExpr, channel: Type) -> None:

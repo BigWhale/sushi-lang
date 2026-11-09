@@ -69,7 +69,7 @@ def _bare(validator: TypeValidator, node: e.GlobalRef, name: str,
         return _generic(validator, node, template, name, expected)
     sig = validator.func_sig(name)
     if sig is None:
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     if (reject_private_name(validator, "function", sig, node.loc, verb=VALUE_VERB)
             or reject_ambiguous_name(validator, "function", name, node.loc)):
         return None

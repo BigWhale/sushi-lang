@@ -4,7 +4,7 @@ Lowering dispatches on the class of an AST node through three tables: `LOWERING`
 expression and a statement) and `ARGUMENTS` (the form of a call argument) in
 `sushi_lang/semantics/shir/lower_nodes.py`, and `PATTERNS` (a pattern position) in
 `sushi_lang/semantics/shir/lower_patterns.py`. A class with no row is a hole: the dump
-prints it, and under `SUSHI_SHIR_STRICT=1` it stops the compile with CE0155. So lowering is
+prints it, and under `SUSHI_SHIR_STRICT=1` it is an internal error (CE0000). So lowering is
 total when every class that a body holds has a row. This gate holds four rules:
 
 1. The union of the keys of the tables, plus `EXEMPT`, is the set of AST body classes: the

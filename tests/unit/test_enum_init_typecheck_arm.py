@@ -3,9 +3,7 @@
 A `Result` or a `Maybe` variant takes the instance of its position. A variant of an enum
 that is not generic is an instance of that enum, also behind an alias. A wrapper variant
 whose position gives no instance, a variant of a generic enum of the program and a variant
-of an enum whose name the unit lost (D2) stop with `typecheck, EnumInit`. A `Static` call
-on a generic enum stops with `typecheck, Call(static)` while a unit declares a method of its
-name (C1).
+of an enum whose name the unit lost are an internal error for `EnumInit`.
 The tests run the arm over SHIR built by hand, with a stand-in for the pass; they do not
 run the compiler.
 """
@@ -16,7 +14,7 @@ from typing import Optional
 
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
@@ -46,6 +44,7 @@ def _validator(written: str, *, lost: Optional[str] = None,
     bindings = {("geo", "Sign"): SimpleNamespace(kind="enum", name="Sign")}
     by_type = {"Sign": {name: [SimpleNamespace(unit_name="main")] for name in methods}}
     return SimpleNamespace(
+        has_an_error=lambda: False,
         answers=answers, body_answers=lambda: answers, decl_name=lambda _decl: written,
         enum_table=SimpleNamespace(by_name={"Sign": SIGN, "Maybe<i32>": MAYBE_I32}),
         struct_table=SimpleNamespace(by_name={}),
@@ -62,9 +61,9 @@ def _init(variant: str) -> e.EnumInit:
     return e.EnumInit(ShirId(1), SPAN, DeclId(0), variant, [], SPAN)
 
 
-def _stop(validator: SimpleNamespace, node: e.ShirExpr,
+def _fault(validator: SimpleNamespace, node: e.ShirExpr,
           expected: Optional[EnumType] = None) -> dict:
-    with pytest.raises(StageStop) as caught:
+    with pytest.raises(InternalCompilerError) as caught:
         visit.check_expr(validator, node, expected)
     assert caught.value.span == SPAN
     return caught.value.params
@@ -88,8 +87,8 @@ def test_a_maybe_variant_takes_the_instance_of_its_position() -> None:
 @pytest.mark.parametrize("written, lost, expected", [
     ("Sign", "Sign", None),
 ])
-def test_a_construction_that_is_not_typed_yet_stops(written: str, lost: Optional[str],
+def test_a_construction_that_is_not_typed_is_an_internal_error(written: str, lost: Optional[str],
                                                     expected: Optional[EnumType]) -> None:
     validator = _validator(written, lost=lost)
-    assert _stop(validator, _init("None" if written != "Sign" else "Plus"), expected) == {
-        "stage": "typecheck", "construct": "EnumInit"}
+    assert _fault(validator, _init("None" if written != "Sign" else "Plus"), expected) == (
+        {"detail": "the typecheck stage does not handle the construct 'EnumInit'"})

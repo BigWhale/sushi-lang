@@ -1,14 +1,13 @@
 """The SLIR unit: one function, its locals and its blocks, and the program (docs/design/ir.md 8.2).
 
-`SlirProgram` keeps the outcome of the SLIR lowering of each SHIR body, keyed by the
-`DeclId` of the body: the `SlirFunction`, or the construct at which the lowering stopped
-(`SlirStopped`). The dump reads it in the order of the SHIR units and bodies. The SLIR
+`SlirProgram` keeps the `SlirFunction` of each SHIR body that the SLIR lowering lowered,
+keyed by the `DeclId` of the body. The dump reads it in the order of the SHIR units and bodies. The SLIR
 stage (`lower.py`) is the one writer.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, TypeAlias
+from typing import Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -21,7 +20,7 @@ from sushi_lang.semantics.slir.statements import Assign, SlirStatement
 from sushi_lang.semantics.slir.terminators import SlirTerminator
 from sushi_lang.semantics.typesys import Type
 
-#: The name of this stage in the stop code.
+#: The name of this stage in an internal error.
 STAGE = "slir"
 
 
@@ -71,26 +70,16 @@ def address_locals(function: SlirFunction) -> frozenset[LocalId]:
                      and isinstance(stmt.place, Local))
 
 
-@dataclass(frozen=True, slots=True)
-class SlirStopped:
-    """A body whose SLIR lowering stopped at the construct `construct`."""
-    name: str
-    construct: str
-
-
-SlirOutcome: TypeAlias = SlirFunction | SlirStopped
-
-
 @dataclass(slots=True)
 class SlirProgram:
-    """The outcome of the SLIR lowering of each SHIR body that `borrow` finished."""
-    _outcomes: dict[DeclId, SlirOutcome] = field(default_factory=dict)
+    """The `SlirFunction` of each SHIR body that `borrow` finished."""
+    _outcomes: dict[DeclId, SlirFunction] = field(default_factory=dict)
 
-    def record(self, body: DeclId, outcome: SlirOutcome) -> None:
+    def record(self, body: DeclId, outcome: SlirFunction) -> None:
         if body in self._outcomes:
             er.raise_internal_error("CE0000", detail="SLIR lowering lowered one body two times")
         self._outcomes[body] = outcome
 
-    def outcome_of(self, body: DeclId) -> Optional[SlirOutcome]:
-        """The outcome of the body `body`, or None when the body did not reach SLIR."""
+    def outcome_of(self, body: DeclId) -> Optional[SlirFunction]:
+        """The function of the body `body`, or None when the body did not reach SLIR."""
         return self._outcomes.get(body)

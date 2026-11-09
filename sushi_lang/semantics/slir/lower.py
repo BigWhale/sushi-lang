@@ -5,9 +5,7 @@ that it finished with no error, with the tables that typecheck read the body in;
 check never comes (ir.md 4.3). The stage lowers no initializer body of a constant or a
 `var`: the global takes the value of the constant evaluator (ir.md 8.2). `lower_function`
 makes the `SlirFunction` of the body from the body and its side tables. A construct that the
-lowering does not handle yet stops the body with the stop code CE0155 (`slir, <construct>`):
-the stage records the stop (`Stops.slir_stopped`) and the construct (`SlirStopped`, for the
-dump), and the analysis goes on with the next body. The verifier (`verify.py`, ir.md 8.13)
+lowering does not handle is an internal error. The verifier (`verify.py`, ir.md 8.13)
 checks a body that the lowering finished, and `SlirProgram` keeps it for the emitter
 (`backend/slir/`).
 
@@ -42,8 +40,7 @@ that a back edge brings. The walk finds such a local only at the join, after the
 that must make the flag. So a walk records what it finds (`Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
-The construct of a stop is the SHIR class of the node, or `ConstRef out of range` for a
-name of a constant whose value its type cannot hold. The symbol, the unit and the return type of the function are facts of its declaration
+The symbol, the unit and the return type of the function are facts of its declaration
 (ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
 (`extension_decl_symbol`), the body of a perk method the perk symbol, and its receiver is `_1`. The unit is the declaring unit; a
 function that has none (a lifted lambda, the instance of a template of a binary library)
@@ -55,7 +52,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span, display_filename
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import Ownership
@@ -91,7 +87,7 @@ from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import DropPlacement, FlowState
 from sushi_lang.semantics.slir.function import (
-    STAGE, SlirBlock, SlirFunction, SlirLocal, SlirProgram, SlirStopped,
+    STAGE, SlirBlock, SlirFunction, SlirLocal, SlirProgram,
 )
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
@@ -106,7 +102,6 @@ from sushi_lang.semantics.unit_symbols import declaring_unit
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.decls import DeclNames
     from sushi_lang.semantics.shir.lowering import BodyTables, LoweredProgram
-    from sushi_lang.semantics.shir.stop import Stops
     from sushi_lang.semantics.tables import SymbolTables
 
 #: The return slot of every function (ir.md 8.2).
@@ -119,7 +114,6 @@ class SlirStage:
     the program has no error (`failed`)."""
     shir: LoweredProgram
     slir: SlirProgram
-    stops: Stops
     unit: str
     failed: Callable[[], bool]
     verifier: SlirVerifier = field(default_factory=SlirVerifier)
@@ -130,23 +124,16 @@ class SlirStage:
         outcome, and neither has a body of a program that has an error (docs/design/ir.md
         7.9).
 
-        A stop ends the lowering of the body: the stage records it with the file of the
-        body. The verifier checks a function that the lowering finished (ir.md 8.13), and
+        The verifier checks a function that the lowering finished (ir.md 8.13), and
         the program keeps it for the emitter.
         """
         if isinstance(body.origin, Initializer) or self.failed():
             return
         name = self.shir.decls.name_of(body.fn_id)
         drops = drop_type_names(tables.perk_impls)
-        try:
-            function = lower_function(decl, self.shir.tables_of(body), decls=self.shir.decls,
-                                      name=name, unit=self.unit, tables=tables, drops=drops,
-                                      label=display_filename(filename or "<input>"))
-        except StageStop as stop:
-            stop.filename = filename
-            self.stops.slir_stopped(stop)
-            self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
-            return
+        function = lower_function(decl, self.shir.tables_of(body), decls=self.shir.decls,
+                                  name=name, unit=self.unit, tables=tables, drops=drops,
+                                  label=display_filename(filename or "<input>"))
         for each in (function, *function.lifted):
             self.verifier.verify(each, funcs=tables.funcs, extensions=tables.extensions,
                                  externals=tables.externals, perk_impls=tables.perk_impls,
@@ -178,8 +165,6 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
                    label: str) -> SlirFunction:
     """The `SlirFunction` of one body that `borrow` finished, from the body and its tables.
     `label` names the file of the body in the position of a trap.
-
-    Raises `StageStop` at the first construct that the lowering does not handle yet.
     """
     body = answers.body
     if isinstance(body.origin, TemplateCheck):
@@ -315,7 +300,7 @@ class Lowering:
         """`_1` to `_n`, each with its convention (L2, L4); an `Owned` one owns (L15)."""
         for param in self.answers.body.params:
             if param.pack:
-                raise StageStop(STAGE, "ShirParam", param.loc)
+                dispatch.unhandled(STAGE, param)
         return self.bound_parameters([(param.local, param.convention, param.loc)
                                       for param in self.answers.body.params])
 
@@ -379,7 +364,7 @@ class Lowering:
                                     detail="a SHIR statement after the end of its block")
         arm = _STATEMENTS.get(type(stmt))
         if arm is None:
-            dispatch.stop(STAGE, stmt)
+            dispatch.unhandled(STAGE, stmt)
         self.placement.open_statement(stmt.shir_id)
         arm(self, stmt)
         if self.alive:
@@ -401,7 +386,7 @@ class Lowering:
             globals_.rebind_global(self, stmt, target)
             return
         if not isinstance(target, e.LocalRef):
-            dispatch.stop(STAGE, target)
+            dispatch.unhandled(STAGE, target)
         if stmt.is_init and isinstance(stmt.value, e.Borrow):
             views.let_reference(self, stmt, target)
         elif stmt.is_init and self.answers.ownership.ownership_of(
@@ -481,7 +466,7 @@ class Lowering:
     def value(self, expr: e.ShirExpr) -> Value:
         arm = _VALUES.get(type(expr))
         if arm is None:
-            dispatch.stop(STAGE, expr)
+            dispatch.unhandled(STAGE, expr)
         return arm(self, expr)
 
     def operand(self, expr: e.ShirExpr, *, in_place: bool = False) -> p.Operand:
@@ -522,16 +507,17 @@ class Lowering:
 
     def constant(self, ref: e.ConstRef) -> k.Constant:
         """The value of the constant that `ref` names, from its typecheck row. A value that its
-        type cannot hold stops (`ConstRef out of range`): the constant evaluator does not
-        wrap a bit pattern, and it gives a value to an initializer with a range error or with
-        a count of elements that its `T[N]` does not hold."""
+        type cannot hold is an internal error (the R14 guard, ir.md 8.5): the constant
+        evaluator does not wrap a bit pattern, and it gives a value to an initializer with a
+        range error or with a count of elements that its `T[N]` does not hold."""
         value = self.typeck.value_of(ref.shir_id)
         if value is None:
             er.raise_internal_error("CE0000", span=ref.loc,
                                     detail="a constant with no value reached SLIR")
         constant = k.of_value(value)
         if not holds(constant):
-            dispatch.stop(STAGE, ref, state="out of range")
+            er.raise_internal_error("CE0000", span=ref.loc,
+                                    detail="a constant value that its type cannot hold")
         return constant
 
     def leaf(self, expr: e.Lit | e.LocalRef | e.ConstRef | e.StorageRef) -> Value:

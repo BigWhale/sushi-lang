@@ -8,10 +8,10 @@ member of `ShirPattern` (ruling R17; gate for both:
 its node (`check_expr`), which the dispatch writes into the `TypeckResults` of the body. A
 pattern arm takes the type of its position and a note that says where that type comes from,
 and answers the place of the pattern in the matrix of the one checker (`check_pattern`): a
-pattern has no type, so its dispatch writes no row. The lookup of an arm and the stop are
-the one dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too:
-a class with no row is an internal error, and the arm of a construct that the pass does not
-type yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
+pattern has no type, so its dispatch writes no row. The lookup of an arm is the one
+dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too: a class
+with no row is an internal error, and so is a construct that an arm does not type
+(`unhandled`).
 
 `statements.py` walks a block and holds the statement arms, `destructure.py` the arm of a
 destructure, `expressions.py` the expression arms of the leaves and of a struct
@@ -46,7 +46,6 @@ from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types import matching as mt
 from sushi_lang.semantics.passes.types.matching import PositionNote
 from sushi_lang.semantics.const_eval import ScalarConstant
-from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
 from sushi_lang.semantics.passes.types.exhaustiveness import Pat
 from sushi_lang.semantics.passes.types.expressions import check_cast, check_try
 from sushi_lang.semantics.shir import dispatch
@@ -59,21 +58,22 @@ from sushi_lang.semantics.typesys import Type
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 
-#: The name of this stage in the stop code.
+#: The name of this stage in an internal error.
 STAGE = "typecheck"
 
 
-def stop_at(validator: TypeValidator, node: Any, _expected: Optional[Type] = None) -> NoReturn:
-    """The arm of a construct that the pass does not type yet: the walk of the body stops."""
-    facts = TypecheckCallFacts(validator) if isinstance(node, e.Call) else None
-    dispatch.stop(STAGE, node, facts)
+def unhandled(validator: TypeValidator, node: Any,
+              _expected: Optional[Type] = None) -> NoReturn:
+    """The internal error of a construct that the pass does not type. After an error, the
+    walk of the body ends there."""
+    dispatch.unhandled(STAGE, node, after_an_error=validator.has_an_error())
 
 
-def stop_with_no_value(node: Any) -> NoReturn:
-    """The stop at a constant that has no value and no error (`ConstRef with no value`), or
-    at the `Return` of such an initializer (`Return with no value`): a function-typed
-    constant, for example. After an error of the initializer, the error is the diagnostic."""
-    dispatch.stop(STAGE, node, state="with no value")
+def unhandled_with_no_value(validator: TypeValidator, node: Any) -> NoReturn:
+    """The internal error of a constant that has no value and no error, or of the `Return`
+    of such an initializer. After an error, the walk of the body ends there."""
+    dispatch.unhandled(STAGE, node, state="with no value",
+                       after_an_error=validator.has_an_error())
 
 
 def _arm(node: Any) -> Callable[..., Any]:

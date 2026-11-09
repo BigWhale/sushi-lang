@@ -18,7 +18,7 @@ import typing
 
 import pytest
 
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.integer_patterns import goes_down, literal_value, pattern_interval
 from sushi_lang.semantics.passes.types import visit
@@ -131,7 +131,6 @@ def test_the_expression_table_has_no_pattern_row() -> None:
     literal = _lit(10, _int(1))
     with pytest.raises(InternalCompilerError) as caught:
         visit.check_expr(_validator(answers), literal, I32)
-    assert not isinstance(caught.value, StageStop)
     assert caught.value.code == "CE0000"
     assert answers.type_of(literal.shir_id) is None
 

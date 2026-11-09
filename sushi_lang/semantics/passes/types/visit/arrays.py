@@ -17,8 +17,8 @@ an i32 position (CE2121). A base of another type is CE2114. An index of a fixed 
 the compiler can read is in range (CE2056, CE2012). An index answers its element type also
 after an error of the index. A `Slice` is a `T[]` view of either array kind: its bounds
 are i32 positions, and readable bounds go up (CE2125). A string has no slice (CE2122), and
-a base of another type is CE2114. A base of a type that the pass has no rule for yet (a
-type pack, a type whose name the unit lost) stops the walk.
+a base of another type is CE2114. A base of a type that the pass has no rule for (a
+type pack, a type whose name the unit lost) is an internal error.
 """
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def _empty(validator: TypeValidator, node: e.ArrayInit,
     if isinstance(node.kind, e.Dynamic) and isinstance(position, DynamicArrayType):
         return position
     if not isinstance(node.kind, e.Dynamic):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     form = "new()" if node.kind.new else "from([])"
     er.emit(validator.reporter, er.ERR.CE2111, node.loc, form=form)
     return None
@@ -262,9 +262,9 @@ def _reject_bounds_that_go_down(validator: TypeValidator, node: e.Slice, span: S
 
 def _reject_not_indexable(validator: TypeValidator, node: e.Index | e.Slice, base: e.ShirExpr,
                           ty: Type) -> None:
-    """CE2114 at the base. A base of a type that the pass has no rule for yet stops the
-    walk: the name of a type pack in a template check (group C1), and a type whose name
-    the unit lost (D2)."""
+    """CE2114 at the base. A base of a type that the pass has no rule for is an internal
+    error: the name of a type pack in a template check, and a type whose name the unit
+    lost."""
     if isinstance(ty, UnknownType):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     er.emit(validator.reporter, er.ERR.CE2114, base.loc, type=display_type(ty))

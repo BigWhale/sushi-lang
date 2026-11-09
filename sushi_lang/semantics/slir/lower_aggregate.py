@@ -235,7 +235,7 @@ def _bind(low: Lowering, targets: Sequence[s.DestructureTarget], source: p.Place
             _bind(low, target.targets, p.Field(source, index), span)
         elif isinstance(target, s.Place):
             if not isinstance(target.target, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
-                dispatch.stop(STAGE, target.target)
+                dispatch.unhandled(STAGE, target.target)
             low.write(place_of(low, target.target), element, span)
         elif isinstance(target, ShirLocalId):
             ident, ty = low.bind(target, span)

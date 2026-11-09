@@ -47,18 +47,14 @@ the body through a table of its own (`borrow/arms.py`); both tables read one dis
 (`shir/dispatch.py`). The declaration half of `typecheck` and of `borrow` (the
 signatures, the declared types, the constraints, the header of each body, the mode of
 each parameter) still reads the AST. `scope` and `effects` stay on the AST; `effects` runs
-before the loop, because `borrow` reads its summary. While the move is in progress, the
-arm of a construct that a pass does not handle yet stops the walk of its body, the next
-pass does not get that body, and the backend does not run. `borrow` gives each body that
+before the loop, because `borrow` reads its summary. A construct that a pass does not
+handle is an internal error; after an error of the program, the walk of the body ends
+there, and the error is the diagnostic. `borrow` gives each body that
 it finished to the SLIR lowering (`semantics/slir/lower.py`), which is not a pass: it makes
-one `SlirFunction` for each body, and stops at the first construct that it cannot lower
-yet. The SLIR verifier (`semantics/slir/verify.py`) checks each function that the
+one `SlirFunction` for each body; a construct that it cannot lower is an internal error. The SLIR verifier (`semantics/slir/verify.py`) checks each function that the
 lowering finished; a broken rule is the internal error
-[CE0158](../error-catalog.md#ce0158). A stop stops a program with no error after the
-analysis with [CE0155](../error-catalog.md#ce0155) (`slir, <construct>`), and `--dump-shir`
-and `--dump-slir` are written first. With no stop, the backend emits each function from its
-SLIR (`backend/slir/`), and the emitter stops at a SLIR shape that it does not handle yet
-(`emit, <class>`).
+[CE0158](../error-catalog.md#ce0158). The backend emits each function from its SLIR
+(`backend/slir/`), and a SLIR shape that the emitter does not handle is an internal error.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a
@@ -1165,10 +1161,10 @@ channel's. The same type propagates unchanged; otherwise `find_conversion`
 `??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is the conversion
 row of the `Try` in `TypeckResults`, beside its facts (the tag of `Ok`, the two payload
 types, the `Result` of the channel); a `??` across two error types that a conversion joins
-is not typed on SHIR yet, and stops the walk of its body. The backend calls the
+has the row of that conversion. The backend calls the
 conversion before the scope cleanup of the propagation path. `check_cast` asks the same question for
 `e as T`: a numeric cast and an identity cast have the conversion row `NoConversion`, a cast
-that a conversion joins stops the walk of its body, and any other pair is
+that a conversion joins has the row of that conversion, and any other pair is
 [`CE2014`](../error-catalog.md#ce2014). In the check of a template, an
 opaque `E` has no conversion: `??` propagates the same `E` and no other ([`CE2511`](../error-catalog.md#ce2511) with a
 note at `E`, ruling R8). Each instance asks again on its own copy of the node, where E3
@@ -1338,11 +1334,8 @@ the `OwnershipResults` of the body: the `Ownership` of each consuming use, which
 `classify()` decides one time (`consume.decide`), and the conditionally moved locals. The
 convention of each call argument is the `TypeckResults` row of the call, and the pass does
 not derive it again. When the walk of a body ends with no error, `check_ownership` finds
-each consuming use with no row ([CE0157](../error-catalog.md#ce0157)). The arm of a
-construct that the pass does not check yet stops the walk of its body with
-[CE0155](../error-catalog.md#ce0155): straight-line code, an `if`, a `while` loop, a `break`
-and a `continue` are checked, and a `foreach`, a method call, a field, a `match` and a lambda
-wait for their groups. The rules below are
+each consuming use with no row ([CE0157](../error-catalog.md#ce0157)). A construct
+that the pass does not check is an internal error. The rules below are
 the rules of the language, and each group of the move brings the rules of its constructs
 to SHIR.
 

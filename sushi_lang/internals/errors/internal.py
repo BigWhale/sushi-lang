@@ -431,54 +431,11 @@ _add(ErrorMessage("CE0154", Severity.ERROR,
     "tests/unit/test_shir_printer_is_total.py is the gate; this is the backstop. "
     "This is a fault in the compiler, not in the program; please report the program."))
 
-_add(ErrorMessage("CE0155", Severity.ERROR,
-    "the new pipeline does not emit this program yet: {stage}, {construct}",
-    Category.INTERNAL,
-    "The compiler moves to a new pipeline (docs/design/ir.md): a body is lowered to SHIR, "
-    "and later stages read SHIR. While the move is in progress, a stage can meet a "
-    "construct that it does not handle yet. The message names the stage and the "
-    "construct. The typecheck pass walks the SHIR body of each declaration, and the "
-    "first construct that it cannot type yet stops the program (the stage is "
-    "`typecheck`). The typecheck pass gives each body that it finished with no error to "
-    "the lift pass, which stops at nothing. The lift "
-    "pass gives each body that it finished to the borrow pass, and the first construct "
-    "that the borrow pass cannot check yet stops the program (the stage is `borrow`). The "
-    "borrow pass gives each body that it finished to the SLIR lowering, and the first "
-    "construct that the SLIR lowering cannot lower yet stops the program (the stage is "
-    "`slir`). A stop of the typecheck pass at a call names the kind of its target, "
-    "`Call(<kind>)`: `method`, `extension`, `stdlib method`, `static`, `builtin static`, "
-    "`stdlib`, `extern`, `alias`, `function`, `generic`, `fn value` or `builtin`. A stop "
-    "at a call of a built-in method whose family the stage cannot handle yet names the "
-    "family, `Call(method <family>)`, in the typecheck pass and in the borrow pass. "
-    "A program in which no stage stops at a construct goes on to the backend: the "
-    "emitter of each SLIR function stops the program at the first SLIR shape that it does "
-    "not handle yet (the stage is `emit`, and the construct is the class of the shape, for "
-    "example `emit, Indirect`), before the compiler writes an object, a binary or an LLVM text. "
-    "The code of a pass or of the SLIR lowering comes after `--dump-shir` and `--dump-slir` "
-    "write their dumps, and "
-    "only when the program has no error: an error of the program is the diagnostic then. "
-    "Lowering gives the code too (the stage is `lowering`), only when the variable "
-    "SUSHI_SHIR_STRICT is 1: with no variable, lowering records the construct as a hole "
-    "(docs/compiler-reference.md, Dump SHIR). The code does not come for a name with no "
-    "declaration: the program always has an error then (CE1001, CE1002, or CE0144 for a "
-    "type pack name), and that error is the diagnostic. The code does not come for a form "
-    "that the language always refuses either: a named argument outside a struct "
-    "construction (CE6104), written type arguments after a dot or on a struct "
-    "construction (CE6102), a slice with a reversed range (CE2122), a call of a name "
-    "that the namespace does not hold (CE2008), a member of a type that is no "
-    "variant (CE2045), and a `break` or a `continue` "
-    "outside a loop (CE1003). The code does not come for a unit "
-    "in which the scope pass reported an error either: a type name written as a value is "
-    "a hole there, and the error of the scope pass (CE2105) is the diagnostic. Each of those "
-    "forms is an ERROR HOLE that carries the codes of its error. On every compile, an error "
-    "hole whose codes no error offered stops the program with this code (the stage is "
-    "`lowering, error hole`) when no pass stopped at a construct: lowering and "
-    "the typecheck pass then disagree, and the hole could hide a fault in a correct "
-    "program. In a constant or a `var` "
-    "initializer an error hole also accepts CE0108, and a slice with a reversed range also "
-    "accepts CE2404, because those errors come first. The code goes when the move is "
-    "complete. "
-    "This is a limit of the compiler, not a fault in the program."))
+# CE0155 ("the new pipeline does not emit this program yet: {stage}, {construct}") is
+# retired. It was the stop code of the move to SHIR and SLIR (docs/design/ir.md): a stage
+# that met a construct it did not handle yet stopped the program with it. When the move was
+# complete, no construct stopped a stage any more, and a construct that a stage does not
+# handle is now an internal error, CE0000. The number is not reused.
 
 _add(ErrorMessage("CE0156", Severity.ERROR,
     "the typecheck pass recorded no {answer} for the {node} at {where} in the body '{body}'",

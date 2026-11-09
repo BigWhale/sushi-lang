@@ -2,7 +2,7 @@
 
 `LOWERING` in `sushi_lang/semantics/shir/lower_nodes.py` gives the lowering of each AST
 expression class and each AST statement class. A class with no row is a HOLE: lowering
-records it and the compile goes on, or the stop code CE0155 stops it under
+records it and the compile goes on, or it is an internal error (CE0000) under
 `SUSHI_SHIR_STRICT=1`. A call argument has a second table, `ARGUMENTS`: the classes that
 are the FORM of an argument and no value of their own there, a bloom `xs...` and a
 `peek`/`poke` marker. A pattern has a third table, `PATTERNS` in

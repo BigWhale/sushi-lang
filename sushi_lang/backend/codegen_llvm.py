@@ -32,7 +32,6 @@ from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
 from sushi_lang.backend.slir import emit as slir_emit
 from sushi_lang.backend.slir.closures import declare_lifted
-from sushi_lang.backend.slir.state import stop
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 # Registers the hash() emitter factories that semantics/generics/hashing.py
 # resolves when it emits an auto-derived hash(). The derive pass registers the method
@@ -595,7 +594,7 @@ class LLVMCodegen:
         expression that produced it. Matching a string constant syntactically meant
         `const string ALIAS = GREETING` registered no global at all and every use said
         CE0055, an internal error, on a valid program (#441; #260 was the same hazard
-        for a literal array). The round makes a global or stops the compile; it never
+        for a literal array). The round makes a global or raises an internal error; it never
         drops one (docs/design/ir.md 8.2).
         """
         # A compiled library's constant is a name of the library unit, and its
@@ -639,10 +638,11 @@ class LLVMCodegen:
     def _value_of_global(self, const: ConstDef, ty: Type, unit_name: str | None,
                          filename: Optional[str]) -> "ConstantValue":
         """The value of the initializer of a constant or a `var`. A constant with no value
-        stops (`emit, constant with no value`)."""
+        is an internal error."""
         value = self._evaluate_constant_expression(const.value, ty, unit_name)
         if value is None:
-            stop("constant with no value", const.loc, filename)
+            raise_internal_error("CE0000", span=const.loc, filename=filename,
+                                 detail="a constant with no value reached the backend")
         return value
 
     def _materialize_constant(self, value, data_name: str, span: Optional[Span],

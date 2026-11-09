@@ -321,7 +321,7 @@ def loop(low: Lowering, stmt: s.Loop) -> None:
           and isinstance(source.iterable, e.Range)):
         _counted(low, stmt, source, source.iterable)
     else:
-        dispatch.stop(STAGE, stmt)
+        dispatch.unhandled(STAGE, stmt)
 
 
 def _while(low: Lowering, stmt: s.Loop, source: s.Cond) -> None:

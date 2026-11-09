@@ -79,7 +79,7 @@ def _place_type(validator: TypeValidator, node: s.Destructure,
                 place: e.ShirExpr) -> Optional[Type]:
     """The type of a place with no `peek` or `poke`; None after an error of the place."""
     if not isinstance(place, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     ty = visit.check_expr(validator, place)
     if reject_unwritable_place(validator, place, place.loc):
         return None

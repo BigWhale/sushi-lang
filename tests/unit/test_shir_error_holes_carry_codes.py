@@ -4,17 +4,17 @@ An error hole is the hole of a program that always has an error: it never stops 
 compile under `SUSHI_SHIR_STRICT=1`. When lowering and the typecheck pass disagree, an
 error hole could stand in a correct program and hide a fault (ruling of 2026-10-20 on
 note 139). So each error hole names the codes of the error that it stands for, and at the
-end of the analysis an error hole whose codes no diagnostic offered is the stop code
-CE0155. Three rules:
+end of the analysis an error hole whose codes no diagnostic offered is an internal error,
+CE0000. Three rules:
 
 1. Each call of `error_hole` in `semantics/shir/` names one code or more, each a string
    literal that the error registry holds.
 2. `unreported_error_holes` answers each error hole whose codes no error offered, and no
    hole with no codes.
 3. The analyzer calls `check_error_holes` at the end of the analysis. From the switch to
-   SHIR it runs on every compile, with no strict variable: it answers the stop of the
-   first error hole whose codes no error offered, and the pipeline reports it when no
-   error and no earlier stop came (ruling of 2026-10-20, R-F).
+   SHIR it runs on every compile, with no strict variable: it raises the internal error
+   of the first error hole whose codes no error offered, and the pipeline runs it when
+   the analysis reported no error (ruling of 2026-10-20, R-F).
 
 The scan reads source, and rule 2 calls a function over data; nothing starts the compiler.
 """
@@ -24,6 +24,9 @@ import ast
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors import REGISTRY
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.ids import ShirId
@@ -87,9 +90,10 @@ def test_the_analyzer_checks_the_error_holes() -> None:
 def test_the_check_runs_on_every_compile(monkeypatch) -> None:
     monkeypatch.delenv(STRICT_VARIABLE, raising=False)
     first, second = _hole("CE2122"), _hole("CE2045")
-    stop = check_error_holes([first, second], Counter({"CE1001": 1}))
-    assert stop is not None and stop.code == "CE0155"
-    assert stop.params == {"stage": "lowering",
-                           "construct": "error hole, IndexAccess with no CE2122"}
-    assert stop.span == first.loc
-    assert check_error_holes([first], Counter({"CE2122": 1})) is None
+    with pytest.raises(InternalCompilerError) as caught:
+        check_error_holes([first, second], Counter({"CE1001": 1}))
+    assert caught.value.code == "CE0000"
+    assert caught.value.params == {
+        "detail": "the error hole of the AST class 'IndexAccess' has no error CE2122"}
+    assert caught.value.span == first.loc
+    check_error_holes([first], Counter({"CE2122": 1}))

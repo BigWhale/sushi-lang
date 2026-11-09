@@ -42,7 +42,7 @@ def check_field(validator: TypeValidator, node: e.Field,
         return None
     ty = deref_type(base)
     if type_is_contested(validator, ty):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     if isinstance(ty, StructType):
         for index, (name, field_type) in enumerate(ty.fields):
             if name == node.name:
@@ -50,7 +50,7 @@ def check_field(validator: TypeValidator, node: e.Field,
                 return resolve_field_type(validator, field_type)
     names = _field_names_of(ty)
     if names is None:
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     _reject_unknown_field(validator, node, ty, names)
     return None
 

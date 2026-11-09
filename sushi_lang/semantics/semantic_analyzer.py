@@ -29,8 +29,6 @@ from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.passes.lift import LiftPass
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
-from sushi_lang.internals.diagnostics import StageStop
-from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.slir.function import SlirProgram
 from sushi_lang.semantics.slir.lower import SlirStage
 from sushi_lang.semantics.units import UnitManager, Unit
@@ -190,11 +188,9 @@ class SemanticAnalyzer:
         # order (docs/design/ir.md 6.3). The typecheck pass walks it, and `--dump-shir`
         # prints it.
         self.shir = LoweredProgram()
-        # The SLIR of each body that the borrow pass finished, or the construct at which
-        # its lowering stopped (docs/design/ir.md 8.2). `--dump-slir` prints it.
+        # The SLIR of each body that the borrow pass finished (docs/design/ir.md 8.2).
+        # `--dump-slir` prints it.
         self.slir = SlirProgram()
-        # The stops that the SHIR passes and the SLIR stage met (`shir/stop.py`).
-        self.stops = Stops()
         # Which functions destroy a `poke` parameter, transitively: the summary of the
         # `effects` pass, which the borrow pass reads.
         self.destroy_effects: dict = {}
@@ -253,12 +249,8 @@ class SemanticAnalyzer:
         gives it to the SLIR stage. A body whose walk in `typecheck` reported an error goes
         to `lift` and `borrow` too, for the diagnostics of `borrow`, and never to the SLIR
         stage, which lowers nothing while the program has an error (docs/design/ir.md 7.9).
-        A stop of a stage ends the work on its body, and the
-        next stage does not get it.
-        `effects` runs on the AST before the loop, because `borrow` reads its summary. A
-        stop of a stage stops the pipeline after the analysis with the stop code CE0155
-        (`pipeline_stop`); with no stop, the backend emits the `SlirFunction` of each body
-        (docs/design/ir.md 8.2). `_check_copies` repeats
+        `effects` runs on the AST before the loop, because `borrow` reads its summary. The
+        backend emits the `SlirFunction` of each body (docs/design/ir.md 8.2). `_check_copies` repeats
         the per-unit stages for each copy cut after the loop started: an extension copy of
         a generic or an array target, a perk copy cut on a miss, and a function instance
         of a late request of the typecheck pass (#1155). `_check_array_extensions` drives
@@ -378,15 +370,10 @@ class SemanticAnalyzer:
         self._check_array_extensions(compilation_order, monomorphizer, libraries)
         self._reject_opaque_in_program_tables()
 
-    def pipeline_stop(self) -> Optional[StageStop]:
-        """The one stop of the program, for an analysis that reported no error.
-
-        The first stop of the typecheck pass, else of the borrow
-        pass, else an error hole whose codes no error offered (ir.md 7.4), else of the SLIR
-        lowering (`Stops.first`). None when nothing stopped: the backend runs.
-        """
-        hole = check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
-        return self.stops.first(hole)
+    def check_error_holes(self) -> None:
+        """CE0000 at the first error hole whose codes no error offered (ir.md 7.4), for an
+        analysis that reported no error."""
+        check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
 
     def _reject_opaque_in_program_tables(self) -> None:
         """CE0148, the backstop of the template check (#1070): no opaque type reached here.
@@ -890,18 +877,20 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
-        slir = SlirStage(self.shir, self.slir, stops=self.stops, unit=unit.name,
+        slir = SlirStage(self.shir, self.slir, unit=unit.name,
                          failed=lambda: self.reporter.has_errors or reporter.has_errors)
-        borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir, stops=self.stops,
+        borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir,
                                next_stage=slir.lower_body,
-                               destroy_effects=self.destroy_effects, namespaces=namespaces)
+                               destroy_effects=self.destroy_effects, namespaces=namespaces,
+                               program_failed=lambda: self.reporter.has_errors)
         lift = LiftPass(self.shir, next_stage=borrow.check_body, unit=unit.name)
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,
             in_library_unit=unit.provenance is not None,
             namespaces=namespaces, checks_templates=_checks_templates(unit),
-            shir=self.shir, stops=self.stops, next_stage=lift.check_body)
+            shir=self.shir, next_stage=lift.check_body,
+            program_failed=lambda: self.reporter.has_errors)
         return _UnitPasses(scope, typecheck, lift, borrow, slir)
 
     @staticmethod

@@ -5,7 +5,7 @@ that it spells. A `ConstRef` takes the value of the constant, and a string const
 literal that owns no heap. The tests call the lowering functions over data; they do not run
 the compiler. A struct value and an array value are an `Aggregate` with no variant, also as
 a payload value or a field value. A name of a constant whose value its type cannot hold
-stops the lowering of the body.
+is an internal error (the R14 guard).
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.const_eval import AggregateConstant, ConstantValue, ScalarConstant
 from sushi_lang.semantics.shir import exprs as e
@@ -85,10 +85,12 @@ def test_a_name_of_a_constant_takes_its_value_row() -> None:
     AggregateConstant([ScalarConstant(1, I8)], ArrayType(I8, 2)),
     AggregateConstant([ScalarConstant(1, I8), ScalarConstant(300, I8)], ArrayType(I8, 2)),
 ], ids=["out of range", "short array", "element out of range"])
-def test_a_name_of_a_constant_that_its_type_cannot_hold_stops(value: ConstantValue) -> None:
-    with pytest.raises(StageStop) as caught:
+def test_a_name_of_a_constant_that_its_type_cannot_hold_is_an_internal_error(
+        value: ConstantValue) -> None:
+    with pytest.raises(InternalCompilerError) as caught:
         _constant_of(value)
-    assert caught.value.params == {"stage": "slir", "construct": "ConstRef out of range"}
+    assert caught.value.code == "CE0000"
+    assert caught.value.params == {"detail": "a constant value that its type cannot hold"}
     assert caught.value.span == SPAN
 
 

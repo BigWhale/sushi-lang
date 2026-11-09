@@ -2,8 +2,8 @@
 
 A construction of a struct that is not generic is an instance of that struct, also behind
 an alias. A construction of a generic struct of the program, of a struct whose name the
-unit lost (D2), and of an alias binding that is no struct stop with `typecheck,
-StructInit`. The tests run the arm over SHIR built by hand, with a stand-in for the pass;
+unit lost, and of an alias binding that is no struct are an internal error for
+`StructInit`. The tests run the arm over SHIR built by hand, with a stand-in for the pass;
 they do not run the compiler.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Optional
 
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
@@ -38,6 +38,7 @@ def _validator(written: str, *, lost: Optional[str] = None) -> SimpleNamespace:
     bindings = {("geo", "Crate"): SimpleNamespace(kind="struct", name="Crate"),
                 ("geo", "Sign"): SimpleNamespace(kind="enum", name="Sign")}
     return SimpleNamespace(
+        has_an_error=lambda: False,
         answers=answers, body_answers=lambda: answers, decl_name=lambda _decl: written,
         struct_table=SimpleNamespace(by_name={"Crate": CRATE}),
         generic_struct_table=SimpleNamespace(by_name={"Box": BOX}),
@@ -62,10 +63,11 @@ def test_a_construction_of_a_plain_struct_is_an_instance_of_it(written: str) -> 
     ("Crate", "Crate"),
     ("geo.Sign", None),
 ])
-def test_a_construction_that_is_not_typed_yet_stops(written: str,
-                                                    lost: Optional[str]) -> None:
+def test_a_construction_that_is_not_typed_is_an_internal_error(written: str,
+                                                               lost: Optional[str]) -> None:
     validator = _validator(written, lost=lost)
-    with pytest.raises(StageStop) as caught:
+    with pytest.raises(InternalCompilerError) as caught:
         visit.check_expr(validator, _init())
     assert caught.value.span == SPAN
-    assert caught.value.params == {"stage": "typecheck", "construct": "StructInit"}
+    assert caught.value.params == {
+        "detail": "the typecheck stage does not handle the construct 'StructInit'"}

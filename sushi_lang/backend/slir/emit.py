@@ -5,8 +5,7 @@ or a `poke` parameter: its local IS the incoming address (docs/design/ir.md 8.3)
 address local, which a `Ref` writes, has a slot of a pointer, and its storage is the
 address in that slot (8.2). A value parameter is stored into its slot at the entry. `_0` is the return slot, and `return`
 loads it. Each SLIR block is one LLVM block, in the order of the function. A statement
-class or a terminator class that the emitter does not handle yet stops the compile
-(`emit, <class>`). `StorageLive`, `StorageDead`, `BeginBorrow` and `EndBorrow` emit
+class or a terminator class that the emitter does not handle is an internal error. `StorageLive`, `StorageDead`, `BeginBorrow` and `EndBorrow` emit
 nothing. A drop goes through the
 one destroy seam of the backend.
 """
@@ -157,7 +156,7 @@ def _statement(state: FunctionState, statement: st.SlirStatement) -> None:
         _drop_if_set(state, statement)
     elif not isinstance(statement, (st.StorageLive, st.StorageDead, st.BeginBorrow,
                                     st.EndBorrow)):
-        state.stop(statement)
+        state.unhandled(statement)
 
 
 def _drop(state: FunctionState, place: p.Place) -> None:
@@ -223,7 +222,7 @@ def _stdlib(state: FunctionState, statement: st.Call, direct: st.Direct) -> None
 
 def _builtin(state: FunctionState, statement: st.Call) -> None:
     """An intrinsic, through its row of `INTRINSICS`, and a method, through its family
-    (`emit_method`). An intrinsic with no row stops (`emit, intrinsic <name>`)."""
+    (`emit_method`). An intrinsic with no row is an internal error."""
     builtin = statement.callee
     if not isinstance(builtin, st.Builtin):
         state.fault(f"the row of a builtin call got a {type(builtin).__name__} callee")
@@ -232,10 +231,10 @@ def _builtin(state: FunctionState, statement: st.Call) -> None:
         state.builder.store(value, place_address(state, statement.dest))
         return
     if not isinstance(builtin.method, Intrinsic):
-        state.stop(builtin.method)
+        state.unhandled(builtin.method)
     emit = INTRINSICS.get(builtin.method.name)
     if emit is None:
-        state.stop(f"intrinsic {builtin.method.name}")
+        state.unhandled(f"intrinsic {builtin.method.name}")
     state.builder.store(emit(state, statement), place_address(state, statement.dest))
 
 
@@ -290,7 +289,7 @@ def _terminator(state: FunctionState, terminator: tm.SlirTerminator) -> None:
     elif isinstance(terminator, tm.Trap):
         _trap(state, terminator)
     else:
-        state.stop(terminator)
+        state.unhandled(terminator)
 
 
 def _trap(state: FunctionState, terminator: tm.Trap) -> None:

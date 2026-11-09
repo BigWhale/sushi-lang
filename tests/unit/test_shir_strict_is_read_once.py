@@ -1,12 +1,13 @@
 """Gate: one module of the compiler reads `SUSHI_SHIR_STRICT` (docs/compiler-reference.md).
 
-Under `SUSHI_SHIR_STRICT=1`, a construct that lowering cannot handle yet stops the compile
-with the stop code CE0155, and does not become a hole. When two modules read the variable,
+Under `SUSHI_SHIR_STRICT=1`, a construct that lowering cannot handle is an internal error
+(CE0000), and does not become a hole. When two modules read the variable,
 one of them can stop the compile while the other records a hole. So the scan below holds
 two rules over the Python source of `sushi_lang/`:
 
 - exactly one string constant is the name of the variable, so one place reads it (a text
-  that names the variable among other words, such as the doc of CE0155, reads nothing);
+  that names the variable among other words, such as the doc of an error code, reads
+  nothing);
 - that constant is in the module of the hole, `semantics/shir/lower_nodes.py`.
 
 The scan reads source; it does not start the compiler.

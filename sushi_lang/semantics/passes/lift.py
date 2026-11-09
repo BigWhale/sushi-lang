@@ -32,7 +32,7 @@ class LiftPass:
 
     def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str], typecheck_failed: bool = False) -> None:
-        """Lift the SHIR body of `decl`, which the typecheck pass finished with no stop.
+        """Lift the SHIR body of `decl`, which the typecheck pass finished.
 
         The pass writes one row of each kind for each `Lambda`, a lambda in a lambda too, in
         the order of the walk. It checks the table of the body and gives the body, with the

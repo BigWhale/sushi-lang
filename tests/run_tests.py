@@ -1337,7 +1337,7 @@ def arm_check_variables() -> None:
     """Arm the variables that every compile of a run checks with, before it starts one.
 
     The spelling gate, and SHIR strict mode: under SUSHI_SHIR_STRICT=1 a hole that
-    lowering records in a correct program stops the compile with CE0155, so a run proves
+    lowering records in a correct program is an internal error, so a run proves
     that lowering is total. A child of the fork-server and a fresh process both take the
     environment of the run. No flag turns either off, and a value that the caller gives
     is replaced. A user who starts `sushic` by hand gets neither.

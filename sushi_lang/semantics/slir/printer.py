@@ -15,7 +15,6 @@ The rules of the text are L1 to L17 of the migration plan, and the golden
   source name adds `// <name>` at column 43.
 - A block is `  bbN:`, then its statements and its terminator at four spaces, with one
   blank line before it.
-- A function whose lowering stopped is one line: `fn <name>: stopped (slir, <construct>)`.
 - An operand is `copy <place>`, `move <place>` or `const <constant>`. A place with a
   projection is in parentheses: `(_3.0)`, `(_3[copy _4])`, `((_3 as Ok).0)`, `(*_2)`. A
   unit-level `var` is `@<symbol>`.
@@ -53,7 +52,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import (
-    STAGE, SlirFunction, SlirLocal, SlirOutcome, SlirStopped,
+    SlirFunction, SlirLocal,
 )
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.type_predicates import generic_base_of
@@ -274,16 +273,11 @@ def print_function(function: SlirFunction) -> str:
                                              for each in function.lifted)
 
 
-def print_stopped(stopped: SlirStopped) -> str:
-    """The one line of a body whose SLIR lowering stopped."""
-    return f"fn {stopped.name}: stopped ({STAGE}, {stopped.construct})\n"
-
-
-def print_units(units: Sequence[tuple[str, Sequence[SlirOutcome]]]) -> str:
-    """The text of a program: each unit, by its name, then the outcome of each body, in order."""
+def print_units(units: Sequence[tuple[str, Sequence[SlirFunction]]]) -> str:
+    """The text of a program: each unit, by its name, then the function of each body, in
+    order."""
     parts: list[str] = []
     for name, outcomes in units:
         parts.append(f"unit {name}\n")
-        parts.extend(print_function(outcome) if isinstance(outcome, SlirFunction)
-                     else print_stopped(outcome) for outcome in outcomes)
+        parts.extend(print_function(function) for function in outcomes)
     return "\n".join(parts)

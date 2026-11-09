@@ -2,10 +2,10 @@
 
 ONE table, `ARMS`, gives the arm of each SHIR statement and expression class (gate:
 `tests/unit/test_borrow_dispatch_is_total.py`). Every arm takes the pass and one node
-(`check`). The lookup of an arm and the stop are the one dispatch of the SHIR passes
+(`check`). The lookup of an arm is the one dispatch of the SHIR passes
 (`shir/dispatch.py`), which the typecheck pass reads too: a class with no row is an
-internal error at the span of the node, and the arm of a construct that the pass does not
-check yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
+internal error at the span of the node, and so is a construct that an arm does not check
+(`unhandled`).
 
 `statements.py` walks a block and holds the statement arms, among them the branch, the
 `match`, the `while` loop, the `break` and the `continue`; `expressions.py` holds the
@@ -30,13 +30,14 @@ from .reads import unknown
 if TYPE_CHECKING:
     from . import BorrowChecker
 
-#: The name of this stage in the stop code.
+#: The name of this stage in an internal error.
 STAGE = "borrow"
 
 
-def stop_at(_checker: BorrowChecker, node: Any) -> NoReturn:
-    """The arm of a construct that the pass does not check yet: the walk of the body stops."""
-    dispatch.stop(STAGE, node)
+def unhandled(checker: BorrowChecker, node: Any) -> NoReturn:
+    """The internal error of a construct that the pass does not check. After an error, the
+    walk of the body ends there."""
+    dispatch.unhandled(STAGE, node, after_an_error=checker.has_an_error())
 
 
 def check(checker: BorrowChecker, node: Any) -> None:
@@ -68,7 +69,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Break: st.check_break,
     s.Continue: st.check_continue,
     s.Expand: st.check_expand,
-    Hole: stop_at,
+    Hole: unhandled,
     # -- expressions -----------------------------------------------------------------
     e.Lit: ex.check_leaf,
     e.LocalRef: ex.check_local_ref,

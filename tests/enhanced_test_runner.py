@@ -35,7 +35,6 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        fixtures_only, _spelled_path)
 from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
 from golden_dumps import check_dumps, dump_flags, gate_seed
-from stop_census import census_lines
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -1591,12 +1590,6 @@ class TestRunner:
                                   else "Runtime failed")
                         print(f"  {name}: {tint(reason, RED)}")
 
-                failed_output = (r.runtime_message if r.compilation_success
-                                 else r.compilation_message
-                                 for r in results.values() if not r.total_success)
-                census = census_lines(failed_output)
-                if census:
-                    print("\n" + "\n".join(census))
 
 SEED_ENV = "PYTHONHASHSEED"
 

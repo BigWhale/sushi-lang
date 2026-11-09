@@ -2,7 +2,7 @@
 
 A field of a struct, and an element of a tuple, answers the type of its field and writes
 the field index row. A base of a type whose name the unit lost (D2), and a base of a type
-that has no rule yet, stop with `typecheck, Field`. The tests run the arm over SHIR built
+that has no rule, are an internal error for `Field`. The tests run the arm over SHIR built
 by hand, with a stand-in for the pass; they do not run the compiler.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Optional
 
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.passes.types import visit
@@ -36,6 +36,7 @@ def _validator(base: Type, *, lost: Optional[str] = None) -> SimpleNamespace:
     visibility = SimpleNamespace(contested_by=lambda _kind, name, _unit: name == lost,
                                  origin=lambda _kind, _name: None)
     return SimpleNamespace(
+        has_an_error=lambda: False,
         answers=answers, body_answers=lambda: answers,
         struct_table=SimpleNamespace(by_name={"Point": POINT}),
         enum_table=SimpleNamespace(by_name={}),
@@ -65,9 +66,9 @@ def test_a_field_answers_the_type_of_its_field(base: Type, name: str, ty: Type,
     (POINT, "Point"),
     (GenericTypeRef("Box", (BuiltinType.I32,)), None),
 ])
-def test_a_field_that_is_not_typed_yet_stops(base: Type, lost: Optional[str]) -> None:
+def test_a_field_that_is_not_typed_is_an_internal_error(base: Type, lost: Optional[str]) -> None:
     validator = _validator(base, lost=lost)
-    with pytest.raises(StageStop) as caught:
+    with pytest.raises(InternalCompilerError) as caught:
         visit.check_expr(validator, _field("x"))
     assert caught.value.span == SPAN
-    assert caught.value.params == {"stage": "typecheck", "construct": "Field"}
+    assert caught.value.params == {"detail": "the typecheck stage does not handle the construct 'Field'"}

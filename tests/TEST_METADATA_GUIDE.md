@@ -838,7 +838,7 @@ python tests/run_tests.py --enhanced --filter constants/
 ### Run the fixtures of a list
 
 ```bash
-python tests/run_tests.py --list tests/ir/ratchet.txt
+python tests/run_tests.py --list my-fixtures.txt
 ```
 
 - The file holds one repository-relative path for each line

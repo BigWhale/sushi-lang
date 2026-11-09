@@ -2,8 +2,8 @@
 
 Each target takes its element, and the path of the target keys its element type row: the
 index of the target, then the index in each `Nested` level. A bare binder takes the type
-of its element. A `Place` of a place that is not a local, a field or an element stops with
-`typecheck, Destructure`. The tests run the arm over SHIR built by hand, with a stand-in
+of its element. A `Place` of a place that is not a local, a field or an element is an
+internal error for `Destructure`. The tests run the arm over SHIR built by hand, with a stand-in
 for the pass; they do not run the compiler.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
@@ -37,7 +37,8 @@ def _validator(value: Type) -> SimpleNamespace:
     binders = {LocalId(i): ShirLocal(LocalId(i), name, None, SPAN)
                for i, name in ((1, "a"), (2, "b"))}
     return SimpleNamespace(answers=answers, body_answers=lambda: answers,
-                           body_locals=binders, refused_locals=set(), reporter=None)
+                           body_locals=binders, refused_locals=set(), reporter=None,
+                           has_an_error=lambda: False)
 
 
 def _value() -> e.LocalRef:
@@ -58,11 +59,11 @@ def test_each_target_takes_its_element_by_its_path() -> None:
     assert answers.local_type(LocalId(2)) == BuiltinType.BOOL
 
 
-def test_a_place_that_is_not_typed_yet_stops() -> None:
+def test_a_place_that_is_not_typed_is_an_internal_error() -> None:
     validator = _validator(OUTER)
     place = e.GlobalRef(ShirId(3), SPAN, DeclId(0))
     node = s.Destructure(ShirId(2), SPAN, [s.Place(place), LocalId(1)], _value())
-    with pytest.raises(StageStop) as caught:
+    with pytest.raises(InternalCompilerError) as caught:
         visit.check(validator, node)
     assert caught.value.span == SPAN
-    assert caught.value.params == {"stage": "typecheck", "construct": "Destructure"}
+    assert caught.value.params == {"detail": "the typecheck stage does not handle the construct 'Destructure'"}

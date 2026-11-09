@@ -3,7 +3,7 @@
 An operator calls the emitter of the old backend that takes LLVM values (ruling Q7), so the
 integer and the float rules stay in one place, and the backend folds nothing
 (`semantics/integer_ops.py` is the one compile-time home). An rvalue over a type that is
-not an integer, a float, a `bool` or an enum comparison stops with the class of the rvalue.
+not an integer, a float, a `bool` or an enum comparison is an internal error.
 
 An enum is `{i32 tag, [K x i64] data}`. The tag, a variant and the address of a payload
 field come from the one layout authority (`TypeSizing.payload_field_offsets`, read through
@@ -83,7 +83,7 @@ def place_address(state: FunctionState, place: p.Place) -> ir.Value:
         case p.Deref(base):
             _pointee_type(state, base)
             return state.builder.load(place_address(state, base))
-    state.stop(place)
+    state.unhandled(place)
 
 
 def global_address(state: FunctionState, symbol: str) -> ir.Value:
@@ -112,7 +112,7 @@ def type_of_place(state: FunctionState, place: p.Place) -> Type:
             return _element_type(state, base)
         case p.Deref(base):
             return _pointee_type(state, base)
-    state.stop(place)
+    state.unhandled(place)
 
 
 def _pointee_type(state: FunctionState, base: p.Place) -> Type:
@@ -202,7 +202,7 @@ def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
                                     span=state.span, filename=state.filename,
                                     finish_function=lambda symbol: closure_constant(codegen, symbol))
     if isinstance(constant, k.FnRef):
-        state.stop(constant)
+        state.unhandled(constant)
     return scalar_initializer(constant, codegen.types, state.fault)
 
 
@@ -214,7 +214,7 @@ def _literal_constant(state: FunctionState) -> Callable[[str, str], ir.Constant]
 
 def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
     if isinstance(constant, k.FnRef):
-        state.stop(constant)
+        state.unhandled(constant)
     return semantic_type_of(constant, state.fault)
 
 
@@ -222,7 +222,7 @@ def rvalue_value(state: FunctionState, rvalue: r.Rvalue) -> ir.Value:
     """The value of an rvalue, from the one table of the rvalue classes."""
     emit = _RVALUES.get(type(rvalue))
     if emit is None:
-        state.stop(rvalue)
+        state.unhandled(rvalue)
     return emit(state, rvalue)
 
 
@@ -290,15 +290,15 @@ def _cast(state: FunctionState, rvalue: r.Cast) -> ir.Value:
 
 
 def _scalar_type(state: FunctionState, rvalue: r.Rvalue, ty: Type) -> Type:
-    """`ty` when it is an integer, a float or a `bool`; else the rvalue stops."""
+    """`ty` when it is an integer, a float or a `bool`; else an internal error."""
     if ty != BuiltinType.BOOL and not is_numeric_type(ty):
-        state.stop(rvalue)
+        state.unhandled(rvalue)
     return ty
 
 
 def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
-    """An enum variant, a struct, a tuple or an array. Any other kind of aggregate stops
-    with its class."""
+    """An enum variant, a struct, a tuple or an array. Any other kind of aggregate is an
+    internal error."""
     kind = rvalue.kind
     if isinstance(kind, r.AggArray):
         if not isinstance(kind.ty, (ArrayType, DynamicArrayType)):
@@ -312,7 +312,7 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
         from sushi_lang.backend.slir.iterators import emit_iterator_value
         return emit_iterator_value(state, rvalue, kind)
     if not isinstance(kind, (r.AggVariant, r.AggStruct, r.AggTuple)):
-        state.stop(kind)
+        state.unhandled(kind)
     parts = [type_of_operand(state, part) for part in rvalue.parts]
     if isinstance(kind, r.AggVariant):
         enum_type, info = checked_variant(kind.ty, kind.variant, parts, state.fault)

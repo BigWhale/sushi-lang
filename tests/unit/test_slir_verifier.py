@@ -795,7 +795,7 @@ def test_a_binary_that_carries_a_short_circuit_is_refused(op: str):
 
 @pytest.mark.parametrize("code, count", [
     ("RE9999", 0),      # no registered code
-    ("CE0155", 0),      # a registered code that is no runtime code
+    ("CE0156", 0),      # a registered code that is no runtime code
     ("RE2020", 1),      # its text prints two values
     ("RE2021", 1),      # its text prints none
 ])

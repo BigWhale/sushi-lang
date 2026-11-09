@@ -5,11 +5,10 @@ signatures, the qualified constraints, the declared types, the constraint perks,
 declared type of a constant and the header of each function, method and perk
 implementation. The BODY half walks the SHIR body of each declaration (`check_body`)
 through the table of `visit/`, and it writes its answers into the `TypeckResults` of the
-body. A stop of the body half ends the walk of its body, and the pass records it in
-`stops` (`shir/stop.py`); the next body is walked as usual. When a walk ends with no stop
-and with no error in its body, the completeness check of the table runs (`check_answers`),
-and the pass gives the body to the next stage, the lift pass (`next_stage`), which the
-driver gives the pass.
+body. When a walk ends with no error in its body, the completeness check of the table
+runs (`check_answers`), and the pass gives the body to the next stage, the lift pass
+(`next_stage`), which the driver gives the pass. After an error, a construct that the pass
+does not handle ends the walk of its body (`AfterAnError`).
 """
 from __future__ import annotations
 from typing import Callable, Dict, Optional, Set, TYPE_CHECKING
@@ -30,14 +29,13 @@ if TYPE_CHECKING:
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.diagnostics import AfterAnError
 from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visit.statements import check_block, check_params
 from sushi_lang.semantics.passes.types.fold import Folder
-from sushi_lang.internals.diagnostics import StageStop
-from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.typeck_check import check_answers
 
@@ -69,20 +67,20 @@ class TypeValidator:
                  namespaces: Optional['NamespaceTable'] = None,
                  checks_templates: bool = False,
                  shir: Optional['LoweredProgram'] = None,
-                 stops: Optional[Stops] = None,
-                 next_stage: Optional[Callable[..., None]] = None) -> None:
+                 next_stage: Optional[Callable[..., None]] = None,
+                 program_failed: Callable[[], bool] = lambda: False) -> None:
         self.reporter = reporter
+        # Whether the program has an error that this unit did not report (`has_an_error`).
+        self.program_failed = program_failed
         # Whether `run` checks each function template of the unit (#1070): a unit of the
         # program, and a bundled stdlib unit. A consumed library
         # unit was checked by its own `--lib` build.
         self.checks_templates = checks_templates
         # The written templates that `run` checked.
         self.checked_template_ids: Set[int] = set()
-        # The SHIR bodies of the program, the record of the stops of the body half, and the
-        # stage that each body goes to when the body half finished it with no error: the
-        # lift pass (`LiftPass.check_body`).
+        # The SHIR bodies of the program, and the stage that each body goes to when the
+        # body half finished it with no error: the lift pass (`LiftPass.check_body`).
         self.shir = shir
-        self.stops = stops
         self.next_stage = next_stage
         # The SHIR body that the body half walks, its `TypeckResults`, its locals by id and
         # the fold of its readable values (docs/design/ir.md 7.4), or None.
@@ -275,24 +273,21 @@ class TypeValidator:
 
     def check_body(self, decl,
                    path_faults: Optional[Callable[['ShirBody', Set['ShirId']], None]] = None,
-                   *, offered: Optional[int] = None) -> Optional['ShirBody']:
+                   *, offered: Optional[int] = None) -> None:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
-        A stop ends the walk: the pass records it, with the file of the body, and the
-        caller goes on with the next declaration. When the walk reaches its end, the path
-        faults of a function or a method (`path_faults`) are checked, with the matches of
-        the body whose arms miss a value. A walk that ends with no stop and with no error
-        in its body is checked for completeness, and its body goes to the next stage, the
+        When the walk reaches its end, the path faults of a function or a method
+        (`path_faults`) are checked, with the matches of the body whose arms miss a value.
+        A walk that ends after an error (`AfterAnError`) gives its body to no
+        stage. A walk that ends with no error in its body is checked for completeness, and its body goes to the next stage, the
         lift pass, with the tables that the body was read in. A node that has an error has
         no answer, so a body with an error is not checked: it goes to the lift pass marked
         `typecheck_failed` when its header has no error (docs/design/ir.md 7.9). `offered` is the count of the errors before the header of
         a function or a method, so that a body whose header has an error (an unknown
         parameter type) does not go on.
-        The answer is the body when the walk reached its end, and None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
-        if (body is None or self.shir is None or self.stops is None
-                or self.next_stage is None):
+        if body is None or self.shir is None or self.next_stage is None:
             er.raise_internal_error(
                 "CE0000", detail=f"the typecheck pass has no SHIR body of "
                                  f"'{getattr(decl, 'name', type(decl).__name__)}'")
@@ -313,10 +308,8 @@ class TypeValidator:
             header_failed = self.errors_offered() != offered
             check_block(self, body.block)
             walk_failed = self.errors_offered() != offered or self.refused_before
-        except StageStop as stop:
-            stop.filename = filename
-            self.stops.stopped(stop)
-            return None
+        except AfterAnError:
+            return
         finally:
             uncovered = self.uncovered_matches
             self.body = self.answers = self.folder = None
@@ -327,14 +320,17 @@ class TypeValidator:
         if path_faults is not None:
             path_faults(body, uncovered)
         if header_failed:
-            return body
+            return
         if walk_failed or self.errors_offered() != offered:
             self.next_stage(decl, body, tables=self.tables, filename=filename,
                             typecheck_failed=True)
-            return body
+            return
         check_answers(body, answers, self.shir.decls)
         self.next_stage(decl, body, tables=self.tables, filename=filename)
-        return body
+
+    def has_an_error(self) -> bool:
+        """Whether this unit or the program has an error so far."""
+        return bool(self.errors_offered()) or self.program_failed()
 
     def errors_offered(self) -> int:
         """The count of the errors offered so far: a check that adds one refused its node."""

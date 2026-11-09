@@ -21,7 +21,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
 from .methods import declaration_was_refused, explain_unpromised_method
-from ..call_facts import TypecheckCallFacts
+from ..call_facts import declaring_units
 from ..method_registry import METHOD_TYPE_REGISTRY, MethodFamily
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ def resolve_dotted(validator: 'TypeValidator', receiver_type: Type,
         return MethodAnswer(MethodRung.FAMILY, family)
     if validator.perk_impl_table.get_method(receiver_type, name) is not None:
         return MethodAnswer(MethodRung.PERK)
-    if TypecheckCallFacts(validator).declaring_units(name):
+    if declaring_units(validator, name):
         return MethodAnswer(MethodRung.EXTENSION)
     return MethodAnswer(MethodRung.UNANSWERED)
 

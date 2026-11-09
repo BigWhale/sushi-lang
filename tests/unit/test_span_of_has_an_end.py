@@ -2,7 +2,7 @@
 
 Lark gives no end to the tree of a block at the end of a file with no newline. The
 renderer compares the end line of a span, so a span with no end stopped the compiler with
-a Python traceback when a diagnostic stood at such a block (the stop code CE0155 of a
+a Python traceback when a diagnostic stood at such a block (an internal error of a
 finished body names the span of its block). `span_of` (`internals/report.py`) gives a tree
 with no end the end of its start, as it does for a token. The test reads plain data.
 """

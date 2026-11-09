@@ -44,7 +44,7 @@ A plain type is a primitive, or a struct or an enum that is no instance of a gen
 and whose name the unit did not lose. Every other target, and a call that another group
 types (a function of a stdlib module other than `<math>` and
 `<time>`, a C function that `visit/extern_calls.py` does not type, a method of a type
-whose name the unit lost), stops the walk of its body. The trailing arguments of a variadic
+whose name the unit lost), is an internal error. The trailing arguments of a variadic
 function are its tail (`visit/variadic_tails.py`). A
 call of a function or a method with a `peek` return has the source row of the call (`record_call_sources`).
 
@@ -247,7 +247,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     `FAMILY_ARMS`. A contract method that a constraint
     of an opaque receiver promises has the arm of its family. Any other perk method is a
     `Method` callee (`visit/perk_calls.py`). Any other method of a receiver that takes no user
-    method yet stops the walk (`_takes_user_methods`). An extension method is a `Method`
+    method is an internal error (`_takes_user_methods`). An extension method is a `Method`
     callee: of a concrete target, or the copy of a template (`visit/method_templates.py`).
     Those rungs also judge a perk template whose target bound fails (CE4006). A method that
     nothing answers on a local whose `let` the pass refused reports nothing
@@ -281,7 +281,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if answer.rung is MethodRung.PERK:
         return check_perk_call(validator, node, target, receiver)
     if not _takes_user_methods(validator, receiver):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     if target.name == "clone" and reject_uncloneable(validator, node, receiver):
         return None
     found = resolve_user_method(validator, node, receiver, target.name, static=False)
@@ -304,7 +304,7 @@ def _check_static_call(validator: TypeValidator, node: e.Call, target: e.Static,
     A type whose dot holds no static `m` is CE2102, and an enum CE2045. A static of a
     primitive type name (`f64.from_bits`) is a `BuiltinStatic`. A static of a generic type
     has the instance that its arguments and its position solve (`generic_static_owner`).
-    A static of a type whose name the unit lost stops the walk.
+    A static of a type whose name the unit lost is an internal error.
     """
     primitive = (PRIMITIVE_STATICS.get((target.ty.value, target.name))
                  if isinstance(target.ty, BuiltinType) else None)
@@ -348,19 +348,19 @@ def _check_primitive_static(validator: TypeValidator, node: e.Call, target: e.St
 def _static_owner(validator: TypeValidator, node: e.Call, target: e.Static,
                   expected: Optional[Type]) -> Constructed:
     """The type that a static call names, or no instance after its error: behind an alias
-    (`geo.Vec.at()`), the type that the namespace holds. Any other type stops the walk."""
+    (`geo.Vec.at()`), the type that the namespace holds. Any other type is an internal error."""
     if isinstance(target.ty, BuiltinType):
         if is_builtin_static(target.ty.value, target.name):
-            visit.stop_at(validator, node)
+            visit.unhandled(validator, node)
         return Constructed(target.ty)
     alias, dot, name = written_name(target.ty).rpartition(".")
     if dot:
         binding = validator.namespaces.lookup(alias, name)
         if binding is None or binding.kind not in ("struct", "enum"):
-            visit.stop_at(validator, node)
+            visit.unhandled(validator, node)
         name = binding.name
     if is_builtin_static(name, target.name) or type_name_is_contested(validator, name):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     if dot and reject_private_type(validator, name, node.loc):
         return Constructed(None)
     if (name in validator.generic_struct_table.by_name
@@ -373,7 +373,7 @@ def _static_owner(validator: TypeValidator, node: e.Call, target: e.Static,
     owner = (validator.struct_table.by_name.get(name)
              or validator.enum_table.by_name.get(name))
     if owner is None or not _is_plain(validator, owner):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     return Constructed(owner)
 
 
@@ -609,7 +609,7 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
     if template is not None:
         return template
     if type_name_is_contested(validator, name):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     sig = validator.func_sig(name)
     if sig is None:
         stdlib = validator.func_table.lookup_stdlib_by_name(name, validator.scope)
@@ -623,7 +623,7 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
         return None
     if (name_is_contested(validator, "function", name)
             and sig.unit_name != validator.current_unit_name):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     return sig
 
 
@@ -634,7 +634,7 @@ def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
     an `unsafe external` block."""
     binding = validator.namespaces.lookup(alias, name)
     if binding is None or binding.kind not in ("function", "generic function", "extern"):
-        visit.stop_at(validator, node)
+        visit.unhandled(validator, node)
     return binding.record
 
 

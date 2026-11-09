@@ -310,7 +310,8 @@ def _checker(check: _Check, opaque: Mapping[str, Any],
         validator.reporter, check.scope.tables, current_unit_name=validator.current_unit_name,
         monomorphized_functions=validator.monomorphized_functions,
         in_library_unit=validator.in_library_unit, namespaces=validator.namespaces,
-        shir=validator.shir, stops=validator.stops, next_stage=validator.next_stage,
+        shir=validator.shir, next_stage=validator.next_stage,
+        program_failed=validator.program_failed,
         scope=check.scope, opaque=opaque, pack_elements=pack_elements)
 
 
