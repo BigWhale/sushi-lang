@@ -1,0 +1,9 @@
+# `and` answers a bool also after CE5010 for a ptr operand.
+# EXPECT_ERROR_CODES_EXACT: CE5010, CE2002
+unsafe external "C" as libc because "a ptr operand":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr a = libc.malloc(8 as i64)
+    let i32 x = a and true
+    return x

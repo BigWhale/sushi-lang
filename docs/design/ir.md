@@ -971,7 +971,8 @@ value: a `??` of a `Result` answers its success value after CE0131 and CE2511, a
 operator answers the type of its left operand after CE2004, CE2510 and CE2512. So `let string
 s = f()??` in a body with no channel is CE0131 and CE2002, as on main. A comparison, `and`,
 `or`, `xor` and `not` answer a `bool` after an error of an operand or of their own (CE1001,
-CE2005, CE2510), so `let i32 x = y < 3` is CE1001 and CE2002, as on main. An arithmetic operand
+CE2005, CE2510, CE5010 for a `ptr` operand), so `let i32 x = y < 3` is CE1001 and CE2002,
+as on main. An arithmetic operand
 whose type names no type (CE2001) is no second fault (CE2518). A call of a name
 that no function takes (CE2008) or that two imports bring (CE3012) answers nothing. The
 display type of a hole of an `Interp` and of the argument of `print` is the type of the
