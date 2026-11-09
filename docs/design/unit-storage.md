@@ -122,10 +122,11 @@ The reads and writes reach it as a `Global` place of SLIR (`semantics/slir/place
 which carries the symbol of the global and the declared type of the `var`. The emitter finds
 the global in the module by its symbol (`backend/slir/values.py`, `global_address`). A
 rebind, a `poke`, a field write and a mutating method all go through that one place. A read
-of a `var` by value is copied into a temporary of its statement first, so a later call of
-the statement that changes the `var` does not change the value that was read. A `var` of a
-type that owns stops with CE0155 (`slir, StorageRef owning`) until its group of the
-migration (`docs/design/ir.md`, 8.9).
+of a plain `var` by value is copied into a temporary of its statement first, so a later
+call of the statement that changes the `var` does not change the value that was read. A
+`var` of a type that owns is read where it is, because a temporary would own a second copy
+of its value. Its rebind drops the old value and then stores the new one, and nothing drops
+it at an exit (`docs/design/ir.md`, 8.4 and 8.10).
 
 ## Library manifest
 
