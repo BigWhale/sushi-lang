@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import CONVERSION_METHOD
+from sushi_lang.semantics.conversions import CONVERSION_METHOD
 from sushi_lang.semantics.generics.name_mangling import extension_symbol, method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import (

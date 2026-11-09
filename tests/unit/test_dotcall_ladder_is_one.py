@@ -42,10 +42,9 @@ SHIR_HOMES = {
     "callee_borrows": (TypeckResults, "sources_of"),
 }
 
-#: The fields of an AST call node that are no written part of the call and that stay for
-#: now: no pass of the body writes them, and Phase 6 deletes them with their AST readers.
-#: `namespace_ref` is written by the constant evaluator for a constant initializer.
-_STILL_ON_THE_AST = ("inferred_return_type", "resolved_enum_type", "namespace_ref")
+#: The field of an AST call node that is no written part of the call and that stays: no
+#: pass of the body writes it. The constant evaluator writes it for a constant initializer.
+_STILL_ON_THE_AST = ("namespace_ref",)
 
 #: Shared fields that are no fact of a resolved method: the written parts of the call, and
 #: what the other call shapes and the AST borrow helpers write on their own nodes.

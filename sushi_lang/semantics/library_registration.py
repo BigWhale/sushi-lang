@@ -928,7 +928,8 @@ class LibraryRegistration:
         that the table holds already means that two libraries declare one target type:
         that clash has its own diagnostic, and the second record adds nothing.
         """
-        from sushi_lang.semantics.ast import CONVERSION_METHOD, Block, ExtendDef
+        from sushi_lang.semantics.ast import Block, ExtendDef
+        from sushi_lang.semantics.conversions import CONVERSION_METHOD
         from sushi_lang.semantics.conversions import Conversion, conversion_symbol
         from sushi_lang.semantics.library_registry import manifest_conversions
         from sushi_lang.semantics.type_resolution import parse_type_string

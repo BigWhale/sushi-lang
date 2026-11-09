@@ -130,7 +130,7 @@ def _ast_step(node: Optional[Expr]) -> Optional[tuple[Step, Expr]]:
         case MethodCall() | DotCall():
             return Step.CALL, node.receiver
         case TryExpr():
-            return Step.TRY, try_operand(node)
+            return Step.TRY, node.expr
     return None
 
 
@@ -150,23 +150,8 @@ def _shir_step(node: ShirNode) -> Optional[tuple[Step, e.ShirExpr]]:
     return None
 
 
-def try_operand(expr: TryExpr) -> Expr:
-    """What a `??` reads: its operand, with a read-through `or_err` call seen through.
-
-    `X.or_err(nom e)??` is `X??` for every rule that reads the shape of a `??` operand:
-    `or_err` changes nothing about what the place is or who owns it
-    (docs/design/error-conversion.md section 4). So a get-out behind it is a get-out.
-    """
-    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
-    receiver = read_through_receiver_of(expr.expr)
-    return receiver if receiver is not None else expr.expr
-
-
 def unwrap_try(expr: Optional[Expr]) -> Optional[Expr]:
-    """Strip every `??` from an expression, leaving what it actually evaluates.
-
-    Each step reads through `try_operand`, so a read-through `or_err` is stripped too.
-    """
+    """Strip every `??` from an expression, leaving what it actually evaluates."""
     while isinstance(expr, TryExpr):
-        expr = try_operand(expr)
+        expr = expr.expr
     return expr

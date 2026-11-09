@@ -95,14 +95,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "the writer keeps it zero"),
 )
 
-_SEMANTICS = "sushi_lang/semantics/"
-
-WHITELIST += (
-    (_SEMANTICS + "typesys.py", "get_field_index",
-     "kept for the struct and tuple group A5: the typecheck pass on SHIR reads the index "
-     "of a field"),
-)
-
 RATCHET: tuple[tuple[str, str, str], ...] = ()
 
 # -- the scan of `tests/unit/` ---------------------------------------------------------

@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Origin, Span
 from sushi_lang.semantics.operators import BinOp, UnOp
-from sushi_lang.semantics.typesys import FunctionType, Type
+from sushi_lang.semantics.conversions import CONVERSION_METHOD
+from sushi_lang.semantics.typesys import Type
 
 from lark import Token
 
@@ -361,11 +362,6 @@ class EnumDef(Node):
     public_span: Optional[Span] = None
     # Written `error`, not `enum`: the type may be the `E` of a `Result`.
     is_error: bool = False
-
-# The method name of a conversion, `extend Source as Target:` (docs/design/error-conversion.md
-# section 8.2). `as` is a reserved word, so no written method has this name.
-CONVERSION_METHOD = "as"
-
 
 @dataclass(slots=True)
 class ExtendDef(Node):
@@ -802,16 +798,11 @@ class Match(Stmt):
 @dataclass(slots=True)
 class Name(Node):
     id: str
-    # A bare name in a fn-typed position gets the expected FunctionType, so a reference
-    # to a generic function can solve its type arguments. `Lambda` carries the same
-    # field for the same reason.
-    expected_type: Optional[Type] = None
 
 @dataclass(slots=True)
 class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
-    resolved_type: Optional[Type] = None
     # The source spelling of a byte literal (`a'/'`), or None for a number literal. A
     # byte literal defaults to u8, and a diagnostic names it by this spelling.
     byte_spelling: Optional[str] = None
@@ -819,7 +810,6 @@ class IntLit(Node):
 @dataclass(slots=True)
 class FloatLit(Node):
     value: float
-    resolved_type: Optional[Type] = None
 
 @dataclass(slots=True)
 class BoolLit(Node):
@@ -847,10 +837,6 @@ class ArrayElement(Node):
 @dataclass(slots=True)
 class ArrayLiteral(Node):
     elements: List["ArrayElement"]
-    # The `T[N]` this literal is, stamped by the typecheck pass: the declared type of its
-    # position, else the type inferred from its elements (#889). The AST argument half of
-    # the array family reads it.
-    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class IndexAccess(Node):
@@ -880,8 +866,6 @@ class BinaryOp(Node):
 class TupleLiteral(Node):
     """A tuple literal: two or more expressions in parentheses, `(1, "a")`."""
     elements: List["Expr"]
-    # The interned tuple type, stamped by the typecheck pass.
-    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Spread(Node):
@@ -900,11 +884,6 @@ class Lambda(Node):
     body: Union["Expr", "Block"]
     ret: Optional[Type] = None
     err_type: Optional[Type] = None
-    # Filled by the early inference: the lambda's FunctionType (params typed, ok/err
-    # resolved). `expected_type` is a FunctionType propagated from the
-    # binding/argument context, used to infer bare-param types (`|x|`).
-    resolved_type: Optional[FunctionType] = None
-    expected_type: Optional[Type] = None
     # A `peek T` return written on a lambda: refused (CE2439).
     borrowed_return: Optional["BorrowedReturn"] = None
 
@@ -924,11 +903,7 @@ class Call(Node):
     # Span of the `@(...)` type-arg list, for diagnostics (CE2062 arity, constraint
     # failures) that must underline the type args rather than the callee.
     type_args_loc: Optional["Span"] = None
-    # The rest of what the typecheck pass resolves about a call. Every call node
-    # carries the whole set, so a pass never has to ask which call shape it has.
-    inferred_return_type: Optional["Type"] = None  # Return type inferred by the typecheck pass
     namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
 
 
 @dataclass(slots=True)
@@ -936,8 +911,6 @@ class MethodCall(Node):
     receiver: "Expr"    # The object/expression being called (x in x.add(5))
     method: str
     args: List["Expr"]
-    inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     # A call through a `use ... as` alias; see DotCall for what the triple carries.
     namespace_ref: Optional["NamespaceRef"] = None
     # The names a call was written with. A method has no field names, so these are
@@ -951,8 +924,6 @@ class DotCall(Node):
     receiver: "Expr"    # The receiver expression (variable, type name, etc.)
     method: str
     args: List["Expr"]
-    inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
     # kind of producer answered, the unit or module it named, and the declared name.
     # The back end resolves through the origin, so a shadowed name reaches the right
@@ -973,8 +944,6 @@ class MemberAccess(Node):
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
-    resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
-    expected_type: Optional[Type] = None  # a generic fn behind an alias solves from it (#1017)
     member_span: Optional[Span] = None  # the `.member` postfix; `loc` is the whole read
 
 @dataclass(slots=True)
@@ -985,20 +954,14 @@ class EnumConstructor(Node):
     args: List["Expr"]  # Arguments for associated data (empty for unit variants)
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
 
 @dataclass(slots=True)
 class DynamicArrayNew(Node):
-    resolved_type: Optional["Type"] = None  # The `T[]` this empty array is (typecheck pass)
+    pass
 
 @dataclass(slots=True)
 class DynamicArrayFrom(Node):
     elements: ArrayLiteral  # from([1, 2, 3]) -> holds the array literal
-    # The `T[]` the position expects, stamped by the typecheck pass (#544). An EMPTY
-    # literal has no other source for its element type, and every position that has a
-    # declared type -- a `let`, a field, a payload, a parameter, a `.realise()` default,
-    # a bare extension's return -- hands it over through one propagation arm.
-    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class CastExpr(Node):
@@ -1027,9 +990,6 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
     reverse: bool = False   # True after an odd number of `.rev()` calls
-    # The typecheck pass sets it where the position expects `Iterator@(i32)`: the range is
-    # then a VALUE, an owned iterator (#1259).
-    is_value: bool = False
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The two call shapes with a receiver and a method name.

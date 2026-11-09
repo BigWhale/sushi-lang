@@ -116,13 +116,6 @@ class StructType:
                 return ty
         return None
 
-    def get_field_index(self, field_name: str) -> Optional[int]:
-        """Get the index of a field by name, or None if field doesn't exist."""
-        for i, (name, _) in enumerate(self.fields):
-            if name == field_name:
-                return i
-        return None
-
 @dataclass(frozen=True)
 class IteratorType:
     """`Iterator@(T)`: a walk that yields items of `element_type`.
