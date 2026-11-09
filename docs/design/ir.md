@@ -1196,9 +1196,11 @@ receiver partition for a `Builtin`, and the declared mode of `self` for a `Metho
 7.6). The ladder runs for a receiver of every type. A family answer goes to the arm of its
 family in ONE table, `FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the name of
 the family in `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
-`tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
-progress, a family with no arm in the table stops the walk with `typecheck, Call(method
-<family>)`, on a receiver of any type, so the stops of each family are counted apart. A receiver that is not of a built-in type and that no family
+`tests/unit/test_typecheck_family_arms_are_registry_rows.py`). Each family has its arm
+there but `foreign_ptr`: a `ptr` receiver goes to its own arm before the ladder
+(`check_foreign_ptr_call`, `passes/types/visit/extern_calls.py`), and that arm also gives
+[CE5011](../error-catalog.md#ce5011) for a method that the family does not hold. A family
+with no arm is an internal error. A receiver that is not of a built-in type and that no family
 claims, and no extension method of a plain type answers (see below), stops the walk with
 the label of the call target (`Call(method)`, `Call(stdlib method)`). A perk method that is
 no contract method is a `Method` callee (7.6). An opaque type parameter that a
@@ -1410,14 +1412,13 @@ are `Call(<kind>)`: `method` (a method that no built-in family claims and that n
 extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension), `stdlib method` (a `public extend`
 of a bundled Sushi-source stdlib unit), `static` (a user static),
 `builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a function of a registry stdlib
-module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function that `typecheck` does not type yet, 7.6, and `errno`), `alias` (a function of a
+module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function of an `unsafe external` block, 7.6, or `errno`), `alias` (a function of a
 user unit behind a `use ... as` alias), `function` (a user function), `generic` (a generic
 function, or written type arguments), `fn value` (a call through a function value) and
 `builtin` (`print`, `println`). There is no
-`Call(construction)`: a construction lowers to `StructInit` or `EnumInit`. A method call
-whose family the ladder found names the family instead and needs no facts:
-`Call(method <family>)`, made by the one helper `dispatch.stop_at_family` for the typecheck
-pass and for the borrow pass.
+`Call(construction)`: a construction lowers to `StructInit` or `EnumInit`. A call of a
+built-in family never stops: each family has its arm in `typecheck` and its receiver rule in
+`borrow`.
 The stop-code census of the runner (`tests/stop_census.py`) counts a stop inside a bundled
 stdlib unit in a row of its own, `<stage>, <construct> [<module>]`, from the note that names
 the module. The census reads the labels and decides nothing.
@@ -1901,9 +1902,15 @@ plain `Maybe` operand. A `string` return is a fresh value that owns (`ADOPT`, 7.
 value in the tail of a `var_arg` extern is a `Guaranteed` scalar. `errno()` is an
 intrinsic with no operand that answers an `i32`; a unit that declares no `unsafe external`
 block cannot call it ([CE5014](../error-catalog.md#ce5014)). A method of a `ptr` that is
-not a `foreign_ptr` method is [CE5011](../error-catalog.md#ce5011). The boundary rules are
-those of 8.6. Not built yet: the `foreign_ptr` methods stop the walk of the body with
-`Call(method foreign_ptr)`; P6.D5.2 (Task 105) builds them and removes this note.
+not a `foreign_ptr` method is [CE5011](../error-catalog.md#ce5011). A `foreign_ptr` method
+is a `Builtin` callee: each argument has the type of its row in `FOREIGN_PTR_METHODS`
+(`semantics/foreign_memory.py`), with the convention `Guaranteed`; a wrong count is
+[CE2009](../error-catalog.md#ce2009) and a wrong type [CE2006](../error-catalog.md#ce2006),
+as on `main`. The call yields the answer of its row, and `load_ptr` yields the interned
+`Maybe@(ptr)`. An extern variable behind the alias of its block (`libc.optind`) is a
+`GlobalRef` whose answer is the declared type of the variable, and whose global row is its
+link name (8.4). A write of one is [CE5016](../error-catalog.md#ce5016) at the target, and the
+value is then checked at no type. The boundary rules are those of 8.6.
 
 `BuiltinMethod` names a row of `METHOD_TYPE_REGISTRY`, so the iterator adapters, `or_err`,
 `map_err`, the container methods and the string methods are one variant. The row of a
@@ -2396,15 +2403,11 @@ too: a class with no row is an internal error at the span of the node, and the a
 construct that the pass does not check yet stops the walk of its body with the stop code
 (`borrow, <class>`; the stop goes in P6.last.1, S28, 8.2). The walk of a block reads the statements that a path reaches
 (`reached_statements`, 7.2). A call of a built-in method has its
-arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each
-method of the primitive family and of the `string` family, the derived `clone` of a struct
-or an enum, and each method of the `result` and `maybe` families that does not declare
-`nom self`. The arm reads the receiver (a use
-after a move is CE2405), and the receiver stays with its owner. Then it reads each argument
-by its convention row, as a call of a free function does. A call of a method of another
-family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops the
-walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make
-this stop with the one helper `dispatch.stop_at_family`. A `Static` callee is a call of its
+arm, and `receiver_convention` (8.3) gives its receiver its convention. The arm reads the
+receiver (a use after a move is CE2405). A `Guaranteed` receiver stays with its owner, the
+call writes an `Inout` receiver after its arguments, and it takes an `Owned` one after its
+arguments. Then it reads each argument by its convention row, as a call of a free function
+does. A `Static` callee is a call of its
 arguments. A `Method` callee reads its receiver by the convention of its `self`
 (`check_method_receiver`, `passes/borrow/calls.py`), after the entry of the call:
 `Guaranteed` is a read and the implicit shared borrow of the receiver; `InGuaranteed` is a
@@ -3150,12 +3153,13 @@ through the pointer: the callee writes the place of the caller.
 **The receiver of a built-in method** (ruling R-V). The receiver is the first operand of the
 call (8.6). Its convention comes from ONE partition of the families of
 `METHOD_TYPE_REGISTRY`, in `semantics/method_effects.py`. Each family that a `Builtin` call
-can name is in exactly one of four sets (gate:
+can name is in exactly one of three sets (gate:
 `tests/unit/test_method_mutation_is_one_fact.py`); `derived_clone` is not such a family
 (see below):
 
-- **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`). No method of the family
-  changes or consumes its receiver. The receiver is `Guaranteed`. One row of the string
+- **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`, `function`,
+  `foreign_ptr`). No method of the family changes or consumes its receiver. A store of the
+  `foreign_ptr` family writes the C memory that the pointer points to, not the `ptr`. The receiver is `Guaranteed`. One row of the string
   family is the exception: `concat_in_place` (`CONCAT_IN_PLACE`), the call of the concat
   peephole (8.9). Only SLIR lowering makes it, and no program can name it: it is no method
   of `METHOD_TYPE_REGISTRY`. It writes its receiver (`Inout`) and reads its one argument
@@ -3183,16 +3187,12 @@ can name is in exactly one of four sets (gate:
   into the callee (`BuiltinMethod.nom_self`). So `realise` and `expect` read a named
   wrapper, as on `main`: the wrapper stays usable after the call, and the lowering copies an
   owning payload out of it with a `Clone` (8.9).
-- **No rule yet** (`NO_RECEIVER_RULE_FAMILIES`): each other family. The set can only
-  shrink: the gate holds a pinned copy. A call of a method of such a family stops in
-  `typecheck` or in `borrow`.
 
-The `derived_clone` family is in no set of the partition (it leaves
-`NO_RECEIVER_RULE_FAMILIES`) and has no row of `METHOD_FAMILIES`: `x.clone()` is never a
+The `derived_clone` family is in no set of the partition and has no row of `METHOD_FAMILIES`: `x.clone()` is never a
 `Builtin` call in SLIR, because it lowers to the rvalue `Clone` (8.7). One deep
 copy has one seam. The refusal of `.clone()` on a type that declares a resource stays in
 `typecheck`. The families of the contract calls, `derived_hash`, `array_hash` and
-`contract`, follow the same rule: they leave `NO_RECEIVER_RULE_FAMILIES`, each operand of
+`contract`, follow the same rule: they are in no set, each operand of
 their call is `Guaranteed`, and they have no row of `METHOD_FAMILIES`, because SLIR lowering
 makes each call an intrinsic (8.6).
 
@@ -3203,10 +3203,8 @@ method, count)`, from the same row of `METHOD_EFFECTS`. `typecheck` writes the a
 rows of a `Builtin` call from it, as it writes them for a free call (7.3), and the verifier
 reads the same function for a `Builtin` callee (8.13). A container static of
 `BUILTIN_STATICS` has the mode of its argument in its row: `Own.alloc` takes its value
-`Owned`, and `List.with_capacity` takes its count `Guaranteed`. `receiver_convention`
-answers None for a family of the no-rule set, and a family in no set is an internal error.
-There is no default convention: the `borrow` pass stops at such a call (`borrow,
-Call(method <family>)`), and in SLIR lowering such a call is an internal error. The
+`Owned`, and `List.with_capacity` takes its count `Guaranteed`. For a family in no set,
+`receiver_convention` is an internal error: there is no default convention. The
 `borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use (7.9).
 SLIR lowering writes the answer as the convention of the first operand.
 
@@ -3319,8 +3317,13 @@ the moment of the read, as `main` does (probe `p06_extern_variable_read`,
 `.superpowers/sdd/probes/P6/`, at `00633e4bd`: `@optind = external global i32` and a
 `load` at each read). A `Maybe@(ptr)` read tests the pointer, and NULL is `None`; a plain
 `ptr` read that finds NULL ends the program with [RE2025](../error-catalog.md#re2025), as a
-return does (8.6). Not built yet: `typecheck` stops on the read (`GlobalRef`) and on the
-write (`Assign`); P6.D5.2 (Task 105) builds this rule and removes this note.
+return does (8.6). `typecheck` writes the global row of the read (7.6). SLIR lowering makes
+the read a `Copy` of the `Global` (`global_ref`, `slir/lower_globals.py`), and no
+projection of it and no borrow of it: the `GlobalRef` is no place of a lowering arm, so a
+`match` on it, a receiver and an operand read it into a temporary. The emitter reads a
+`Copy` of a C global through `backend/slir/foreign.py`, which loads the declaration of
+`codegen.external_vars` and gives the value of the boundary (8.6); the address of a C
+global is an internal error.
 
 ### 8.5 Constants
 
@@ -3682,11 +3685,16 @@ does (probes `p03_extern_string_return`, `p04_extern_maybe_parameters` and
   source order, so a read of `errno()` directly after the failed call sees its value.
 
 The `foreign_ptr` methods (`p.load_i32(off)`, `p.store_i32(off, v)`, `p.to_string(off)`,
-...) are a `Builtin` family with an arm in `FAMILY_ARMS` and a receiver rule in
-`method_effects.py`: the receiver is a `Guaranteed` scalar, and the family leaves
-`NO_RECEIVER_RULE_FAMILIES` (8.3). `to_string` answers an owned copy (`ADOPT`), and
-`load_ptr` a `Maybe@(ptr)` with NULL as `None`. The emitter family takes operands (Q7).
-Not built yet: P6.D5.2 (Task 105) builds the `foreign_ptr` family and removes this note.
+...) are a `Builtin` family with its own arm in `typecheck` (7.6) and the receiver rule
+"only reads" (8.3): the receiver is a `Guaranteed` scalar. `to_string` answers an owned
+copy (`ADOPT`), and `load_ptr` a `Maybe@(ptr)` with NULL as `None`. The emitter family
+takes the values of the operands (Q7): the row of `METHOD_FAMILIES` calls
+`emit_foreign_ptr_method` (`backend/slir/foreign.py`). It makes a `gep` of the byte offset
+on the `i8*`, then a load or a store of the width of the method, with `align 1`, as `main`
+does; `offset` answers the address, and `to_string` copies the C string there. The answer
+of a C function, the read of a C global and `load_ptr` go through the one set of boundary
+rules in `foreign.py`; the extern emitter reads a `Maybe` payload through the one payload
+layout (`enum_utils`).
 
 A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
@@ -4308,10 +4316,11 @@ Runs after lowering, before the backend. It checks:
   `StorageDead` or a `Drop` of the root ends that permission, and so does the end of the
   block. Any other read or move of the root after a part move is a use after a move
 - no `Move` out of a `Global`: a `Global` is never a `Move` operand, also when it owns
-- the `ptr` quarantine (S25): no `ptr` and no `Maybe@(ptr)` is a parameter or the return of
-  a public function that is not an extern. `public_signatures.py` stays the language rule
-  (CE5002, CE5008), and the verifier only checks it again. Not built yet: P6.D5.2 (Task
-  105) builds this rule
+- the `ptr` quarantine (S25): no `ptr`, and no type that holds one (`Maybe@(ptr)`), is a
+  parameter or the return of a public function that is not an extern. `public_signatures.py` stays the language rule
+  (CE5002, CE5008), and the verifier only checks it again (`verify_quarantine.py`). The
+  rule reads the return slot and each parameter of a function whose declaration, found by
+  its symbol, is `public`: a free function or an extension method
 - every block ends in exactly one terminator, and every `BlockId` exists
 - every `Drop` targets an owning type
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
