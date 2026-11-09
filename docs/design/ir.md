@@ -1359,10 +1359,9 @@ The call answers the type of the row. An answer that owns (`getcwd` answers `str
 ProcessError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
 value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
 callee whose last parameter is a variadic tail (7.4), so its row is typed with the tail of
-S22. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. Not built yet: `<sys/process>`
-and `<net/socket>` are not typed (`UNTYPED_STDLIB_MODULES`), and a call of a function of
-one of them stops the walk (`Call(stdlib)`). P6.D7.2 (Task 103) deletes that set and
-removes this note.
+S22: its callee row holds `Tail(1, string[], Guaranteed)`, and the one argument check takes
+the tail. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. No call of a registry
+function stops the walk.
 
 **A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
 that the program writes: an explicit type argument, a written type, and a generic function
@@ -1752,9 +1751,18 @@ The target `GlobalRef` of the call answers the declared signature, with the tail
 parameter `T[]`. `borrow` reads the `Owned` row of each value and of a bloom as a consuming
 use, so a field of a struct is CE2411 there and a later use of a bloomed local is CE2405.
 SLIR lowering makes the temporary in `slir/lower_variadic.py`. The callee drops nothing of
-its tail. The AST fold `build_variadic_array` is gone; `_emit_run` of `<sys/process>`
-still names it, and D7.2 (Task 103) lowers `run` through the same arm: its `Stdlib` row
-gets the tail row too.
+its tail. The AST fold `build_variadic_array` is gone.
+
+**The tail of `run`.** The `Stdlib` callee of `run` holds the tail row too
+(`_stdlib_tail`, `passes/types/calls/user_defined.py`), and the same arm lowers it: each
+value of the tail moves into the temporary of the call, and the temporary drops at the end
+of the statement. A bloom into `run` is different from a bloom into a function of a unit:
+it BORROWS its source, as in `main`, where `argv` stays readable after
+`run("cmd", argv...)`. So the one argument check gives that bloom the `Guaranteed`
+convention (`bloom_borrows`), `borrow` reads it as a shared borrow and no consuming use,
+and SLIR lowering passes the place of the source itself as the tail operand, with no
+temporary (`tail_argument`, `slir/lower_variadic.py`). A temporary that copies the
+descriptor and drops would free the array two times.
 
 ### 7.5 Statements
 
@@ -1870,9 +1878,8 @@ built-in container (`List.new`, `List.with_capacity`, `HashMap.new`, `Own.alloc`
 same row: `ty` is the instance that the call builds, which its position gives, and
 `method` is the row of the family of the container (`CONTAINER_STATIC_FAMILIES`).
 
-A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`, and by
-S24 each other module of 7.3): a row of
-the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
+A `Stdlib` callee is a function of a registry stdlib module (each module of 7.3, S24): a
+row of the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
 a member of a `<math>` family (`abs`, `min`, `max`, `divmod`). `decl` names the written
 name, bare or behind an alias, and `module` is the `use` path of the module (`math`). It is
 the `CalleeKind.STDLIB` of `param_modes.py`: a registry row declares no mode, so each
@@ -3602,9 +3609,9 @@ the name of the function with no alias, and `module` is the `use` path of its mo
 (#817). Every other `Direct` callee has no module. The printer writes the call as
 `call @<math>.sqrt(copy _1 @guaranteed)`. The emitter gives a `Direct` callee with a
 module to the row of its module in `STDLIB_EMITTERS` with the value and the type of each
-operand (Q7); every operand is evaluated first. The rows of `<math>`, `<time>`,
-`<sys/env>`, `<random>` and `<io/files>` read the row of the call (`stdlib_row`), declare the generated function of the symbol from that
-row and call it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
+operand (Q7); every operand is evaluated first. The row of each module reads the row of
+the call (`stdlib_row`), declares the generated function of the symbol from that row and
+calls it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
 `<time>` sleep answers a bare status, and the call builds its `Result` from it
 (`status_result.py`: a negative status is `Result.Err`).
 
@@ -3614,16 +3621,19 @@ that `<math>` and `<time>` have: the row of the call, the declaration of the gen
 function of the symbol from that row, and the call (`emit_stdlib_row`). The
 `<time>`/`<sys/env>` status contract stays one seam (`status_result.py`). `run` lowers
 after the tail of S22: its last operand is the temporary `string[]` of the tail (7.4),
-which the caller keeps. The row borrows it as `Guaranteed`, as each operand of a `Stdlib`
-callee, and the temporary drops at the end of the statement, as in `main`
-(`build_variadic_array(..., callee_owns=False)` in `_emit_run`). `exit` is
-no intrinsic in `main`: probe `p09_exit_lowering` (`.superpowers/sdd/probes/P6/`, at
-`00633e4bd`) shows `call void @sushi_exit(i32 3)` and then `unreachable` (`_emit_exit`,
-`backend/expressions/calls/stdlib/process.py`). So `exit` lowers to a `Call` of
-`Direct(sushi_exit, exit, sys/process)` whose block ends in the `Unreachable` terminator
-(8.8). Not built yet: the rows of
-`<sys/process>` and `<net/socket>` keep the AST entry `emit_registry_call`
-(`signatures.py`), which P6.D7.2 (Task 103) deletes. It removes this note.
+which the caller keeps; a bloom into `run` is the place of its source (7.4). The row
+borrows it as `Guaranteed`, as each operand of a `Stdlib` callee, and the temporary drops
+at the end of the statement, as in `main`. The `Ok` of `run` is the named struct
+`ProcessOutput`, which crosses at the layout of its generator, as `Datagram` does
+(`llvm_value_type`). `exit` is no intrinsic in `main`: probe `p09_exit_lowering`
+(`.superpowers/sdd/probes/P6/`, at `00633e4bd`) shows `call void @sushi_exit(i32 3)` and
+then `unreachable`. So `exit` lowers to a `Call` of `Direct(sushi_exit, exit, sys/process)`
+whose block ends in the `Unreachable` terminator (8.8). The registry says which functions
+never return (`stdlib_never_returns`, `semantics/stdlib_registry.py`), and SLIR lowering
+reads it at the call (`never_returns`, `slir/lower_calls.py`). The statements after the
+call lower into a new block that no path reaches, so the drops of the scope do not run, as
+in `main`. Each module of `STDLIB_EMITTERS` is a one-line forwarder to `emit_stdlib_row`;
+no row has an AST entry.
 
 **A `cstr` parameter of a registry row** (S23, decision E3 (a)). Its operand is a
 `Guaranteed` `string`, as each operand of a `Stdlib` callee is (8.3). The emitter of the
@@ -3633,10 +3643,8 @@ after the call. No SLIR local holds the copy, and no drop of 8.10 reads it, so a
 row and an extern have one rule at the C boundary (the CLAUDE.md seam row "C-string
 marshalling"). `run()` stays the one exception: its tail is a `string[]` temporary that the
 caller keeps (7.4), not a C string. The operand form is `emit_stdlib_row`
-(`backend/expressions/calls/stdlib/signatures.py`). Not built yet: a row of
-`<sys/process>` and `<net/socket>` keeps its AST arguments (`emit_registry_call`), which
-gives an `Expr` to `emit_cstr_arg` and calls no `free_cstr_args`. P6.D7.2 (Task 103)
-builds their operand form, deletes `emit_registry_call` and removes this note.
+(`backend/expressions/calls/stdlib/signatures.py`), for the rows of every registry
+module.
 
 An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name)`: `symbol` is the
 link name, `name` is the name of the function with no alias, and it has no module. The
@@ -3731,7 +3739,8 @@ walks the initializer of each public constant, so a private function that the va
 travels with its signature and its link symbol, as a private function that a template body
 names does. The check of the initializer may name it, as a body of a library template may
 (`in_library_body`). The thunk of the constant then names the link symbol of the private
-function. A private `var` or a private constant of a binary library that the consumer names
+function. A private constant that the value names travels as source, by the same
+walk. A private `var` or a private constant of a binary library that the consumer names
 is a name of the scope pass (`kept_constant_names`), so `typecheck` gives
 [CE3005](../error-catalog.md#ce3005) for it, and the scope pass gives no CE1001.
 
