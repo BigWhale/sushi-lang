@@ -12,10 +12,11 @@ A comparison, `and`, `or`, `xor` and `not` answer a `bool`. A `Maybe` or a `Resu
 variant that is an operand of a comparison takes the type of the other operand, which is
 checked first (`m == Maybe.None`). Each operand of `and`, `or`,
 `xor` and `not` is a condition, as the condition of an `if` and of a `while` is
-(`check_condition`). A negated literal is one value: the negation types the literal with
+(`check_condition`). These five answer a `bool` also after an error of an operand or of
+their own, because the error does not change the type of the value. A negated literal is one value: the negation types the literal with
 its sign. An overflow-checked operation reads itself through the fold when its operands
 have no error (`reject_overflow`). The rules of the operands are in
-`passes/types/expressions.py`. A node whose own rule reports answers no type.
+`passes/types/expressions.py`. Any other node whose own rule reports answers no type.
 """
 from __future__ import annotations
 
@@ -61,8 +62,7 @@ def check_unary(validator: TypeValidator, node: e.Unary,
         ty = visit.check_expr(validator, operand, _offered(validator, operand, BuiltinType.BOOL))
         if _rejects_a_pointer(validator, node, ty):
             return None
-        if ty is None or reject_non_bool_condition(validator, operand, ty):
-            return None
+        reject_non_bool_condition(validator, operand, ty)
         return BuiltinType.BOOL
     position = _numeric(expected)
     if node.op == "neg" and isinstance(operand, e.Lit):
@@ -98,13 +98,13 @@ def check_binary(validator: TypeValidator, node: e.Binary,
         return None
     op = node.op
     if op in _LOGICAL:
-        refused = reject_non_bool_condition(validator, node.lhs, left)
-        refused = reject_non_bool_condition(validator, node.rhs, right) or refused
-        return None if refused or left is None or right is None else BuiltinType.BOOL
+        reject_non_bool_condition(validator, node.lhs, left)
+        reject_non_bool_condition(validator, node.rhs, right)
+        return BuiltinType.BOOL
     if op in COMPARISON_OPS:
-        refused = reject_mixed_numeric_operands(validator, node.loc, left, right)
-        refused = reject_uncomparable_operands(validator, node, left, right) or refused
-        return None if refused or left is None or right is None else BuiltinType.BOOL
+        reject_mixed_numeric_operands(validator, node.loc, left, right)
+        reject_uncomparable_operands(validator, node, left, right)
+        return BuiltinType.BOOL
     if op in ARITHMETIC_OPS:
         return _check_arithmetic(validator, node, left, right)
     return _check_bitwise(validator, node, left, right)
