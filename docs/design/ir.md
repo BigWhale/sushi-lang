@@ -5,7 +5,7 @@
 SHIR and SLIR exist on the branch `feat/ir-shir-slir`. Phases 0 to 5 of the migration are
 done: the spine, Tier A (plain values), Tier B (ownership) and Tier C (generics, closures,
 iterators), closed at Gate 5. Phase 6 (Tier D) is next. A construct that a stage does not handle
-yet stops the compile with CE0155. The numbers in sections 1 to 5 describe the tree at
+is an internal error (CE0000). The numbers in sections 1 to 5 describe the tree at
 `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
@@ -921,7 +921,7 @@ evaluator (`ConstantValue`, `semantics/const_eval.py`), one shape for the two ke
 that an integer literal holds at its type, and the value of the constant that a `ConstRef`
 names (from the constant table, Q5). A `ConstRef` of a constant whose initializer has an
 error has no value row: the walk goes on (`refused_before`, 7.9). With no error in the
-program, a constant with no value stops (`ConstRef with no value`). An initializer has no
+program, a constant with no value is an internal error. An initializer has no
 value row: no stage reads one,
 because the backend makes the global of a constant from the evaluator (8.2). The global row
 of a `StorageRef` holds the symbol of the global of its `var`, from the one derivation of a
@@ -938,13 +938,12 @@ body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing
 the internal error [CE0156](../error-catalog.md#ce0156), which names the answer, the class
 of the node, its position and the body. Each expression node needs a type, the reference of
 a call target too. An integer literal and a `ConstRef` need a value too. A `ConstRef` of a
-constant that has no value stops the walk of its body with `typecheck, ConstRef with no
-value`, and an initializer with no value that is no empty container stops with `typecheck,
-Return with no value`. A function-typed constant (`const fn() -> i32 F = area`) has a
+constant that has no value is an internal error (`ConstRef with no value`), and so is an
+initializer with no value that is no empty container (`Return with no value`). A function-typed constant (`const fn() -> i32 F = area`) has a
 `ScalarConstant` whose type is the function type and whose value is the symbol of the
 function; a generic function has no value there. When the initializer has an error, that error is the diagnostic, and the
-stop does not show. A `var` whose initializer is an empty container has no value, and it
-does not stop: its global is zero. The captures of a lambda are in `Bindings` and not in the
+walk of the body ends there (`AfterAnError`, 7.9). A `var` whose initializer is an empty
+container has no value, and that is no fault: its global is zero. The captures of a lambda are in `Bindings` and not in the
 body, so the check cannot count them.
 
 The body half of `typecheck` walks a SHIR body through ONE table of arms keyed on the SHIR
@@ -960,8 +959,8 @@ of the template as written (origin `TemplateCheck`), and the header of the check
 the declaration half (6.4). An expression arm takes the type of its position,
 when the position has one, and answers the type of its node; the one dispatch writes that
 answer as the type row of the node. A node that has an error has no answer, and a node that
-reads it has none either, so the completeness check runs only when a walk ends with no stop
-and with no error in its body. A call is the one exception: its callee decides its type, so
+reads it has none either, so the completeness check runs only when a walk ends with no error
+in its body. A call is the one exception: its callee decides its type, so
 a call of a function that the pass finds answers what the function yields also when the
 call has an error of its own: a wrong count, an argument that does not fit, a wrong marker,
 or a function that is private to another unit (CE3005, where the pass checks no argument).
@@ -1027,7 +1026,7 @@ checked; a named one is then CE6104 at the construction, as the old pipeline rep
 `collect` pass refused ([CE1005](../error-catalog.md#ce1005)) gives no second error, and
 the body holds that error. A construction gives its fields no
 convention: a field takes its value by position (7.9). A node that has an error has no
-answer. A struct whose name the unit lost is not typed yet, and stops the walk of its body.
+answer. A struct whose name the unit lost is an internal error.
 
 **A construction of a generic type** (`visit/constructions.py`). A `StructInit`, an `EnumInit`
 and a static of a generic type take the instance from the position when the position holds an
@@ -1047,8 +1046,8 @@ field index row. A field of a constant is a field read too, also behind an alias
 `Maybe` and a `Result` too), an array, a primitive, a `string`, a function type, a `ptr`
 and an opaque type parameter can have this fault. A note says when the name is a method of
 the type, and a help names the field that is near, or the fields of the type. A base of a
-type whose name the unit lost, and a base of a type that has no rule here yet, stop
-the walk with `typecheck, Field`.
+type whose name the unit lost, and a base of a type that has no rule here, are an internal
+error.
 
 **A tuple.** A `TupleInit` checks each part at the element type of its position, when the
 type of its position is a tuple with as many elements, else at no type. It answers the
@@ -1136,7 +1135,7 @@ overflow ([CE2077](../error-catalog.md#ce2077)), a division by zero and a cycle
 evaluator. An empty container (`List.new()`, `from([])`) allocates nothing: the evaluator
 does not read it. The `Return` of the body checks its value at the declared type, as a `let`
 does: a value that does not fit is [CE2002](../error-catalog.md#ce2002) at `name = value`,
-with a note at the declared type. The value that the evaluator gave only decides the stop
+with a note at the declared type. The value that the evaluator gave only decides the internal error
 above; the pass writes no row for it. The `borrow` pass walks an initializer body as any
 other body. The constant evaluator makes each value of an initializer, so each value there
 is a new value: the `Return` adopts its value, and a constant that the initializer names is
@@ -1204,8 +1203,8 @@ there but `foreign_ptr`: a `ptr` receiver goes to its own arm before the ladder
 (`check_foreign_ptr_call`, `passes/types/visit/extern_calls.py`), and that arm also gives
 [CE5011](../error-catalog.md#ce5011) for a method that the family does not hold. A family
 with no arm is an internal error. A receiver that is not of a built-in type and that no family
-claims, and no extension method of a plain type answers (see below), stops the walk with
-the label of the call target (`Call(method)`, `Call(stdlib method)`). A perk method that is
+claims, and no extension method of a plain type answers (see below), is an internal
+error. A perk method that is
 no contract method is a `Method` callee (7.6). An opaque type parameter that a
 constraint gives `Clone` has the family of the derived `clone`, and a contract constraint the
 family of the contract (`promised_contract_family`). In an instance, the same call is the
@@ -1319,8 +1318,8 @@ convention of `argument_conventions` (8.3). A perk method is the `Method` of 7.6
 (`passes/types/visit/perk_calls.py`): a written call of the `drop` of the predefined `Drop`
 perk is [CE4020](../error-catalog.md#ce4020), a wrong count says no more about the
 arguments, and an opaque receiver has the method that a constraint promises. These calls
-still stop the walk with their label: a receiver of a kind that takes no user method (an
-iterator), and a call through a field of a function type that no method of the struct names.
+are an internal error: a receiver of a kind that takes no user method (an iterator), and a
+call through a field of a function type that no method of the struct names.
 
 **A `peek` return.** A free function, an extension method and a static with a `peek T`
 return (`borrow-model.md` S10h) are typed as any other callee of their kind: the type of
@@ -1364,8 +1363,8 @@ ProcessError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) 
 value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
 callee whose last parameter is a variadic tail (7.4), so its row is typed with the tail of
 S22: its callee row holds `Tail(1, string[], Guaranteed)`, and the one argument check takes
-the tail. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. No call of a registry
-function stops the walk.
+the tail. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. Every call of a registry
+function has its arm.
 
 **A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
 that the program writes: an explicit type argument, a written type, and a generic function
@@ -1401,30 +1400,8 @@ that names it (`Monomorphizer.in_refused_copy`). A late refusal does not stop th
 and a copy whose cut refused an instance gets no check: the refusal stands, as for an
 extension copy.
 
-While the migration is in progress, the arm of a construct that the pass does not
-type yet stops the walk of its body with the stop code; the pass then goes on with the
-next body, so every unit is lowered and every earlier error is found. This paragraph and the
-label of a stop below go in P6.last.1 (S28, 8.2).
-
-**The label of a stop at a call.** Only `typecheck` stops on a `Call` with the kind of its
-target. One function makes the label, `construct_of` (`semantics/shir/dispatch.py`), from
-the SHIR node and from the call facts that the stop site gives it
-(`passes/types/call_facts.py`). A stage that stops on a `Call` with no facts is an internal
-error, so no stage prints a label that another stage would print in another way. The labels
-are `Call(<kind>)`: `method` (a method that no built-in family claims and that no
-extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension), `stdlib method` (a `public extend`
-of a bundled Sushi-source stdlib unit), `static` (a user static),
-`builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a function of a registry stdlib
-module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function of an `unsafe external` block, 7.6, or `errno`), `alias` (a function of a
-user unit behind a `use ... as` alias), `function` (a user function), `generic` (a generic
-function, or written type arguments), `fn value` (a call through a function value) and
-`builtin` (`print`, `println`). There is no
-`Call(construction)`: a construction lowers to `StructInit` or `EnumInit`. A call of a
-built-in family never stops: each family has its arm in `typecheck` and its receiver rule in
-`borrow`.
-The stop-code census of the runner (`tests/stop_census.py`) counts a stop inside a bundled
-stdlib unit in a row of its own, `<stage>, <construct> [<module>]`, from the note that names
-the module. The census reads the labels and decides nothing.
+The arm of a construct that the pass does not type is an internal error (CE0000,
+`dispatch.unhandled`), never a skip.
 
 `--dump-shir` prints three answers in place. The resolved callee prints in place of the
 `CallTarget` (`Call(Free(@decorate), ...)`; `println` is `Intrinsic("println")`). Each
@@ -1525,7 +1502,8 @@ when the written type names an enum, the hole is [CE2045](../error-catalog.md#ce
 `name_loc`, and the diagnostic names the instance that the position gives to a generic
 enum, as for a `Static` call (7.3). A static of the name does not change it, because a
 static is a value only in a call. On a type that is no enum, the error is the error of
-another pass (CE2105, CE2007, CE2008), and the hole stops the walk of its body. The dump
+another pass (CE2105, CE2007, CE2008), and the walk of the body ends at the hole
+(`AfterAnError`, 7.9). The dump
 prints the member (`<hole: MemberAccess, error: CE2045 | ..., member: Sign.Nope>`). Ruled
 2026-10-28 (R20). The error hole of a bare call with written type arguments on a type name
 (`Pair@(i32, i32)(1, 2)`, the `Call` hole of CE6102) is [CE6102](../error-catalog.md#ce6102)
@@ -1536,9 +1514,9 @@ of written type arguments after a type or a value and a dot (`xs.get@(i32)(0)`,
 type arguments, and `type_args_loc`. Lowering sets both. `typecheck` reports CE6102 at
 `type_args_loc` and then types `call`, so the later faults of the call are reported too, and
 the hole answers what `call` answers. A struct behind an alias with written
-type arguments (`geo.Box@(i32)(1)`) has no `call`, and it stops the walk of its body. At
-the end of the analysis, an error hole whose code no diagnostic reported is an internal
-error, CE0155. The error hole of a name with no declaration, of a jump outside a loop and of
+type arguments (`geo.Box@(i32)(1)`) has no `call`, and the walk of the body ends at it
+after its error. At the end of an analysis with no error, an error hole whose code no
+diagnostic reported is an internal error, CE0000 (`check_error_holes`). The error hole of a name with no declaration, of a jump outside a loop and of
 a `self` in a static is the error of a pass before `typecheck` (`REPORTED_BEFORE`,
 `visit/results.py`): when that error is reported, the hole has no answer and the walk of the
 body goes on, so the later faults of the body are reported too (a CE2002 after a CE1001);
@@ -1837,7 +1815,7 @@ of these matches of the body (`uncovered`), and a match of the set does not end 
 fall-off rule and `borrow` give no set: the fall-off rule takes the match as one that ends the
 path, and `borrow`, which walks a body with an error too (7.9), joins the arms that the match
 has. The two path rules read no type:
-`typecheck` runs them on the SHIR body after a walk that ends with no stop, on a template as
+`typecheck` runs them on the SHIR body after a walk that reaches its end, on a template as
 it is written and not on a copy of it, and it reads every block of the body.
 
 `Destructure` stays one statement, because its ownership is not that of a field read: it
@@ -2313,8 +2291,8 @@ body for `typecheck`, so such a body does not go to `lift` either: a parameter w
 unknown type would reach SLIR as a local with no type. `typecheck` checks the path faults
 of a function or a method (CE0140 and CE0107) before it gives the body to `lift`. A body
 with a path fault goes on, marked as the next paragraph tells, so that `borrow` reports its
-errors too. A body whose walk in `typecheck` reported an error goes on in the same way. A stop of a pass ends the walk of
-its body, and the next pass does not get the body. The body of a template check is read
+errors too. A body whose walk in `typecheck` reported an error goes on in the same way. A walk that
+ends after an error (`AfterAnError`, below) does not give its body to the next pass. The body of a template check is read
 in the overlay of its check, and an error of `borrow` there refuses the template as an
 error of `typecheck` does.
 
@@ -2328,8 +2306,8 @@ type, and the other rows of `NEEDS`. A `Call` with a callee is known: an argumen
 no convention is unknown on its own. A `Match` and a `Loop` are known, because `borrow` reads
 no answer of their own: their scrutinee and their condition are unknown on their own, and
 each arm and each body is walked (`misses_an_answer` and `KNOWN_WITH`,
-`shir/typeck_check.py`). A `Loop` whose iterable has an error has no kind, and `borrow` stops
-at it (7.7). An unknown node has no arm:
+`shir/typeck_check.py`). A `Loop` whose iterable has an error has no kind, and the walk of
+`borrow` ends at it (`AfterAnError`, below; 7.7). An unknown node has no arm:
 
 - an unknown expression is a read of each expression that it holds (`walk.parts`), each
   through its own arm. A function name that it holds reads nothing. The expression itself
@@ -2353,11 +2331,20 @@ local moves there, and no view starts there. So a use of a name after an unknown
 names it with `nom` gives no CE2405. A local with no type is PLAIN for `classify()`, so a use
 of it never moves it. Two divergences from the old pipeline follow. `typecheck` types no arm
 of a `match` whose scrutinee has an error (7.8), so each node of its arms is unknown, and
-`borrow` gives no diagnostic in them. A stop of `borrow` ends the walk of such a body too
-(for example a construct that the pass does not check yet), so a diagnostic in the construct of the stop or after it does not
-come; the pipeline never reports the stop, because the program has an error. The pass writes no row of such a body,
+`borrow` gives no diagnostic in them. The pass writes no row of such a body,
 as in the discovery round of a loop: the `OwnershipResults` of the body stay empty, the pass
 does not check them, and the body never goes to the SLIR lowering.
+
+**A construct that a pass does not handle, after an error.** In a pass over SHIR, a
+construct that the pass does not handle is an internal error (CE0000, `dispatch.unhandled`).
+In a body that has an error, or in a program that has one, such a construct is the trace of
+that error: a `Loop` with no kind, a write of a C global after
+[CE5016](../error-catalog.md#ce5016), an error hole after the error that it stands for. So
+`unhandled` raises `AfterAnError` (`internals/diagnostics.py`) there, the pass ends the walk of the body, and the error
+of the program is the diagnostic: a diagnostic in the construct or after it does not come.
+`typecheck` asks the errors of the unit and of the program (`has_an_error`), and `borrow`
+also asks whether the body is marked `typecheck_failed`. A program that ends with no error
+never ends a walk in this way.
 
 **`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`) and stops at
 nothing. For each `Lambda`, a lambda in a lambda too, in the order of the walk, it writes the
@@ -2400,11 +2387,10 @@ may not run.
 the body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
 body half walks the body through ONE table of arms keyed on the SHIR class, with a row for
 each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
-`tests/unit/test_borrow_dispatch_is_total.py`). The lookup of an arm and the stop are the
-one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
-too: a class with no row is an internal error at the span of the node, and the arm of a
-construct that the pass does not check yet stops the walk of its body with the stop code
-(`borrow, <class>`; the stop goes in P6.last.1, S28, 8.2). The walk of a block reads the statements that a path reaches
+`tests/unit/test_borrow_dispatch_is_total.py`). The lookup of an arm and `unhandled` are
+the one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
+too: a class with no row is an internal error at the span of the node, and so is a
+construct that an arm does not check (after an error, see above). The walk of a block reads the statements that a path reaches
 (`reached_statements`, 7.2). A call of a built-in method has its
 arm, and `receiver_convention` (8.3) gives its receiver its convention. The arm reads the
 receiver (a use after a move is CE2405). A `Guaranteed` receiver stays with its owner, the
@@ -2453,16 +2439,14 @@ In an initializer body, the constant evaluator makes each value, so the provenan
 consuming use there is FRESH: the `Return` adopts its value, and `const string ALIAS =
 GREETING` is no take of `GREETING`.
 
-When the walk of a body ends with no stop and with no error, `check_ownership` runs, and
+When the walk of a body ends with no error, `check_ownership` runs, and
 the body goes to the SLIR lowering (8.2). The SLIR stage takes no initializer body
 (8.2), and it lowers no body while the program has an error: the program reporter or the
 reporter of the unit holds one (`SlirStage.failed`). So no body with an error of
 `typecheck` or of `borrow` reaches the SLIR lowering, and neither does a body of a program
 whose declaration has an error (CE2416 of an enum payload): the program gets no internal
-error of the verifier after its real error. The pipeline reports the first stop of
-`typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
-hole, then the first stop of the SLIR lowering; with no stop, the backend emits each body from
-its SLIR (8.2).
+error of the verifier after its real error. After an analysis with no error, the pipeline checks the error holes
+(`check_error_holes`), and the backend emits each body from its SLIR (8.2).
 
 **Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
 checks each block from the state after its condition, and the paths that reach the code
@@ -2550,8 +2534,8 @@ the value is a consuming use. Each field of a `StructInit`, in the written order
 each part of a `TupleInit` is a consuming use by its position, as each payload of an
 `EnumInit` is. A construction reads each field (each payload) first and then takes
 each, as a call does with its arguments, so two takes of one local in one construction
-are one take (8.9, `Take`). A root that the pass does not check yet (a `GlobalRef`) stops
-the walk with its class.
+are one take (8.9, `Take`). A root that the pass does not check (a `GlobalRef`) is an
+internal error.
 
 **A marked field take in `borrow`.** A `Take` (`nom s.out` in a `let`, a `return` or the
 value of a destructure) and a `nom` argument on a field (`f(nom s.out)`, a `nom` field of a
@@ -2741,8 +2725,8 @@ each capture with its `Ownership` row. The source row of
 `typecheck` prints as
 `borrows: [0, -1]` after the arguments of a call with a `peek` return. With no row, the
 text does not change: a
-body that `borrow` did not reach prints no answer of it, and a body that `borrow` stopped in
-prints the rows that the walk wrote before the stop.
+body that `borrow` did not reach prints no answer of it, and a body whose walk ended after
+an error prints the rows that the walk wrote before its end.
 
 ### 7.10 AST to SHIR, node by node
 
@@ -2981,26 +2965,9 @@ implementation that holds the method (`perk_impl_of`). It never reads the shape 
 The verifier finds the declared parameters of the callee in the same table, by the perk
 symbol, with the receiver first (`declared_params`).
 
-While the migration is in progress, a construct that the lowering does not handle yet stops
-the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or `ConstRef out of range` for a `ConstRef` whose value its type cannot
-hold (8.5). The dump prints such a function as ONE line in place of
-its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
-progress of each function. The pipeline reports one stop after the analysis: a stop of
-`typecheck`, else of `lift`, else of `borrow`, else an error hole, else a stop of the
-lowering. When nothing stopped, the program goes on to the backend.
-
-**No stop code after the migration** (S28). Each "while the migration is in progress"
-paragraph of this file goes: the one of `typecheck` (7.3), of `borrow` (7.9), of the
-lowering (here) and of the emitter (below). A construct that a stage does not handle is
-then an internal error (CE0000, `raise_internal_error`), never a stop. The dump line
-`fn <name>: stopped (slir, <construct>)` goes, and so do the label of a stop at a call
-(7.3), `construct_of` (`semantics/shir/dispatch.py`), `StageStop` (`semantics/shir/stop.py`),
-`stop` (`backend/slir/state.py`), the stop-code census of the runner (`tests/stop_census.py`)
-and the fixtures that pin a stop (decision E5 (a)). CE0155 becomes a retired code, with its
-history in its `doc`. The status line of this file says BUILT in P7.3, not in this text. Not
-built yet: P6.last.1 (Task 108) deletes the stop code and these paragraphs, and removes
-this note.
+A construct that the lowering does not handle is an internal error (CE0000,
+`raise_internal_error`, S28). The dump prints the SLIR of each function that the
+lowering finished.
 
 **An initializer body.** The SLIR stage does not lower the initializer body of a constant or
 a `var` (6.3). The body gives `typecheck` and `borrow` a SHIR node to check, and nothing
@@ -3014,10 +2981,9 @@ declared in each other module, so a body of any module reads and writes it by ad
 emitter finds the global of a `Global` place by its symbol (`values.global_address`), and a
 symbol that the module does not hold is an internal error. A body reads a constant as a `Const` operand (8.5), and
 never reads its global. The round makes a global for each constant and each `var`, or it
-stops the compile; it never drops one. A struct value and an enum value go through the
-converter of 8.5, and so does an array value, also in a payload or a field. A constant
-that the evaluator gives no value stops with `emit, constant with no value`.
-Every other fault of the round is an internal error: a constant with no type, a scalar of
+raises an internal error; it never drops one. A struct value and an enum value go through the
+converter of 8.5, and so does an array value, also in a payload or a field. Every fault of the round is an internal error: a constant that the evaluator
+gives no value, a constant with no type, a scalar of
 a type that has no LLVM constant, and a value that the converter of 8.5 cannot write.
 
 **The emitter.** The package is `backend/slir/`, and it follows the backend rule: free
@@ -3046,7 +3012,7 @@ structs of one type (a tuple is a struct) calls the contract seam (`emit_contrac
 `backend/expressions/operators.py`): `==` and `!=` read the `Eq` contract, the order
 operators read the `Ord` contract, an implementation of the perk first and else the derived
 one (`emit_value_eq`, `emit_value_compare`). The operand of any other operator is an
-integer, a float or a `bool`, and any other operand type stops the emitter. `SwitchInt`
+integer, a float or a `bool`, and any other operand type is an internal error. `SwitchInt`
 with `otherwise: None` goes to a block that holds `unreachable`.
 
 Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
@@ -3091,28 +3057,18 @@ row of `METHOD_FAMILIES` (`backend/slir/methods.py`), by the family of the metho
 receiver is the first operand, and every operand is evaluated before the family emits. The
 family keeps its emitters and gives them the operand values (Q7). The primitive family, the
 `string` family, the `result` family and the `maybe` family have a row. A family with no row
-stops. Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3);
+is an internal error. Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3);
 any other convention is an internal error. Each method that the row of the family emits
 (`is_ok`, `is_err`, `is_some`, `is_none`) takes only the receiver and answers a `bool`. `realise` and `err` reach no family: they lower
 as `expect` does, to a switch on the tag (8.9), and the copy of an owning value is a `Clone`
 on its own path. The `Clone` rvalue has ONE emit arm, over `copy_out` (the one deep-clone
 entry of `backend/ownership.py`), and no family calls `copy_out` for `realise` or `err`.
 
-While the migration is in progress, a SLIR shape that the emitter does not handle yet
-stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
-example `emit, Indirect` or `emit, AggArray`), at the span of its statement or
-terminator. Where one class holds two shapes, the stop names the shape, so that the
-stop-code census counts each one: `emit, intrinsic <name>` for an intrinsic with no row
-of `INTRINSICS`, and `emit, <family> method` for a `BuiltinMethod` whose family has no row
-of `METHOD_FAMILIES`. The declaration round of a global stops with one name, at the span of
-the declaration: `emit, constant with no value` (see the initializer body above). Every stop
-of the stage goes through one function, `stop` (`backend/slir/state.py`). The stop
-comes before any output: the incremental path builds the module of every unit before it
-writes the first object, so no object, no binary and no `.ll` text is written. This order
-serves the migration alone: when no shape stops the emitter, the path can again build and
-write one unit at a time. A stop of the emitter renders as a stop of the analysis does
-(one `except StageStop` in `compile_multi_file`): it is a limit of the compiler, not a bug.
-This paragraph goes in P6.last.1 (S28, above).
+A SLIR shape that the emitter does not handle is an internal error (CE0000, through
+`FunctionState.unhandled`, `backend/slir/state.py`), at the span of its statement or
+terminator. It comes before any output: the incremental path builds the module of every
+unit before it writes the first object, so no object, no binary and no `.ll` text is
+written.
 
 ### 8.3 Conventions
 
@@ -3180,7 +3136,7 @@ can name is in exactly one of three sets (gate:
   because the map stores both. Each other argument is `Guaranteed`, the key of a lookup
   too. `alloc` of an `Own` takes its value `Owned`, and `destroy` writes its receiver.
   A family of `RULED_EFFECT_FAMILIES` has a read-or-write partition of its methods. All four families are in it (`array`, `list`, `hashmap`,
-  `own`), so no call of an effect family stops for want of a receiver rule.
+  `own`), so every call of an effect family has a receiver rule.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
   `nom self` method, so the answer is per method. The receiver of a method that declares
   `nom self` (`map_err`, `or_err`) is `Owned`: a consuming use (7.9). The receiver of each
@@ -3392,15 +3348,13 @@ lowering decides no value and the verifier rule holds. A private function that a
 its unit names is emitted, also when the constant is read in another unit. A payload of an
 enum constant and a field of a struct constant can be a function value.
 
-**The R14 guard after the stop code** (S27, decision E4 (a)). The rule stays: a
-`ConstRef` whose value its type cannot hold is not lowered. When the stop code goes
-(P6.last.1), the guard becomes an internal error (CE0000, `raise_internal_error`) with the
-detail "a constant value that its type cannot hold". The fault is in the constant
+**The R14 guard** (S27, decision E4 (a)). The rule stays: a `ConstRef` whose value its
+type cannot hold is not lowered. The guard is an internal error (CE0000,
+`raise_internal_error`, `Lowering.constant`, `slir/lower.py`) with the detail "a constant
+value that its type cannot hold". The fault is in the constant
 evaluator (#1273 to #1275), and ruling R-AF fixes it after the merge, not on this branch.
 So `tests/literals/hex_literals/test_hex_literals_constants.sushi` stays red by name at Gate
-6, with R-AF as the reason, until #1273 lands. Not built yet: today the guard stops the
-lowering (`slir, ConstRef out of range`, `Lowering.constant`, `slir/lower.py`); P6.last.1 (Task 108) makes it the
-internal error and removes this note.
+6, with R-AF as the reason, until #1273 lands.
 
 ### 8.6 Statements
 
@@ -3525,8 +3479,8 @@ A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod
 method has no operand types in the callee, because each operand is a place or a constant
 that has its own type. The receiver is the FIRST operand of the call, and it comes before
 the arguments in the order of evaluation. Its convention is the answer of the receiver
-partition (`receiver_convention`, 8.3). A family with no answer stops in `typecheck` or in
-`borrow` first, so its call in lowering is the internal error CE0000, never a `Guaranteed`
+partition (`receiver_convention`, 8.3). A family with no answer is an internal error in `typecheck` or in
+`borrow` first, and its call in lowering is the internal error CE0000 too, never a `Guaranteed`
 receiver by default. The printer writes the call as
 `builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
 fresh owning local like any other call, and the drop placement drops it (8.10). The emitter
@@ -3555,8 +3509,8 @@ the emitter (`0`, and `len - 1`, which the bounds check of an empty List refuses
 `first` and `last` answer a view (`answers_view`); over a plain element the destination is
 an ordinary local and the answer is a copy (8.9), and over an owning element the answer is
 a view (8.2) of the receiver. The name of a static called on a
-List value (`xs.new()`) answers `~` and builds nothing. The `iter()` producer is a stop of
-`borrow`.
+List value (`xs.new()`) answers `~` and builds nothing. The `iter()` producer makes a lent
+iterator in `borrow` (`passes/borrow/iterators.py`).
 
 The `hashmap` family takes the ADDRESS of its receiver in the same way. Its rows are
 `HASHMAP_EMITTERS` (`backend/generics/hashmap/`), over operands (`emit_with_operands`): the
@@ -3571,7 +3525,7 @@ a view local of the map. `remove` moves the value out into a fresh `Maybe`, whic
 and drops the key of the entry. `free` drops each entry and keeps an empty map, `destroy`
 drops each entry and keeps no buckets, and `rehash` moves each entry into new buckets.
 `HashMap.new` goes to the static row of the table. The producers `keys`, `values`,
-`entries` and `pairs` are a stop of `borrow`.
+`entries` and `pairs` make a lent iterator in `borrow`.
 
 Four rows of the `hashmap` family are the step of a `HashMapCursor` walk (8.9), one for
 each view: `cursor_next.keys`, `cursor_next.values`, `cursor_next.entries` and
