@@ -1319,10 +1319,10 @@ The call answers the type of the row. An answer that owns (`getcwd` answers `str
 ProcessError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
 value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
 callee whose last parameter is a variadic tail (7.4), so its row is typed with the tail of
-S22. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. Not built yet: only `<math>`
-and `<time>` are typed (`TYPED_STDLIB_MODULES`), and a call of a function of any other
-registry module stops the walk (`Call(stdlib)`). P6.D7.1 (Task 100) and P6.D7.2 (Task 103)
-delete that set and remove this note.
+S22. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. Not built yet: `<sys/process>`
+and `<net/socket>` are not typed (`UNTYPED_STDLIB_MODULES`), and a call of a function of
+one of them stops the walk (`Call(stdlib)`). P6.D7.2 (Task 103) deletes that set and
+removes this note.
 
 **A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
 that the program writes: an explicit type argument, a written type, and a generic function
@@ -3530,13 +3530,14 @@ in `borrow` ([CE2429](../error-catalog.md#ce2429)), because the write would land
 A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`. `name` is
 the name of the function with no alias, and `module` is the `use` path of its module.
 `symbol` is the generated function of its row (`stdlib_symbol`,
-`semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`, and
+`semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`
+(`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers), and
 `sushi_<name>_<type>` for a member of a `<math>` family, at the type of its first argument
 (#817). Every other `Direct` callee has no module. The printer writes the call as
 `call @<math>.sqrt(copy _1 @guaranteed)`. The emitter gives a `Direct` callee with a
 module to the row of its module in `STDLIB_EMITTERS` with the value and the type of each
-operand (Q7); every operand is evaluated first. The `<math>` and `<time>` rows read the
-row of the call (`stdlib_row`), declare the generated function of the symbol from that
+operand (Q7); every operand is evaluated first. The rows of `<math>`, `<time>`,
+`<sys/env>`, `<random>` and `<io/files>` read the row of the call (`stdlib_row`), declare the generated function of the symbol from that
 row and call it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
 `<time>` sleep answers a bare status, and the call builds its `Result` from it
 (`status_result.py`: a negative status is `Result.Err`).
@@ -3555,8 +3556,8 @@ no intrinsic in `main`: probe `p09_exit_lowering` (`.superpowers/sdd/probes/P6/`
 `backend/expressions/calls/stdlib/process.py`). So `exit` lowers to a `Call` of
 `Direct(sushi_exit, exit, sys/process)` whose block ends in the `Unreachable` terminator
 (8.8). Not built yet: the rows of
-the other modules keep the AST entry `emit_registry_call` (`signatures.py`), which P6.D7.1
-(Task 100) and P6.D7.2 (Task 103) delete. They remove this note.
+`<sys/process>` and `<net/socket>` keep the AST entry `emit_registry_call`
+(`signatures.py`), which P6.D7.2 (Task 103) deletes. It removes this note.
 
 **A `cstr` parameter of a registry row** (S23, decision E3 (a)). Its operand is a
 `Guaranteed` `string`, as each operand of a `Stdlib` callee is (8.3). The emitter of the
@@ -3565,10 +3566,11 @@ makes the NUL-terminated copy right before the call, and `free_cstr_args` frees 
 after the call. No SLIR local holds the copy, and no drop of 8.10 reads it, so a registry
 row and an extern have one rule at the C boundary (the CLAUDE.md seam row "C-string
 marshalling"). `run()` stays the one exception: its tail is a `string[]` temporary that the
-caller keeps (7.4), not a C string. Not built yet: the row of a module other than `<math>` and `<time>` keeps its
-AST arguments (`emit_registry_call`), which gives an `Expr` to `emit_cstr_arg` and calls
-no `free_cstr_args`. P6.D7.1 (Task 100) and P6.D7.2 (Task 103) build the operand form,
-delete `emit_registry_call` and remove this note.
+caller keeps (7.4), not a C string. The operand form is `emit_stdlib_row`
+(`backend/expressions/calls/stdlib/signatures.py`). Not built yet: a row of
+`<sys/process>` and `<net/socket>` keeps its AST arguments (`emit_registry_call`), which
+gives an `Expr` to `emit_cstr_arg` and calls no `free_cstr_args`. P6.D7.2 (Task 103)
+builds their operand form, deletes `emit_registry_call` and removes this note.
 
 An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name)`: `symbol` is the
 link name, `name` is the name of the function with no alias, and it has no module. The

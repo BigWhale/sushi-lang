@@ -60,7 +60,7 @@ def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef
     function of a module that the pass does not type yet stops the walk (`Call(stdlib)`).
     """
     module, name = func.module_path, func.name
-    if module not in TYPED_STDLIB_MODULES:
+    if module in UNTYPED_STDLIB_MODULES:
         visit.stop_at(validator, node)
     validator.body_answers().record_callee(node.shir_id,
                                            ResolvedCall(Stdlib(ref.decl, module)))
@@ -81,9 +81,9 @@ def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef
     return yielded
 
 
-#: The registry stdlib modules whose calls the pass types (group A14). A call of a
-#: function of any other module stops the walk of its body.
-TYPED_STDLIB_MODULES = frozenset({"math", "time"})
+#: The registry stdlib modules whose calls the pass does not type yet (P6.D7.2). A call
+#: of a function of one of them stops the walk of its body.
+UNTYPED_STDLIB_MODULES = frozenset({"sys/process", "net/socket"})
 
 
 def _row_parameter_name(ty: Type) -> str:

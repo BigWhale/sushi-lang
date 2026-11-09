@@ -1,0 +1,16 @@
+# EXPECT_DUMP_SLIR: test_slir_stdlib_cstr_owning_row.slir
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+#
+# A call of a row with a `cstr` parameter is a `Direct` callee of its module, and the
+# string operand is `Guaranteed`: no SLIR local holds the C copy. The answer of `getenv`
+# owns, so its place drops at the end of its scope.
+use <sys/env>
+
+fn main() i32:
+    setenv("SLIR_STDLIB_ROW", "Mostly Harmless").realise(-1)
+    let string key = "SLIR_STDLIB_ROW"
+    let Maybe@(string) value = getenv(key)
+    println(value.realise("none"))
+    return 0

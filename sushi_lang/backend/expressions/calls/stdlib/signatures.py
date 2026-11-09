@@ -153,16 +153,26 @@ def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, sy
     types of its operands (docs/design/ir.md 8.6). The row is the row of the call
     (`stdlib_row`: a member of a family at the type of its first argument), and `symbol`
     is the symbol that SLIR lowering derived for it. Each operand borrows. A `cstr`
-    parameter takes no operand yet: the group of the C-string argument ports it."""
+    parameter crosses as the copy of the one C-string seam (`emit_cstr_arg`), which the
+    call frees right after it returns (S23)."""
+    from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg, free_cstr_args
     from sushi_lang.semantics.stdlib_registry import stdlib_row
 
     sig = stdlib_row(module_path, func_name, [ty for _, ty in args])
     if sig is None:
         raise_internal_error("CE0024", type=module_path, method=func_name)
-    if any(param.as_cstr for param in sig.params):
-        raise_internal_error("CE0000", detail=f"the C-string argument of '{func_name}' "
-                                              f"takes no operand yet")
-    return emit_row_call(codegen, func_name, symbol, sig, [value for value, _ in args])
+    if len(args) != sig.arity:
+        raise_internal_error("CE0023", method=func_name, expected=sig.arity, got=len(args))
+    copies: list[ir.Value] = []
+    values = []
+    for param, (value, _) in zip(sig.params, args, strict=True):
+        if param.as_cstr:
+            value = emit_cstr_arg(codegen, value)
+            copies.append(value)
+        values.append(value)
+    result = emit_row_call(codegen, func_name, symbol, sig, values)
+    free_cstr_args(codegen, copies)
+    return result
 
 
 def emit_row_call(codegen: 'LLVMCodegen', func_name: str, symbol: str, sig: Signature,

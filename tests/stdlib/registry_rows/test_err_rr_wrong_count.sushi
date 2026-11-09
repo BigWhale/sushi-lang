@@ -1,0 +1,7 @@
+# A row of <sys/env> takes the count of its row: `setenv` with one argument is CE2009.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+use <sys/env>
+
+fn main() i32:
+    let i32 status = setenv("RR_WRONG_COUNT").realise(-1)
+    return status

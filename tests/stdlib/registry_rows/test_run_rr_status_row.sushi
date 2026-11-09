@@ -1,0 +1,24 @@
+# A row of the status contract (`setenv`) answers its Result in a `??` and in a `match`.
+# An empty key is a failure: the status is negative and the call answers Result.Err.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "try:0\nmatch ok:0\nmatch err:invalid\ntry:0\npropagated:7\n"
+use <sys/env>
+
+fn set_both() i32 | EnvError:
+    let i32 status = setenv("RR_STATUS_ROW", "one")??
+    println("try:{status}")
+    setenv("", "two")??
+    return Result.Ok(status)
+
+fn main() i32:
+    let i32 ignored = set_both().realise(-1)
+    match setenv("RR_STATUS_ROW", "three"):
+        Result.Ok(status) -> println("match ok:{status}")
+        Result.Err(_) -> println("match ok:failed")
+    match setenv("", "four"):
+        Result.Ok(_) -> println("match err:unexpected")
+        Result.Err(EnvError.InvalidValue) -> println("match err:invalid")
+        Result.Err(_) -> println("match err:other")
+    println("propagated:{set_both().realise(7)}")
+    return ignored + 1

@@ -334,12 +334,17 @@ def stdlib_arity(module_path: str, name: str) -> Optional[int]:
 
 def stdlib_symbol(module_path: str, name: str, arg_types: Sequence["Type"]) -> str:
     """The symbol of the generated function that a call of a registry stdlib function
-    calls: the ONE derivation (docs/design/ir.md 8.6). It is `sushi_<name>`, and
+    calls: the ONE derivation (docs/design/ir.md 8.6). It is `sushi_<name>`
+    (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers), and
     `sushi_<name>_<type>` for a member of a family, at the type of its first argument: an
     LLVM integer has no sign, so `min` of two u8 is `sushi_min_u8` (#817)."""
     if _is_family(module_path, name):
         return f"sushi_{name}_{arg_types[0]}"
-    return f"sushi_{name}"
+    return f"{_SYMBOL_PREFIXES.get(module_path, 'sushi_')}{name}"
+
+
+#: The modules whose generated functions carry the name of their layer.
+_SYMBOL_PREFIXES = {"io/files": "sushi_io_files_", "net/socket": "sushi_net_"}
 
 
 class StdlibRegistry:

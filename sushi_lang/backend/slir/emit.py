@@ -32,7 +32,7 @@ from sushi_lang.backend.slir.values import (
     type_of_place,
 )
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.passes.types.calls.user_defined import TYPED_STDLIB_MODULES
+from sushi_lang.semantics.passes.types.calls.user_defined import UNTYPED_STDLIB_MODULES
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -212,10 +212,10 @@ def _stdlib(state: FunctionState, statement: st.Call, direct: st.Direct) -> None
     """A function of a registry stdlib module, through the row of its module in
     `STDLIB_EMITTERS`, with the value and the type of each operand. Each operand is
     `Guaranteed` (the verifier checks it), and every operand is evaluated before the row
-    emits anything. Only the row of a module that typecheck types takes operands
-    (`TYPED_STDLIB_MODULES`); any other module is an internal error."""
+    emits anything. The row of a module that typecheck does not type yet
+    (`UNTYPED_STDLIB_MODULES`) is an internal error."""
     emit = STDLIB_EMITTERS.get(direct.module or "")
-    if emit is None or direct.module not in TYPED_STDLIB_MODULES:
+    if emit is None or direct.module in UNTYPED_STDLIB_MODULES:
         state.fault(f"no stdlib row with operands emits the module '{direct.module}'")
     args = [(operand_value(state, operand), type_of_operand(state, operand))
             for operand, _ in statement.args]

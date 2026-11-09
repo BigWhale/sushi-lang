@@ -1,0 +1,72 @@
+unit test_slir_stdlib_cstr_owning_row
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Result@(i32, EnvError)
+    let _2: i32
+    let _3: i32
+    let _4: i32
+    let _5: i32
+    let _6: string                         // key
+    let _7: Maybe@(string)                 // value
+    let _8: string
+    let _9: i32
+    let _10: string
+    let _11: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @<sys/env>.setenv(const "SLIR_STDLIB_ROW" @guaranteed, const "Mostly Harmless" @guaranteed)
+    StorageLive(_2)
+    _2 = neg const 1_i32
+    StorageLive(_3)
+    _4 = discriminant(_1)
+    switchInt(copy _4) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    _3 = copy ((_1 as Ok).0)
+    goto -> bb3
+
+  bb2:
+    _3 = copy _2
+    goto -> bb3
+
+  bb3:
+    StorageLive(_5)
+    _5 = copy _3
+    StorageDead(_5)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    StorageLive(_6)
+    _6 = const "SLIR_STDLIB_ROW"
+    StorageLive(_7)
+    _7 = call @<sys/env>.getenv(copy _6 @guaranteed)
+    StorageLive(_8)
+    _9 = discriminant(_7)
+    switchInt(copy _9) -> [0: bb4, otherwise: bb5]
+
+  bb4:
+    _8 = clone(copy ((_7 as Some).0))
+    goto -> bb6
+
+  bb5:
+    _8 = const "none"
+    goto -> bb6
+
+  bb6:
+    StorageLive(_10)
+    _10 = move _8
+    StorageLive(_11)
+    _11 = call builtin println@(string)(copy _10 @guaranteed)
+    StorageDead(_11)
+    Drop(_10)
+    StorageDead(_10)
+    StorageDead(_8)
+    _0 = const 0_i32
+    Drop(_7)
+    StorageDead(_7)
+    Drop(_6)
+    StorageDead(_6)
+    return
+}

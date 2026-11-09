@@ -1,0 +1,17 @@
+# The rows of <random>: a row that answers `~`, a row with two arguments and rows with
+# no argument. One seed gives one sequence.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "same:true\nrange:true\nunit:true\n"
+use <random>
+
+fn main() i32:
+    srand(42 as u64)
+    let u64 first = rand()
+    srand(42 as u64)
+    let u64 second = rand()
+    println("same:{first == second}")
+    let i32 roll = rand_range(1, 7)
+    println("range:{roll >= 1 and roll < 7}")
+    let f64 unit = rand_f64()
+    println("unit:{unit >= 0.0 and unit < 1.0}")
+    return 0
