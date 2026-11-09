@@ -3453,9 +3453,19 @@ operand (Q7); every operand is evaluated first. The `<math>` and `<time>` rows r
 row of the call (`stdlib_row`), declare the generated function of the symbol from that
 row and call it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
 `<time>` sleep answers a bare status, and the call builds its `Result` from it
-(`status_result.py`: a negative status is `Result.Err`). A `cstr` parameter takes no
-operand yet: the row of another module keeps its AST arguments, until the C-string argument
-is ported with `emit_cstr_arg` at the call site.
+(`status_result.py`: a negative status is `Result.Err`).
+
+**A `cstr` parameter of a registry row** (S23, decision E3 (a)). Its operand is a
+`Guaranteed` `string`, as each operand of a `Stdlib` callee is (8.3). The emitter of the
+row marshals it as the extern emitter does (`backend/slir/externs.py`): `emit_cstr_arg`
+makes the NUL-terminated copy right before the call, and `free_cstr_args` frees it right
+after the call. No SLIR local holds the copy, and no drop of 8.10 reads it, so a registry
+row and an extern have one rule at the C boundary (the CLAUDE.md seam row "C-string
+marshalling"). `run()` stays the one exception: its tail is an owned `string[]` (7.4), not
+a C string. Not built yet: the row of a module other than `<math>` and `<time>` keeps its
+AST arguments (`emit_registry_call`), which gives an `Expr` to `emit_cstr_arg` and calls
+no `free_cstr_args`. P6.D7.1 (Task 100) and P6.D7.2 (Task 103) build the operand form,
+delete `emit_registry_call` and remove this note.
 
 An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name)`: `symbol` is the
 link name, `name` is the name of the function with no alias, and it has no module. The
