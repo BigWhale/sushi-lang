@@ -2751,6 +2751,7 @@ tests/ir/lift/test_err_lift_empty_table.sushi
 tests/ir/shir/asserts/test_shir_assert_forms.sushi
 tests/ir/shir/calls/test_shir_call_markers.sushi
 tests/ir/shir/calls/test_shir_call_methods.sushi
+tests/ir/shir/calls/test_shir_call_namespace.sushi
 tests/ir/shir/calls/test_shir_call_namespace_type_args.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
 tests/ir/shir/calls/test_shir_call_statics.sushi

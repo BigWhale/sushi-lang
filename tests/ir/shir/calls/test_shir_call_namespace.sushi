@@ -2,9 +2,10 @@
 # EXPECT_DUMP_SHIR: test_shir_call_namespace.shir
 #
 # the SHIR dump of a call through a namespace: a stdlib module behind `use ... as`, and
-# a C function behind an `unsafe external` block. The alias folds into the name of the
-# function, so the target is `Named` with the written qualified name. A static on a type
-# behind an alias is `Static`, as on a bare type name.
+# a C function behind an `unsafe external` block. The typecheck pass resolves the callee
+# through the alias: a stdlib function is `Stdlib` with its module, a C function is `Extern`
+# with its link name, and a built-in static on a type behind an alias is `BuiltinStatic` on
+# the instance type, as on a bare type name.
 
 use <math> as m
 use <collections/hashmap> as hm

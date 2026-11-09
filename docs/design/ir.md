@@ -406,6 +406,11 @@ These diagnostics differ from the old pipeline too, and each one is a stated div
 - the caret of CE4006 at a generic call that only its arguments solve covers the whole call.
   The old pipeline put it on the name of the callee when its early inference could not type
   an argument (a field read, a lambda parameter), and on the whole call when it could
+- the expression in the text and the help of CE2411 and CE2412 (an adapter chain, the
+  receiver of a `nom self` call) is the written source text (`semantics/source_text.py`), where
+  the old pipeline rendered a closed set of AST shapes and printed `<expression>` for any
+  other (ruling R-BE). A field after a root that a call or a construction gives stays
+  `<expression>` (8.5)
 
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.

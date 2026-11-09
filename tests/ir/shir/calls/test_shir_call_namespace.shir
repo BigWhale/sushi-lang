@@ -4,19 +4,19 @@ ShirBody root
   params : [(_0 "x": f64, Guaranteed)]
   locals : []
   block  :
-    Return(Call(Named(GlobalRef(@m.sqrt)), [LocalRef(_0)]))
+    Return(adopt Call(Stdlib(<math>, @m.sqrt), [(LocalRef(_0), Guaranteed)]))
 
 ShirBody magnitude
   params : [(_0 "x": i32, Guaranteed)]
   locals : []
   block  :
-    Return(Call(Named(GlobalRef(@libc.abs)), [LocalRef(_0)]))
+    Return(adopt Call(Extern(@libc.abs, "abs"), [(LocalRef(_0), Guaranteed)]))
 
 ShirBody table
   params : []
   locals : []
   block  :
-    Return(Call(Static(HashMap, "new"), []))
+    Return(adopt Call(BuiltinStatic(HashMap@(i32, i32), "new"), []))
 
 ShirBody main
   params : []
