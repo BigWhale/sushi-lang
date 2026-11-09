@@ -13,12 +13,12 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import (
     DynamicArrayType, EnumType, StructType)
 from sushi_lang.semantics.generics.types import TypeParameter
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.generics.constraints import target_bounds_hold
 from sushi_lang.semantics.passes.collect.functions import GenericExtensionMethod
 from ..utils import call_constraint_check, intern_signature
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.exprs import ShirExpr
     from .. import TypeValidator
 
 
@@ -617,7 +617,7 @@ def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_
     return refused
 
 
-def reject_uncloneable(validator: 'TypeValidator', call: MethodCall, value_type) -> bool:
+def reject_uncloneable(validator: 'TypeValidator', call: 'ShirExpr', value_type) -> bool:
     """CE4018 or CE2431 when a value of `value_type` has no deep copy. True when refused.
 
     The one rule of `.clone()`, read by `.clone()` itself and by `clone_each`, which
@@ -649,7 +649,7 @@ def reject_uncloneable(validator: 'TypeValidator', call: MethodCall, value_type)
     return True
 
 
-def _reject_clone_of_opaque(validator: 'TypeValidator', call: MethodCall,
+def _reject_clone_of_opaque(validator: 'TypeValidator', call: 'ShirExpr',
                             receiver_type, param: TypeParameter) -> None:
     """CE4018: the receiver holds a type parameter that does not promise `Clone`.
 

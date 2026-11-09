@@ -4,9 +4,11 @@ from __future__ import annotations
 from typing import Collection
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
+from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, Param, PerkDef
 from sushi_lang.semantics.ast_walk import is_template_copy
-from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, IteratorType,
+    ReferenceType, StructType, UnknownType)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.channel import callable_text, has_channel
 from sushi_lang.semantics.generics.results import signature_result_arms
@@ -18,7 +20,7 @@ from sushi_lang.semantics.generics.extension_targets import (
 
 from .borrowed_returns import reject_borrowed_return_faults
 from .control_flow import reject_dead_statements, reject_fall_off
-from .utils import validate_type_name, validate_and_register_parameters
+from .utils import resolve_declared_type, validate_type_name
 from .perks import (
     check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
     validate_perk_implementation,
@@ -314,3 +316,62 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
 
     for method in impl.methods:
         _validate_method_body(self, resolved_type, method, synthesized)
+
+
+def validate_and_register_parameters(validator, params: list[Param]) -> None:
+    """Validate parameter types and register them in the variable_types table."""
+    for param in params:
+        validate_type_name(validator, param.ty, param.type_span)
+
+        # Blank type cannot be used for parameters
+        if param.ty == BuiltinType.BLANK:
+            er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
+            continue
+
+        if isinstance(param.ty, ReferenceType):
+            # The REFERENT gets the same resolution as a by-value parameter of that type
+            # (#305). A borrow of a type is not a different type.
+            resolved_ref = ReferenceType(
+                referenced_type=resolve_declared_type(validator, param.ty.referenced_type),
+                mutability=param.ty.mutability
+            )
+            validator.variable_types[param.name] = resolved_ref
+            continue
+
+        from sushi_lang.semantics.typesys import FunctionType
+        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
+            # A container spelling: the WRAPPER is concrete but its members may not be.
+            # A function type binds its implicit UnknownType("StdError"); an array binds
+            # its element, which `P[]` leaves unresolved (#284).
+            validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
+            continue
+
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType,
+                                 TypeParameter)):
+            # A type parameter here is the opaque one of a template check (#1070).
+            validator.variable_types[param.name] = param.ty
+        elif isinstance(param.ty, UnknownType):
+            resolved_type = resolve_declared_type(validator, param.ty)
+            if resolved_type != param.ty:
+                validator.variable_types[param.name] = resolved_type
+        else:
+            from sushi_lang.semantics.generics.types import GenericTypeRef
+            if isinstance(param.ty, GenericTypeRef):
+                resolved_type = resolve_declared_type(validator, param.ty)
+                if isinstance(resolved_type, GenericTypeRef):
+                    resolved_type = None
+
+                if resolved_type is not None:
+                    validator.variable_types[param.name] = resolved_type
+                    param.ty = resolved_type  # Update AST node for backend
+
+                    # A check copy writes no signature of the program (#1070).
+                    func_sig = (validator.func_sig(validator.current_function.name)
+                                if validator.current_function
+                                and not validator.in_template_check else None)
+                    if func_sig is not None:
+                        for sig_param in func_sig.params:
+                            if sig_param.name == param.name:
+                                sig_param.ty = resolved_type
+                                break

@@ -12,14 +12,13 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import TUPLE_BASE
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
-    ReferenceType, ForeignPtrType, IteratorType)
+    ReferenceType, IteratorType)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
     built_in_generic_unreachable, name_was_refused, reject_private_kept,
     reject_private_type)
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Param
     from . import TypeValidator
 
 
@@ -500,65 +499,6 @@ def intern_declared_wrapper(validator: 'TypeValidator',
         return ensure_maybe_type_in_table(validator.enum_table, payloads[0],
                                           struct_table=structs)
     return None
-
-
-def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
-    """Validate parameter types and register them in the variable_types table."""
-    for param in params:
-        validate_type_name(validator, param.ty, param.type_span)
-
-        # Blank type cannot be used for parameters
-        if param.ty == BuiltinType.BLANK:
-            er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
-            continue
-
-        if isinstance(param.ty, ReferenceType):
-            # The REFERENT gets the same resolution as a by-value parameter of that type
-            # (#305). A borrow of a type is not a different type.
-            resolved_ref = ReferenceType(
-                referenced_type=resolve_declared_type(validator, param.ty.referenced_type),
-                mutability=param.ty.mutability
-            )
-            validator.variable_types[param.name] = resolved_ref
-            continue
-
-        from sushi_lang.semantics.typesys import FunctionType
-        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
-            # A container spelling: the WRAPPER is concrete but its members may not be.
-            # A function type binds its implicit UnknownType("StdError"); an array binds
-            # its element, which `P[]` leaves unresolved (#284).
-            validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
-            continue
-
-        from sushi_lang.semantics.generics.types import TypeParameter
-        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType,
-                                 TypeParameter)):
-            # A type parameter here is the opaque one of a template check (#1070).
-            validator.variable_types[param.name] = param.ty
-        elif isinstance(param.ty, UnknownType):
-            resolved_type = resolve_declared_type(validator, param.ty)
-            if resolved_type != param.ty:
-                validator.variable_types[param.name] = resolved_type
-        else:
-            from sushi_lang.semantics.generics.types import GenericTypeRef
-            if isinstance(param.ty, GenericTypeRef):
-                resolved_type = resolve_declared_type(validator, param.ty)
-                if isinstance(resolved_type, GenericTypeRef):
-                    resolved_type = None
-
-                if resolved_type is not None:
-                    validator.variable_types[param.name] = resolved_type
-                    param.ty = resolved_type  # Update AST node for backend
-
-                    # A check copy writes no signature of the program (#1070).
-                    func_sig = (validator.func_sig(validator.current_function.name)
-                                if validator.current_function
-                                and not validator.in_template_check else None)
-                    if func_sig is not None:
-                        for sig_param in func_sig.params:
-                            if sig_param.name == param.name:
-                                sig_param.ty = resolved_type
-                                break
 
 
 def reject_named_argument(validator: 'TypeValidator', name: str, loc: Any) -> None:

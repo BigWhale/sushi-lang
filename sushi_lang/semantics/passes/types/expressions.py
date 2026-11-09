@@ -13,7 +13,7 @@ from sushi_lang.semantics.type_predicates import (
 from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir.exprs import IntConst, Lit, Unary
-from sushi_lang.semantics.ast import CONVERSION_METHOD
+from sushi_lang.semantics.conversions import CONVERSION_METHOD
 from sushi_lang.semantics.shir.callee import Conversion as ConversionCall
 from sushi_lang.semantics.shir.typeck import NoConversion, TryFacts
 from sushi_lang.semantics.type_resolution import resolve_unknown_type

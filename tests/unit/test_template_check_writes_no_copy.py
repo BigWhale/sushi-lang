@@ -15,7 +15,7 @@ import pytest
 
 from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.types.calls import methods, statics
-from sushi_lang.semantics.passes.types import templates, utils
+from sushi_lang.semantics.passes.types import signatures, templates
 from sushi_lang.semantics.passes.types.templates import TemplateValidator
 from sushi_lang.semantics.passes.types.visit import generic_calls
 
@@ -33,7 +33,7 @@ WRITERS = [
      "queues_late_copies"),
     (statics._interned_static_target, "_add_late_static_copy", "queues_late_copies"),
     (generic_calls.resolve_generic_call, "_instance_callee(", "in_template_check"),
-    (utils.validate_and_register_parameters, "sig_param.ty =", "in_template_check"),
+    (signatures.validate_and_register_parameters, "sig_param.ty =", "in_template_check"),
 ]
 
 

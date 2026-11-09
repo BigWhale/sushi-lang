@@ -1,20 +1,21 @@
 """Type inference helpers for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Optional, Protocol
 
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_bit_width
 from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.semantics.ast import (IntLit)
-from sushi_lang.semantics.shir.exprs import IntConst
-
-if TYPE_CHECKING:
-    pass
 
 
 _F32_MAX = 3.4028234663852886e38
 
 
-def int_literal_default(lit: IntLit | IntConst) -> BuiltinType:
+class IntegerLiteral(Protocol):
+    """An integer literal of the AST or of SHIR: its byte spelling, or None."""
+    @property
+    def byte_spelling(self) -> Optional[str]: ...
+
+
+def int_literal_default(lit: IntegerLiteral) -> BuiltinType:
     """The type of an integer literal that no position has typed: u8 for a byte literal
     (`a'x'`), i32 for a number literal. The one answer for every pass and the backend, for
     an AST literal and a SHIR literal alike."""
