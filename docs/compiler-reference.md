@@ -570,7 +570,7 @@ Write the SLIR (the Sushi Low-level IR, `docs/design/ir.md` section 8) of each b
 
 **Rules:**
 - The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SLIR`, `tests/TEST_METADATA_GUIDE.md`)
-- The units and the functions are those of the SHIR dump, in the same order. A template check, the initializer of a constant or a `var`, and a body that a pass refused or stopped, do not reach the SLIR lowering and do not print. The global of a constant or a `var` takes the value of the constant evaluator
+- The units and the functions are those of the SHIR dump, in the same order. A template check, the initializer of a constant or a `var`, and a body that has an error, do not reach the SLIR lowering and do not print. The global of a constant or a `var` takes the value of the constant evaluator
 - The dump is written when the semantic analysis ends, before the backend runs or the compile stops. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
 - With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
 
