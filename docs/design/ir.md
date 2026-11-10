@@ -4139,6 +4139,9 @@ locals, and the locals that own nothing, and nothing else:
    unless it is a constant, and the store moves the temporary (`_2 = ...`, `Drop(_1)`,
    `_1 = move _2`). A new value that is `and` or `or` always goes into a temporary first,
    because its left operand is written before its right operand reads the old value. A
+   new value of a local or a `var` that an open region has as an owner also goes into a
+   temporary first, unless it is a constant: the new value holds the last use of the view,
+   so the region ends after the temporary and before the store. A
    rebind of a `Guaranteed` parameter drops the old value only when the callee owns it
    (rule 5): the first rebind drops nothing, because the old value is the caller's. A
    rebind of an `InGuaranteed` parameter does not reach SLIR: `borrow` refuses it. The
