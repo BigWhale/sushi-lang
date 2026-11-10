@@ -887,7 +887,7 @@ def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
 def _emit_library(driver, analyzer, compilation_order, out_path: Path,
                   reporter: Reporter, options: BuildOptions) -> bool:
     """Write the `.slib`. False when a gate refused it; the reporter holds why."""
-    from sushi_lang.backend.library_manifest import (
+    from sushi_lang.compiler.library_manifest import (
         LibraryManifestGenerator, resolve_library_version,
     )
     # Resolve the library's own version FIRST: a missing or contradicted version is

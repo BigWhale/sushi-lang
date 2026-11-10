@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 
-MANIFEST = "sushi_lang/backend/library_manifest.py"
+MANIFEST = "sushi_lang/compiler/library_manifest.py"
 TEMPLATES = "sushi_lang/semantics/library_templates.py"
 PIPELINE = "sushi_lang/compiler/pipeline.py"
 REGISTRATION = "sushi_lang/semantics/library_registration.py"

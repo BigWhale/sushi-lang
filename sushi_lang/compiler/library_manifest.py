@@ -496,7 +496,7 @@ class LibraryManifestGenerator:
                 continue
             public = {e.name for e in unit.ast.enums if e.is_public}
             for ext in unit.ast.extensions:
-                if not ext.is_conversion:
+                if not ext.is_conversion or ext.target_type is None or ext.ret is None:
                     continue
                 source, target = type_string(ext.target_type), type_string(ext.ret)
                 if target not in public or source in kept:
@@ -775,7 +775,7 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             source = self._source(unit)
-            rows = (
+            rows: tuple[tuple[list[Any], Callable[[Any, str], dict], list[dict]], ...] = (
                 ([f for f in unit.ast.functions if f.is_public and f.type_params],
                  serialize_generic_function, functions),
                 ([s for s in unit.ast.structs if s.type_params],

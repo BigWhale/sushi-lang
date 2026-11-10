@@ -1,6 +1,6 @@
 """The parts of a .slib manifest that come from the AST: generic templates, and docs.
 
-Two producers write a manifest -- this module and `backend/library_manifest.py` -- and
+Two producers write a manifest -- this module and `compiler/library_manifest.py` -- and
 both build a `doc` record through `doc_record` here. One function, so the record shape
 cannot differ between a concrete symbol and a template.
 """
