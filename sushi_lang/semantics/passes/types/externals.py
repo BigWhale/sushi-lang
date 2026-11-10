@@ -126,8 +126,9 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
     """Fold each link name written as a string constant, in the declaring unit (#1089).
 
     It runs where every unit's constants and aliases exist and before CE5013 reads the
-    names. The folded name is written to the declaration and to its collected signature,
-    which is what the backend declares.
+    names. The folded name goes to the extern table (`ExternalTable.folded`, which the
+    checks of a declaration read) and to the collected signature, which is what the
+    backend declares. Nothing is written on the AST.
     """
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.const_eval import ConstantEvaluator, is_string_constant
@@ -150,13 +151,14 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
                 er.emit(reporter, er.ERR.CE5015, link.loc, name=decl.name,
                         type=display_type(value.semantic_type))
                 continue
-            decl.link_name = str(value.value)
+            link_name = str(value.value)
+            tables.externals.folded[id(decl)] = link_name
             var = tables.externals.lookup_variable(block.namespace, decl.name)
             if var is not None:
-                var.link_name = decl.link_name
+                var.link_name = link_name
             sig = tables.externals.lookup(block.namespace, decl.name)
             if sig is not None:
-                sig.link_name = decl.link_name
+                sig.link_name = link_name
 
 
 def reject_external_naming_a_defined_symbol(
@@ -182,15 +184,17 @@ def reject_external_naming_a_defined_symbol(
 
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            found = _defining_site(decl.link_name, tables, registry, generated_symbols)
+            link_name = tables.externals.link_name_of(decl)
+            found = _defining_site(link_name, tables, registry, generated_symbols)
             if found is not None:
-                _emit_defined_symbol(reporter, decl, *found)
+                _emit_defined_symbol(reporter, decl, link_name, *found)
 
 
-def _emit_defined_symbol(reporter: Reporter, decl, note: str, span, filename) -> None:
+def _emit_defined_symbol(reporter: Reporter, decl, link_name: str, note: str, span,
+                         filename) -> None:
     """CE5013 at the extern, with a note at the definition when it has a span."""
     diagnostic = er.emit_with(reporter, er.ERR.CE5013, decl.name_span or decl.loc,
-                              symbol=decl.link_name)
+                              symbol=link_name)
     if span is None:
         diagnostic.note(note)
     else:
@@ -220,7 +224,7 @@ def monomorphized_instances(compilation_order, funcs) -> list[tuple]:
 
 
 def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
-                                       instances: list[tuple]) -> None:
+                                       externals_table, instances: list[tuple]) -> None:
     """CE5013, the instance half: an extern that names a monomorphized instance (#1113).
 
     An instance exists only after the `monomorphize` pass, and the first half runs
@@ -234,18 +238,19 @@ def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
     bodies = {id(sig): fn for sig, fn in instances}
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            sig = _declaration_emitting(decl.link_name, [sig for sig, _ in instances])
+            link_name = externals_table.link_name_of(decl)
+            sig = _declaration_emitting(link_name, [sig for sig, _ in instances])
             if sig is None:
                 continue
             fn = bodies[id(sig)]
             generic = getattr(fn, "instance_of", None) or fn.name
             if getattr(fn, "is_library_template", False) or fn.name_span is None:
                 _emit_defined_symbol(
-                    reporter, decl,
+                    reporter, decl, link_name,
                     f"an instance of the library generic '{generic}' defines it",
                     None, None)
             else:
-                _emit_defined_symbol(reporter, decl, "the instance of this generic",
+                _emit_defined_symbol(reporter, decl, link_name, "the instance of this generic",
                                      fn.name_span, getattr(fn, "filename", None))
 
 

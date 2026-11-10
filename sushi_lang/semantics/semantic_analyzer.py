@@ -589,7 +589,8 @@ class SemanticAnalyzer:
             if unit.ast is None or not getattr(unit.ast, "externals", None):
                 continue
             unit_reporter = self._unit_reporter(unit)
-            reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
+            reject_external_naming_an_instance(unit_reporter, unit.ast,
+                                               self.tables.externals, instances)
             self._merge_unit(unit_reporter)
 
     def _check_late_instance_clash(self, compilation_order: list[Unit],
@@ -606,7 +607,8 @@ class SemanticAnalyzer:
             if unit.ast is None or not unit.ast.externals:
                 continue
             unit_reporter = self._unit_reporter(unit)
-            reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
+            reject_external_naming_an_instance(unit_reporter, unit.ast,
+                                               self.tables.externals, instances)
             self._merge_unit(unit_reporter)
 
     def _collect_instantiations(self, compilation_order: list[Unit],

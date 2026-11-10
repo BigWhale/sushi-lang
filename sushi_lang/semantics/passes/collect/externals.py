@@ -51,6 +51,9 @@ class ExternalTable:
     """Namespace-keyed table of foreign function signatures and C global variables."""
     by_namespace: Dict[str, Dict[str, ExternalSig]] = field(default_factory=dict)
     variables: Dict[str, Dict[str, ExternalVarSig]] = field(default_factory=dict)
+    # The link name of each declaration that writes it as a string constant (#1089), by
+    # the id of the declaration node. `fold_link_names` is the one writer.
+    folded: Dict[int, str] = field(default_factory=dict)
 
     def is_namespace(self, ns: str) -> bool:
         """True if `ns` is a registered external namespace."""
@@ -72,6 +75,10 @@ class ExternalTable:
             if sig is not None and sig.link_name == link_name:
                 return sig
         return None
+
+    def link_name_of(self, decl: Any) -> str:
+        """The C symbol of an extern declaration: the written string, or the folded constant."""
+        return self.folded.get(id(decl), decl.link_name)
 
     def add(self, sig: ExternalSig) -> None:
         self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
@@ -224,16 +231,18 @@ def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
     for block in program.externals:
         for decl in block.decls:
             record = externals.lookup(block.namespace, decl.name)
-            if (decl.link_name and _collected(record, decl, filename)
+            link_name = externals.link_name_of(decl)
+            if (link_name and _collected(record, decl, filename)
                     and _crosses(decl)):
                 shape = function_shape([p.ty for p in decl.params], decl.ret, decl.is_variadic)
-                link_names.admit(reporter, decl.link_name, shape,
+                link_names.admit(reporter, link_name, shape,
                                  decl.name_span or decl.loc, filename)
         for var in block.variables:
             record = externals.lookup_variable(block.namespace, var.name)
-            if (var.link_name and _collected(record, var, filename)
+            link_name = externals.link_name_of(var)
+            if (link_name and _collected(record, var, filename)
                     and is_c_abi_variable(var.ty)):
-                link_names.admit(reporter, var.link_name, ("var", c_type(var.ty)),
+                link_names.admit(reporter, link_name, ("var", c_type(var.ty)),
                                  var.name_span or var.loc, filename)
 
 
