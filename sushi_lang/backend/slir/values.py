@@ -240,18 +240,17 @@ def assign(state: FunctionState, place: p.Place, rvalue: r.Rvalue) -> None:
 
 def _fixed_array(state: FunctionState, place: p.Place, runs: tuple[r.ArrayRun, ...],
                  ty: ArrayType, operands: tuple[p.Operand, ...]) -> None:
-    """A part that moves by address is read while the slots fill. When such a part reads
-    the root of `place`, the array is built in a fresh slot and then copied into `place`."""
+    """A part that moves by address is read while the slots fill, and a reference can make
+    any place an alias of `place`. So the array is built in `place` only when no part moves
+    by address; else it is built in a fresh slot and then copied into `place`."""
     parts = _array_parts(state, ty, operands)
-    aliased = moves_by_address(state.codegen.types.ll_type(ty.base_type)) and any(
-        isinstance(part, (p.Copy, p.Move)) and _root(part.place) == _root(place)
-        for part in operands)
     llvm_type = state.codegen.types.ll_type(ty)
-    dest = entry_alloca(state.builder, llvm_type, "array_literal") if aliased \
-        else place_address(state, place)
-    emit_fixed_array_into(state.codegen, ty, runs, parts, dest)
-    if aliased:
-        emit_fixed_array_copy(state.codegen, place_address(state, place), dest, llvm_type)
+    if not moves_by_address(state.codegen.types.ll_type(ty.base_type)):
+        emit_fixed_array_into(state.codegen, ty, runs, parts, place_address(state, place))
+        return
+    slot = entry_alloca(state.builder, llvm_type, "array_literal")
+    emit_fixed_array_into(state.codegen, ty, runs, parts, slot)
+    emit_fixed_array_copy(state.codegen, place_address(state, place), slot, llvm_type)
 
 
 def _array_parts(state: FunctionState, ty: ArrayType | DynamicArrayType,
@@ -262,12 +261,6 @@ def _array_parts(state: FunctionState, ty: ArrayType | DynamicArrayType,
     return [operand_address(state, part)
             if by_address and type_of_operand(state, part) == ty.base_type
             else operand_value(state, part) for part in parts]
-
-
-def _root(place: p.Place) -> p.Place:
-    while isinstance(place, (p.Field, p.Index, p.Downcast, p.Deref)):
-        place = place.base
-    return place
 
 
 def rvalue_value(state: FunctionState, rvalue: r.Rvalue) -> ir.Value:
