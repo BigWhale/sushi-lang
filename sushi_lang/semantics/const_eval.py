@@ -370,10 +370,10 @@ class ConstantEvaluator:
         written without its parentheses -- is no value; the body's validator owns that
         diagnostic, so this answers None and says nothing.
         """
-        self._fold_qualified_enum(expr)
-        ref = self._qualified(expr)
+        receiver = self._unqualified_receiver(expr)
+        ref = self._qualified(expr, receiver)
         if ref is None:
-            return self._evaluate_enum_construction(expr, expected_type, span)
+            return self._evaluate_enum_construction(expr, receiver, expected_type, span)
         if ref.kind == "constant":
             return self._evaluate_constant_ref(ref, span)
         if ref.kind == "function" and ref.producer == "unit":
@@ -400,10 +400,10 @@ class ConstantEvaluator:
         bare form's rules. Anything else the alias reaches with parentheses is a call,
         and a call is not a constant: CE0108, the code the bare `f()` answers.
         """
-        self._fold_qualified_enum(expr)
-        ref = self._qualified(expr)
+        receiver = self._unqualified_receiver(expr)
+        ref = self._qualified(expr, receiver)
         if ref is None:
-            return self._evaluate_enum_construction(expr, expected_type, span)
+            return self._evaluate_enum_construction(expr, receiver, expected_type, span)
         if ref.kind == "struct":
             stand_in = Call(callee=Name(id=ref.name, loc=expr.loc), args=expr.args,
                             field_names=expr.field_names, loc=expr.loc)
@@ -411,43 +411,35 @@ class ConstantEvaluator:
         er.emit(self.reporter, er.ERR.CE0108, span, what="a function call")
         return None
 
-    def _qualified(self, node: Union[DotCall, MemberAccess]) -> Optional[NamespaceRef]:
+    def _qualified(self, node: Union[DotCall, MemberAccess],
+                   receiver: Optional[Expr] = None) -> Optional[NamespaceRef]:
         """What `alias.name` denotes when the receiver names a namespace, else None.
 
-        The stamp answers first: the typecheck pass leaves one on every qualified node
-        it resolved, and the back end's evaluator has no table and reads that alone.
-        Without one, the unit's own namespace table answers and the node is stamped for
-        every reader after this one. A constant initializer binds no local, so nothing
-        can shadow the alias here.
+        The unit's own namespace table answers; the evaluator writes nothing on the node.
+        `receiver` is the receiver with a leading alias read away (`_unqualified_receiver`).
+        A constant initializer binds no local, so nothing can shadow the alias here.
         """
-        ref = getattr(node, "namespace_ref", None)
-        if ref is not None:
-            return ref
-        receiver = node.receiver
+        if receiver is None:
+            receiver = node.receiver
         if (self.namespaces is None or not isinstance(receiver, Name)
                 or not self.namespaces.is_namespace(receiver.id)):
             return None
         name = node.member if isinstance(node, MemberAccess) else node.method
         binding = self.namespaces.lookup(receiver.id, name)
-        if binding is None:
-            return None
-        node.namespace_ref = binding.ref()
-        return node.namespace_ref
+        return None if binding is None else binding.ref()
 
-    def _fold_qualified_enum(self, node: Union[DotCall, MemberAccess]) -> None:
-        """`sh.Shape.Circle(2)` becomes `Shape.Circle(2)`, in place.
+    def _unqualified_receiver(self, node: Union[DotCall, MemberAccess]) -> Expr:
+        """The receiver of `sh.Shape.Circle(2)` with the alias read away: the bare `Shape`.
 
-        The fold the typecheck pass applies in a body (`calls/namespaced.py`): a type is
-        one per program, so once the alias is gone the bare name is the whole address
-        and every reader after this one -- the body's validator, the back end -- sees
-        the bare form it already knows.
+        A type is one per program, so once the alias is gone the bare name is the whole
+        address, as in a body (`calls/namespaced.py`). Any other receiver is the written one.
         """
         inner = node.receiver
-        if not isinstance(inner, MemberAccess):
-            return
-        ref = self._qualified(inner)
-        if ref is not None and ref.kind == "enum":
-            node.receiver = Name(id=ref.name, loc=inner.loc)
+        if isinstance(inner, MemberAccess):
+            ref = self._qualified(inner)
+            if ref is not None and ref.kind == "enum":
+                return Name(id=ref.name, loc=inner.loc)
+        return inner
 
     def _evaluate_constant_ref(self, ref: NamespaceRef,
                                span: Optional[Span]) -> Optional[ConstantValue]:
@@ -504,7 +496,7 @@ class ConstantEvaluator:
         return AggregateConstant(field_values, struct_type)
 
     def _evaluate_enum_construction(self, expr: Union[DotCall, MemberAccess],
-                                    expected_type: Type,
+                                    receiver: Expr, expected_type: Type,
                                     span: Optional[Span]) -> Optional[ConstantValue]:
         """A variant built entirely from constants is itself a constant (#551).
 
@@ -519,7 +511,7 @@ class ConstantEvaluator:
         the typecheck pass's to name (CE2045, CE2050): this answers None in SILENCE, and
         `validate_constant` runs the body's validator when nothing was reported.
         """
-        enum_type = self._named_type(expr.receiver, expected_type, self.enum_table,
+        enum_type = self._named_type(receiver, expected_type, self.enum_table,
                                      EnumType)
         if enum_type is None:
             what = "a method call" if isinstance(expr, DotCall) else "a field read"

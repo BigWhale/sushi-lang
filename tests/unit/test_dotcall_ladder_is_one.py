@@ -42,10 +42,6 @@ SHIR_HOMES = {
     "callee_borrows": (TypeckResults, "sources_of"),
 }
 
-#: The field of an AST call node that is no written part of the call and that stays: no
-#: pass of the body writes it. The constant evaluator writes it for a constant initializer.
-_STILL_ON_THE_AST = ("namespace_ref",)
-
 #: Shared fields that are no fact of a resolved method: the written parts of the call, and
 #: what the other call shapes and the AST borrow helpers write on their own nodes.
 _NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names")
@@ -92,10 +88,10 @@ def _homes(name: str) -> tuple[dict[str, int], dict[str, int]]:
 
 
 def test_no_ast_call_node_carries_a_fact_of_a_resolved_method():
-    """The fields that the AST call nodes share are the written parts of the call, or a
-    field that no body pass writes. No fact of `SHIR_HOMES` but one of those is there."""
+    """The fields that the AST call nodes share are the written parts of the call. No fact
+    of `SHIR_HOMES` is there."""
     shared = (_field_names(MethodCall) & _field_names(DotCall)) - _field_names(Node)
-    left = sorted(shared - set(_NOT_A_METHOD_STAMP) - set(_STILL_ON_THE_AST))
+    left = sorted(shared - set(_NOT_A_METHOD_STAMP))
     assert not left, (
         "an AST call node carries a field that is no written part of the call: "
         + ", ".join(left) + "\nA fact of a resolved method is a row of TypeckResults.")

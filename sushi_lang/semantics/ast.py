@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.generics.types import TemplateId
-    from sushi_lang.semantics.namespaces import NamespaceRef
 
 
 @dataclass(slots=True)
@@ -903,7 +902,6 @@ class Call(Node):
     # Span of the `@(...)` type-arg list, for diagnostics (CE2062 arity, constraint
     # failures) that must underline the type args rather than the callee.
     type_args_loc: Optional["Span"] = None
-    namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
 
 
 @dataclass(slots=True)
@@ -911,8 +909,6 @@ class MethodCall(Node):
     receiver: "Expr"    # The object/expression being called (x in x.add(5))
     method: str
     args: List["Expr"]
-    # A call through a `use ... as` alias; see DotCall for what the triple carries.
-    namespace_ref: Optional["NamespaceRef"] = None
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
@@ -924,11 +920,6 @@ class DotCall(Node):
     receiver: "Expr"    # The receiver expression (variable, type name, etc.)
     method: str
     args: List["Expr"]
-    # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
-    # kind of producer answered, the unit or module it named, and the declared name.
-    # The back end resolves through the origin, so a shadowed name reaches the right
-    # declaration (`docs/design/unit-namespaces.md` section 5).
-    namespace_ref: Optional["NamespaceRef"] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
     # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
     # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a
@@ -943,7 +934,6 @@ class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
-    namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
     member_span: Optional[Span] = None  # the `.member` postfix; `loc` is the whole read
 
 @dataclass(slots=True)
