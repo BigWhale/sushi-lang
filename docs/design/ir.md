@@ -6,9 +6,8 @@ SHIR and SLIR are built on the branch `feat/ir-shir-slir`. All phases of the mig
 done: the spine, Tier A (plain values), Tier B (ownership), Tier C (generics, closures,
 iterators), Tier D (the rest of the language) and Phase 7 (the declaration table, the tests,
 the dead code and the documents). The backend emits each function from SLIR, and no backend
-module reads the AST. A construct that a stage does not handle is an internal error (CE0000). The
-numbers in sections 1 to 5 describe the tree at
-`cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
+module reads the AST. In a program with no error, a construct that a stage does not handle is
+an internal error (CE0000). The numbers in sections 1 to 5 describe the tree at `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
 test passes before and after, unchanged. There are the exceptions that N4 names.
@@ -881,7 +880,7 @@ copy that it places), the template check (the header copy that it cuts, 6.2), an
 whole-program declaration pass).
 `typecheck` keeps what it resolves in its tables: the type of a parameter in the signature
 record, and the folded link name of an extern declaration in the extern table
-(`ExternalTable.folded`, by the id of the declaration). The constant evaluator reads an alias
+(`ExternalTable.folded`, by the namespace, the name and the position of the name). The constant evaluator reads an alias
 from the namespace table each time, and it writes no stamp and no receiver on a node.
 
 ---

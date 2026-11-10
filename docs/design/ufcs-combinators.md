@@ -147,7 +147,8 @@ Two different solved `U`s on one receiver are two methods, so the symbol carries
 parts: the receiver, the method name, and the method-level type arguments. ONE helper —
 `extension_symbol(receiver_display, method, margs)` in
 `semantics/generics/name_mangling.py` — answers for all three consumers: the
-declaration (`backend/functions/helpers.py`), the call site (the `Direct` callee of a SLIR
+declaration (`extension_decl_symbol`, `semantics/generics/name_mangling.py`, read by the
+declaration table, `semantics/decl_table.py`), the call site (the `Direct` callee of a SLIR
 `Call`, whose symbol SLIR lowering makes from the row of the call), and the dedup of the
 copies. The
 `__{margs}` suffix appears only when method-level arguments exist, so an extension

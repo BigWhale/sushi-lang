@@ -53,7 +53,7 @@ def test_seed_library_perks_guards_missing_templates():
 
 def test_impl_method_symbol_matches_extension_naming():
     """The manifest symbol matches the backend's extension-method mangling
-    (get_extension_method_name): sanitized type name + "_" + method name.
+    (extension_symbol): sanitized type name + "_" + method name.
     """
     assert impl_method_symbol("i32", "doubled") == "i32_doubled"
     assert impl_method_symbol("Box<i32>", "unwrap") == "Box__i32_unwrap"
