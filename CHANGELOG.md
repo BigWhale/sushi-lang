@@ -6,10 +6,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 The compiler has a new pipeline. The semantic passes and the backend now work on two
 typed intermediate representations, SHIR (high level, after name and type resolution)
-and SLIR (low level, basic blocks with explicit moves and drops), where they worked on
-the syntax tree before. A language rule did not change, and every program of the test
-corpus compiles to the same result, with the exceptions that the lists below name. Most
-of these exceptions are faults of the old pipeline that the new one does not have.
+and SLIR (low level, where the control flow, each move and each drop are explicit),
+where they worked on the syntax tree before. A language rule did not change, and every
+program of the test corpus compiles to the same result, with the exceptions that the lists
+below name. Most of these exceptions are faults of the old pipeline that the new one does
+not have.
 
 ### Added
 
@@ -19,10 +20,11 @@ of these exceptions are faults of the old pipeline that the new one does not hav
   be written is `CW0005`. See `docs/compiler-reference.md`.
 - **A SLIR verifier.** Each SLIR function is checked on every compile: types of places,
   no read after a move, one terminator for each block, one move or one drop of each owning
-  value on each path, the convention of each argument of a call. A rule that the lowering
+  value on each path, the convention of each argument of a call. A rule that the compiler
   breaks is the internal error `CE0158`, with the function and the rule. A compiler fault
   is now an internal error with a code and a message, and no wrong program is written.
-  The internal errors `CE0156` and `CE0157` name a result that a pass did not record.
+  The internal errors `CE0156` and `CE0157` name a type, a callee or an ownership fact that
+  the compiler did not record for a node of a body.
 
 ### Changed
 
@@ -40,7 +42,8 @@ of these exceptions are faults of the old pipeline that the new one does not hav
 - **A bare variant at a position of a different declared type is a type error.** At an
   `i32` position, `let i32 y = Maybe.None` and `y := Maybe.None` are `CE2002`,
   `id(Maybe.None)` is `CE2006`, and `return Maybe.None` is `CE2003`. The old compiler gave
-  an internal error, or no diagnostic when the body had another error.
+  the error `CE0056` ("cannot determine type for variable"), or no diagnostic when the body
+  had another error.
 - **A constraint that a generic template breaks is `CE4006` at the template.** The text
   names the type parameter (`type T`) with a note at its declaration and a help. The old
   text named the type of the instance and the note "this instance is required by the call
@@ -84,16 +87,17 @@ of these exceptions are faults of the old pipeline that the new one does not hav
   So is a change of the owner in a walk in place through a `poke` reference
   (`let poke Words r = w`, then `foreach(s in r):` with `w.items.clear()` in the body).
   Before, the program compiled and read freed storage.
-- **`let b = a` of a lent iterator moves it.** `return b` from a `peek` function works, and
-  a later use of `a` is `CE2405`. Before, the copy compiled and crashed at run time.
-- **A perk method on an instance that only the typecheck pass names** (`extend Box@(Pt) with
-  Named`) compiles. Before, it was `CE2008`, or the internal error `CE0024`.
+- **`let b = a` of an iterator that borrows its source (from `.iter()`) moves it.**
+  `return b` from a `peek` function works, and a later use of `a` is `CE2405`. Before, the
+  copy compiled and crashed at run time.
+- **A perk method on an instance that only the type of an expression names** (`extend
+  Box@(Pt) with Named`) compiles. Before, it was `CE2008`, or the internal error `CE0024`.
 - **An override of `Display`, `Eq` or `Hashable` runs on such an instance.** Before, the
   compiler used the derived form with no diagnostic, so the output was wrong.
 - **The receiver of a perk method with `peek self` or `poke self` is evaluated one time.**
   Before, it was evaluated two times, and its side effects ran two times.
-- **Two perk templates that give one method to one target** give `CE4015` at the second
-  implementation and no false `CE2008` at the call.
+- **Two perk implementations on a generic target that give one method to one type** give
+  `CE4015` at the second implementation and no false `CE2008` at the call.
 - **A `bool` that the program reads through a `peek` reference** prints `true` or `false`,
   where it printed `1` or `0` (#1275).
 - **A method call on a `var` of type `T[]` behind a `use ... as` alias** (`st.names.len()`)
@@ -102,7 +106,7 @@ of these exceptions are faults of the old pipeline that the new one does not hav
   internal error.
 - **An interpolation that reads an owning `var` that a call in the same string rebinds**
   (`"{text}{bump()}"`) reads `text` when it is printed and shows the new value. Before, it
-  printed freed memory.
+  showed the old value.
 - **A public constant of a binary or hybrid library that names a private function** compiles
   and runs in a consumer. Before, each consumer got `CE1001`. A consumer of a private `var`
   of such a library gets `CE3005` alone, where it also got `CE1001`.
