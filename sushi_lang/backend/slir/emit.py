@@ -27,7 +27,7 @@ from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.internals.errors import message_for, raise_internal_error
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.backend.slir.values import (
-    operand_address, operand_value, place_address, rvalue_value, type_of_operand,
+    assign, operand_address, operand_value, place_address, type_of_operand,
     type_of_place,
 )
 from sushi_lang.semantics.param_modes import Convention
@@ -146,8 +146,7 @@ def _statement(state: FunctionState, statement: st.SlirStatement) -> None:
     if isinstance(statement, st.Assign) and isinstance(statement.rvalue, r.Ref):
         _write_address(state, statement.place, statement.rvalue)
     elif isinstance(statement, st.Assign):
-        value = rvalue_value(state, statement.rvalue)
-        state.builder.store(value, place_address(state, statement.place))
+        assign(state, statement.place, statement.rvalue)
     elif isinstance(statement, st.Call):
         _call(state, statement)
     elif isinstance(statement, st.Drop):

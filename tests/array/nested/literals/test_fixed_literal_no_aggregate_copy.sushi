@@ -1,0 +1,28 @@
+# a large fixed array is built in its slot and copied from address to address: the IR of
+# the program has no first-class load or store of the whole 64 x 64 grid, of the 1000
+# rows, or of the 32 strings (LLVM is slow on an aggregate value of that size). The IR is
+# read before any pass. The fill loop is the twin.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 1 2 1\n7 0 1000\nMostly Harmless 32\n"
+# EXPECT_IR_LACKS: user_main load [64 x [64 x i32]]
+# EXPECT_IR_LACKS: user_main store [64 x [64 x i32]]
+# EXPECT_IR_LACKS: user_main load [1000 x { i32, i32, ptr }]
+# EXPECT_IR_LACKS: user_main store [1000 x { i32, i32, ptr }]
+# EXPECT_IR_LACKS: user_main load [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main store [32 x { ptr, i32, i8 }]
+# EXPECT_IR_HOLDS: user_main run0_fill
+fn main() i32:
+    let i32[64][64] g = [[1; 64]; 64]
+    g[3][5] := 7
+    let i32[64][64] h = g
+    g := [[2; 64]; 64]
+    println("{h[3][5]} {h[63][63]} {g[3][5]} {h[0][0]}")
+    let i32[][1000] r = [from([0]); 1000]
+    r[3].push(7)
+    println("{r[3][1]} {r[999][0]} {r.len()}")
+    let string[32] words = ["Mostly Harmless".clone(); 32]
+    let string[32] moved = words
+    println("{moved[31]} {moved.len()}")
+    return 0

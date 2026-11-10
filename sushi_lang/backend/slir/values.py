@@ -45,7 +45,8 @@ from sushi_lang.backend.expressions.operators import (
 from sushi_lang.backend.slir.foreign import extern_variable, read_extern_variable
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.types.arrays.indexing import array_length, element_address, slice_value
-from sushi_lang.backend.types.arrays.runs import emit_array_value
+from sushi_lang.backend.types.arrays.runs import (
+    emit_array_value, emit_fixed_array_copy, emit_fixed_array_into, moves_by_address)
 from sushi_lang.backend.types.structs import emit_struct_value
 from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS
 from sushi_lang.semantics.slir import constants as k
@@ -218,6 +219,57 @@ def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
     return semantic_type_of(constant, state.fault)
 
 
+def assign(state: FunctionState, place: p.Place, rvalue: r.Rvalue) -> None:
+    """The value of `rvalue` into `place`. A `T[N]` literal is built in the place, and a
+    `T[N]` that moves by address is copied from the address of its source (ir.md 8.7)."""
+    if (isinstance(rvalue, r.Aggregate) and isinstance(rvalue.kind, r.AggArray)
+            and isinstance(rvalue.kind.ty, ArrayType)):
+        _fixed_array(state, place, rvalue.kind.runs, rvalue.kind.ty, rvalue.parts)
+        return
+    if isinstance(rvalue, r.Use) and isinstance(rvalue.operand, (p.Copy, p.Move)):
+        source = rvalue.operand.place
+        llvm_type = state.codegen.types.ll_type(type_of_place(state, source))
+        if moves_by_address(llvm_type) and not (
+                isinstance(source, p.Global) and extern_variable(state, source.symbol)):
+            emit_fixed_array_copy(state.codegen, place_address(state, place),
+                                  place_address(state, source), llvm_type)
+            return
+    value = rvalue_value(state, rvalue)
+    state.builder.store(value, place_address(state, place))
+
+
+def _fixed_array(state: FunctionState, place: p.Place, runs: tuple[r.ArrayRun, ...],
+                 ty: ArrayType, operands: tuple[p.Operand, ...]) -> None:
+    """A part that moves by address is read while the slots fill. When such a part reads
+    the root of `place`, the array is built in a fresh slot and then copied into `place`."""
+    parts = _array_parts(state, ty, operands)
+    aliased = moves_by_address(state.codegen.types.ll_type(ty.base_type)) and any(
+        isinstance(part, (p.Copy, p.Move)) and _root(part.place) == _root(place)
+        for part in operands)
+    llvm_type = state.codegen.types.ll_type(ty)
+    dest = entry_alloca(state.builder, llvm_type, "array_literal") if aliased \
+        else place_address(state, place)
+    emit_fixed_array_into(state.codegen, ty, runs, parts, dest)
+    if aliased:
+        emit_fixed_array_copy(state.codegen, place_address(state, place), dest, llvm_type)
+
+
+def _array_parts(state: FunctionState, ty: ArrayType | DynamicArrayType,
+                 parts: tuple[p.Operand, ...]) -> list[ir.Value]:
+    """The value of each part, and the address of a part of an element type that moves by
+    address."""
+    by_address = moves_by_address(state.codegen.types.ll_type(ty.base_type))
+    return [operand_address(state, part)
+            if by_address and type_of_operand(state, part) == ty.base_type
+            else operand_value(state, part) for part in parts]
+
+
+def _root(place: p.Place) -> p.Place:
+    while isinstance(place, (p.Field, p.Index, p.Downcast, p.Deref)):
+        place = place.base
+    return place
+
+
 def rvalue_value(state: FunctionState, rvalue: r.Rvalue) -> ir.Value:
     """The value of an rvalue, from the one table of the rvalue classes."""
     emit = _RVALUES.get(type(rvalue))
@@ -301,10 +353,10 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
     internal error."""
     kind = rvalue.kind
     if isinstance(kind, r.AggArray):
-        if not isinstance(kind.ty, (ArrayType, DynamicArrayType)):
-            state.fault(f"an array value of {kind.ty}")
+        if not isinstance(kind.ty, DynamicArrayType):
+            state.fault(f"an array value of {kind.ty} outside an assignment")
         return emit_array_value(state.codegen, kind.ty, kind.runs,
-                                [operand_value(state, part) for part in rvalue.parts])
+                                _array_parts(state, kind.ty, rvalue.parts))
     if isinstance(kind, r.AggClosure):
         return emit_closure_value(state, rvalue,
                                   [operand_value(state, part) for part in rvalue.parts[1:]])
