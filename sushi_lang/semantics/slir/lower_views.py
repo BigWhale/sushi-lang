@@ -16,8 +16,7 @@ ends with the storage of the temporary. Each arm is a free function that takes t
 """
 from __future__ import annotations
 
-from enum import Enum
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Literal, Optional, TypeAlias, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -281,12 +280,9 @@ def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:
     return ViewValue(value, (p.root_of(read.place),))
 
 
-class Held(Enum):
-    """How a read of a `Result` or a `Maybe` holds the wrapper that it switches on."""
-    PLACE = "place"
-    VIEW = "view"
-    CONSTANT = "constant"
-    VALUE = "value"
+#: How a read of a `Result` or a `Maybe` holds the wrapper that it switches on: in its
+#: place, in a view local, as a constant in a temporary, or as a value in a temporary.
+Held: TypeAlias = Literal["place", "view", "constant", "value"]
 
 
 #: The places that a read method of a `Result` or a `Maybe` reads where they are.
@@ -309,11 +305,11 @@ def wrapper(low: Lowering, inner: e.ShirExpr, every_place: bool = False) -> tupl
         return operand.place, held
     if (low.answers.ownership.ownership_of(inner.shir_id) is Ownership.REJECT
             and isinstance(inner, (e.LocalRef, e.Field, e.Index))):
-        return agg.place_of(low, inner), Held.PLACE
+        return agg.place_of(low, inner), "place"
     lowered = low.value(inner)
     if (isinstance(lowered, ViewValue) and isinstance(lowered.value, r.Use)
             and isinstance(lowered.value.operand, p.Copy)):
-        return lowered.value.operand.place, Held.PLACE
+        return lowered.value.operand.place, "place"
     return _held_in_a_temporary(low, inner, lowered)
 
 
@@ -323,16 +319,16 @@ def read_in_place(low: Lowering, expr: e.ShirExpr) -> tuple[p.Const | p.Copy, He
     if isinstance(expr, (e.Lit, e.ConstRef)):
         constant = low.operand(expr)
         if isinstance(constant, p.Const):
-            return constant, Held.CONSTANT
+            return constant, "constant"
     if isinstance(expr, PLACES):
-        return p.Copy(agg.place_of(low, expr)), Held.PLACE
+        return p.Copy(agg.place_of(low, expr)), "place"
     place, held = _held_in_a_temporary(low, expr, low.value(expr))
     return p.Copy(place), held
 
 
 def _held_in_a_temporary(low: Lowering, expr: e.ShirExpr, value: Value) -> tuple[p.Place, Held]:
     """`value` in a temporary of the statement: a view goes into a view local."""
-    held = Held.VIEW if isinstance(value, ViewValue) else Held.VALUE
+    held: Held = "view" if isinstance(value, ViewValue) else "value"
     return p.Local(low.temporary(value, low.type_of(expr), expr.loc)), held
 
 

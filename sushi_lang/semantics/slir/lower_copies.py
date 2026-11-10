@@ -163,14 +163,14 @@ def source(low: Lowering, expr: e.ShirExpr) -> Source:
     """A constant, a place read where it is, or a new value in a temporary of the statement
     (`views.read_in_place`): a view goes into a view local, which owns nothing to spend."""
     operand, held = views.read_in_place(low, expr)
-    return Source(operand, held is views.Held.VALUE and low.owns(low.type_of(expr)))
+    return Source(operand, held == "value" and low.owns(low.type_of(expr)))
 
 
 def _wrapper(low: Lowering, recv: e.ShirExpr) -> _Placed:
     """The source of a receiver, in a place (`views.wrapper`): a path spends a temporary
     that owns."""
     place, held = views.wrapper(low, recv, every_place=True)
-    return _Placed(p.Copy(place), held is views.Held.VALUE and low.owns(low.type_of(recv)))
+    return _Placed(p.Copy(place), held == "value" and low.owns(low.type_of(recv)))
 
 
 def _read(low: Lowering, origin: Source, projection: p.Place | None, ty: Type) -> r.Rvalue:

@@ -56,7 +56,7 @@ def try_(low: Lowering, node: e.Try) -> Value:
         borrowed = True
     else:
         wrapper, held = views.wrapper(low, node.inner)
-        borrowed = held is not views.Held.VALUE
+        borrowed = held != "value"
         error = (p.Copy if borrowed else p.Move)(p.Field(p.Downcast(wrapper, err), 0))
     take = p.Copy if borrowed else p.Move
     tag = low.new_local(BuiltinType.I32, None, None)

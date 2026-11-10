@@ -388,8 +388,8 @@ def _parts_of(check: Check, place: p.Place, inside: list[p.Place],
     a variant, and each variant of an enum that a place of `inside` reads."""
     ty = check.place(place, span).ty
     if isinstance(ty, EnumType):
-        steps = (_step_under(place, end) for end in inside)
-        return list(dict.fromkeys(step for step in steps if isinstance(step, p.Downcast)))
+        variants = [p.Downcast(place, variant.name) for variant in ty.variants]
+        return [part for part in variants if any(_within(part, end) for end in inside)]
     if isinstance(place, p.Downcast):
         enum = check.place(place.base, span).ty
         variant = enum.get_variant(place.variant) if isinstance(enum, EnumType) else None
@@ -400,11 +400,3 @@ def _parts_of(check: Check, place: p.Place, inside: list[p.Place],
         return []
     return [p.Field(place, index) for index in range(count)]
 
-
-def _step_under(outer: p.Place, place: p.Place) -> Optional[p.Place]:
-    """The projection of `place` whose base is `outer`."""
-    while isinstance(place, (p.Field, p.Index, p.Downcast, p.Deref)):
-        if place.base == outer:
-            return place
-        place = place.base
-    return None
