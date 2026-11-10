@@ -178,7 +178,7 @@ statement was wrong for a template.
 
 Every `.slib` kind records its marked functions, each with its `because`: a source library
 as text, a binary or hybrid library as a manifest record beside `reexports` and
-`conversions` (`backend/library_manifest.py`). `--lib-info` lists them in both halves, the
+`conversions` (`compiler/library_manifest.py`). `--lib-info` lists them in both halves, the
 Python fallback (`compiler/lib_info.py`) and the `slib-info` tool (`toolchain/src/`). A
 reviewer sees the unchecked code and its proof before the first build.
 

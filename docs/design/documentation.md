@@ -788,7 +788,7 @@ block on:
 
 | Producer | Records that carry `doc` |
 |---|---|
-| `backend/library_manifest.py` | public function, public constant, struct, struct field, enum, enum variant |
+| `compiler/library_manifest.py` | public function, public constant, struct, struct field, enum, enum variant |
 | `semantics/library_templates.py` | `serialize_generic_function`, `serialize_generic_struct`, `serialize_generic_enum`, `serialize_perk`, `serialize_perk_impl` |
 
 Line numbers are deliberately not given, because a commit that has nothing to do with the

@@ -112,7 +112,7 @@ is still cheap to take.
 
 ## 3. The manifest — an index, not the authority
 
-`LibraryManifestGenerator.generate()` in `sushi_lang/backend/library_manifest.py`
+`LibraryManifestGenerator.generate()` in `sushi_lang/compiler/library_manifest.py`
 builds a plain dict. `docs/library-format.md` carries the full schema.
 
 **The rule: everything in the library must be knowable from the manifest alone.**
@@ -876,7 +876,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | File | Responsibility |
 |---|---|
 | `sushi_lang/backend/library_format.py` | The `.slib` byte container: magic/version/flags/kind/length framing, msgpack (de)serialization. No LLVM, no linking, no path resolution. |
-| `sushi_lang/backend/library_manifest.py` | `LibraryManifestGenerator` — the **producer**. Builds every manifest section; `_extract_templates` / `_compute_export_closure` are the binary path's export-closure walk. |
+| `sushi_lang/compiler/library_manifest.py` | `LibraryManifestGenerator` — the **producer**. Builds every manifest section; `_extract_templates` / `_compute_export_closure` are the binary path's export-closure walk. |
 | `sushi_lang/backend/library_errors.py` | `LibraryError(SushiError)` — the one exception type every `.slib` read/resolve/link failure raises, rendered through the normal reporter. |
 | `sushi_lang/backend/library_paths.py` | `LibraryResolver` — filesystem discovery only (`SUSHI_LIB_PATH`, project deps, Nori bento, cwd) and manifest caching (`loaded_libraries`). Deliberately *not* a linker. |
 | `semver` (under `sushi_lang/internals/`) | `Version` + constraint matching. Shared by the library-load path and the Nori resolver (§6.3). |
@@ -921,7 +921,7 @@ the failure conditional compilation is supposed to describe. Leaving [CE5006](..
 the honest answer ("this cannot be portable yet") until there is a way to say so.
 
 **A rejected library build writes nothing.** The three rejection sites in
-`sushi_lang/backend/library_manifest.py` emit their diagnostic into the reporter and
+`sushi_lang/compiler/library_manifest.py` emit their diagnostic into the reporter and
 return, and control flow belongs to `pipeline.py`, which gates on `reporter.has_errors`
 the way it does before codegen. There are two gates, and the placement is the contract:
 the first sits after the export closure and BEFORE the bitcode compilation, so a [CE5006](../error-catalog.md#ce5006)
