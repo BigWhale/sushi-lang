@@ -37,6 +37,7 @@ def substituted_sig(validator: 'TypeValidator', generic_func, type_args, name: s
     substituted signature, its instances interned in the overlay and each parameter
     resolved. None when the count does not fit the declaration.
     """
+    from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
     from sushi_lang.semantics.generics.types import substituted_call_signature
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.type_resolution import resolve_type_recursively
@@ -45,13 +46,13 @@ def substituted_sig(validator: 'TypeValidator', generic_func, type_args, name: s
     signature = substituted_call_signature(generic_func, type_args)
     if signature is None:
         return None
-    params, ret, err = signature
-    intern_signature(validator, ret, err, *(p.ty for p in params))
+    substituted, ret, err = signature
+    intern_signature(validator, ret, err, *(p.ty for p in substituted))
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
-    for param in params:
-        if param.ty is not None:
-            param.ty = resolve_type_recursively(param.ty, structs, enums)
+    params = [p if p.ty is None
+              else substituted_param(p, resolve_type_recursively(p.ty, structs, enums))
+              for p in substituted]
     return FuncSig(name=name, params=params,
                    ret_type=resolve_type_recursively(ret, structs, enums), err_type=err,
                    borrowed_return=getattr(generic_func, "borrowed_return", None))

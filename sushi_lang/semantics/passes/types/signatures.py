@@ -364,7 +364,6 @@ def validate_and_register_parameters(validator, params: list[Param]) -> None:
 
                 if resolved_type is not None:
                     validator.variable_types[param.name] = resolved_type
-                    param.ty = resolved_type  # Update AST node for backend
 
                     # A check copy writes no signature of the program (#1070).
                     func_sig = (validator.func_sig(validator.current_function.name)

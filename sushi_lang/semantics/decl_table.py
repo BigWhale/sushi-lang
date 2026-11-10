@@ -16,13 +16,15 @@ from sushi_lang.semantics.ast import (
     ConstDef, ExtendDef, ExtendWithDef, FuncDef, Param, Program, VarDef,
 )
 from sushi_lang.semantics.const_eval import ConstantEvaluator, allocates_nothing
+from sushi_lang.semantics.generics.iterators import settle_in_tables
 from sushi_lang.semantics.generics.name_mangling import extension_decl_symbol, method_symbol
+from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.library_templates import impl_method_symbol
 from sushi_lang.semantics.param_modes import receiver_mode
 from sushi_lang.semantics.passes.collect.perks import _get_type_name
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.stdlib_registry import named_methods, stdlib_imports
-from sushi_lang.semantics.type_resolution import require_named_type
+from sushi_lang.semantics.type_resolution import require_named_type, resolve_unknown_type
 from sushi_lang.semantics.typesys import Type, UnknownType
 from sushi_lang.semantics.unit_symbols import (
     declaring_unit, function_symbol, global_symbol, mangle_unit_symbol,
@@ -147,7 +149,7 @@ class _Builder:
         for impl in program.perk_impls:
             for method in impl.methods:
                 methods.append(self.perk_method(
-                    impl.target_type, method, _typed_params(method.params), method.ret,
+                    impl.target_type, method, self.typed_params(method.params), method.ret,
                     method.err_type, self.body(method)))
             type_name = _get_type_name(impl.target_type)
             if type_name is not None:
@@ -164,7 +166,7 @@ class _Builder:
         unit = declaring_unit(fn, unit_name)
         return FunctionDecl(
             name=fn.name, unit=unit, symbol=function_symbol(fn.name, unit),
-            is_public=fn.is_public, params=_function_params(fn), ret=fn.ret,
+            is_public=fn.is_public, params=self.function_params(fn), ret=fn.ret,
             err_type=fn.err_type, written_channel=fn.written_channel,
             resolved_result=fn.resolved_result, body=self.body(fn))
 
@@ -175,7 +177,7 @@ class _Builder:
         return MethodDecl(
             name=ext.name, symbol=symbol, link_name=ext.link_symbol or symbol,
             receiver=receiver, by_pointer=_by_pointer(receiver, ext.self_mode),
-            params=_typed_params(ext.params), ret=ext.ret, err_type=ext.err_type,
+            params=self.typed_params(ext.params), ret=ext.ret, err_type=ext.err_type,
             written_channel=ext.written_channel, home_unit=ext.home_unit, body=self.body(ext))
 
     def perk_method(self, target: Optional[Type], method: FuncDef,
@@ -201,6 +203,36 @@ class _Builder:
             tuple((p.name, self.resolved(p.ty)) for p in method.params if p.ty),
             self.resolved(method.ret), self.resolved(method.err_type), None)
             for method in impl.methods]
+
+    def param_type(self, ty: Type) -> Type:
+        """The type of a parameter. A written instance (`Box@(i32) b`) names the instance
+        that the analysis interned, with its iterator items in their one form (#1227)."""
+        if isinstance(ty, GenericTypeRef):
+            structs, enums = self.tables.structs.by_name, self.tables.enums.by_name
+            resolved = resolve_unknown_type(settle_in_tables(ty, self.tables.enums),
+                                            structs, enums)
+            if resolved is not None and not isinstance(resolved, GenericTypeRef):
+                return resolved
+        return ty
+
+    def typed_params(self, params: Iterable[Param]) -> tuple[tuple[str, Type], ...]:
+        return tuple((p.name, self.param_type(p.ty)) for p in params if p.ty)
+
+    def function_params(self, fn: FuncDef) -> tuple[tuple[str, Type], ...]:
+        """The parameters of a free function. A parameter with no type is an internal error."""
+        out = []
+        for idx, p in enumerate(fn.params):
+            if not isinstance(p, Param):
+                raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] must be Param, "
+                                                       f"got {type(p).__name__}")
+            if not isinstance(p.name, str):
+                raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] name must be "
+                                                       f"str, got {type(p.name).__name__}")
+            if p.ty is None:
+                raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] '{p.name}' "
+                                                       "has no type")
+            out.append((p.name, self.param_type(p.ty)))
+        return tuple(out)
 
     @overload
     def resolved(self, ty: Type) -> Type: ...
@@ -251,23 +283,3 @@ def _by_pointer(receiver: Optional[Type], self_mode: Optional[str]) -> bool:
     """A `poke self` or a `peek self` receiver arrives by POINTER (#327); `nom self` and the
     unmarked one cross by value."""
     return receiver is not None and receiver_mode(self_mode).by_pointer
-
-
-def _typed_params(params: Iterable[Param]) -> tuple[tuple[str, Type], ...]:
-    return tuple((p.name, p.ty) for p in params if p.ty)
-
-
-def _function_params(fn: FuncDef) -> tuple[tuple[str, Type], ...]:
-    """The parameters of a free function. A parameter with no type is an internal error."""
-    out = []
-    for idx, p in enumerate(fn.params):
-        if not isinstance(p, Param):
-            raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] must be Param, "
-                                                   f"got {type(p).__name__}")
-        if not isinstance(p.name, str):
-            raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] name must be str, "
-                                                   f"got {type(p.name).__name__}")
-        if p.ty is None:
-            raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] '{p.name}' has no type")
-        out.append((p.name, p.ty))
-    return tuple(out)
