@@ -718,6 +718,8 @@ UnitDecls
   methods      : [MethodDecl]          # the extensions, then the methods of each perk implementation
   globals      : [GlobalDecl]          # each constant and each `var`, in source order
   perk_symbols : [str]                 # the symbol of each perk method (`weak_odr` in a library)
+  stdlib_imports : [str]               # the stdlib module of each `use <...>`, as written, in order
+  method_names : {str}                 # each method name that the unit calls or declares (R1)
 
 FunctionDecl
   name, unit, symbol                   # `declaring_unit`, `function_symbol`
@@ -763,16 +765,27 @@ Five rules hold the table:
 - The builder resolves a type that a shipped perk implementation writes and that the program
   declares (an `UnknownType`, from the source text of a library) with `require_named_type`
   (`semantics/type_resolution.py`): a name with no declaration is the internal error CE0020.
-  It writes nothing on the AST.
+  The builder also resolves a parameter type that writes an instance (`Box@(i32) b`, a
+  `GenericTypeRef`) to the instance that the analysis interned, with its iterator items in
+  their one form (`settle_in_tables`). It writes nothing on the AST, and `typecheck` writes
+  no parameter type on the AST.
 - The symbols are those of the mangling seams (`function_symbol`, `extension_decl_symbol`,
   `global_symbol`, `impl_method_symbol`). The table holds each symbol, and the backend
   derives none from a declaration.
 
 The readers: the declaration round of `codegen_llvm.py` (the functions, the methods, the
 globals and the body of each), `functions/` (each prototype), `driver.py` (the perk symbols of
-a library), and `backend/slir/bodies.py` (the `SlirFunction` of a `body`). The stdlib link set
-(`stdlib_linker.py`) and the manifest of a library (`library_manifest.py`) still read the AST
-(6.4).
+a library), `backend/slir/bodies.py` (the `SlirFunction` of a `body`), and the stdlib link set
+(`stdlib_linker.py`: the `stdlib_imports` and the `method_names` of each unit). No backend
+module reads the AST.
+
+The manifest of a library is not a reader of the table. It writes no LLVM, and it is a module
+of the compiler (`compiler/library_manifest.py`), not of the backend. It reads the
+declarations of the AST of each own unit, and it walks the BODY of each exported template for
+the names that the body reads and the types that it writes (the export closure, question 4 of
+6.1). It keeps the source text of each template body, so the `.slib` format does not change.
+The table does not hold the closure: the move is the smaller change, and a second home of the
+closure walk in the builder has no other reader.
 
 **The one third entry point: an initializer body.** Lowering makes a one-expression
 `ShirBody`, with an origin of its own, from each constant initializer and each `var`
@@ -794,7 +807,7 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 |---|---|---|
 | No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
 | A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | **In force**: `tests/unit/test_body_passes_import_no_ast.py` |
-| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty | **In force** with one exception: `tests/unit/test_backend_imports_no_ast.py` |
+| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty | **In force**: `tests/unit/test_backend_imports_no_ast.py` |
 
 Two sibling gates are in force. The ruff rule `TID251` (`pyproject.toml`) allows no
 `llvmlite` import outside `backend/` and `sushi_stdlib/`, so `semantics` names no LLVM
@@ -815,15 +828,17 @@ a body: `externals.py` walks the types that the bodies of a unit write (`body_ty
 declaration module, and `effects` is a whole-program pass with its own module
 (`passes/effects.py`, S4).
 
-The third gate has one exception: two modules of the backend read the AST, and the
-declaration table of 6.3 does not hold what they read yet. The declaration round
-(`codegen_llvm.py`, `driver.py`, `functions/`) reads the table and imports no AST. The gate
-names each backend module that still imports the AST, with each name: the stdlib modules of
-the `use` declarations (`stdlib_linker.py`), and the manifest of a library
-(`library_manifest.py`), which writes no LLVM. `library_manifest.py` reads more than a
-declaration: it walks the body of each exported template, for the names that it reads and
-the types that it writes. A row may only go. The SLIR emitter (`backend/slir/`) imports no
-AST.
+The third gate has no exception. The declaration round (`codegen_llvm.py`, `driver.py`,
+`functions/`) and the stdlib link set (`stdlib_linker.py`) read the table of 6.3, and the
+SLIR emitter (`backend/slir/`) reads SLIR. No backend module imports the AST or reads
+`Unit.ast`. The manifest of a library is a module of the compiler (6.3).
+
+After `collect`, no pass writes a declaration field on the AST, except `monomorphize` (the
+copies it makes, ruling Q1) and the driver (the home and the scope of a copy that it places).
+`typecheck` keeps what it resolves in its tables: the type of a parameter in the signature
+record, and the folded link name of an extern declaration in the extern table
+(`ExternalTable.folded`, by the id of the declaration). The constant evaluator reads an alias
+from the namespace table each time, and it writes no stamp and no receiver on a node.
 
 ---
 
