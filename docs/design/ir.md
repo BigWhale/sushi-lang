@@ -690,7 +690,7 @@ The entire interface between the AST and everything downstream is two entry poin
 
 ```
 lower_body(ast_block, bindings, ctx) -> ShirBody   # bodies, once scope has run
-declarations(program)                -> DeclTable  # declarations, whole-program passes
+declarations(program)                -> DeclTable  # declarations, for the backend (S30)
 ```
 
 Anything that needs a third entry point is a design smell and must be argued for in this
