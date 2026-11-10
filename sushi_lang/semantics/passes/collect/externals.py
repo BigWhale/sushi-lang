@@ -14,7 +14,7 @@ from sushi_lang.semantics.ffi_boundary import (
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
+    from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl, ExternalVar
     from sushi_lang.semantics.visibility import VisibilityTable
 
 
@@ -52,8 +52,9 @@ class ExternalTable:
     by_namespace: Dict[str, Dict[str, ExternalSig]] = field(default_factory=dict)
     variables: Dict[str, Dict[str, ExternalVarSig]] = field(default_factory=dict)
     # The link name of each declaration that writes it as a string constant (#1089), by
-    # the id of the declaration node. `fold_link_names` is the one writer.
-    folded: Dict[int, str] = field(default_factory=dict)
+    # the namespace, the name and the span of the name of the declaration, which a copy of
+    # the node keeps. `fold_link_names` is the one writer (`fold`).
+    folded: Dict[Tuple[str, str, Optional[Tuple[int, int]]], str] = field(default_factory=dict)
 
     def is_namespace(self, ns: str) -> bool:
         """True if `ns` is a registered external namespace."""
@@ -76,9 +77,12 @@ class ExternalTable:
                 return sig
         return None
 
-    def link_name_of(self, decl: Any) -> str:
+    def fold(self, namespace: str, decl: 'ExternalDecl | ExternalVar', link_name: str) -> None:
+        self.folded[_folded_key(namespace, decl)] = link_name
+
+    def link_name_of(self, namespace: str, decl: 'ExternalDecl | ExternalVar') -> str:
         """The C symbol of an extern declaration: the written string, or the folded constant."""
-        return self.folded.get(id(decl), decl.link_name)
+        return self.folded.get(_folded_key(namespace, decl), decl.link_name)
 
     def add(self, sig: ExternalSig) -> None:
         self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
@@ -92,6 +96,12 @@ class ExternalTable:
             for name_space, decls in table.items():
                 if ns is None or name_space == ns:
                     yield from decls.values()
+
+
+def _folded_key(namespace: str, decl: 'ExternalDecl | ExternalVar'
+                ) -> Tuple[str, str, Optional[Tuple[int, int]]]:
+    at = decl.name_span
+    return namespace, decl.name, None if at is None else (at.line, at.col)
 
 
 class ExternalCollector:
@@ -231,7 +241,7 @@ def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
     for block in program.externals:
         for decl in block.decls:
             record = externals.lookup(block.namespace, decl.name)
-            link_name = externals.link_name_of(decl)
+            link_name = externals.link_name_of(block.namespace, decl)
             if (link_name and _collected(record, decl, filename)
                     and _crosses(decl)):
                 shape = function_shape([p.ty for p in decl.params], decl.ret, decl.is_variadic)
@@ -239,7 +249,7 @@ def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
                                  decl.name_span or decl.loc, filename)
         for var in block.variables:
             record = externals.lookup_variable(block.namespace, var.name)
-            link_name = externals.link_name_of(var)
+            link_name = externals.link_name_of(block.namespace, var)
             if (link_name and _collected(record, var, filename)
                     and is_c_abi_variable(var.ty)):
                 link_names.admit(reporter, link_name, ("var", c_type(var.ty)),

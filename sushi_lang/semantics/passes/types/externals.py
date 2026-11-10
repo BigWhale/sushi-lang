@@ -126,7 +126,7 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
     """Fold each link name written as a string constant, in the declaring unit (#1089).
 
     It runs where every unit's constants and aliases exist and before CE5013 reads the
-    names. The folded name goes to the extern table (`ExternalTable.folded`, which the
+    names. The folded name goes to the extern table (`ExternalTable.fold`, which the
     checks of a declaration read) and to the collected signature, which is what the
     backend declares. Nothing is written on the AST.
     """
@@ -152,7 +152,7 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
                         type=display_type(value.semantic_type))
                 continue
             link_name = str(value.value)
-            tables.externals.folded[id(decl)] = link_name
+            tables.externals.fold(block.namespace, decl, link_name)
             var = tables.externals.lookup_variable(block.namespace, decl.name)
             if var is not None:
                 var.link_name = link_name
@@ -184,7 +184,7 @@ def reject_external_naming_a_defined_symbol(
 
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            link_name = tables.externals.link_name_of(decl)
+            link_name = tables.externals.link_name_of(block.namespace, decl)
             found = _defining_site(link_name, tables, registry, generated_symbols)
             if found is not None:
                 _emit_defined_symbol(reporter, decl, link_name, *found)
@@ -238,7 +238,7 @@ def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
     bodies = {id(sig): fn for sig, fn in instances}
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            link_name = externals_table.link_name_of(decl)
+            link_name = externals_table.link_name_of(block.namespace, decl)
             sig = _declaration_emitting(link_name, [sig for sig, _ in instances])
             if sig is None:
                 continue
