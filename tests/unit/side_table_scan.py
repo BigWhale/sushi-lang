@@ -1,8 +1,8 @@
 """The scan of the one-writer gates of the side tables of a SHIR body (docs/design/ir.md 7.3, 7.9).
 
 A side table holds the answers of one pass for one body: `TypeckResults`, `OwnershipResults`
-and `LiftResults`. Each gate holds the same four rules over the Python source of
-`sushi_lang/`, with the names of its table:
+and `LiftResults`. The one-writer gate holds the same four rules for each table, over the
+Python source of `sushi_lang/`, with the names of its table:
 
 - only the owner of the bodies (`semantics/shir/lowering.py`) makes a table: every other
   module names the class only as a type (an annotation, a `TypeAlias`, a plain import), so

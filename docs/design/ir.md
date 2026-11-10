@@ -243,7 +243,7 @@ completeness check. Three faults follow from that shape, and each one is in the 
   `backend/expressions/calls/` (deleted, 8.12) writes `resolved_struct_type`.
 
 Every dataclass in `semantics/ast.py` is `slots=True`, every analysis field is declared on
-each class that takes it, and `tests/unit/test_ast_nodes_are_slotted.py` keeps it that
+each class that takes it, and `tests/unit/test_ir_nodes_are_slotted.py` keeps it that
 way. That CONTAINS the channel: a stray write raises at the site that wrote it. It does
 not give a fact an owner, one writer, or a completeness check. Sections 7.3 and 7.9 do.
 The declared analysis fields are transitional (6.2): each one goes when the pass that
@@ -810,7 +810,7 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 
 | Gate | Mechanism | When |
 |---|---|---|
-| No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
+| No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ir_nodes_are_slotted.py` |
 | A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | **In force**: `tests/unit/test_body_passes_import_no_ast.py` |
 | The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty | **In force**: `tests/unit/test_backend_imports_no_ast.py` |
 
@@ -1039,7 +1039,7 @@ one body.
 kind for each row of the table above. `LoweredProgram` owns it: it makes the empty table of
 a body when lowering lists the body, and keeps it beside the body
 (`LoweredProgram.typeck_of`). `typecheck` is the one writer (gate:
-`tests/unit/test_typeck_results_have_one_writer.py`), and a second answer for one key is an
+`tests/unit/test_result_tables_have_one_writer.py`), and a second answer for one key is an
 internal error. A row for a position takes the node and the position as its key: a call
 argument and a `print` argument by the index in the arguments, a part of an `Interp` by
 the index in the parts (a text part has no row), a capture by the `LocalId` of the captured
@@ -1335,7 +1335,7 @@ receiver partition for a `Builtin`, and the declared mode of `self` for a `Metho
 7.6). The ladder runs for a receiver of every type. A family answer goes to the arm of its
 family in ONE table, `FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the name of
 the family in `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
-`tests/unit/test_typecheck_family_arms_are_registry_rows.py`). Each family has its arm
+`tests/unit/test_family_tables_are_registry_rows.py`). Each family has its arm
 there but `foreign_ptr`: a `ptr` receiver goes to its own arm before the ladder
 (`check_foreign_ptr_call`, `passes/types/visit/extern_calls.py`), and that arm also gives
 [CE5011](../error-catalog.md#ce5011) for a method that the family does not hold. A family
@@ -2287,8 +2287,8 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 three tables share their shapes (`semantics/shir/side_table.py`): a second answer for one
 key is an internal error, a copy of a table is refused, and a completeness check stops at
 its first gap. `borrow` is the one writer of `OwnershipResults` (gate:
-`tests/unit/test_ownership_results_have_one_writer.py`), and `lift` is the one writer of
-`LiftResults` (gate: `tests/unit/test_lift_results_have_one_writer.py`). The gates of the
+`tests/unit/test_result_tables_have_one_writer.py`), and `lift` is the one writer of
+`LiftResults` (gate: `tests/unit/test_result_tables_have_one_writer.py`). The gates of the
 three tables use one scan (`tests/unit/side_table_scan.py`).
 
 The rows of `OwnershipResults`:
@@ -3039,7 +3039,7 @@ drop of the old part of a field write or an element write included; gate:
 `verify_rules.py`) and the
 printer of `--dump-slir`
 (`printer.py`). Every class is a slotted dataclass, and every statement and terminator has
-a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The borrow pass
+a required `span` (gate: `tests/unit/test_ir_nodes_are_slotted.py`). The borrow pass
 gives each body that it finished, and that is not a template check (Q1), to the SLIR stage
 of its unit (`SlirStage`). The stage makes one `SlirFunction` from the body and its three
 side tables, and `SlirProgram` keeps the outcome of each body, keyed by the `DeclId` of the

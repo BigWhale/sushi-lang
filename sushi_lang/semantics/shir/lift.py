@@ -6,7 +6,7 @@ of the body, by the `shir_id` of the `Lambda`: the symbol of the lifted function
 environment layout, the captured locals in slot order. The mode of a capture is an answer of
 `borrow` (`OwnershipResults`), not of this table. Lowering lists each body with its table
 (`LoweredProgram.lift_table_of`), and the lift pass is the one writer (gate:
-`tests/unit/test_lift_results_have_one_writer.py`). A key has one answer: a second write is
+`tests/unit/test_result_tables_have_one_writer.py`). A key has one answer: a second write is
 an internal error. When the pass ends, `lift_check.py` finds each `Lambda` with no symbol or
 no environment.
 """

@@ -4,7 +4,7 @@ No SHIR node holds a fact that `typecheck` finds. Each answer is a row of the
 `TypeckResults` of the body: one table for each `ShirBody`, one row kind for each decision
 of the table in ir.md 7.3. Lowering lists each body with its table
 (`LoweredProgram.typeck_of`), and the typecheck pass is the one writer (gate:
-`tests/unit/test_typeck_results_have_one_writer.py`). A key has one answer: a second write
+`tests/unit/test_result_tables_have_one_writer.py`). A key has one answer: a second write
 is an internal error. When the pass ends, `typeck_check.py` finds each answer that a node
 needs and that the table does not hold.
 

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 # Reserved pack-marker token. A ".pack{N}" segment is appended for pack
 # instantiations. The "." separator is what makes invariant (D) STRUCTURAL
-# rather than probabilistic, and `tests/unit/test_pack_mangling.py` is where
+# rather than probabilistic, and `tests/unit/test_monomorphize_pack.py` is where
 # invariant (D) is stated and gated.
 _PACK_MARKER = "pack"
 

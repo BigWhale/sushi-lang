@@ -1,14 +1,18 @@
-"""The typecheck arm of a method call chooses the arm of a built-in family from ONE table.
+"""Each table of a built-in family is keyed by the families of ONE registry.
 
-`FAMILY_ARMS` is keyed by the name of a family of `METHOD_TYPE_REGISTRY`, and each family
-has its row but `foreign_ptr`: a `ptr` receiver goes to its own arm before the ladder
-(`check_foreign_ptr_call`), which gives CE5011 too. A family with no row is an internal
-error. No arm compares a family name of its own.
+`METHOD_TYPE_REGISTRY` names the families. The typecheck arm of a method call chooses the
+arm of a family from `FAMILY_ARMS`, which has a row for each family but `foreign_ptr`: a
+`ptr` receiver goes to its own arm before the ladder (`check_foreign_ptr_call`), which
+gives CE5011 too. A family with no row is an internal error. No arm compares a family name
+of its own. The SLIR method emitter chooses its emitter from `METHOD_FAMILIES`, and each
+key of it names a family of the registry (docs/design/ir.md 8.6). A misspelled key would
+never match, and the emitter would find no row for the family.
 """
 from __future__ import annotations
 
 import inspect
 
+from sushi_lang.backend.slir import methods
 from sushi_lang.semantics.method_effects import FOREIGN_PTR_FAMILY
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.passes.types.visit import calls
@@ -30,3 +34,8 @@ def test_the_method_call_arm_compares_no_family_name():
     source = inspect.getsource(calls)
     assert "family.name ==" not in source, (
         "the typecheck pass chooses a family arm by a comparison, not by FAMILY_ARMS")
+
+
+def test_every_slir_family_row_names_a_registry_family():
+    unknown = set(methods.METHOD_FAMILIES) - {f.name for f in METHOD_TYPE_REGISTRY._families}
+    assert not unknown, f"no family of METHOD_TYPE_REGISTRY is named {sorted(unknown)}"
