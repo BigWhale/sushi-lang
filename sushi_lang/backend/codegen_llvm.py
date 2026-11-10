@@ -109,9 +109,6 @@ class LLVMCodegen:
         # comes from it. None in a codegen that defines no body.
         self.slir_bodies: Optional['SlirBodies'] = None
 
-        self.stdlib_units: set[str] = set()
-
-
         # Recursive-lifecycle state, declared here rather than conjured on at first use:
         # each `_inprogress` is the stack of type keys being inlined, so a re-entry means
         # the type is self-referential and gets a call to its out-of-line function.
@@ -166,10 +163,6 @@ class LLVMCodegen:
         also hold -- a library build's bundled stdlib modules (#594). Empty for a
         program, which is the only build that owns every symbol it emits.
         """
-        for unit in units:
-            if unit.ast is not None:
-                self.stdlib.extract_stdlib_units(unit.ast)
-
         self.runtime.declare_externs()
         self.declare_user_externs()
         self._emit_multi_unit_program(units, weak_units=weak_units)
@@ -207,10 +200,6 @@ class LLVMCodegen:
         self.string_manager = StringConstantManager(self)
 
         self.runtime = LLVMRuntime(self)
-
-        for unit in all_units:
-            if unit.ast is not None:
-                self.stdlib.extract_stdlib_units(unit.ast)
 
         self.runtime.declare_externs()
         self.declare_user_externs()

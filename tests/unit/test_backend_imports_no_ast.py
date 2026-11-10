@@ -6,8 +6,9 @@ emitter of the bodies (`backend/slir/`) imports none, and the declaration round 
 declaration table of ir.md 6.3 (`semantics/decl_table.py`) and imports none.
 
 `DECLARATION_ROUND` holds the modules that still import the AST, each with the names that
-it imports and the reason: the stdlib link set and the manifest of a library, which the
-declaration table does not hold yet. `library_manifest.py` reads more than a declaration:
+it imports and the reason: the manifest of a library, which the declaration table does not
+hold yet. The stdlib link set reads the `use` declarations of each unit from the table.
+`library_manifest.py` reads more than a declaration:
 it walks the body of each exported template, for the names that it reads (the export
 closure) and the types that it writes. No row reads a body that SLIR has. The table may
 only get shorter: a module that no longer imports a name of its row fails the gate, and so
@@ -23,10 +24,6 @@ _WALK = "sushi_lang.semantics.ast_walk"
 
 #: module -> ({AST module: the names it imports}, reason).
 DECLARATION_ROUND: dict[str, tuple[dict[str, frozenset[str]], str]] = {
-    "sushi_lang/backend/stdlib_linker.py": (
-        {_AST: frozenset({"Program"})},
-        "Phase 7: the stdlib modules that a module links are the `use` declarations of "
-        "the AST"),
     "sushi_lang/backend/library_manifest.py": (
         {_AST: frozenset({"*", "ExtendDef", "Node", "Program", "VarDef"}),
          _WALK: frozenset({"bodied_with_owner", "is_written", "node_fields", "walk_nodes"})},
@@ -37,9 +34,7 @@ DECLARATION_ROUND: dict[str, tuple[dict[str, frozenset[str]], str]] = {
 }
 
 #: The rows at the day of the pin. A row may leave both; none may join.
-PINNED = frozenset({
-    "sushi_lang/backend/stdlib_linker.py", "sushi_lang/backend/library_manifest.py",
-})
+PINNED = frozenset({"sushi_lang/backend/library_manifest.py"})
 
 
 def _found():

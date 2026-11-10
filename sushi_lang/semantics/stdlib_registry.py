@@ -89,6 +89,12 @@ BUILTIN_TYPE_METHOD_MODULES = frozenset({
 })
 
 
+def stdlib_imports(program: 'Program') -> tuple[str, ...]:
+    """The stdlib module of each `use <...>` of one unit, as written and in order. The
+    parent directory of a path is not an import of it (#501)."""
+    return tuple(use_stmt.path for use_stmt in program.uses if use_stmt.is_stdlib)
+
+
 def named_methods(program: 'Program') -> frozenset:
     """Every method name that one unit calls, or declares as an extension.
 

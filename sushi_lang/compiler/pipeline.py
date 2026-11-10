@@ -149,7 +149,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
         BUILTIN_TYPE_METHOD_MODULES, PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES,
         builtin_type_method_names, get_stdlib_registry, keep_builtin_type_methods,
         may_declare_methods, named_methods, platform_key, platform_source,
-        resolve_source_stdlib_path,
+        resolve_source_stdlib_path, stdlib_imports,
     )
 
     compiled = _compiled_stdlib_modules(library_linker)
@@ -159,8 +159,8 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
 
     def _imported(units) -> set:
         needed = set()
-        paths = [use_stmt.path for unit in units if unit.ast is not None
-                 for use_stmt in unit.ast.uses if use_stmt.is_stdlib]
+        paths = [path for unit in units if unit.ast is not None
+                 for path in stdlib_imports(unit.ast)]
         for path in [*paths, *compiled]:
             if path in SOURCE_STDLIB_MODULES:
                 needed.add(path)
@@ -656,8 +656,11 @@ def _stdlib_units(compilation_order: list[Unit], library_linker,
     has to be on the link line even where no unit of the build wrote the import.
     """
     from sushi_lang.backend.stdlib_linker import linked_stdlib_paths
+    from sushi_lang.semantics.stdlib_registry import named_methods, stdlib_imports
+    programs = [unit.ast for unit in compilation_order if unit.ast]
     stdlib_units = set(linked_stdlib_paths(
-        [unit.ast for unit in compilation_order if unit.ast],
+        [path for program in programs for path in stdlib_imports(program)],
+        frozenset().union(*(named_methods(program) for program in programs)),
         also=sorted(_compiled_stdlib_modules(library_linker))))
 
     if len(compilation_order) > 1:

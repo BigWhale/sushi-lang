@@ -21,6 +21,7 @@ from sushi_lang.semantics.library_templates import impl_method_symbol
 from sushi_lang.semantics.param_modes import receiver_mode
 from sushi_lang.semantics.passes.collect.perks import _get_type_name
 from sushi_lang.semantics.shir.ids import DeclId
+from sushi_lang.semantics.stdlib_registry import named_methods, stdlib_imports
 from sushi_lang.semantics.type_resolution import require_named_type
 from sushi_lang.semantics.typesys import Type, UnknownType
 from sushi_lang.semantics.unit_symbols import (
@@ -88,6 +89,8 @@ class UnitDecls:
     methods: tuple[MethodDecl, ...]
     globals: tuple[GlobalDecl, ...]
     perk_symbols: tuple[str, ...]
+    stdlib_imports: tuple[str, ...]
+    method_names: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +157,8 @@ class _Builder:
             functions=tuple(self.function(fn, name) for fn in _module_order(program.functions)),
             methods=tuple(methods),
             globals=tuple(self.global_of(const, name) for const in program.constants),
-            perk_symbols=tuple(perk_symbols))
+            perk_symbols=tuple(perk_symbols), stdlib_imports=stdlib_imports(program),
+            method_names=named_methods(program))
 
     def function(self, fn: FuncDef, unit_name: str) -> FunctionDecl:
         unit = declaring_unit(fn, unit_name)

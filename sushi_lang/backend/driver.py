@@ -128,9 +128,8 @@ class LLVMDriver:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        from sushi_lang.backend.stdlib_linker import linked_stdlib_paths
-        stdlib_units = linked_stdlib_paths(
-            [unit.ast for unit in units if unit.ast is not None])
+        from sushi_lang.backend.stdlib_linker import table_stdlib_paths
+        stdlib_units = table_stdlib_paths(cg.declaration_table())
 
         # Every COMPILED library of the graph, once, by its stamped name (#1120): the
         # pipeline loaded each one, the consumer's own imports, the dependencies and
@@ -170,8 +169,7 @@ class LLVMDriver:
             llmod = two_phase.link()
 
         else:
-            cg.stdlib.link_stdlib_modules(
-                llmod, [unit.ast for unit in units if unit.ast is not None])
+            cg.stdlib.link_stdlib_modules(llmod, cg.declaration_table())
 
         cg.optimizer.ensure_target(llmod)
         self._verify_and_optimize(llmod, opt, verify)
@@ -228,7 +226,7 @@ class LLVMDriver:
         # every module it imports, so this one may not be a second strong definition.
         from sushi_lang.backend.library_linkage import weaken_linked_symbols
         weaken_linked_symbols(llmod, cg.stdlib.link_stdlib_modules(
-            llmod, [unit.ast for unit in units if unit.ast is not None]))
+            llmod, cg.declaration_table()))
 
         cg.optimizer.ensure_target(llmod)
         self._verify_and_optimize(llmod, opt, verify)

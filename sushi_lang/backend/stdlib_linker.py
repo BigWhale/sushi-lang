@@ -1,6 +1,6 @@
 """Standard library linking utilities."""
 from __future__ import annotations
-from typing import Iterable, TYPE_CHECKING
+from typing import AbstractSet, Iterable, TYPE_CHECKING
 from pathlib import Path
 
 import llvmlite.binding as llvm
@@ -8,29 +8,31 @@ import llvmlite.binding as llvm
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import Program
+    from sushi_lang.semantics.decl_table import DeclTable
 
 
-def linked_stdlib_paths(programs: Iterable[Program],
+def linked_stdlib_paths(imports: Iterable[str], methods: AbstractSet[str],
                         also: Iterable[str] = ()) -> list[str]:
     """Every stdlib module that a build links, each once, in a stable order.
 
-    Each `use <...>` of the programs, the modules in `also`, then the bitcode of each
-    method of a built-in type that the programs name. Such a method needs no import
-    (`docs/design/extension-visibility.md` R1). A module under a directory in the list
-    is left out: the directory links its bitcode.
+    Each stdlib module of `imports` (the `use <...>` of each unit, in order), the modules
+    in `also`, then the bitcode of each method of a built-in type in `methods`. Such a
+    method needs no import (`docs/design/extension-visibility.md` R1). A module under a
+    directory in the list is left out: the directory links its bitcode.
     """
-    from sushi_lang.semantics.stdlib_registry import (
-        builtin_type_method_bitcode, named_methods)
-    programs = list(programs)
-    names = frozenset().union(*(named_methods(program) for program in programs))
-    paths = dict.fromkeys([
-        *(use_stmt.path for program in programs for use_stmt in program.uses
-          if use_stmt.is_stdlib),
-        *also, *sorted(builtin_type_method_bitcode(names))])
+    from sushi_lang.semantics.stdlib_registry import builtin_type_method_bitcode
+    paths = dict.fromkeys([*imports, *also, *sorted(builtin_type_method_bitcode(methods))])
     return [path for path in paths
             if not any("/".join(path.split("/")[:depth]) in paths
                        for depth in range(1, path.count("/") + 1))]
+
+
+def table_stdlib_paths(decls: DeclTable) -> list[str]:
+    """The stdlib modules that the program of the declaration table links."""
+    units = list(decls.units.values())
+    return linked_stdlib_paths(
+        [path for unit in units for path in unit.stdlib_imports],
+        frozenset().union(*(unit.method_names for unit in units)))
 
 
 class StdlibLinker:
@@ -54,23 +56,10 @@ class StdlibLinker:
         else:
             return "unknown"
 
-    def extract_stdlib_units(self, program: Program) -> None:
-        """Extract stdlib unit imports from the program and store them for conditional codegen.
-        """
-        stdlib_units = self.codegen.stdlib_units
+    def link_stdlib_modules(self, llmod: llvm.ModuleRef, decls: DeclTable) -> set[str]:
+        """Link the stdlib .bc files that the program of `decls` needs into one LLVM IR module.
 
-        # The path AS WRITTEN, and nothing else. Recording an import's parent directory
-        # too made every SIBLING module look imported, so `use <io/files>` walked
-        # straight through the `io/stdio` gate (#501).
-        for use_stmt in program.uses:
-            if use_stmt.is_stdlib:
-                stdlib_units.add(use_stmt.path)
-
-    def link_stdlib_modules(self, llmod: llvm.ModuleRef,
-                            programs: Iterable[Program]) -> set[str]:
-        """Link the stdlib .bc files that `programs` need into one LLVM IR module.
-
-        The whole build's programs arrive together and each .bc is linked ONCE. The
+        The whole build's units arrive together and each .bc is linked ONCE. The
         monolithic path gives every unit the SAME module, so linking per unit linked
         one module's globals twice as soon as two units named the same import (#493).
 
@@ -82,7 +71,7 @@ class StdlibLinker:
 
         seen: set[Path] = set()
         bc_files: list[Path] = []
-        for unit_path in linked_stdlib_paths(programs):
+        for unit_path in table_stdlib_paths(decls):
             for bc_path in self._resolve_stdlib_unit(unit_path):
                 if bc_path not in seen:
                     seen.add(bc_path)
