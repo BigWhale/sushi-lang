@@ -44,9 +44,10 @@ the order `typecheck`, `lift`, `borrow`. `typecheck` walks it through one table 
 keyed on the SHIR class (`types/visit/__init__.py`) and gives each body that it finished
 with no error to `lift`. `lift` gives each body that it finished to `borrow`, which walks
 the body through a table of its own (`borrow/arms.py`); both tables read one dispatch
-(`shir/dispatch.py`). The declaration half of `typecheck` and of `borrow` (the
-signatures, the declared types, the constraints, the header of each body, the mode of
-each parameter) still reads the AST. `scope` and `effects` stay on the AST; `effects` runs
+(`shir/dispatch.py`). The declaration half of `typecheck` (the signatures, the declared types,
+the constraints, the header of each body, the mode of each parameter) still reads the AST,
+in 8 modules that a gate pins (`tests/unit/test_body_passes_import_no_ast.py`). `borrow` and
+`lift` read no AST. `scope` and `effects` stay on the AST; `effects` runs
 before the loop, because `borrow` reads its summary. A construct that a pass does not
 handle is an internal error; after an error of the program, the walk of the body ends
 there, and the error is the diagnostic. `borrow` gives each body that
@@ -55,6 +56,9 @@ one `SlirFunction` for each body; a construct that it cannot lower is an interna
 lowering finished; a broken rule is the internal error
 [CE0158](../error-catalog.md#ce0158). The backend emits each function from its SLIR
 (`backend/slir/`), and a SLIR shape that the emitter does not handle is an internal error.
+After the last pass, `codegen_for` makes the `DeclTable` (`semantics/decl_table.py`): the one
+frozen table of the declarations that the backend reads (the signatures, the symbols, the folded
+value of each constant and `var`). No backend module imports the AST.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a

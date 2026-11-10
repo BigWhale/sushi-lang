@@ -2,7 +2,7 @@
 
 [← Back to Documentation](../index.md) | [Architecture](architecture.md)
 
-The backend translates the type-checked AST into LLVM IR, optimizes the IR, emits object
+The backend translates the SLIR of the analysis into LLVM IR, optimizes the IR, emits object
 code and links a native executable. All paths on this page are relative to
 `sushi_lang/`. The code sketches show the shape of the emitted IR; the module that each
 section names holds the real code.
@@ -30,7 +30,8 @@ and links:
 The emit order in a module is: the declarations of the runtime and the libc externs, the
 user externs (`declare_user_externs`, `backend/runtime/externs/user_externs.py`), the
 constants and unit variables, the function declarations, and then the function bodies.
-The declarations come from the AST. Each body comes from the `SlirFunction` of the
+The declarations come from the `DeclTable` (`semantics/decl_table.py`), which `codegen_for`
+makes after the analysis; no backend module imports the AST. Each body comes from the `SlirFunction` of the
 analysis (`codegen_for` hands over the SLIR of the program as `SlirBodies`), through the
 SLIR emitter in `backend/slir/` (`emit_function`): every local is a slot in the entry
 block, and each SLIR block is one LLVM block. A drop goes through the one destroy seam
@@ -227,12 +228,11 @@ A container method has its row in `LIST_EMITTERS` or `HASHMAP_EMITTERS`
 (`emit_with_operands`, `backend/generics/container_table.py`), a stdlib call its row in `STDLIB_EMITTERS`
 (`backend/expressions/calls/stdlib/__init__.py`), and a built-in array method its row in
 `backend/types/arrays/`. An extension method symbol comes from `extension_symbol`
-(`semantics/generics/name_mangling.py`), for example `Pair__i32_string_swapped`. A
-family with no row of `METHOD_FAMILIES` still takes AST nodes: it gets operands from SLIR
-in the group that brings its construct back (`docs/design/ir.md` Q7). The primitive, the string, the array, the
-List and the HashMap family already take operands (`backend/slir/methods.py`,
-`METHOD_FAMILIES`). The emitter stops on a `BuiltinMethod`
-callee of any other family until then.
+(`semantics/generics/name_mangling.py`), for example `Pair__i32_string_swapped`. 
+Each family of built-in methods takes the operands of the SLIR call, never an AST node
+(`docs/design/ir.md` Q7). The row of each family is in `METHOD_FAMILIES`
+(`backend/slir/methods.py`). A `BuiltinMethod` callee of a family with no row is an internal
+error.
 
 ## Memory management
 
