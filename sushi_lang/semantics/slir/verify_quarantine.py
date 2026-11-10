@@ -3,7 +3,10 @@
 No `ptr`, and no type that holds one (`Maybe@(ptr)`, `Result@(ptr, E)`), is a parameter
 or the return of a public function or a public extension method. `public_signatures.py` is
 the language rule (CE5002, CE5008); the verifier only checks it again. A C function has no
-SLIR body, so the rule never reads one.
+SLIR body, so the rule never reads one. A method of a perk implementation and a conversion
+carry no marker: each is as visible as its target type. The verifier does not read the
+visibility of a type, so it does not check them, and `public_signatures.py` alone holds
+the rule for those two kinds.
 """
 from __future__ import annotations
 

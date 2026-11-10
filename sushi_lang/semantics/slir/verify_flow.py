@@ -15,7 +15,11 @@ the caller, which it reads and never drops or moves; a write gives it a value of
 and from there it is an owning local (rule 5). A `Trap` ends the program, so it needs no drop. The `Drop` of an element reads
 its root local, which must hold a value, and does not change its state. A `Move` of a part
 moves its root; a later `Move` of a disjoint part of that root in the same block is the same
-take (`parts`), and a write, the storage or a drop of the root ends it.
+take (`parts`), and a write, the storage or a drop of the root, or the end of the block, ends
+it. A take spends the whole root: at its end, each owning part of the root that the take does
+not move has a `Drop` in the block, of the part or of a part that holds it (`_missing_part`).
+A lent part of the answer of a step (the `peeks` of the iterator) owns nothing of its own,
+so it needs no `Drop`. The rule is read after each other rule of the dataflow.
 
 The structure check of `verify.py` runs first and gives the dataflow its facts (`Check`).
 """
@@ -37,6 +41,9 @@ from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.printer import show
 from sushi_lang.semantics.slir.verify_rules import (
     DROP_ONCE, IN_STORAGE, RETURN_SLOT, USE_AFTER_MOVE,
+)
+from sushi_lang.semantics.typesys import (
+    EnumType, IteratorType, StructType, deref_type, owns_resource,
 )
 
 if TYPE_CHECKING:
@@ -65,11 +72,16 @@ class Flow:
     flagged: dict[LocalId, tuple[LocalId, ...]] = field(default_factory=dict)
     report: bool = False
     parts: dict[LocalId, list[p.Place]] = field(default_factory=dict)
+    taken_at: dict[LocalId, Span] = field(default_factory=dict)
+    dropped_parts: dict[LocalId, list[p.Place]] = field(default_factory=dict)
+    left_parts: list[tuple[str, Span]] = field(default_factory=list)
+    lent: dict[LocalId, list[p.Place]] = field(default_factory=dict)
 
     def run(self) -> None:
         check = self.check
         for local, flag in check.guards.items():
             self.flagged[flag] = (*self.flagged.get(flag, ()), local)
+        self.lent = _lent_parts(check)
         start = tuple(frozenset({(self.entry_state(local.id),
                                   _UNSET if local.id in check.guards else _NO_FLAG)})
                       for local in check.function.locals)
@@ -89,13 +101,18 @@ class Flow:
         for block in check.function.blocks:
             if block.id in states:
                 self.through(block, states[block.id])
+        for detail, span in self.left_parts[:1]:
+            self.violate(DROP_ONCE, detail, span)
 
     def through(self, block: SlirBlock, state: _State) -> _State:
         configs = list(state)
         self.parts.clear()
+        self.dropped_parts.clear()
         for stmt in block.statements:
             self.statement(configs, stmt)
         self.terminator(configs, block.terminator)
+        for local in list(self.parts):
+            self.end_take(local)
         return tuple(configs)
 
     def entry_state(self, local: LocalId) -> str:
@@ -128,6 +145,9 @@ class Flow:
             self.write(configs, stmt.dest, span, None)
         elif isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index, p.Global)):
             self.read(configs, stmt.place, span)
+            root = p.root_of(stmt.place)
+            if isinstance(root, p.Local):
+                self.dropped_parts.setdefault(root.id, []).append(stmt.place)
         elif isinstance(stmt, st.Drop):
             self.drop(configs, self.check.dropped(stmt), span)
         elif isinstance(stmt, st.DropIfSet):
@@ -203,6 +223,7 @@ class Flow:
         configs[local.index] = frozenset((_MOVED, flag) for _, flag in configs[local.index])
         if place != p.Local(local):
             self.parts[local] = [place]
+            self.taken_at[local] = span
 
     def another_part(self, configs: list[frozenset[_Config]], local: LocalId,
                      place: p.Place) -> bool:
@@ -217,9 +238,13 @@ class Flow:
               value: Optional[r.Rvalue]) -> None:
         if not isinstance(place, p.Local):
             self.read(configs, place, span)
+            root = p.root_of(place)
+            if isinstance(root, p.Local) and root.id in self.dropped_parts:
+                self.dropped_parts[root.id] = [part for part in self.dropped_parts[root.id]
+                                               if not _within(place, part)]
             return
         local = place.id
-        self.parts.pop(local, None)
+        self.end_take(local)
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
             self.violate(DROP_ONCE, f"writes _{local.index} while it holds a value", span)
         configs[local.index] = frozenset((_LIVE, flag) for _, flag in configs[local.index])
@@ -234,7 +259,6 @@ class Flow:
             configs[guarded.index] = frozenset((s, value) for s, _ in configs[guarded.index])
 
     def drop(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
-        self.parts.pop(local, None)
         states = {s for s, _ in configs[local.index]}
         if self.borrowed(local) or _LENT in states:
             self.violate(DROP_ONCE, f"drops the parameter _{local.index}, which the function "
@@ -245,11 +269,11 @@ class Flow:
             self.violate(DROP_ONCE, f"drops _{local.index} two times", span)
         if _UNINIT in states:
             self.violate(DROP_ONCE, f"drops _{local.index}, which holds no value", span)
+        self.end_take(local)
         configs[local.index] = frozenset((_DROPPED, flag) for _, flag in configs[local.index])
 
     def drop_if_set(self, configs: list[frozenset[_Config]], local: LocalId, flag: LocalId,
                     span: Span) -> None:
-        self.parts.pop(local, None)
         after = set()
         for state, value in configs[local.index]:
             if value not in (_TRUE, _FALSE):
@@ -262,15 +286,16 @@ class Flow:
                 self.violate(DROP_ONCE, f"the flag _{flag.index} is false where _{local.index} "
                                         f"holds a value", span)
             after.add((_DROPPED if state == _LIVE else state, value))
+        self.end_take(local)
         configs[local.index] = frozenset(after)
 
     def storage(self, configs: list[frozenset[_Config]], local: LocalId, span: Span,
                 verb: str) -> None:
         """`StorageLive` and `StorageDead`: each leaves the local with no value."""
-        self.parts.pop(local, None)
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
             self.violate(DROP_ONCE, f"{verb} the storage of _{local.index} while it holds a "
                                     f"value", span)
+        self.end_take(local)
         configs[local.index] = frozenset((_UNINIT, flag) for _, flag in configs[local.index])
         self.set_flag(configs, local, _UNSET)
 
@@ -291,6 +316,19 @@ class Flow:
         if any(state != _LIVE for state, _ in configs[0]):
             self.violate(RETURN_SLOT, "returns before a write of _0", span)
 
+    def end_take(self, local: LocalId) -> None:
+        """The end of the take of `local`: each owning part that it does not move drops."""
+        taken = self.parts.pop(local, None)
+        dropped = self.dropped_parts.pop(local, [])
+        span = self.taken_at.pop(local, None)
+        if taken is None or local not in self.check.owning or span is None:
+            return
+        ends = [*taken, *dropped, *self.lent.get(local, ())]
+        missing = _missing_part(self.check, p.Local(local), ends, span)
+        if missing is not None and self.report:
+            self.left_parts.append((f"the take of {show(taken[0])} leaves {show(missing)}, "
+                                    f"which owns, with no drop", span))
+
     def borrowed(self, local: LocalId) -> bool:
         """Whether `local` is an `InGuaranteed` parameter: a view of the place of the
         caller."""
@@ -305,3 +343,68 @@ def _within(outer: p.Place, place: p.Place) -> bool:
         if not isinstance(place, (p.Field, p.Index, p.Downcast, p.Deref)):
             return False
         place = place.base
+
+
+def _lent_parts(check: Check) -> dict[LocalId, list[p.Place]]:
+    """The lent parts of each local that the step of an iterator writes: the item of the
+    `Some`, or each lent element of a tuple item (the `peeks` of the iterator)."""
+    lent: dict[LocalId, list[p.Place]] = {}
+    for block in check.function.blocks:
+        for stmt in block.statements:
+            if not (isinstance(stmt, st.Call) and isinstance(stmt.callee, st.Indirect)
+                    and isinstance(stmt.dest, p.Local)):
+                continue
+            ty = check.operand_type(stmt.callee.operand, stmt.span)
+            walked = None if ty is None else deref_type(ty)
+            peeks = walked.peeks if isinstance(walked, IteratorType) else ()
+            item = p.Field(p.Downcast(stmt.dest, "Some"), 0)
+            parts = [item] if peeks == (True,) else [
+                p.Field(item, index) for index, peek in enumerate(peeks) if peek]
+            if parts:
+                lent.setdefault(stmt.dest.id, []).extend(parts)
+    return lent
+
+
+def _missing_part(check: Check, place: p.Place, ends: list[p.Place],
+                  span: Span) -> Optional[p.Place]:
+    """The first owning part of `place` that no place of `ends` holds, and that is not
+    split into parts that the places of `ends` hold. None when there is no such part."""
+    if any(_within(end, place) for end in ends):
+        return None
+    inside = [end for end in ends if _within(place, end)]
+    if not inside:
+        ty = check.operand_type(p.Copy(place), span)
+        return place if ty is not None and owns_resource(ty, check.drops) else None
+    for part in _parts_of(check, place, inside, span):
+        missing = _missing_part(check, part, ends, span)
+        if missing is not None:
+            return missing
+    return None
+
+
+def _parts_of(check: Check, place: p.Place, inside: list[p.Place],
+              span: Span) -> list[p.Place]:
+    """The parts of `place` that a take splits: each field of a struct or of the payload of
+    a variant, and each variant of an enum that a place of `inside` reads."""
+    ty = check.place(place, span).ty
+    if isinstance(ty, EnumType):
+        steps = (_step_under(place, end) for end in inside)
+        return list(dict.fromkeys(step for step in steps if isinstance(step, p.Downcast)))
+    if isinstance(place, p.Downcast):
+        enum = check.place(place.base, span).ty
+        variant = enum.get_variant(place.variant) if isinstance(enum, EnumType) else None
+        count = 0 if variant is None else len(variant.associated_types)
+    elif isinstance(ty, StructType):
+        count = len(ty.fields)
+    else:
+        return []
+    return [p.Field(place, index) for index in range(count)]
+
+
+def _step_under(outer: p.Place, place: p.Place) -> Optional[p.Place]:
+    """The projection of `place` whose base is `outer`."""
+    while isinstance(place, (p.Field, p.Index, p.Downcast, p.Deref)):
+        if place.base == outer:
+            return place
+        place = place.base
+    return None

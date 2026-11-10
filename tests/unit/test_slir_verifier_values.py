@@ -69,3 +69,28 @@ def test_an_iterator_with_a_part_count_that_is_not_its_row_is_refused():
 
 def test_an_adapter_that_copies_its_inner_iterator_is_refused():
     _refused(_iterator(r.IterEnumerate(ITERATOR), _copy(3)), ITERATOR_VALUE)
+
+
+def test_an_owned_cursor_that_copies_its_container_is_refused():
+    _refused(_iterator(r.IterElements(NUMBERS, False), _copy(2)), ITERATOR_VALUE)
+
+
+def test_an_owned_map_view_that_copies_its_map_is_refused():
+    _refused(_iterator(r.IterMapView(NUMBERS, "keys", False), _copy(2)), ITERATOR_VALUE)
+
+
+def _zip(right: p.Operand, convention: Convention) -> object:
+    """`_1 = zip(move _3, right)` over the owned iterator `_3` and the iterator `_4`."""
+    value = r.Aggregate(r.AggIterator(ITERATOR, r.IterZip(ITERATOR, ITERATOR), True),
+                        (_move(3), right))
+    return _function([BLANK, ITERATOR, NUMBERS, ITERATOR, ITERATOR], _block(
+        0, _ret(), _set(1, value, BAD), _drop(1), _set(0, r.Use(p.Const(k.Blank())))),
+        params=((3, Convention.OWNED), (4, convention)))
+
+
+def test_a_zip_that_moves_its_right_iterator_passes():
+    _passes(_zip(_move(4), Convention.OWNED))
+
+
+def test_a_zip_that_copies_its_right_iterator_is_refused():
+    _refused(_zip(_copy(4), GUARANTEED), ITERATOR_VALUE)

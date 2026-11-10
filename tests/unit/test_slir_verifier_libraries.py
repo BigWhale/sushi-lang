@@ -23,6 +23,7 @@ from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.verify import (
     CONVENTIONS, DeclaredParams, declared_params, verify_function)
 from sushi_lang.semantics.typesys import BuiltinType, StructType
+from sushi_lang.semantics.unit_symbols import function_symbol
 
 BAD = Span(7, 5, 7, 20)
 OWNED, GUARANTEED = Convention.OWNED, Convention.GUARANTEED
@@ -89,3 +90,10 @@ def test_a_call_of_a_library_function_with_a_wrong_argument_count_is_refused():
     assert caught.value.code == "CE0158"
     assert caught.value.params["rule"] == CONVENTIONS
     assert "has 0 arguments, and @shout declares 1" in caught.value.params["detail"]
+
+
+def test_a_function_with_a_link_symbol_is_found_by_that_symbol_alone():
+    """One symbol for each row: the link symbol of a library function, never its unit symbol."""
+    funcs, extensions = _library_tables()
+    assert declared_params(funcs, extensions,
+                           st.Direct(function_symbol("shout", UNIT), "shout")) is None

@@ -1675,6 +1675,68 @@ def test_a_part_move_in_a_later_block_is_refused():
     _refused(function, "no use after a move")
 
 
+def _take_one(*drops: st.SlirStatement) -> SlirFunction:
+    """`_1` is a pair of new strings; `_4` takes its first part, after `drops`."""
+    return _function([BLANK, TWO, STRING, STRING, STRING], _block(
+        0, _ret(), *_two(1), _live(4), *drops, _set(4, r.Use(_part(1, 0)), BAD),
+        _drop(4), _dead(4), _dead(1), _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_a_take_of_one_part_that_drops_its_owning_sibling_passes():
+    _passes(_take_one(st.Drop(p.Field(_local(1), 1), SPAN)))
+
+
+def test_a_take_of_one_part_with_no_drop_of_its_owning_sibling_is_refused():
+    """A take spends the whole root, so each other owning part drops at it (ir.md 8.13)."""
+    _refused(_take_one(), "one drop or move on every path")
+
+
+_NESTED = StructType(name="$Tuple<$Tuple<string, string>, string>",
+                     fields=(("0", TWO), ("1", STRING)))
+
+
+def _take_deep(*drops: st.SlirStatement) -> SlirFunction:
+    """`_1` is `((<new>, <new>), <new>)`; `_6` takes `_1.0.0`, after `drops`."""
+    return _function([BLANK, _NESTED, TWO, STRING, STRING, STRING, STRING], _block(
+        0, _ret(), *_two(2), _live(5), _text(5), _live(1),
+        _set(1, r.Aggregate(r.AggTuple(_NESTED), (_move(2), _move(5)))), _dead(5), _dead(2),
+        _live(6), *drops, _set(6, r.Use(p.Move(p.Field(p.Field(_local(1), 0), 0))), BAD),
+        _drop(6), _dead(6), _dead(1), _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_a_deep_take_that_drops_each_owning_sibling_on_its_path_passes():
+    _passes(_take_deep(st.Drop(p.Field(p.Field(_local(1), 0), 1), SPAN),
+                       st.Drop(p.Field(_local(1), 1), SPAN)))
+
+
+def test_a_deep_take_with_no_drop_of_a_sibling_of_its_root_is_refused():
+    _refused(_take_deep(st.Drop(p.Field(p.Field(_local(1), 0), 1), SPAN)),
+             "one drop or move on every path")
+
+
+_TWO_ITEM = EnumType(name="Maybe<$Tuple<string, string>>", variants=(
+    EnumVariantInfo("Some", (TWO,)), EnumVariantInfo("None", ())))
+
+
+def _step_take(peeks: tuple[bool, ...]) -> SlirFunction:
+    """`_2` is the answer of a step of the iterator `_1`; `_3` takes the first element of its
+    item, and nothing drops the second."""
+    item = p.Field(p.Downcast(_local(2), "Some"), 0)
+    step = st.Call(_local(2), st.Indirect(p.Copy(_local(1))), (), SPAN)
+    return _function([BLANK, IteratorType(TWO, peeks=peeks), _TWO_ITEM, STRING], _block(
+        0, _ret(), _live(2), step, _live(3), _set(3, r.Use(p.Move(p.Field(item, 0))), BAD),
+        _drop(3), _dead(3), _dead(2), _drop(1), _set(0, r.Use(p.Const(k.Blank())))),
+        params=((1, OWNED),))
+
+
+def test_a_take_of_an_item_whose_other_element_is_lent_passes():
+    _passes(_step_take((False, True)))
+
+
+def test_a_take_of_an_item_whose_other_element_is_owned_is_refused():
+    _refused(_step_take(()), "one drop or move on every path")
+
+
 def test_a_repeat_run_that_moves_its_value_is_refused():
     repeat = r.Aggregate(r.AggArray(STRINGS, (r.RunRepeat(),)),
                          (_move(2), p.Const(k.Int(2, I32))))

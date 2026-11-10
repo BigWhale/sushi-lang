@@ -7,8 +7,9 @@ it (`copies_with_no_transfer`). In a function that lowering cut from a lambda, a
 is never moved out of, and the environment is never written as a whole: a caller can call the
 closure two times or more (`capture_places`). A closure value is the `FnRef` of its function,
 then one `Copy` or `Move` of a place for each field of its environment (`closure_value`). An
-iterator value has the parts of its row: a lent cursor reads its container with a `Copy`, and
-an adapter moves its inner iterator (`iterator_value`). The `Indirect` call of an `IteratorValue` walk
+iterator value has the parts of its row: a lent cursor reads its container with a `Copy`, an
+owned cursor moves it, an adapter moves its inner iterator, and `zip` moves its right iterator
+too (`iterator_value`). The `Indirect` call of an `IteratorValue` walk
 has an iterator as its operand, and no argument. A local that holds an iterator with a stack
 state never reaches `_0` or an `Owned` argument, except the iterator of a consumer
 (`stack_iterators`).
@@ -88,8 +89,9 @@ _ITERATOR_PARTS: dict[type, int] = {
 
 def iterator_value(check: Check, kind: r.AggIterator, parts: Sequence[p.Operand],
                    span: Span) -> None:
-    """The part count of the row; a lent cursor reads its container, and an adapter and
-    `Iterator.new` move their first part."""
+    """The part count of the row; a lent cursor reads its container. An owned cursor, an
+    adapter and `Iterator.new` move their first part, and `zip` moves its right iterator
+    too."""
     source = kind.source
     wanted = _ITERATOR_PARTS[type(source)]
     if len(parts) != wanted:
@@ -100,9 +102,13 @@ def iterator_value(check: Check, kind: r.AggIterator, parts: Sequence[p.Operand]
         if not isinstance(first, p.Copy):
             check.fail(ITERATOR_VALUE, f"the lent cursor reads {first}, which is no Copy of a "
                                        f"place", span)
-    elif not isinstance(source, (r.IterElements, r.IterMapView, r.IterRange)):
-        if not isinstance(first, p.Move):
-            check.fail(ITERATOR_VALUE, f"the iterator value takes {first}, which is no Move",
+        return
+    taken = [] if isinstance(source, r.IterRange) else [first]
+    if isinstance(source, r.IterZip):
+        taken.append(parts[1])
+    for part in taken:
+        if not isinstance(part, p.Move):
+            check.fail(ITERATOR_VALUE, f"the iterator value takes {part}, which is no Move",
                        span)
 
 

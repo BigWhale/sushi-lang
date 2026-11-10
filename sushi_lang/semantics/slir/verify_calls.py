@@ -76,14 +76,16 @@ def _perk_params(perk_impls: Optional[PerkImplementationTable], symbol: str,
 
 def function_of(funcs: FunctionTable, symbol: str, name: str) -> Optional[FuncSig]:
     """The free function `name` whose symbol is `symbol`: of the unit of that symbol, or of
-    the flat view (an instance of a template of a binary library has no unit)."""
+    the flat view (an instance of a template of a binary library has no unit). Each row has
+    one symbol: its `link_symbol` when the `libraries` step gives it one, else the symbol of
+    its name in its unit."""
     rows: list[tuple[Optional[str], Optional[FuncSig]]] = [
         (unit, own.get(name)) for unit, own in funcs.by_unit.items()]
     rows.append((None, funcs.by_name.get(name)))
     for unit, sig in rows:
         if sig is None or (unit is None and sig.unit_name is not None):
             continue
-        if symbol in (sig.link_symbol, function_symbol(name, unit)):
+        if symbol == (sig.link_symbol or function_symbol(name, unit)):
             return sig
     return None
 
