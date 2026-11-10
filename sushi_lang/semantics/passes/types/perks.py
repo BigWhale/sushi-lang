@@ -228,9 +228,9 @@ def _same_param_type(impl_ty, required_ty, target) -> bool:
     spell a name that the parameter already resolved (or the other way round)."""
     if not isinstance(required_ty, ReceiverType):
         return impl_ty == required_ty
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
+    from sushi_lang.semantics.passes.collect.perks import perk_type_name
     return impl_ty == target or (
-        target is not None and _get_type_name(impl_ty) == _get_type_name(target))
+        target is not None and perk_type_name(impl_ty) == perk_type_name(target))
 
 
 def _signatures_match(impl: FuncDef, required: PerkMethodSignature,

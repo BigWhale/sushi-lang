@@ -8,6 +8,7 @@ initializer, and the `DeclId` of each body.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Iterable, Mapping, Optional, overload
 
 from sushi_lang.internals.errors import raise_internal_error
@@ -21,7 +22,7 @@ from sushi_lang.semantics.generics.name_mangling import extension_decl_symbol, m
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.library_templates import impl_method_symbol
 from sushi_lang.semantics.param_modes import receiver_mode
-from sushi_lang.semantics.passes.collect.perks import _get_type_name
+from sushi_lang.semantics.passes.collect.perks import perk_type_name
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.stdlib_registry import named_methods, stdlib_imports
 from sushi_lang.semantics.type_resolution import require_named_type, resolve_unknown_type
@@ -117,8 +118,8 @@ def declarations(units: Iterable[Unit], tables: SymbolTables, shir: LoweredProgr
     for impl in shipped_perks:
         shipped.extend(builder.shipped_perk_methods(impl))
     return DeclTable(
-        units={unit.name: builder.unit(unit.name, unit.ast) for unit in units
-               if unit.ast is not None},
+        units=MappingProxyType({unit.name: builder.unit(unit.name, unit.ast) for unit in units
+                                if unit.ast is not None}),
         copies=tuple(builder.extension(ext, None) for ext in copies),
         shipped_perks=tuple(shipped),
         shipped_methods=tuple(builder.extension(ext, None) for ext in shipped_methods))
@@ -151,7 +152,7 @@ class _Builder:
                 methods.append(self.perk_method(
                     impl.target_type, method, self.typed_params(method.params), method.ret,
                     method.err_type, self.body(method)))
-            type_name = _get_type_name(impl.target_type)
+            type_name = perk_type_name(impl.target_type)
             if type_name is not None:
                 perk_symbols.extend(impl_method_symbol(type_name, method.name)
                                     for method in impl.methods)

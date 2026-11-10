@@ -832,7 +832,7 @@ class LibraryManifestGenerator:
         """
         from sushi_lang.semantics.library_templates import (
             impl_method_symbol, method_record, serialize_extension)
-        from sushi_lang.semantics.passes.collect.perks import _get_type_name
+        from sushi_lang.semantics.passes.collect.perks import perk_type_name
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.generics.name_mangling import (
             extension_receiver_name, extension_symbol)
@@ -858,7 +858,7 @@ class LibraryManifestGenerator:
                         or isinstance(impl.target_type, GenericTypeRef)
                         or getattr(impl, "is_synthesized", False)):
                     continue
-                type_name = _get_type_name(impl.target_type)
+                type_name = perk_type_name(impl.target_type)
                 if type_name is None or type_name in kept:
                     continue
                 base_name = getattr(impl.target_type, "generic_base", None) or type_name
@@ -1016,7 +1016,7 @@ class LibraryManifestGenerator:
                              template_keys: set[tuple[str, str]]) -> list[dict]:
         """Every concrete implementation of a shipped perk, once per (type, perk)."""
         from sushi_lang.semantics.library_templates import serialize_perk_impl
-        from sushi_lang.semantics.passes.collect.perks import _get_type_name, covering_base
+        from sushi_lang.semantics.passes.collect.perks import perk_type_name, covering_base
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         records: list[dict] = []
@@ -1029,7 +1029,7 @@ class LibraryManifestGenerator:
                     continue
                 if isinstance(impl.target_type, GenericTypeRef):
                     continue
-                type_name = _get_type_name(impl.target_type)
+                type_name = perk_type_name(impl.target_type)
                 if type_name is None or (type_name, impl.perk_name) in seen:
                     continue
                 # A monomorphized copy of a template is an ordinary implementation by

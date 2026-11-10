@@ -233,7 +233,7 @@ class PerkImplementationTable:
         from sushi_lang.semantics.generics.types import TypeParameter
         if isinstance(ty, TypeParameter):
             return ty.promises(perk_name)
-        type_name = _get_type_name(ty)
+        type_name = perk_type_name(ty)
         if type_name is None:
             return False
         if self.implements(type_name, perk_name):
@@ -261,7 +261,7 @@ class PerkImplementationTable:
         from sushi_lang.semantics.generics.types import TypeParameter
         if isinstance(target_type, TypeParameter):
             return self._promised_method(target_type, method_name)
-        type_name = _get_type_name(target_type)
+        type_name = perk_type_name(target_type)
         if type_name is None:
             return None
         found = self._method(type_name, method_name)
@@ -282,7 +282,7 @@ class PerkImplementationTable:
         if isinstance(target_type, TypeParameter):
             perks = self.promising_perks(target_type, method_name)
             return perks[0] if perks else None
-        type_name = _get_type_name(target_type)
+        type_name = perk_type_name(target_type)
         if type_name is None:
             return None
         for perk_name in self.by_type.get(type_name, set()):
@@ -397,7 +397,7 @@ def _as_implementation(sig: PerkMethodSignature, param: Type) -> FuncDef:
         self_mode_span=sig.self_mode_span)
 
 
-def _get_type_name(ty: Optional[Type]) -> Optional[str]:
+def perk_type_name(ty: Optional[Type]) -> Optional[str]:
     """Extract a string name from a Type for use in perk implementation tables."""
     if ty is None:
         return None
@@ -853,7 +853,7 @@ class PerkCollector:
         er.emit(self.r, ERR.CE4017, impl.perk_name_span or impl.loc,
                 type=display_type(target_type))
         type_name = (target_type.base_name if isinstance(target_type, GenericTypeRef)
-                     else _get_type_name(target_type))
+                     else perk_type_name(target_type))
         if type_name is not None:
             self._refuse_methods(type_name, impl)
         return True
@@ -1085,7 +1085,7 @@ class PerkCollector:
                                or impl.loc, ERR.CE2420):
             return False
 
-        type_name = _get_type_name(target_type)
+        type_name = perk_type_name(target_type)
         if type_name is None:
             return False
 

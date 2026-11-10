@@ -266,9 +266,9 @@ def method_record(method) -> dict:
 
 def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
     """Produce the manifest record for one concrete perk IMPLEMENTATION."""
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
+    from sushi_lang.semantics.passes.collect.perks import perk_type_name
 
-    type_name = _get_type_name(impl.target_type)
+    type_name = perk_type_name(impl.target_type)
     return with_doc({
         "type": type_name,
         "perk": impl.perk_name,

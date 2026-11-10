@@ -41,9 +41,9 @@ class PerkCopies:
         from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
         from sushi_lang.semantics.generics.extensions import (
             bounds_hold_for, monomorphize_perk_impl)
-        from sushi_lang.semantics.passes.collect.perks import _get_type_name
+        from sushi_lang.semantics.passes.collect.perks import perk_type_name
 
-        type_name = _get_type_name(target)
+        type_name = perk_type_name(target)
         if type_name is None:
             return False
         if isinstance(target, DynamicArrayType):
