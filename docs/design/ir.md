@@ -960,7 +960,9 @@ a call target too. An integer literal and a `ConstRef` need a value too. A `Cons
 constant that has no value is an internal error (`ConstRef with no value`), and so is an
 initializer with no value that is no empty container (`Return with no value`). A function-typed constant (`const fn() -> i32 F = area`) has a
 `ScalarConstant` whose type is the function type and whose value is the symbol of the
-function; a generic function has no value there. When the initializer has an error, that error is the diagnostic, and the
+function. A generic function has no value there, because a constant holds no instance:
+the initializer is [CE2093](../error-catalog.md#ce2093), also at a function type that solves
+the type arguments, with the text of a function type that does not solve them (as `main`). When the initializer has an error, that error is the diagnostic, and the
 walk of the body ends there (`AfterAnError`, 7.9). A `var` whose initializer is an empty
 container has no value, and that is no fault: its global is zero. The captures of a lambda are in `Bindings` and not in the
 body, so the check cannot count them.
@@ -1532,9 +1534,10 @@ of written type arguments after a type or a value and a dot (`xs.get@(i32)(0)`,
 `Vec.at@(i32)(1)`, `Sign.Plus@(i32)(1)`) carries `call`, the call or the construction with no
 type arguments, and `type_args_loc`. Lowering sets both. `typecheck` reports CE6102 at
 `type_args_loc` and then types `call`, so the later faults of the call are reported too, and
-the hole answers what `call` answers. A struct behind an alias with written
-type arguments (`geo.Box@(i32)(1)`) has no `call`, and the walk of the body ends at it
-after its error. At the end of an analysis with no error, an error hole whose code no
+the hole answers what `call` answers. A struct construction behind an alias with written
+type arguments (`geo.Box@(i32)(1)`) has no `call`: it is the hole of the form with no alias,
+CE6102 at the hole, and its help names the construction with the alias
+(`let geo.Box@(i32) v = geo.Box(1)`). At the end of an analysis with no error, an error hole whose code no
 diagnostic reported is an internal error, CE0000 (`check_error_holes`). The error hole of a name with no declaration, of a jump outside a loop and of
 a `self` in a static is the error of a pass before `typecheck` (`REPORTED_BEFORE`,
 `visit/results.py`): when that error is reported, the hole has no answer and the walk of the
