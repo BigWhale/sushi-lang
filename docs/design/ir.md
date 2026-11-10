@@ -1,11 +1,13 @@
 # The Sushi IR: SHIR and SLIR
 
-**Status: ACCEPTED, and BUILT in part.** The design was measured against the tree on
+**Status: ACCEPTED, and BUILT.** The design was measured against the tree on
 2026-10-11, at `cc4088ca`, and ruled on the same day. Every design question has a ruling.
-SHIR and SLIR exist on the branch `feat/ir-shir-slir`. Phases 0 to 5 of the migration are
-done: the spine, Tier A (plain values), Tier B (ownership) and Tier C (generics, closures,
-iterators), closed at Gate 5. Phase 6 (Tier D) is next. A construct that a stage does not handle
-is an internal error (CE0000). The numbers in sections 1 to 5 describe the tree at
+SHIR and SLIR are built on the branch `feat/ir-shir-slir`. All phases of the migration are
+done: the spine, Tier A (plain values), Tier B (ownership), Tier C (generics, closures,
+iterators), Tier D (the rest of the language) and Phase 7 (the declaration table, the tests,
+the dead code and the documents). The backend emits each function from SLIR, and no backend
+module reads the AST. A construct that a stage does not handle is an internal error (CE0000). The
+numbers in sections 1 to 5 describe the tree at
 `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
@@ -128,12 +130,14 @@ function type, and the emitter passes the environment first); 7.3, 7.6, 8.2, 8.3
 is a `Method` callee, and its body lowers as the body of `drop`); 8.2, 8.9 and 8.13 (a
 view local and an address local have one write on each path, so an alternative binds an
 owning payload or a reference); 7.3 and 7.9 (the arm of a generic call makes a late request
-directly, and the callee row records the instance); 8.6 and 8.13 (a `BeginBorrow` names its view, and the
+directly, and the callee row records the instance); 8.6 and 8.13 (a `BeginBorrow` names its view,
+and the
 view-region check reads the view from the statement). Amended on 2026-11-06 by group X2:
 7.3, 7.6, 7.9, 8.6, 8.9 and 8.13 (an `Extern` callee carries the link name of its C
 function; it lowers to a `Direct` callee with no module, whose row the verifier finds in
 the external table; the emitter makes the C copy of a `string` argument at the call and
-frees it after the call, so no SLIR local holds it). Amended on 2026-11-07 by ruling R-AZ: 7.9 and 8.13 (a store into one capture slot is
+frees it after the call, so no SLIR local holds it). Amended on 2026-11-07 by ruling R-AZ: 7.9 and
+8.13 (a store into one capture slot is
 legal, and the environment as a whole is never written; CE2405 stays for a second capture of
 an owning local and for a use after a move from a rebound function value). Amended on
 2026-11-08 by ruling R-BA: 4.4 and 7.9 (a `let` of a `let` that holds a lent iterator moves
@@ -154,6 +158,11 @@ checks that each owning part that it does not move drops; the part rules of an o
 and of `zip`; one symbol for each row of the function table; the `ptr` quarantine of the
 verifier does not read a perk method or a conversion) and 8.2 (a body with a receiver that no
 perk implementation holds is an internal error).
+Amended on 2026-11-10 by chunk P7.3 (the close of the migration): the status above; 6.4 (the
+per-body gate keeps 8 declaration modules, each with its reason, and the AST fields that a
+pass writes after `collect`); 7.9 (`AfterAnError` is the final rule); and N4 (the stated
+divergences that Gate 6 and Phase 7 found: the text of CE0052, a private constant behind an
+alias, a constant of a wrong type in a `let`, and the chain of perk copies).
 
 ## The decisions, in one place
 
@@ -397,7 +406,8 @@ old pipeline refused it with CE2008, or with the internal error CE0024 on a conc
 (`extend Box@(Pt) with Named`) (7.3); on such an instance an override of `Display`, `Eq` or
 `Hashable` runs, where the old pipeline used the derived form with no diagnostic (7.3); and
 the receiver of a perk method with a `peek self` or a `poke self` is evaluated one time, where
-the old pipeline evaluated it two times (8.3). A call of a method that two perk templates give one target
+the old pipeline evaluated it two times (8.3). A call of a method that two perk templates give one
+target
 (CE4015 at the second implementation) gets no second error: the old pipeline also gave a
 false CE2008 at the call.
 
@@ -426,6 +436,17 @@ These diagnostics differ from the old pipeline too, and each one is a stated div
   the old pipeline rendered a closed set of AST shapes and printed `<expression>` for any
   other (ruling R-BE). A field after a root that a call or a construction gives stays
   `<expression>` (8.5)
+- the text of CE0052 for an array of `ptr` (`tests/array/hash/test_err_hash_array_of_ptr`) names
+  the type that the check could not hash, `ptr[]`, where the old pipeline named `ptr`. The code
+  is the same (ruling D4 asks for the same CE0052; the text is the part that changed)
+- a private constant of another unit behind an alias is CE3005 one time, where the old pipeline
+  gave it three times (7.3); a constant of a wrong type in a `let` is CE2002, where the old
+  pipeline gave the internal error CE0000
+- a chain of perk copies that grows without end, where the late copy of a function is refused
+  at the bound, is CE0151
+  (`tests/generics/instance_grows_without_end/test_err_perk_copy_chain_stops_at_the_bound`).
+  The old pipeline gave CE0149 at the template: "the check of the template did not report a
+  fault that a copy of it reports"
 - written type arguments on a struct construction are CE6102, with no alias
   (`Pair@(i32, i32)(1, 2)`) and behind an alias (`geo.Box@(i32)(1)`), where the old pipeline
   compiled the program (ruling R-AT, 7.4)
@@ -438,6 +459,17 @@ These diagnostics differ from the old pipeline too, and each one is a stated div
 - a `foreach` binder of type `ptr` in a unit with no `unsafe external` block
   (`foreach(ptr p in 0..1)`) is CE5009 alone: the written type has the error, so the binder
   gets no CE2034 too
+
+Three fixtures differ from the old pipeline too, and each difference is stated above: the two
+fixtures `test_err_dw_use_after_change_in_arm` and `test_err_dw_use_after_change_on_exit`
+(`tests/iterators/direct_walks/`) give CE2412, a true borrow error, where the old pipeline
+compiled the program (ruling R-BB); and `test_err_ptr_foreach_item_type`
+(`tests/ffi/ptr_body_gate/`) gives CE5009 alone (the last item above).
+
+One fault is the same on the old pipeline and on the new one, and is not a divergence: a static
+with a method-level type parameter on a generic target
+(`extend Box@(T) static make@(U)(nom T a, U seed)`) is the internal error CE0000 "no copy of
+'make' applies" on both. It is the issue #1276.
 
 The new pipeline also corrects faults of the old pipeline that changed no rule. Each rule that
 is named here is stated in the section that the text gives:
@@ -528,7 +560,8 @@ of an owning value, the drop set and the order of `drop()`, the derived methods 
 concrete type, the layout, E3 ([CE2084](../error-catalog.md#ce2084)) and an owning lambda
 parameter ([CE2094](../error-catalog.md#ce2094)). Any other error from an instance is
 [CE0149](../error-catalog.md#ce0149): a fault that the template check missed. A type argument
-that holds a reference in a field (`Box@(peek i32)`) is no [CE2419](../error-catalog.md#ce2419), in the template check and in
+that holds a reference in a field (`Box@(peek i32)`) is no [CE2419](../error-catalog.md#ce2419), in
+the template check and in
 each copy. The template check runs also when the copies of the function grow without end, so
 its faults come beside [CE0151](../error-catalog.md#ce0151).
 
@@ -542,7 +575,8 @@ An `Iterator@(T)` is a value (`iteration.md`, ruling 10). It has the shape of a 
 view, a range, `Iterator.new`, each lazy adapter) supplies its own three functions.
 
 The loop kind is still chosen statically. `typecheck` decides it once
-(`check_iterator_walk`, `passes/types/visit/walks.py`): a range or a built-in producer written as the iterable is a DIRECT
+(`check_iterator_walk`, `passes/types/visit/walks.py`): a range or a built-in producer written as
+the iterable is a DIRECT
 walk with no call through `next_fn` and no allocation, a type with `next()` is a protocol
 walk, and every other iterator is a walk of a value through its `next_fn`. `LoopKind`
 (7.7) has a variant for each.
@@ -681,7 +715,8 @@ Only these may be asked of the AST once the migration completes:
   (`nom_marked`, `unchecked`, `borrowed_return`, `dont_panic`) is syntax and stays.
 - **Be rewritten by more than one pass.** `monomorphize` is the single sanctioned
   rewriter (ruling Q1 keeps it there). The template check writes nothing on the AST: it reads
-  the SHIR body of the written template, and makes a header with no body. Every other pass treats the AST as immutable.
+  the SHIR body of the written template, and makes a header with no body. Every other pass treats
+  the AST as immutable.
 - **Be read by the backend.** The new backend reads SLIR and nothing else.
 - **Be read by a per-body pass.** Once the passes move, the BODY modules of `typecheck`,
   `lift` and `borrow` read SHIR only. The declaration half of `typecheck` and `borrow`
@@ -825,7 +860,8 @@ of a driver module. SHIR has no declaration, and question 4 of 6.1 allows a read
 declaration. Ruled 2026-10-11. As built, the gate scans each import of the AST (the node
 module, `ast_walk` and the AST builder) in `passes/types/`, `passes/borrow/` and
 `passes/lift.py`. A body module imports none. Each declaration module of `typecheck` is a
-row of the gate, with each name that it may import: a declaration node, a walk of the
+row of the gate (8 rows in all, and none of them is a module of `borrow` or `lift`), with each
+name that it may import: a declaration node, a walk of the
 declarations, and the types that the source writes. A row names no expression and no
 statement, with one named exception: the link name of an extern declaration. One row reads
 a body: `externals.py` walks the types that the bodies of a unit write (`body_types`, the
@@ -957,7 +993,8 @@ is syntax, like `ShirParam.ty`: the user wrote it. `declared_loc` is where the u
 it, and a type mismatch puts its note there ("declared here").
 
 A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)` or of
-a `foreach((a, b) in ...)`, the `let` of a `foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
+a `foreach((a, b) in ...)`, the `let` of a `foreach(_?? in ...)`. It has no source name and no span,
+and no diagnostic names it. The
 `_` binder of a `foreach` with no `??` binds nothing: its source holds `Discard` (7.5). The
 AST builder also binds the whole value of a destructuring `let` to a hidden name, but no
 SHIR node reads it, so it is not a local of the body: `Destructure` holds the value, and
@@ -1074,13 +1111,16 @@ the internal error [CE0156](../error-catalog.md#ce0156), which names the answer,
 of the node, its position and the body. Each expression node needs a type, the reference of
 a call target too. An integer literal and a `ConstRef` need a value too. A `ConstRef` of a
 constant that has no value is an internal error (`ConstRef with no value`), and so is an
-initializer with no value that is no empty container (`Return with no value`). A function-typed constant (`const fn() -> i32 F = area`) has a
+initializer with no value that is no empty container (`Return with no value`). A function-typed
+constant (`const fn() -> i32 F = area`) has a
 `ScalarConstant` whose type is the function type and whose value is the symbol of the
 function. A generic function has no value there, because a constant holds no instance:
 the initializer is [CE2093](../error-catalog.md#ce2093), also at a function type that solves
-the type arguments, with the text of a function type that does not solve them (as `main`). When the initializer has an error, that error is the diagnostic, and the
+the type arguments, with the text of a function type that does not solve them (as `main`). When the
+initializer has an error, that error is the diagnostic, and the
 walk of the body ends there (`AfterAnError`, 7.9). A `var` whose initializer is an empty
-container has no value, and that is no fault: its global is zero. The captures of a lambda are in `Bindings` and not in the
+container has no value, and that is no fault: its global is zero. The captures of a lambda are in
+`Bindings` and not in the
 body, so the check cannot count them.
 
 The body half of `typecheck` walks a SHIR body through ONE table of arms keyed on the SHIR
@@ -1209,7 +1249,8 @@ other place that is not a `LocalRef`, a `Field` or an `Index` is not typed yet.
 binder with a written type wants that type, and the written type is checked as the type of
 a `let` is checked ([CE2001](../error-catalog.md#ce2001)). A `Place` wants the type of its
 place. The place is a `LocalRef`, a `StorageRef` or a `Field`, and it is checked as the
-target of a rebind or of a field write, and an `Index` as an element write: a field or an element of a constant
+target of a rebind or of a field write, and an `Index` as an element write: a field or an element of
+a constant
 is CE2096 at the place. A `Place` of any other place is not typed yet. A bare binder and a
 `_` want no type, and a `Nested` target wants
 what its targets want. Then the value is checked. A `TupleInit` with one part for each
@@ -1261,7 +1302,8 @@ method in `_ARRAY_METHODS`. The call answers the type of its row after each faul
 `starts_with` and `eq_range` take a `T[]`, a `T[N]` and an empty `new()` as their argument. The
 slot argument of `push` and `insert` is `Owned`, because the slot takes it by position. Every
 other argument is `Guaranteed`, and a `nom` on it is [CE2427](../error-catalog.md#ce2427). A
-repeat count of a fixed literal that the compiler cannot read is [CE2017](../error-catalog.md#ce2017), also in an argument
+repeat count of a fixed literal that the compiler cannot read is
+[CE2017](../error-catalog.md#ce2017), also in an argument
 position.
 
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
@@ -1285,7 +1327,8 @@ writes the global row of the node: the symbol of the global of the `var`, from
 `global_symbol` (`semantics/unit_symbols.py`). Another unit's private `var` is
 [CE3005](../error-catalog.md#ce3005), bare or behind an alias, and a bare name that two
 imports bring is [CE3012](../error-catalog.md#ce3012), as for a constant. A rebind of a
-private `var` of another unit behind an alias is [CE3005](../error-catalog.md#ce3005) one time, and the text names a
+private `var` of another unit behind an alias is [CE3005](../error-catalog.md#ce3005) one time, and
+the text names a
 variable. A rebind of a
 `var` checks its value at the type of the `var`, as a rebind of a local does: a value that
 does not fit is CE2002 at the statement. A `var` has an address, so a field write and an
@@ -1353,7 +1396,8 @@ from yielding that type. The `string` family has its arm too. A string method ha
 arguments of its row in `METHOD_SPECS` (a wrong count is
 [CE2009](../error-catalog.md#ce2009) from the arity row of the family, and a wrong argument
 type is [CE2006](../error-catalog.md#ce2006) from the one argument check), and the call
-yields the return type of its row. A wrong count skips the argument types. The `result` and `maybe` families have their arms too. `is_ok`,
+yields the return type of its row. A wrong count skips the argument types. The `result` and `maybe`
+families have their arms too. `is_ok`,
 `is_err`, `is_some` and `is_none` yield a `bool`, `realise` and `expect` yield the payload
 `T`, and `err` yields a `Maybe@(E)`. A wrong count is [CE2009](../error-catalog.md#ce2009)
 from the arity row of the family, and it skips the argument types. The one argument check
@@ -1398,7 +1442,8 @@ the `Result` of the instance. The receiver of each is `Owned` (8.3), and the rea
 of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
 arm too (see "An array" above). The iterator family has its arm too
 (`check_iterator_method`, `passes/types/visit/iterator_methods.py`). It solves an adapter
-with the same solver. A method type parameter that nothing solves is [CE2063](../error-catalog.md#ce2063), and the pass
+with the same solver. A method type parameter that nothing solves is
+[CE2063](../error-catalog.md#ce2063), and the pass
 then checks no mode of the arguments. The hash of an array is the `array_hash` family, which a
 `Hashable` implementation overrides. Its call is a contract call, which SLIR lowering makes
 the intrinsic `hash` (7.6, 8.6). The arm of the family is in `visit/contract_calls.py`,
@@ -1442,7 +1487,8 @@ method-level type parameter: `resolve_user_method` (`visit/method_templates.py`)
 extension rungs, then solves a method-level parameter from the arguments with the one leading
 solver. The copy is cut for the call, and it is one body of the copy fixpoint. A copy with
 solved method arguments has its own row (`ExtensionTable.method_generic_copies`), because it
-is no answer of (type, name), and `ResolvedCall.type_args` gives them to the symbol. A payload method on a `Result` or a `Maybe` that no method of
+is no answer of (type, name), and `ResolvedCall.type_args` gives them to the symbol. A payload
+method on a `Result` or a `Maybe` that no method of
 the wrapper answers (`xs.first_big().doubled()`) is [CE2515](../error-catalog.md#ce2515)
 at the call, with a note at the receiver, through the one emitter
 (`reject_unhandled_channel_chain`, `calls/methods.py`). A static of a primitive type name
@@ -1653,8 +1699,10 @@ type arguments, and `type_args_loc`. Lowering sets both. `typecheck` reports CE6
 the hole answers what `call` answers. A struct construction behind an alias with written
 type arguments (`geo.Box@(i32)(1)`) has no `call`: it is the hole of the form with no alias,
 CE6102 at the hole, and its help names the construction with the alias
-(`let geo.Box@(i32) v = geo.Box(1)`). At the end of an analysis with no error, an error hole whose code no
-diagnostic reported is an internal error, CE0000 (`check_error_holes`). The error hole of a name with no declaration, of a jump outside a loop and of
+(`let geo.Box@(i32) v = geo.Box(1)`). At the end of an analysis with no error, an error hole whose
+code no
+diagnostic reported is an internal error, CE0000 (`check_error_holes`). The error hole of a name
+with no declaration, of a jump outside a loop and of
 a `self` in a static is the error of a pass before `typecheck` (`REPORTED_BEFORE`,
 `visit/results.py`): when that error is reported, the hole has no answer and the walk of the
 body goes on, so the later faults of the body are reported too (a CE2002 after a CE1001);
@@ -1667,11 +1715,13 @@ call names an argument too (`m.missing(a: 2)`), the hole has both codes, the `me
 the `named`, and `typecheck` reports CE2008 and then CE6104, the order of `main`. The
 collect pass reports CE0134 to the program and not to the reporter of the unit, so the hole
 of a `self` in a static walks on with no count of the unit (`REPORTED_TO_THE_PROGRAM`);
-the check of the error holes at the end of the analysis still holds it. An error of the construct around the hole can come first, and the hole
+the check of the error holes at the end of the analysis still holds it. An error of the construct
+around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
 the first node that is not constant (CE0108), and the borrow of a slice in a `let peek` is
 refused as a borrow of a temporary (CE2404). A new case of this kind is added with its
-fixture (`tests/ir/shir/error_holes/`). So an error hole can never hide a fault in a correct program: when lowering
+fixture (`tests/ir/shir/error_holes/`). So an error hole can never hide a fault in a correct
+program: when lowering
 and `typecheck` disagree, the compile stops loudly. Lowering and `typecheck` also read ONE
 answer for a name behind a namespace: lowering resolves it (`DeclLookup.member_kind`), and
 `typecheck` reads the SHIR node and does not resolve the name a second time. Ruled
@@ -1679,7 +1729,8 @@ answer for a name behind a namespace: lowering resolves it (`DeclLookup.member_k
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`, and `marker_loc` is
 the span of the written marker (a `peek x` and a `poke x` from the marker, and a whole bloom
-`xs...`), where a diagnostic of the marker stands. The RESOLVED convention is `typecheck`'s: an unmarked
+`xs...`), where a diagnostic of the marker stands. The RESOLVED convention is `typecheck`'s: an
+unmarked
 argument in a consuming position (constructor, container insert, array element) resolves
 to `Owned` with no marker. At a call of a declared parameter, the one argument check
 (`passes/types/arguments.py`) resolves the convention of each argument from the declared
@@ -1914,7 +1965,8 @@ where [CE2423](../error-catalog.md#ce2423) points for a range, whose values have
 storage; a `Ref` of a pattern binding has no `loc` (`None`). A type
 written on a plain binder is the `declared` type of its local. A type written on a `??`
 binder names the value that the `let` at the top of the body unwraps, so it is the
-`declared` type of the local of that `let`. Which WALK the iterable gets is `typecheck`'s answer (7.7), and it
+`declared` type of the local of that `let`. Which WALK the iterable gets is `typecheck`'s answer
+(7.7), and it
 holds no operand of its own.
 
 `is_init` carries the one semantic difference between `Let` and `Rebind`: a rebind
@@ -2173,7 +2225,8 @@ both ask the one pure function in `semantics/integer_patterns.py` (`literal_valu
 `pattern_interval`). It reads the written constant of the SHIR pattern and the type of the
 scrutinee, which is a row already. Ruling R-W does not apply here: its reason is a context
 that lowering does not know, and the scrutinee type is known to both readers. A bound is a
-literal and not an expression, so lowering does not call the constant evaluator for it, and a constant
+literal and not an expression, so lowering does not call the constant evaluator for it, and a
+constant
 keeps its spelling (a radix, a byte). `Variant` names its enum by the written name, the
 alias included: a name that is not an enum is an error of `typecheck`, not of lowering.
 `Tuple` mirrors `TuplePattern`, `Own` mirrors `OwnPattern`, and `Or` mirrors `OrPattern`:
@@ -2222,7 +2275,8 @@ pass reads an AST stamp for a late instance.
 pass before `typecheck` reported, or whose answer that error takes away, sets the flag, gets
 no answer, and the walk goes on: a `??` in a bare body (CE0131 of `collect`), a call of a
 method whose declaration `collect` refused, a construction of a name whose second
-declaration `collect` refused (CE1005, CE0006), an error hole of `REPORTED_BEFORE` (7.4), a `match` whose scrutinee has an error
+declaration `collect` refused (CE1005, CE0006), an error hole of `REPORTED_BEFORE` (7.4), a `match`
+whose scrutinee has an error
 (7.8), and a name of a constant whose initializer has an error (7.3). A body with the flag
 gets no completeness check (`check_answers`). It goes on to `lift` and `borrow` as a body with
 an error of `typecheck` (see "A body with an error of `typecheck`" below). The flag is a
@@ -2251,7 +2305,8 @@ reads one field. A change of the owner in such an arm,
 after the end of the region, is legal, and a use after that change is CE2412.
 
 **Ruling S6: one fact, one writer.** Before this ruling, `typecheck` and `borrow` both
-wrote the walk in place and the iterator state (1.2). Each of those facts is a question about ownership, and
+wrote the walk in place and the iterator state (1.2). Each of those facts is a question about
+ownership, and
 `borrow` sees every input that `typecheck` sees. So `borrow` writes them, and `typecheck`
 writes nothing about them. A `Cursor` walk needs no state, because its `LoopKind` says so.
 
@@ -2430,7 +2485,8 @@ unknown type would reach SLIR as a local with no type. `typecheck` checks the pa
 of a function or a method (CE0140 and CE0107) before it gives the body to `lift`. A body
 with a path fault goes on, marked as the next paragraph tells, so that `borrow` reports its
 errors too. A body whose walk in `typecheck` reported an error goes on in the same way. A walk that
-ends after an error (`AfterAnError`, below) does not give its body to the next pass. The body of a template check is read
+ends after an error (`AfterAnError`, below) does not give its body to the next pass. The body of a
+template check is read
 in the overlay of its check, and an error of `borrow` there refuses the template as an
 error of `typecheck` does.
 
@@ -2462,7 +2518,8 @@ A check that the arm of a known node makes on the SHAPE of an unknown part still
 CE2404 for a `poke` of a field of a temporary, and CE2437 for a `let` of a slice of a
 temporary. A write of a constant is a known statement too: its error is CE2096 of
 `typecheck`, and the write gate takes the constant as storage, so it gives no CE2429
-(`reads.chain_call_boundary`). So `borrow` gives the diagnostic of each statement and each expression that has
+(`reads.chain_call_boundary`). So `borrow` gives the diagnostic of each statement and each
+expression that has
 its answers, also in the statement of the error of `typecheck`, and never a diagnostic that
 reads an answer that `typecheck` did not give. What `borrow` assumes in an unknown part: no
 local moves there, and no view starts there. So a use of a name after an unknown call that
@@ -2478,17 +2535,22 @@ construct that the pass does not handle is an internal error (CE0000, `dispatch.
 In a body that has an error, or in a program that has one, such a construct is the trace of
 that error: a `Loop` with no kind, a write of a C global after
 [CE5016](../error-catalog.md#ce5016), an error hole after the error that it stands for. So
-`unhandled` raises `AfterAnError` (`internals/diagnostics.py`) there, the pass ends the walk of the body, and the error
+`unhandled` raises `AfterAnError` (`internals/diagnostics.py`) there, the pass ends the walk of the
+body, and the error
 of the program is the diagnostic: a diagnostic in the construct or after it does not come.
 `typecheck` asks the errors of the unit and of the program (`has_an_error`), and `borrow`
 also asks whether the body is marked `typecheck_failed`. A program that ends with no error
-never ends a walk in this way.
+never ends a walk in this way. This is the final rule, and no later work changes it: the
+delayed form (the walk ends with no code of its own, and the error that came first is the
+diagnostic) stays, and no pass reads on after an error to give a second one. A correct
+program that reaches an unhandled construct gets CE0000.
 
 **`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`) and stops at
 nothing. For each `Lambda`, a lambda in a lambda too, in the order of the walk, it writes the
 symbol, the symbol of the body with the suffix `.__lambda_<n>`, and the captures of the node
 in slot order. A template check and an initializer never lower, so their name is
-the prefix. A conversion lowers, so its symbol is the prefix, as for each other body. A body with no `Lambda` has an empty `LiftResults`, and the dump prints no answer
+the prefix. A conversion lowers, so its symbol is the prefix, as for each other body. A body with no
+`Lambda` has an empty `LiftResults`, and the dump prints no answer
 of `lift`. `check_lift` runs, and the body goes to `borrow`, also a body with an error of
 `typecheck`.
 
@@ -2528,7 +2590,8 @@ each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
 `tests/unit/test_borrow_dispatch_is_total.py`). The lookup of an arm and `unhandled` are
 the one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
 too: a class with no row is an internal error at the span of the node, and so is a
-construct that an arm does not check (after an error, see above). The walk of a block reads the statements that a path reaches
+construct that an arm does not check (after an error, see above). The walk of a block reads the
+statements that a path reaches
 (`reached_statements`, 7.2). A call of a built-in method has its
 arm, and `receiver_convention` (8.3) gives its receiver its convention. The arm reads the
 receiver (a use after a move is CE2405). A `Guaranteed` receiver stays with its owner, the
@@ -2551,8 +2614,10 @@ arguments with the convention of each row: `string.from_bytes` consumes its arra
 `Extern` callee is a call of its arguments with the convention of each declared mode: a
 `poke u8[]` is the exclusive borrow of its place for the statement, and each other argument
 is a read. The typecheck pass records only the callees
-`Free`, `Stdlib`, `Extern`, `Intrinsic`, `Builtin`, `BuiltinStatic`, `Method` and `Static`, so a call with another
-callee in this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is keyed
+`Free`, `Stdlib`, `Extern`, `Intrinsic`, `Builtin`, `BuiltinStatic`, `Method` and `Static`, so a
+call with another
+callee in this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is
+keyed
 by `LocalId`, because a hidden local has no source name, and a diagnostic names a local by
 the name of its `ShirLocal`. The pass decides the `Ownership` of each consuming use ONE
 time, with `classify()`, and one function writes the row (`consume.decide`, gate:
@@ -2583,7 +2648,8 @@ the body goes to the SLIR lowering (8.2). The SLIR stage takes no initializer bo
 reporter of the unit holds one (`SlirStage.failed`). So no body with an error of
 `typecheck` or of `borrow` reaches the SLIR lowering, and neither does a body of a program
 whose declaration has an error (CE2416 of an enum payload): the program gets no internal
-error of the verifier after its real error. After an analysis with no error, the pipeline checks the error holes
+error of the verifier after its real error. After an analysis with no error, the pipeline checks the
+error holes
 (`check_error_holes`), and the backend emits each body from its SLIR (8.2).
 
 **Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
@@ -2631,7 +2697,8 @@ literal that owns, as the scrutinee, builds NO tuple (ruling 3 of `tuples.md`): 
 is a root of its own, which the match reads; a part is a consuming use only when the match
 consumes (`match nom (a, b):` takes each part), and a binder of a part views that part, so
 its owners are the owners of the part. A binder of a part of a tuple literal is a view of that
-part, and [CE2411](../error-catalog.md#ce2411) and [CE2412](../error-catalog.md#ce2412) at it carry a note at the binder. A tuple literal of plain parts
+part, and [CE2411](../error-catalog.md#ce2411) and [CE2412](../error-catalog.md#ce2412) at it carry
+a note at the binder. A tuple literal of plain parts
 is checked as above. A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
@@ -2664,7 +2731,8 @@ borrow of a local (CE2403, CE2407, CE2408, CE2412); a field of a constant goes t
 `reject_borrow_of_constant` at the name of the constant, and a field of a temporary is
 CE2404. Its text spells each field after a root that a call of a function or a construction
 gives as `<expression>` (`make().x` is `<expression>.x`), the text of `main`
-(`temporary_spelled`). A field write goes through `reject_readonly_write` at the root, at the statement:
+(`temporary_spelled`). A field write goes through `reject_readonly_write` at the root, at the
+statement:
 CE2408, CE2414, CE2421, CE2422, CE2426, and CE2429 for a root past a call boundary, with a
 note at the boundary. Then the field is read, the value is checked, a change of the root
 invalidates each let-borrow of it (`check_owner_not_borrowed`, CE2412 at a later use), and
@@ -2755,7 +2823,8 @@ changes each let-borrow of the owner (CE2412 at a later use of it). Then the own
 (`record_owners`), and the local has a region row to its last use. A binder of a match that
 only borrows a root that is no place is CE2404: a root that a name keeps through a `??`, a
 get-out or an `or_err` is borrowed. A `let peek` or a `let poke` whose value is no place is
-[CE2404](../error-catalog.md#ce2404), and the reference freezes no owner, so a later change of the owner is no [CE2412](../error-catalog.md#ce2412). The
+[CE2404](../error-catalog.md#ce2404), and the reference freezes no owner, so a later change of the
+owner is no [CE2412](../error-catalog.md#ce2412). The
 binders of one pattern are siblings, and their
 region is over the arm. A `poke` of a `var` changes the `var` for each let-borrow of it. An
 extension receiver is read before the arguments and takes its borrow after them, so a
@@ -3114,15 +3183,18 @@ more. The value of the constant is the value of the constant evaluator (Q5). The
 the declaration table folds it, and the `GlobalDecl` of the constant holds it (6.3). The
 backend makes the global of each constant and each `var` from that value, in its declaration
 round (`codegen_llvm.py`, `_emit_global_constant`), and names it with the symbol of the
-record (`global_symbol`, `unit_symbols.py`). This is the one path of a global: no SLIR function makes the value of a
+record (`global_symbol`, `unit_symbols.py`). This is the one path of a global: no SLIR function
+makes the value of a
 global, and the dump shows no function for an initializer. A constant is an `internal`
 `.rodata` global in each module. A `var` is defined in the module of its unit, and
 declared in each other module, so a body of any module reads and writes it by address: the
 emitter finds the global of a `Global` place by its symbol (`values.global_address`), and a
-symbol that the module does not hold is an internal error. A body reads a constant as a `Const` operand (8.5), and
+symbol that the module does not hold is an internal error. A body reads a constant as a `Const`
+operand (8.5), and
 never reads its global. The round makes a global for each constant and each `var`, or it
 raises an internal error; it never drops one. A struct value and an enum value go through the
-converter of 8.5, and so does an array value, also in a payload or a field. Every fault of the round is an internal error: a constant that the evaluator
+converter of 8.5, and so does an array value, also in a payload or a field. Every fault of the round
+is an internal error: a constant that the evaluator
 gives no value, a constant with no type, a scalar of
 a type that has no LLVM constant, and a value that the converter of 8.5 cannot write.
 
@@ -3132,7 +3204,8 @@ storage of each local and the LLVM block of each `BlockId`). The stage entry
 (`emit_function`) takes `codegen` first and makes the state; every other function of the
 package takes the state first and reads the codegen from it, so one route reaches it. The
 declarations of a module come from the declaration table (6.3). Each body comes from the
-`SlirFunction` of the analysis, keyed by the `DeclId` of the body that its record holds: `codegen_for` hands the SLIR of the
+`SlirFunction` of the analysis, keyed by the `DeclId` of the body that its record holds:
+`codegen_for` hands the SLIR of the
 program to the backend (`SlirBodies`), and a body that has no `SlirFunction` there is an
 internal error. There is no fallback to the AST body emitter. The emitter defines the LLVM
 function that the declaration round made for the symbol. One function derives the symbol of
@@ -3166,7 +3239,8 @@ every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`). 
 frees its buffer only when its owned flag is set. An enum goes to the destroy half of its
 lifecycle handler, and so do a `List@(T)`, a `HashMap@(K, V)` and an `Own@(T)`, which free
 what they hold and then their buffer. A type of the `Drop` set calls the symbol of its
-`drop()` first, and then drops its owning fields (see the body of a `Drop` implementation above). `DropIfSet`
+`drop()` first, and then drops its owning fields (see the body of a `Drop` implementation above).
+`DropIfSet`
 loads its flag and drops only while the flag is `true`.
 An enum is `{i32 tag, [K x i64] data}`: an `Aggregate` of a variant goes through the enum
 emitter with one value for each payload, which the emitter writes at the offsets of the
@@ -3197,9 +3271,11 @@ row of `METHOD_FAMILIES` (`backend/slir/methods.py`), by the family of the metho
 receiver is the first operand, and every operand is evaluated before the family emits. The
 family keeps its emitters and gives them the operand values (Q7). The primitive family, the
 `string` family, the `result` family and the `maybe` family have a row. A family with no row
-is an internal error. Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3);
+is an internal error. Each operand of a call of the `result` or the `maybe` family is `Guaranteed`
+(8.3);
 any other convention is an internal error. Each method that the row of the family emits
-(`is_ok`, `is_err`, `is_some`, `is_none`) takes only the receiver and answers a `bool`. `realise` and `err` reach no family: they lower
+(`is_ok`, `is_err`, `is_some`, `is_none`) takes only the receiver and answers a `bool`. `realise`
+and `err` reach no family: they lower
 as `expect` does, to a switch on the tag (8.9), and the copy of an owning value is a `Clone`
 on its own path. The `Clone` rvalue has ONE emit arm, over `copy_out` (the one deep-clone
 entry of `backend/ownership.py`), and no family calls `copy_out` for `realise` or `err`.
@@ -3258,7 +3334,8 @@ can name is in exactly one of three sets (gate:
 
 - **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`, `function`,
   `foreign_ptr`). No method of the family changes or consumes its receiver. A store of the
-  `foreign_ptr` family writes the C memory that the pointer points to, not the `ptr`. The receiver is `Guaranteed`. One row of the string
+  `foreign_ptr` family writes the C memory that the pointer points to, not the `ptr`. The receiver
+  is `Guaranteed`. One row of the string
   family is the exception: `concat_in_place` (`CONCAT_IN_PLACE`), the call of the concat
   peephole (8.9). Only SLIR lowering makes it, and no program can name it: it is no method
   of `METHOD_TYPE_REGISTRY`. It writes its receiver (`Inout`) and reads its one argument
@@ -3275,7 +3352,8 @@ can name is in exactly one of three sets (gate:
   (`POSITION_ARGUMENTS`). `insert` on a `HashMap` takes its key and its value `Owned`,
   because the map stores both. Each other argument is `Guaranteed`, the key of a lookup
   too. `alloc` of an `Own` takes its value `Owned`, and `destroy` writes its receiver.
-  A family of `RULED_EFFECT_FAMILIES` has a read-or-write partition of its methods. All four families are in it (`array`, `list`, `hashmap`,
+  A family of `RULED_EFFECT_FAMILIES` has a read-or-write partition of its methods. All four
+  families are in it (`array`, `list`, `hashmap`,
   `own`), so every call of an effect family has a receiver rule.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
   `nom self` method, so the answer is per method. The receiver of a method that declares
@@ -3287,7 +3365,8 @@ can name is in exactly one of three sets (gate:
   wrapper, as on `main`: the wrapper stays usable after the call, and the lowering copies an
   owning payload out of it with a `Clone` (8.9).
 
-The `derived_clone` family is in no set of the partition and has no row of `METHOD_FAMILIES`: `x.clone()` is never a
+The `derived_clone` family is in no set of the partition and has no row of `METHOD_FAMILIES`:
+`x.clone()` is never a
 `Builtin` call in SLIR, because it lowers to the rvalue `Clone` (8.7). One deep
 copy has one seam. The refusal of `.clone()` on a type that declares a resource stays in
 `typecheck`. The families of the contract calls, `derived_hash`, `array_hash` and
@@ -3621,7 +3700,8 @@ A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod
 method has no operand types in the callee, because each operand is a place or a constant
 that has its own type. The receiver is the FIRST operand of the call, and it comes before
 the arguments in the order of evaluation. Its convention is the answer of the receiver
-partition (`receiver_convention`, 8.3). A family with no answer is an internal error in `typecheck` or in
+partition (`receiver_convention`, 8.3). A family with no answer is an internal error in `typecheck`
+or in
 `borrow` first, and its call in lowering is the internal error CE0000 too, never a `Guaranteed`
 receiver by default. The printer writes the call as
 `builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
@@ -3799,7 +3879,8 @@ A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
 `symbol` is `method_symbol` of the type of the receiver (the type row of `recv` with no
 `peek` or `poke`, or `ty`), the method and `ResolvedCall.unit`, so two units' private
-methods of one name are two symbols (C5). The receiver of a `Method` is the FIRST operand of the call,
+methods of one name are two symbols (C5). The receiver of a `Method` is the FIRST operand of the
+call,
 with the convention `receiver` of the callee row, and the arguments come after it with the
 conventions of their rows. A `Static` has no receiver. The printer writes the call as `call
 @Counter.bump(copy _1 @inout, const 4_i32 @guaranteed)`. The emitter calls the function
@@ -3898,7 +3979,8 @@ its value, and the emitter writes a deep copy of it into each slot, over `copy_o
 seam of the `Clone` arm). A value that is a new value is a temporary of the statement, which
 drops it at the end of the statement.
 
-`Len(place)` is the length of a `T[N]`, a `T[]`, a `List@(T)` or a `string`, as an `i32`. `Slice(place,
+`Len(place)` is the length of a `T[N]`, a `T[]`, a `List@(T)` or a `string`, as an `i32`.
+`Slice(place,
 start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is exclusive. Its value
 is a `T[]` descriptor that views the storage of `place`. **A VIEW** is a local that a `Slice`
 writes, or a view local that a `Copy` writes (8.2): it owns nothing, so drop placement gives
@@ -3946,7 +4028,8 @@ contiguous cursor, `IterMapView(container, view, lent)` for each view of a `Hash
 and `other` is the iterator type of the right side of `zip`. Its parts are the operands
 that the row reads: the container (a read of its place when `lent`, else its move), the first
 value and the count of a range, the value of `Iterator.new`, and for an adapter the move of
-the inner iterator, then the move of the function value or of the right iterator. `heap` is the answer of `OwnershipResults` (7.9), and the kind carries it, so the
+the inner iterator, then the move of the function value or of the right iterator. `heap` is the
+answer of `OwnershipResults` (7.9), and the kind carries it, so the
 emitter decides nothing: a LENT iterator that no `peek` return takes out of the function has
 its state on the stack (`heap: false`), and an OWNED iterator, or a LENT iterator that
 leaves through a `peek` return, has its state in a heap block (`heap: true`). The emitter of
@@ -4093,7 +4176,8 @@ address local holds it, because a `Copy` of an address local reads the value beh
 read of the field through a method or an operator has no arm, as on `main`.
 
 A `Match` evaluates its scrutinee in the scope of the match statement. A place (a local, a
-field, an element) is read where it is, with `Copy` in each test. A new value, and a scrutinee that the match takes (`consumes`), go into a
+field, an element) is read where it is, with `Copy` in each test. A new value, and a scrutinee that
+the match takes (`consumes`), go into a
 temporary of the statement: each test reads the temporary, and the statement drops it at its
 end, or at the exit of an arm (a `return`, a `break`, a `continue`). A constant of an enum
 goes into a temporary too, because a `Discriminant` reads a place.
@@ -4134,15 +4218,18 @@ the place of the binder on each path: the scrutinee, or the part of a tuple lite
 the path reads (`(W.A(x), _) | (_, W.A(x))` gives two owners). Each path writes the
 `BeginBorrow` of each owner of the region, with ONE id for the region on every path, before
 its write, so the paths that meet at the arm body bring the same open regions by their ids
-(8.6), and at the body the region is over the owners of every path. A `nom` binder in an alternative takes the variant
+(8.6), and at the body the region is over the owners of every path. A `nom` binder in an alternative
+takes the variant
 whole on its path, as a plain arm does. When the paths take from two temporaries (two parts
 of a tuple literal: `(W.A(nom x), _) | (_, W.A(nom x))`), each temporary that some paths take
 and some do not gets a drop flag (8.10, rule 4): each path writes it after its binders, `false`
 where the path takes the temporary and `true` where it does not, so the temporary is unknown
-at the body, and the end of the arm and each exit from it drop it by its flag. Each path writes its binders in the order of the
+at the body, and the end of the arm and each exit from it drop it by its flag. Each path writes its
+binders in the order of the
 first path, with its `nom` binders last, and starts from the state before the paths, so
 each path gives the same ids to its regions and the same state to the body (an internal
-error if two paths give two moved sets or two sets of region ids). With one path, the block of the body writes the
+error if two paths give two moved sets or two sets of region ids). With one path, the block of the
+body writes the
 binders first.
 With two or more paths that write a binder, each path ends in a
 block of its own that writes the binders of that path and goes to the body. Each arm body is
@@ -4218,7 +4305,8 @@ locals, and the locals that own nothing, and nothing else:
    of a rebind (rule 6) alike. Where the state is exact, the state decides, as in rule 3:
    a live local gets `Drop`, a moved one nothing. The flag is the local right after its
    local; the flag of a parameter comes after the last parameter, and it is set `true` at
-   the entry for an `Owned` parameter and `false` for a `Guaranteed` one (rule 5). The flag is set `true` right after the statement that declares its local,
+   the entry for an `Owned` parameter and `false` for a `Guaranteed` one (rule 5). The flag is set
+   `true` right after the statement that declares its local,
    after the temporaries of the statement die, and right after the store of a rebind. It
    is set `false` right after the statement that moves its local, before the temporaries
    of the statement die, and before each jump to another block, so that each path into a
@@ -4436,7 +4524,8 @@ Runs after lowering, before the backend. It checks:
   (`verify_flow._missing_part`)
 - no `Move` out of a `Global`: a `Global` is never a `Move` operand, also when it owns
 - the `ptr` quarantine (S25): no `ptr`, and no type that holds one (`Maybe@(ptr)`), is a
-  parameter or the return of a public function that is not an extern. `public_signatures.py` stays the language rule
+  parameter or the return of a public function that is not an extern. `public_signatures.py` stays
+  the language rule
   (CE5002, CE5008), and the verifier only checks it again (`verify_quarantine.py`). The
   rule reads the return slot and each parameter of a function whose declaration, found by
   its symbol, is `public`: a free function or an extension method. A method of a perk
@@ -4486,12 +4575,14 @@ Runs after lowering, before the backend. It checks:
   variant, an rvalue or a constant, names a variant of its enum type and gives one part for
   each value of its payload, of the type of that value
 - a struct value: an `Aggregate(AggStruct)` or an `Aggregate(AggTuple)` rvalue, and a constant
-  `Aggregate` with no variant and of no array type, is of a struct type and gives one part for each field, of the
+  `Aggregate` with no variant and of no array type, is of a struct type and gives one part for each
+  field, of the
   type of that field. One check of the parts serves an enum value and a struct value
 - an array value: an `Aggregate(AggArray)` is of a `T[N]` or a `T[]` type and gives the
   parts of each run (8.7): a value of the element type, an `i32` count and an `i32` first
   value of a sequence, whose element is an `i32`. The value of a `RunRepeat` is never a
-  `Move`: the run borrows it. The counts of a `T[N]` are constants that add up to `N`. A constant `Aggregate` of a `T[N]` gives one part for each element, of the
+  `Move`: the run borrows it. The counts of a `T[N]` are constants that add up to `N`. A constant
+  `Aggregate` of a `T[N]` gives one part for each element, of the
   element type
 - a length and a slice: `Len` reads a `T[N]`, a `T[]`, a `List@(T)` or a `string`, and
   `Slice` reads a `T[N]` or a `T[]` with two `i32` bounds
@@ -4522,7 +4613,8 @@ Runs after lowering, before the backend. It checks:
   local`, `VIEW_LOCAL` of `verify_rules.py`, which `verify_regions.py` reports)
 - an address local (8.2): ONE `Ref` writes it on each path, as the writes of a view local
   are counted, and a `Ref` writes a local, never a part of one. At each use, a region over
-  the root of the place of each of its `Ref`s is open. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its
+  the root of the place of each of its `Ref`s is open. It is never the place of a `DropIfSet` as a
+  whole and never `Move`d, at its
   root or
   at a part; the write of an owning part drops the old part through the address (8.10,
   rule 6). It is the place of a `Drop` as a whole only at a rebind through it: the next
@@ -4580,7 +4672,8 @@ view local outside its regions is `a view local`): a dataflow
 gives each block the set of open regions at its top, every path into a block brings the
 same set of region ids, the owners of a region at a block are the owners that each path
 brings (two parts of a tuple literal, 8.9), the checks of the uses and of the owners read
-the answer of the dataflow, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
+the answer of the dataflow, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout`
+argument of
 an owner counts at its root and at each projection of it. It runs after the structure check
 and before the dataflow of the moves and the drops, which does not read a view local.
 `verify_values.py` holds the checks of a function value and of an iterator value: the
@@ -4626,11 +4719,13 @@ of a binary or a hybrid library finds its row in the function table or in the ex
 table that the `libraries` step fills from the manifest (8.6, S26). An instance of a
 template of a binary library has no unit: the flat view of the function table holds its
 row, and its symbol has no unit prefix. Each row has one symbol: its `link_symbol` when the
-`libraries` step gives it one, else the symbol of its name in its unit (`function_of`). The verifier does not check a shape that no lowering makes yet,
+`libraries` step gives it one, else the symbol of its name in its unit (`function_of`). The verifier
+does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
 place that is no local, no element of a local and no `Global`, and a `DropIfSet` of a place
 that is no local and no `Global`.
-A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
+A projection of a `Global` is checked against the type that the `Global` carries. The negative case
+of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`,
 `tests/unit/test_slir_verify_regions.py` for the views and the regions,
 `tests/unit/test_slir_verifier_globals.py` for the drop of a `Global`, and
