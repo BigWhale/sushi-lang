@@ -191,8 +191,11 @@ class DropPlacement:
         return local in self._owning_addresses or (local in self._owning
                                                    and local not in self._moved)
 
-    def is_lent(self, root: p.Place) -> bool:
-        """Whether an open region has the local or the global `root` as an owner."""
+    def is_lent(self, place: p.Place) -> bool:
+        """Whether an open region has the root of `place` as an owner: a write of `place`
+        changes that owner, so a new value that reads the view goes into a temporary first,
+        and the region ends before the store (ir.md 8.10, rule 6)."""
+        root = p.root_of(place)
         return any(root in region.owners for region in self._open)
 
     def holds_own_value(self, local: LocalId) -> bool:

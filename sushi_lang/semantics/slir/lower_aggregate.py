@@ -172,19 +172,22 @@ def field_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> Non
     """`p.x := v` and `a[i] := v`: the new value first, then the store into the projection.
     `and` and `or` go into a temporary first, because the right operand reads the place
     again. When the place holds an index, a value that is no constant goes into a
-    temporary first too: the index and its check come after the whole value. A write of an
-    owning field or element drops the old value (`part_write`)."""
+    temporary first too: the index and its check come after the whole value. So does a
+    value of a place whose root a view lends (`is_lent`). A write of an owning field or
+    element drops the old value (`part_write`)."""
     if low.owns(low.type_of(target)):
         part_write(low, stmt, target)
         return
     value = low.value(stmt.value)
     indexed = any(isinstance(step, (e.Index, e.Slice))
                   for step in walk_place(target, Step.MEMBER | Step.INDEX).path)
-    if isinstance(value, ShortCircuit) or (indexed and not (
+    place = None if indexed else place_of(low, target)
+    first = indexed or (place is not None and low.placement.is_lent(place))
+    if isinstance(value, ShortCircuit) or (first and not (
             isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
         value = r.Use(p.Copy(p.Local(low.temporary(value, low.type_of(stmt.value),
                                                    stmt.value.loc))))
-    low.write(place_of(low, target), value, stmt.loc)
+    low.write(place_of(low, target) if place is None else place, value, stmt.loc)
 
 
 def part_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> None:
