@@ -149,6 +149,11 @@ is checked in `verify_globals.py`).
 Amended on 2026-11-10 by shape S30 (Phase 7): 6.3 (the declaration table: its fields, its
 builder and its readers), 6.4 (the third gate loses the declaration round) and 8.2 (the
 declaration round reads the table, and the global round takes the folded value from it).
+Amended on 2026-11-10 by chunk P7.0c: 8.13 (a take spends the whole root, and the verifier
+checks that each owning part that it does not move drops; the part rules of an owned cursor
+and of `zip`; one symbol for each row of the function table; the `ptr` quarantine of the
+verifier does not read a perk method or a conversion) and 8.2 (a body with a receiver that no
+perk implementation holds is an internal error).
 
 ## The decisions, in one place
 
@@ -3083,7 +3088,8 @@ below).
 As built: the stage finds the implementation of the body in the perk table
 (`perk_impl_of`, `semantics/slir/lower_signature.py`), and the symbol is
 `method_symbol` of the target with no unit, the symbol that the declaration round of the
-backend gives the method. The SLIR of a body that holds a value of
+backend gives the method. A body with a receiver that the perk table does not hold is an
+internal error (CE0000), never a free function. The SLIR of a body that holds a value of
 the type has a `Drop(_n)` of the value at each point where a value of any other owning type
 drops: the scope exit in reverse declaration order, the path that does not move it, the old
 value of a rebind. A value that a call takes drops in the callee, and a field take spends
@@ -4420,13 +4426,23 @@ Runs after lowering, before the backend. It checks:
   `Move` of another sub-place moved EARLIER IN THE SAME BLOCK is legal when neither place
   is a projection of the other (the parts are disjoint). A write, a `StorageLive`, a
   `StorageDead` or a `Drop` of the root ends that permission, and so does the end of the
-  block. Any other read or move of the root after a part move is a use after a move
+  block. Any other read or move of the root after a part move is a use after a move. At the
+  end of a take (a write, the storage or a drop of the root, or the end of the block), each
+  owning part of the root that the take does not move has a `Drop` earlier in the block, of
+  the part or of a part that holds it; a struct, a tuple and the payload of a variant split
+  into their fields. A lent part of the answer of the step of an iterator (the `peeks` of
+  the `Iterator@(T)` of the callee, 4.4) owns nothing of its own and needs no `Drop`. The
+  rule `one drop or move on every path` reports it after each other rule of the dataflow
+  (`verify_flow._missing_part`)
 - no `Move` out of a `Global`: a `Global` is never a `Move` operand, also when it owns
 - the `ptr` quarantine (S25): no `ptr`, and no type that holds one (`Maybe@(ptr)`), is a
   parameter or the return of a public function that is not an extern. `public_signatures.py` stays the language rule
   (CE5002, CE5008), and the verifier only checks it again (`verify_quarantine.py`). The
   rule reads the return slot and each parameter of a function whose declaration, found by
-  its symbol, is `public`: a free function or an extension method
+  its symbol, is `public`: a free function or an extension method. A method of a perk
+  implementation and a conversion carry no marker, and each is as visible as its target
+  type. The verifier does not read the visibility of a type, so it does not check them:
+  `public_signatures.py` alone holds the rule for those two kinds
 - every block ends in exactly one terminator, and every `BlockId` exists
 - every `Drop` targets an owning type
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
@@ -4525,8 +4541,9 @@ Runs after lowering, before the backend. It checks:
 - an iterator value: an `Aggregate(AggIterator)` has the parts of its row (8.7): one for
   `IterElements`, `IterMapView`, `IterNew`, `IterEnumerate` and `IterCloneEach`, two for
   `IterRange`, `IterMap`, `IterFilter` and `IterZip`. The part of a lent cursor is a `Copy`
-  of the place of its container. The first part of `IterNew` and of each adapter row is a
-  `Move` (`verify_values.iterator_value`)
+  of the place of its container, and the part of an owned cursor is a `Move` of it. The
+  first part of `IterNew` and of each adapter row is a `Move`, and so is the second part of
+  `IterZip`, the right iterator (`verify_values.iterator_value`)
 - a stack-state iterator never leaves: a local that an `Aggregate(AggIterator)` with
   `heap: false` writes, and each local that it moves into, never reaches `_0` and is never
   the operand of an `Owned` argument (8.7), except the iterator of a consumer
@@ -4608,7 +4625,8 @@ row. A `Direct` callee whose symbol is the `link_symbol` of a function, a method
 of a binary or a hybrid library finds its row in the function table or in the extension
 table that the `libraries` step fills from the manifest (8.6, S26). An instance of a
 template of a binary library has no unit: the flat view of the function table holds its
-row, and its symbol has no unit prefix. The verifier does not check a shape that no lowering makes yet,
+row, and its symbol has no unit prefix. Each row has one symbol: its `link_symbol` when the
+`libraries` step gives it one, else the symbol of its name in its unit (`function_of`). The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
 place that is no local, no element of a local and no `Global`, and a `DropIfSet` of a place
 that is no local and no `Global`.
