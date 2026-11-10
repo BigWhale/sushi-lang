@@ -1,0 +1,7 @@
+# The one fixture of its directory. The runner tests in tests/unit/runner/ select this
+# directory when they need a real run of exactly one fixture. A fixture that another area
+# adds cannot change that count. Do not add a second fixture here.
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    return 0

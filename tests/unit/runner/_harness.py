@@ -18,6 +18,9 @@ PROJECT_ROOT = TESTS_DIR.parent
 RUN_TESTS = TESTS_DIR / "run_tests.py"
 ENHANCED = TESTS_DIR / "enhanced_test_runner.py"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+#: A `--filter` that selects ONE fixture and no other: `tests/runner_probe/one_fixture/` holds
+#: the one fixture, so a fixture that another area adds cannot change the count.
+ONE_FIXTURE = "runner_probe/one_fixture/"
 
 # tests/ is not a package; the harness modules import each other flat.
 if str(TESTS_DIR) not in sys.path:

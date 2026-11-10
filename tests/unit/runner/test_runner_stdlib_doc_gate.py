@@ -15,12 +15,10 @@ import os
 import subprocess
 from pathlib import Path
 
-from _harness import PROJECT_ROOT, run_tests
+from _harness import ONE_FIXTURE, PROJECT_ROOT, run_tests
 from run_tests import (
     DOC_GATE_MODULES_ENV, _doc_gate_selection, doc_gate_modules, doc_gate_program,
 )
-
-ONE_FIXTURE = "diagnostics/borrow_help/"
 
 UNDOCUMENTED = """\
 ##: A synthetic module for the doc-block gate. :##
