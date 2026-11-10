@@ -418,6 +418,18 @@ These diagnostics differ from the old pipeline too, and each one is a stated div
   the old pipeline rendered a closed set of AST shapes and printed `<expression>` for any
   other (ruling R-BE). A field after a root that a call or a construction gives stays
   `<expression>` (8.5)
+- written type arguments on a struct construction are CE6102, with no alias
+  (`Pair@(i32, i32)(1, 2)`) and behind an alias (`geo.Box@(i32)(1)`), where the old pipeline
+  compiled the program (ruling R-AT, 7.4)
+- a call with no `nom` marker at a `nom` parameter (`eat(s)`) is CE2427 and does not move the
+  argument, so a later `eat(nom s)` is no CE2405, and the note of the next CE2405 is at the
+  first `nom` use. The old pipeline also moved the argument at the call with no marker
+- a range given to the `zip` adapter (`xs.iter().zip(0..3)`) is CE2122, where the old pipeline
+  gave CE2427; a range given to the free `zip` of `<collections/iter>` adds CE2060, because the
+  call solves no type argument from an argument that has an error
+- a `foreach` binder of type `ptr` in a unit with no `unsafe external` block
+  (`foreach(ptr p in 0..1)`) is CE5009 alone: the written type has the error, so the binder
+  gets no CE2034 too
 
 The new pipeline also corrects faults of the old pipeline that changed no rule. Each rule that
 is named here is stated in the section that the text gives:
@@ -3375,6 +3387,8 @@ type cannot hold is not lowered. The guard is an internal error (CE0000,
 `raise_internal_error`, `Lowering.constant`, `slir/lower.py`) with the detail "a constant
 value that its type cannot hold". The fault is in the constant
 evaluator (#1273 to #1275), and ruling R-AF fixes it after the merge, not on this branch.
+A signed constant whose radix literal fills its bit pattern (`const i8 K = 0xff`) gets this
+internal error too, where the old pipeline compiled the program.
 So `tests/literals/hex_literals/test_hex_literals_constants.sushi` stays red by name at Gate
 6, with R-AF as the reason, until #1273 lands.
 
