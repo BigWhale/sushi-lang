@@ -10,8 +10,9 @@ another unit is CE3005. A node that has an error has no answer.
 
 Lowering makes `T.m(...)` a `Static` call when the enum `T` has no variant `m`. When no
 unit declares a method `m`, the dot of the enum holds no such member: CE2045. The bare
-`T.m` is an error hole that keeps the member, and it is CE2045 too. The hole of a bare
-call with written type arguments on a type name (`Pair@(i32, i32)(1, 2)`) is CE6102.
+`T.m` is an error hole that keeps the member, and it is CE2045 too. The hole of a struct
+construction with written type arguments (`Pair@(i32, i32)(1, 2)`, `geo.Box@(i32)(1)`) is
+CE6102.
 
 A variant of a generic enum (`Maybe`, `Result`, one of the program) takes the instance of its
 position, else the instance that its payload solves (`visit/constructions.py`). A variant of
@@ -93,8 +94,8 @@ def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Sta
 def check_hole(validator: TypeValidator, node: Hole,
                expected: Optional[Type] = None) -> Optional[Type]:
     """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
-    the member, the `Call` hole of written type arguments on a type name
-    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, the hole of written type arguments
+    the member, the hole of written type arguments on a struct construction
+    (`Pair@(i32, i32)(1, 2)`, `geo.Box@(i32)(1)`) is CE6102 at the hole, the hole of written type arguments
     after a dot is CE6102 at the type arguments and answers its `call`, the `RangeExpr` hole of a slice
     with a reversed range is CE2122 at the range, the hole of a named argument is CE6104
     at the hole, and the hole of a name that a namespace does not hold is CE2008 at the
@@ -111,7 +112,7 @@ def check_hole(validator: TypeValidator, node: Hole,
         er.emit_with(validator.reporter, er.ERR.CE6102, node.type_args_loc or node.loc) \
             .help("call the generic function directly, e.g. foo@(i32)(x)").emit()
         return visit.check_expr(validator, node.call, expected)
-    if node.ast_class == "Call" and "CE6102" in node.codes:
+    if "CE6102" in node.codes:
         _reject_construction_type_args(validator, node)
         return None
     reported = False
