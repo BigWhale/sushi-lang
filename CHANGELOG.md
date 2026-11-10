@@ -37,10 +37,10 @@ of these exceptions are faults of the old pipeline that the new one does not hav
 - **Written type arguments on a struct construction are `CE6102`**, with no alias
   (`Pair@(i32, i32)(1, 2)`) and behind an alias (`geo.Box@(i32)(1)`). The old compiler
   accepted them. Write the type in the `let`, or let the arguments solve it.
-- **A bare variant at a position that declares a type is a type error.** `x := Maybe.None`
-  and a bare variant as an argument or a return value are `CE2002`, `CE2003` or `CE2006`.
-  The old compiler gave an internal error, or no diagnostic when the body had another error.
-  A bare variant as the operand of a comparison, of `not` or of a condition is `CE2112`.
+- **A bare variant at a position of a different declared type is a type error.** At an
+  `i32` position, `let i32 y = Maybe.None` and `y := Maybe.None` are `CE2002`,
+  `id(Maybe.None)` is `CE2006`, and `return Maybe.None` is `CE2003`. The old compiler gave
+  an internal error, or no diagnostic when the body had another error.
 - **A constraint that a generic template breaks is `CE4006` at the template.** The text
   names the type parameter (`type T`) with a note at its declaration and a help. The old
   text named the type of the instance and the note "this instance is required by the call
