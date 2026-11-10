@@ -253,7 +253,8 @@ def allocates_nothing(expr: Expr) -> bool:
     Each one is the literal descriptor `{0, 0, null}` and touches no heap, which is what
     lets a unit variable start as one (docs/design/unit-storage.md). `HashMap.new()` is
     not here: it mallocs its buckets on the spot. ONE predicate, read by the typecheck
-    pass and the backend alike, so the two cannot disagree about what qualifies.
+    pass and the declaration table (`decl_table.py`) alike, so the two cannot disagree
+    about what qualifies.
     """
     if isinstance(expr, DynamicArrayNew):
         return True

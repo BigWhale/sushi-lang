@@ -3,15 +3,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import FuncDef, ExtendDef
 from sushi_lang.semantics.typesys import Type as Ty
 
-from .helpers import FunctionHelpers, declare_stdlib_function
+from .helpers import declare_stdlib_function
 from .declarations import FunctionDeclarations
 from .main_wrapper import MainFunctionWrapper
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.semantics.decl_table import FunctionDecl, MethodDecl
 
 
 class LLVMFunctionManager:
@@ -21,19 +21,16 @@ class LLVMFunctionManager:
         """Initialize function manager with all components."""
         self.codegen = codegen
 
-        self.helpers = FunctionHelpers(codegen)
         self.declarations = FunctionDeclarations(codegen)
         self.main_wrapper = MainFunctionWrapper(codegen)
 
-    def emit_func_decl(self, fn: FuncDef,
-                       unit_name: str | None = None) -> ir.Function:
+    def emit_func_decl(self, fn: 'FunctionDecl') -> ir.Function:
         """Create LLVM function prototype for regular function."""
-        return self.declarations.emit_func_decl(fn, unit_name)
+        return self.declarations.emit_func_decl(fn)
 
-    def emit_extension_method_decl(self, ext: ExtendDef,
-                                   unit_name: str | None = None) -> ir.Function:
+    def emit_extension_method_decl(self, ext: 'MethodDecl') -> ir.Function:
         """Create LLVM function prototype for extension method."""
-        return self.declarations.emit_extension_method_decl(ext, unit_name)
+        return self.declarations.emit_extension_method_decl(ext)
 
     def extract_value_from_result_enum(self, result_enum: ir.Value, value_type: ir.Type,
                                        semantic_type: Ty) -> tuple[ir.Value, ir.Value]:

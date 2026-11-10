@@ -1,10 +1,10 @@
 """The symbol of a unit-level global, a constant or a `var`, has one derivation (docs/design/ir.md 8.2).
 
-The back end names each global with `global_symbol`, and the typecheck pass writes the symbol
-of the global of a `var` that a `StorageRef` names as a row, which SLIR lowering reads for a
-`Global` place. SLIR lowering makes no function of an initializer body, so these two are the
-callers. The symbols are the ones that the back end
-links today. The tests call the function over data and scan the Python source; they do not run
+The declaration table names each global with `global_symbol` for the back end (ir.md 6.3),
+and the typecheck pass writes the symbol of the global of a `var` that a `StorageRef` names
+as a row, which SLIR lowering reads for a `Global` place. SLIR lowering makes no function of
+an initializer body, so these two are the callers. The symbols are the ones that the back
+end links today. The tests call the function over data and scan the Python source; they do not run
 the compiler.
 """
 from __future__ import annotations
@@ -60,9 +60,9 @@ def _callers(name: str) -> list[str]:
     return found
 
 
-def test_the_back_end_and_the_typecheck_arm_of_a_var_call_it() -> None:
+def test_the_declaration_table_and_the_typecheck_arm_of_a_var_call_it() -> None:
     assert sorted(set(_callers("global_symbol"))) == [
-        "backend/codegen_llvm.py", "semantics/passes/types/visit/expressions.py"]
+        "semantics/decl_table.py", "semantics/passes/types/visit/expressions.py"]
 
 
 def test_slir_lowering_names_no_constant_declaration() -> None:

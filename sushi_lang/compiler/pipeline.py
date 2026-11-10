@@ -827,7 +827,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                                options, library_linker)
 
 
-def codegen_for(analyzer: SemanticAnalyzer,
+def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit],
                 library_linker: Optional['LibraryResolver'] = None) -> 'LLVMCodegen':
     """One `LLVMCodegen` over the analyzer's program tables.
 
@@ -846,25 +846,25 @@ def codegen_for(analyzer: SemanticAnalyzer,
     which is where the `libraries` step files them.
 
     The SLIR of the program travels the same way: every body that the backend defines
-    comes from the `SlirFunction` of the analysis (docs/design/ir.md 8.2).
+    comes from the `SlirFunction` of the analysis (docs/design/ir.md 8.2). So does the
+    declaration table of `units` (ir.md 6.3), made here, after the last pass of the
+    analysis: the declaration round reads each declaration from it.
     """
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.backend.slir.bodies import SlirBodies
+    from sushi_lang.semantics.decl_table import declarations
 
     tables = analyzer.tables
     cg = LLVMCodegen(struct_table=tables.structs, enum_table=tables.enums,
-                     func_table=tables.funcs, perk_impl_table=tables.perk_impls,
-                     const_table=tables.constants)
+                     perk_impl_table=tables.perk_impls)
     cg.external_table = tables.externals
     cg.library_linker = library_linker
     cg.library_registry = analyzer.library_registry
-    cg.library_perk_impls = analyzer.library_perk_impls
-    cg.library_extensions = analyzer.library_extensions
-    # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
-    # through the same per-unit scope the typecheck pass accepted it under, and a
-    # constant's initializer through the aliases of the unit that wrote it (#561).
-    cg.unit_namespaces = dict(tables.namespaces)
-    cg.slir_bodies = SlirBodies(analyzer.shir, analyzer.slir)
+    cg.decls = declarations(units, tables, analyzer.shir,
+                            copies=analyzer.monomorphized_extensions,
+                            shipped_methods=analyzer.library_extensions,
+                            shipped_perks=analyzer.library_perk_impls)
+    cg.slir_bodies = SlirBodies(analyzer.slir)
     return cg
 
 
@@ -918,7 +918,6 @@ def _emit_library(driver, analyzer, compilation_order, out_path: Path,
         bitcode = driver.compile_to_bitcode(
             compilation_order, debug=options.dump_ll, opt=options.opt,
             verify=not options.no_verify,
-            monomorphized_extensions=analyzer.monomorphized_extensions,
             exported_private_functions=closure_fn_symbols)
 
     source = manifest_gen.source_map(compilation_order) if kind != "binary" else None
@@ -935,7 +934,7 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                         reporter: Reporter, options: BuildOptions, library_linker) -> int:
     """One module for the whole program: a native binary, or a `.slib`."""
     from sushi_lang.backend.driver import LLVMDriver
-    cg = codegen_for(analyzer, library_linker)
+    cg = codegen_for(analyzer, compilation_order, library_linker)
     driver = LLVMDriver(cg)
 
     if options.lib:
@@ -948,8 +947,7 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                                   debug=options.dump_ll, opt=options.opt,
                                   verify=not options.no_verify,
                                   keep_object=options.keep_object,
-                                  main_expects_args=analyzer.main_expects_args,
-                                  monomorphized_extensions=analyzer.monomorphized_extensions)
+                                  main_expects_args=analyzer.main_expects_args)
         written = "native binary"
 
     if options.write_ll:
@@ -976,10 +974,9 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     monomorphized_extensions = analyzer.monomorphized_extensions
 
     from sushi_lang.backend.driver import LLVMDriver
-    cg = codegen_for(analyzer, library_linker)
+    cg = codegen_for(analyzer, compilation_order, library_linker)
     driver = LLVMDriver(cg)
     cg.main_expects_args = analyzer.main_expects_args
-    cg.monomorphized_extensions = monomorphized_extensions
 
     obj_paths: list[Path] = []
     rebuilt = []

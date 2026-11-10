@@ -5,30 +5,9 @@ from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import (
-    UnknownType,
     StructType,
     EnumType,
 )
-
-
-def require_named_type(
-    semantic_type: UnknownType,
-    struct_table: dict[str, StructType],
-    enum_table: dict[str, EnumType],
-) -> StructType | EnumType:
-    """The declaration `semantic_type` names, or the internal error CE0020.
-
-    Named for its CONTRACT, not for its lookup. `semantics/type_resolution.py` has a
-    `resolve_unknown_type` whose contract is the opposite -- a name it cannot place comes
-    back UNCHANGED -- and the back end imports both, so one name for the two read alike at
-    a call site and hid which one applied (#678). Here the caller is about to emit, a
-    name with no declaration cannot be lowered, and the seam says so.
-    """
-    if semantic_type.name in struct_table:
-        return struct_table[semantic_type.name]
-    if semantic_type.name in enum_table:
-        return enum_table[semantic_type.name]
-    raise_internal_error("CE0020", type=semantic_type.name)
 
 
 def require_generic_instance(
@@ -38,10 +17,10 @@ def require_generic_instance(
 ) -> StructType | EnumType | None:
     """The monomorphized instance `semantic_type` names, or the internal error CE0045.
 
-    Named for its CONTRACT, like `require_named_type` above. `TypeResolver` has a
-    `resolve_generic_type_ref` whose contract is the opposite -- a reference it cannot
-    place comes back UNCHANGED -- so one name for the two read alike at a call site and
-    hid which one applied (#717). A type that is not a generic reference is not this
+    Named for its CONTRACT, like `require_named_type` (`semantics/type_resolution.py`).
+    `TypeResolver` has a `resolve_generic_type_ref` whose contract is the opposite -- a
+    reference it cannot place comes back UNCHANGED -- so one name for the two read alike at
+    a call site and hid which one applied (#717). A type that is not a generic reference is not this
     seam's business, and answers None.
     """
     from sushi_lang.semantics.generics.types import GenericTypeRef

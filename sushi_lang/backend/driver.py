@@ -12,7 +12,7 @@ from sushi_lang.semantics.units import Unit
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import ExtendDef
+    from sushi_lang.semantics.decl_table import DeclTable
 
 
 @contextmanager
@@ -69,23 +69,15 @@ def _print_numbered(title: str, module: ir.Module) -> None:
         print(f"{i:4} {line}")
 
 
-def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
+def _set_weak_odr_on_perk_impls(module: ir.Module, decls: 'DeclTable',
+                                units: list[Unit]) -> None:
     """Set weak_odr linkage on every perk-impl method in a library module."""
-    from sushi_lang.semantics.library_templates import impl_method_symbol
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
-
     for unit in units:
-        if unit.ast is None:
-            continue
-        for perk_impl in unit.ast.perk_impls:
-            type_name = _get_type_name(perk_impl.target_type)
-            if type_name is None:
-                continue
-            for method in perk_impl.methods:
-                symbol = impl_method_symbol(type_name, method.name)
-                fn = module.globals.get(symbol)
-                if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
-                    fn.linkage = "weak_odr"
+        unit_decls = decls.unit(unit.name)
+        for symbol in () if unit_decls is None else unit_decls.perk_symbols:
+            fn = module.globals.get(symbol)
+            if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
+                fn.linkage = "weak_odr"
 
 
 class LLVMDriver:
@@ -119,7 +111,6 @@ class LLVMDriver:
         verify: bool = True,
         keep_object: bool = False,
         main_expects_args: bool = False,
-        monomorphized_extensions: Optional[list['ExtendDef']] = None,
     ) -> Path:
         """Compile every unit into one module, and link it to a native executable.
 
@@ -129,7 +120,6 @@ class LLVMDriver:
         """
         cg = self.codegen
         cg.main_expects_args = main_expects_args
-        cg.monomorphized_extensions = monomorphized_extensions or []
 
         mod_ir: ir.Module = cg.build_module_multi_unit(units)
 
@@ -197,12 +187,10 @@ class LLVMDriver:
         debug: bool = False,
         opt: str = "mem2reg",
         verify: bool = True,
-        monomorphized_extensions: Optional[list['ExtendDef']] = None,
         exported_private_functions: frozenset[str] | set[str] = frozenset(),
     ) -> bytes:
         """Compile units to LLVM bitcode without linking to executable."""
         cg = self.codegen
-        cg.monomorphized_extensions = monomorphized_extensions or []
 
         cg.is_library_mode = True
 
@@ -222,7 +210,7 @@ class LLVMDriver:
         # A perk impl may ship through the manifest and be overridden locally. weak_odr,
         # not linkonce_odr: it must survive optimization while unreferenced in the library,
         # and it lets the consumer's strong definition win at link time.
-        _set_weak_odr_on_perk_impls(mod_ir, units)
+        _set_weak_odr_on_perk_impls(mod_ir, cg.declaration_table(), units)
 
         # An export-closure private function must resolve consumer call sites at link
         # time, so promote it to external. A same-name consumer definition is CE5007.

@@ -2,17 +2,16 @@
 
 The scan reads the source of each module of `sushi_lang/backend/` and finds each import of
 the AST (`ast_import_scan.py`): the node module, the AST walks and the AST builder. The
-emitter of the bodies (`backend/slir/`) imports none, and no other module may.
+emitter of the bodies (`backend/slir/`) imports none, and the declaration round reads the
+declaration table of ir.md 6.3 (`semantics/decl_table.py`) and imports none.
 
 `DECLARATION_ROUND` holds the modules that still import the AST, each with the names that
-it imports and the reason. Each one reads the DECLARATIONS of a module: ir.md 8.2 states
-that the declarations of a module come from the AST, until the declaration table of ir.md
-6.3 exists. Two rows read more than a declaration. `codegen_llvm.py` gives the AST
-initializer expression of each constant and each `var` to the constant evaluator, which
-makes the value of the global. `library_manifest.py` walks the body of each exported
-template, for the names that it reads (the export closure) and the types that it writes.
-No row reads a body that SLIR has. The table may only get shorter: a module
-that no longer imports a name of its row fails the gate, and so does a new row.
+it imports and the reason: the stdlib link set and the manifest of a library, which the
+declaration table does not hold yet. `library_manifest.py` reads more than a declaration:
+it walks the body of each exported template, for the names that it reads (the export
+closure) and the types that it writes. No row reads a body that SLIR has. The table may
+only get shorter: a module that no longer imports a name of its row fails the gate, and so
+does a new row.
 """
 from __future__ import annotations
 
@@ -21,23 +20,9 @@ from ast_import_scan import ROOT, scan
 BACKEND = ROOT / "sushi_lang" / "backend"
 _AST = "sushi_lang.semantics.ast"
 _WALK = "sushi_lang.semantics.ast_walk"
-_ROUND = ("Phase 7: the declaration round reads the declarations of the AST (ir.md 8.2); the "
-          "declaration table of ir.md 6.3 does not exist")
-_CONSTANTS = (_ROUND + "; the global round also gives the AST initializer expression of each "
-              "constant and each `var` to the constant evaluator (ir.md 8.2, Q5)")
 
 #: module -> ({AST module: the names it imports}, reason).
 DECLARATION_ROUND: dict[str, tuple[dict[str, frozenset[str]], str]] = {
-    "sushi_lang/backend/codegen_llvm.py": (
-        {_AST: frozenset({"ConstDef", "ExtendDef", "ExtendWithDef", "FuncDef", "VarDef"})},
-        _CONSTANTS),
-    "sushi_lang/backend/driver.py": ({_AST: frozenset({"ExtendDef"})}, _ROUND),
-    "sushi_lang/backend/functions/__init__.py": (
-        {_AST: frozenset({"ExtendDef", "FuncDef"})}, _ROUND),
-    "sushi_lang/backend/functions/declarations.py": (
-        {_AST: frozenset({"ExtendDef", "FuncDef"})}, _ROUND),
-    "sushi_lang/backend/functions/helpers.py": (
-        {_AST: frozenset({"ExtendDef", "FuncDef", "Param"})}, _ROUND),
     "sushi_lang/backend/stdlib_linker.py": (
         {_AST: frozenset({"Program"})},
         "Phase 7: the stdlib modules that a module links are the `use` declarations of "
@@ -53,10 +38,7 @@ DECLARATION_ROUND: dict[str, tuple[dict[str, frozenset[str]], str]] = {
 
 #: The rows at the day of the pin. A row may leave both; none may join.
 PINNED = frozenset({
-    "sushi_lang/backend/codegen_llvm.py", "sushi_lang/backend/driver.py",
-    "sushi_lang/backend/functions/__init__.py", "sushi_lang/backend/functions/declarations.py",
-    "sushi_lang/backend/functions/helpers.py", "sushi_lang/backend/stdlib_linker.py",
-    "sushi_lang/backend/library_manifest.py",
+    "sushi_lang/backend/stdlib_linker.py", "sushi_lang/backend/library_manifest.py",
 })
 
 

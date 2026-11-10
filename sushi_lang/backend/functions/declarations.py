@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import FuncDef, ExtendDef
-from sushi_lang.semantics.unit_symbols import declaring_unit, emitted_symbol, function_symbol
+from sushi_lang.semantics.unit_symbols import emitted_symbol
 from sushi_lang.backend.generics.result_builder import declared_return_ll
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.semantics.decl_table import FunctionDecl, MethodDecl
 
 
 class FunctionDeclarations:
@@ -18,30 +18,27 @@ class FunctionDeclarations:
         """Initialize declarations handler with reference to main codegen instance."""
         self.codegen = codegen
 
-    def emit_func_decl(self, fn: FuncDef, unit_name: str | None = None) -> ir.Function:
+    def emit_func_decl(self, fn: 'FunctionDecl') -> ir.Function:
         """Create LLVM function prototype for regular function.
 
-        `unit_name` is the unit whose declaration this is, and it decides the LLVM
-        symbol (`function_symbol`, the one derivation that SLIR lowering reads too): two
-        units may each declare a private `helper`, and the monolithic path puts both into
-        one module. A synthesized body -- a monomorphized instance, a lifted lambda --
-        belongs to no unit and keeps the bare name it was given.
+        The record names the unit whose declaration this is, and its symbol
+        (`function_symbol`, the one derivation that SLIR lowering reads too): two units may
+        each declare a private `helper`, and the monolithic path puts both into one module.
+        A synthesized body -- a monomorphized instance, a lifted lambda -- goes home to the
+        unit of its template, or keeps the bare name it was given (`declaring_unit`).
 
         The body of a function named `main` is `user_main` (`function_symbol`), with the
         declared signature. In a program, `main` itself is the C entry `int main(int,
         char**)`, which calls it. A library declares no `main` (the entrypoint pass).
         """
-        unit_name = declaring_unit(fn, unit_name)
-        existing = self.codegen.funcs.declared(fn.name, unit_name)
+        existing = self.codegen.funcs.declared(fn.name, fn.unit)
         if existing is not None:
             return existing
 
-        params = self.codegen.functions.helpers.params_of(fn)
-        ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
+        ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in fn.params]
         fnty = ir.FunctionType(declared_return_ll(self.codegen, fn), ll_param_tys)
-        llvm_fn = ir.Function(self.codegen.module, fnty,
-                              name=function_symbol(fn.name, unit_name))
-        for i, (pname, _) in enumerate(params):
+        llvm_fn = ir.Function(self.codegen.module, fnty, name=fn.symbol)
+        for i, (pname, _) in enumerate(fn.params):
             llvm_fn.args[i].name = pname
 
         # Set linkage based on visibility:
@@ -51,9 +48,9 @@ class FunctionDeclarations:
         llvm_fn.linkage = 'external' if fn.is_public and not is_entry else 'internal'
 
         if is_entry:
-            llvm_fn = self._declare_c_main(emitted_symbol(fn.name, unit_name))
+            llvm_fn = self._declare_c_main(emitted_symbol(fn.name, fn.unit))
 
-        self.codegen.funcs.declare(fn.name, llvm_fn, unit=unit_name)
+        self.codegen.funcs.declare(fn.name, llvm_fn, unit=fn.unit)
         return llvm_fn
 
     def _declare_c_main(self, symbol: str) -> ir.Function:
@@ -76,24 +73,20 @@ class FunctionDeclarations:
             c_main.args[1].name = "argv"
         return c_main
 
-    def emit_extension_method_decl(self, ext: ExtendDef,
-                                   unit_name: str | None = None) -> ir.Function:
+    def emit_extension_method_decl(self, ext: 'MethodDecl') -> ir.Function:
         """Create LLVM function prototype for extension method.
 
         The method is filed under the symbol its call site names. A method that a
-        binary library ships keeps the name its bitcode gave it, `link_symbol`.
+        binary library ships keeps the name its bitcode gave it (`link_name`).
         """
-        func_name = self.codegen.functions.helpers.get_extension_method_name(ext, unit_name)
-
         param_types = []
         param_names = []
 
         # A STATIC method has no receiver (#542): the parameter list is the arguments
-        # alone, and `receiver_mode` must never be reached for one.
-        if ext.target_type and not getattr(ext, "is_static", False):
-            from sushi_lang.semantics.param_modes import receiver_mode
-            self_ll = self.codegen.types.ll_type(ext.target_type)
-            if receiver_mode(getattr(ext, "self_mode", None)).by_pointer:
+        # alone.
+        if ext.receiver is not None:
+            self_ll = self.codegen.types.ll_type(ext.receiver)
+            if ext.by_pointer:
                 # `poke self` / `peek self` (#327): the receiver arrives by POINTER,
                 # so a write through it reaches the caller's value. A `nom self`
                 # receiver crosses BY VALUE, like the unmarked one: what it takes is
@@ -102,18 +95,16 @@ class FunctionDeclarations:
             param_types.append(self_ll)
             param_names.append("self")
 
-        for param in ext.params:
-            if param.ty:
-                param_types.append(self.codegen.types.ll_type(param.ty))
-                param_names.append(param.name)
+        for name, ty in ext.params:
+            param_types.append(self.codegen.types.ll_type(ty))
+            param_names.append(name)
 
         func_type = ir.FunctionType(declared_return_ll(self.codegen, ext), param_types)
-        llvm_fn = ir.Function(self.codegen.module, func_type,
-                              name=ext.link_symbol or func_name)
+        llvm_fn = ir.Function(self.codegen.module, func_type, name=ext.link_name)
 
         for i, name in enumerate(param_names):
             if i < len(llvm_fn.args):
                 llvm_fn.args[i].name = name
 
-        self.codegen.funcs.declare(func_name, llvm_fn)
+        self.codegen.funcs.declare(ext.symbol, llvm_fn)
         return llvm_fn

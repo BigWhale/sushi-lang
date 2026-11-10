@@ -1,20 +1,19 @@
 """LLVM backend orchestrator for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Callable, Dict, NoReturn, Optional
+from typing import TYPE_CHECKING, Callable, Dict, NoReturn, Optional
 
 from llvmlite import ir
 
 if TYPE_CHECKING:
     from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.backend.slir.bodies import SlirBodies
-    from sushi_lang.semantics.ast import ExtendWithDef
-    from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
+    from sushi_lang.semantics.decl_table import DeclTable, FunctionDecl, GlobalDecl, MethodDecl
+    from sushi_lang.semantics.passes.collect import PerkImplementationTable
     from sushi_lang.semantics.const_eval import ConstantValue
     from sushi_lang.semantics.typesys import Type
 
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import ConstDef, ExtendDef, FuncDef, VarDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.library_registry import LibraryRegistry
@@ -24,9 +23,7 @@ from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
 from sushi_lang.backend.runtime.strings import literal_fat_pointer
 from sushi_lang.backend.functions import LLVMFunctionManager
-from sushi_lang.semantics.unit_symbols import (
-    UnitKeyedSymbols, emitted_symbol, global_symbol, mangle_unit_symbol,
-)
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -39,45 +36,10 @@ from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 import sushi_lang.backend.types  # noqa: F401
 
 
-def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
-    """Wrap a perk-impl method as a synthetic ExtendDef."""
-    return ExtendDef(
-        target_type=perk_impl.target_type,
-        name=method.name,
-        params=method.params,
-        ret=method.ret,
-        body=method.body,
-        loc=method.loc,
-        name_span=method.name_span,
-        ret_span=method.ret_span,
-        # The receiver mode MUST ride along (#327): dropping it here would compile the
-        # impl with a by-value receiver against a poke-self declaration -- the silently
-        # lost write of #326, reintroduced through the perk door.
-        self_mode=getattr(method, "self_mode", None),
-        self_mode_span=getattr(method, "self_mode_span", None),
-        # And so must the error channel (ruling R1): `channel_result_of` reads it for
-        # the declaration ABI, and a dropped one would compile a channel body against a
-        # bare signature.
-        err_type=getattr(method, "err_type", None),
-        err_span=getattr(method, "err_span", None),
-        written_channel=getattr(method, "written_channel", None),
-        # And the scope its names resolve in (#1120).
-        scope_unit=getattr(method, "scope_unit", None),
-    )
-
-
-def _functions_in_module_order(unit: Unit) -> list[FuncDef]:
-    """The functions that the module of `unit` holds: the written functions in source order,
-    then the instances by name, never in the order of the copy fixpoint (ir.md 8.2)."""
-    concrete = [fn for fn in unit.ast.functions if not fn.type_params]
-    return ([fn for fn in concrete if not fn.is_synthesized]
-            + sorted((fn for fn in concrete if fn.is_synthesized), key=lambda fn: fn.name))
-
-
 class LLVMCodegen:
     """Main LLVM backend orchestrator for the Sushi language compiler."""
 
-    def __init__(self, module_name: str = "lang_module", *, perk_impl_table: 'PerkImplementationTable', struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, const_table: Optional['ConstantTable'] = None) -> None:
+    def __init__(self, module_name: str = "lang_module", *, perk_impl_table: 'PerkImplementationTable', struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None) -> None:
         """Initialize the LLVM code generator with all specialized subsystems."""
         # Our OWN context, not llvmlite's process-wide global_context: identified types
         # (#257) register per Context, so on the global one a second `struct Tree` would
@@ -91,18 +53,11 @@ class LLVMCodegen:
         # process-wide primitive built-ins behind them (#601). It travels on the enum
         # table, so the analyser's tables carry it here with no wiring of their own.
         self.derived_methods = self.enum_table.derived
-        from sushi_lang.semantics.passes.collect import FunctionTable, ConstantTable
-        self.func_table = func_table or FunctionTable()
         # The unit whose bodies are being emitted, or None outside a multi-unit walk.
         self.emitting_unit: Optional[str] = None
-        # What each unit may write, bare and behind a dot, handed over by the semantic
-        # analyser: a constant's initializer is folded as the unit that wrote it reads
-        # (#561).
-        self.unit_namespaces: Dict[str, Any] = {}
         # REQUIRED (#780): an empty default answers "nothing implements Drop", and
         # every handle is then copied and closed twice.
         self.perk_impl_table = perk_impl_table
-        self.const_table = const_table or ConstantTable()
         from sushi_lang.semantics.passes.collect import ExternalTable
         self.external_table = ExternalTable()
         self.external_funcs = {}
@@ -145,16 +100,14 @@ class LLVMCodegen:
 
         self.library_registry: Optional[LibraryRegistry] = None
 
-        self.monomorphized_extensions: list['ExtendDef'] = []
+        # The declaration table of the program (`codegen_for`, docs/design/ir.md 6.3): the
+        # declaration round reads each declaration from it. None in a codegen that
+        # declares nothing.
+        self.decls: Optional['DeclTable'] = None
 
         # The SLIR of the program (`codegen_for`): every body that the module walk defines
         # comes from it. None in a codegen that defines no body.
         self.slir_bodies: Optional['SlirBodies'] = None
-
-        # Library-shipped concrete perk impls (C4a): declared only, never
-        # defined - the bodies link in from the library bitcode.
-        self.library_perk_impls: list['ExtendWithDef'] = []
-        self.library_extensions: list[ExtendDef] = []
 
         self.stdlib_units: set[str] = set()
 
@@ -169,23 +122,6 @@ class LLVMCodegen:
         # The out-of-line functions of the derived contracts (`Eq`, `Ord`, `Display`),
         # by symbol. Per module, for the lifecycle caches' reason.
         self._contract_funcs: Dict[str, ir.Function] = {}
-
-    def namespaces_of(self, unit_name: Optional[str]):
-        """The namespace table of `unit_name`, or None for a unit the analyser never saw."""
-        return self.unit_namespaces.get(unit_name)
-
-    def constant_evaluator(self, unit_name: Optional[str] = None):
-        """A silent evaluator reading as `unit_name` -- the emitting unit by default.
-
-        Silent because the typecheck pass has already reported anything wrong with the
-        expression; the back end only wants the value.
-        """
-        from sushi_lang.internals.report import Reporter
-        from sushi_lang.semantics.const_eval import ConstantEvaluator
-        return ConstantEvaluator(Reporter(), self.const_table,
-                                 unit_name or self.emitting_unit, self.namespaces_of,
-                                 self.struct_table, self.enum_table,
-                                 functions=self.func_table)
 
     # Centralized memory management function declarations.
     # Private: allocate through backend.memory.heap.emit_malloc, which null-checks
@@ -281,12 +217,12 @@ class LLVMCodegen:
 
         def emit_constants() -> None:
             for unit in all_units:
-                if unit.ast is None:
+                decls = self.declaration_table().unit(unit.name)
+                if decls is None:
                     continue
-                for const in unit.ast.constants:
+                for const in decls.globals:
                     # A unit variable is defined by its own unit's module only.
-                    self._emit_global_constant(const, unit.name,
-                                               defining=unit.name == target_unit.name,
+                    self._emit_global_constant(const, defining=unit.name == target_unit.name,
                                                filename=str(unit.file_path))
 
         # The target unit declares ALL its functions, public and private, because this
@@ -338,12 +274,13 @@ class LLVMCodegen:
 
         def emit_constants() -> None:
             for unit in units:
-                if unit.ast is None:
+                decls = self.declaration_table().unit(unit.name)
+                if decls is None:
                     continue
 
                 before = set(self.module.globals) if unit.name in weak_units else None
-                for const in unit.ast.constants:
-                    self._emit_global_constant(const, unit.name, filename=str(unit.file_path))
+                for const in decls.globals:
+                    self._emit_global_constant(const, filename=str(unit.file_path))
                 if before is not None:
                     weaken_foreign_globals(self.module, before)
 
@@ -358,59 +295,55 @@ class LLVMCodegen:
         `defined`.
 
         ONE walk for both build paths: every function, extension and perk-impl method
-        is declared before a constant, which can name a function, and before any body is emitted, so a body may call a function that a
-        later unit defines. The declarations come from the AST; each body comes from the
-        `SlirFunction` of the analysis (`slir_bodies`), through the SLIR emitter. A
-        monomorphized extension is declared in every module and defined in the module of
-        its HOME unit alone, the unit that declared its template, like a perk-impl copy
-        (#1064): its body names that unit's private functions and aliases, and one
-        definition is one symbol (#404). A unit named in `weak_units` has each of its
-        bodies weakened (`backend/library_linkage.py`).
+        is declared before a constant, which can name a function, and before any body is
+        emitted, so a body may call a function that a later unit defines. The declarations
+        come from the declaration table (`decls`); each body comes from the `SlirFunction`
+        of the analysis (`slir_bodies`), through the SLIR emitter. A monomorphized
+        extension is declared in every module and defined in the module of its HOME unit
+        alone, the unit that declared its template, like a perk-impl copy (#1064): its body
+        names that unit's private functions and aliases, and one definition is one symbol
+        (#404). A unit named in `weak_units` has each of its bodies weakened
+        (`backend/library_linkage.py`).
         """
         from sushi_lang.backend.library_linkage import weaken_all
 
+        table = self.declaration_table()
         for unit in declared:
-            if unit.ast is None:
+            decls = table.unit(unit.name)
+            if decls is None:
                 continue
             private = declares_private(unit)
-            for fn in _functions_in_module_order(unit):
+            for fn in decls.functions:
                 if not (private or fn.is_public):
                     continue
-                self.functions.emit_func_decl(fn, unit.name)
+                self.functions.emit_func_decl(fn)
 
-            for ext in unit.ast.extensions:
-                self.functions.emit_extension_method_decl(ext, unit.name)
+            for method in decls.methods:
+                self.functions.emit_extension_method_decl(method)
 
-            for perk_impl in unit.ast.perk_impls:
-                for method in perk_impl.methods:
-                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
-                    self.functions.emit_extension_method_decl(synthetic_ext)
-
-        for ext in self.monomorphized_extensions:
-            self.functions.emit_extension_method_decl(ext)
+        for method in table.copies:
+            self.functions.emit_extension_method_decl(method)
 
         if self.library_linker is not None:
             self._declare_library_functions()
-            self._declare_library_perk_impl_methods()
-            for ext in self.library_extensions:
-                self.functions.emit_extension_method_decl(ext)
+            # Library-shipped perk impls and extensions (C4a): declared only, never
+            # defined - the bodies link in from the library bitcode.
+            for method in (*table.shipped_perks, *table.shipped_methods):
+                self.functions.emit_extension_method_decl(method)
 
         emit_constants()
 
         for unit in defined:
-            if unit.ast is None:
+            decls = table.unit(unit.name)
+            if decls is None:
                 continue
 
             self.emitting_unit = unit.name
             # Each body as the emitter named it. A snapshot cannot find these: the
             # declaration round above already put every function in the module.
             emitted: list[ir.Function] = []
-            bodies: list[FuncDef | ExtendDef] = list(_functions_in_module_order(unit))
-            bodies.extend(unit.ast.extensions)
-            bodies.extend(method for perk_impl in unit.ast.perk_impls
-                          for method in perk_impl.methods)
-            bodies.extend(ext for ext in self.monomorphized_extensions
-                          if ext.home_unit == unit.name)
+            bodies: list[FunctionDecl | MethodDecl] = [*decls.functions, *decls.methods]
+            bodies.extend(method for method in table.copies if method.home_unit == unit.name)
             for decl in bodies:
                 emitted.extend(self._define(decl, str(unit.file_path)))
 
@@ -418,7 +351,15 @@ class LLVMCodegen:
                 weaken_all(emitted)
         self.emitting_unit = None
 
-    def _define(self, decl: FuncDef | ExtendDef, filename: str) -> list[ir.Function]:
+    def declaration_table(self) -> 'DeclTable':
+        """The declaration table of the program. A codegen with no table declares nothing:
+        that is an internal error."""
+        if self.decls is None:
+            raise_internal_error("CE0000", detail="the backend declares a module with no "
+                                                  "declaration table of the program")
+        return self.decls
+
+    def _define(self, decl: 'FunctionDecl | MethodDecl', filename: str) -> list[ir.Function]:
         """Define the body of `decl` from its `SlirFunction`. The body of `main` is
         `user_main`, and the C `main` that calls it comes after it."""
         if self.slir_bodies is None:
@@ -433,42 +374,6 @@ class LLVMCodegen:
         if function.symbol == USER_MAIN_SYMBOL:
             defined.append(self.functions.main_wrapper.emit_main())
         return defined
-
-    def _declare_library_perk_impl_methods(self) -> None:
-        """Declare (never define) library-shipped perk-impl methods (C4a).
-
-        The one wrapper `_perk_method_to_extend_def` builds the declaration, so the
-        receiver mode and the channel ride along as they do for a local implementation;
-        only the types are resolved here, against the consumer's tables.
-        """
-        from dataclasses import replace
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.backend.types.core.resolution import require_named_type
-
-        struct_table = self.struct_table.by_name if self.struct_table else {}
-        enum_table = self.enum_table.by_name if self.enum_table else {}
-
-        def _resolved(ty):
-            # Templates are re-parsed source, so user-type references arrive
-            # as UnknownType; resolve against the consumer's tables (which
-            # include library-registered concrete types).
-            if isinstance(ty, UnknownType):
-                return require_named_type(ty, struct_table, enum_table)
-            return ty
-
-        for perk_impl in self.library_perk_impls:
-            target_type = _resolved(perk_impl.target_type)
-            for method in perk_impl.methods:
-                for param in method.params:
-                    if param.ty is not None:
-                        param.ty = _resolved(param.ty)
-                synthetic_ext = replace(
-                    _perk_method_to_extend_def(perk_impl, method),
-                    target_type=target_type,
-                    ret=_resolved(method.ret) if method.ret is not None else None,
-                    err_type=_resolved(method.err_type) if method.err_type is not None else None,
-                )
-                self.functions.emit_extension_method_decl(synthetic_ext)
 
     def _declare_library_functions(self) -> None:
         """Declare every loaded library's functions from the registry's signatures.
@@ -564,29 +469,24 @@ class LLVMCodegen:
             global_var.unnamed_addr = True  # Allow merging identical constants
         self.constants.declare(name, global_var, unit=unit_name)
 
-    def _emit_unit_variable(self, var: VarDef, ty: Type, unit_name: str | None,
-                            defining: bool, filename: Optional[str]) -> None:
+    def _emit_unit_variable(self, var: 'GlobalDecl', ty: Type, defining: bool,
+                            filename: Optional[str]) -> None:
         """Define a `var`'s storage in its own unit's module; declare it everywhere else."""
         ll_type = self.types.ll_type(ty)
         if var.link_symbol is not None or not defining:
-            self._register_global_constant(var.name, ll_type, None, unit_name,
-                                           symbol=global_symbol(var, unit_name), storage=True)
+            self._register_global_constant(var.name, ll_type, None, var.unit,
+                                           symbol=var.symbol, storage=True)
             return
-        from sushi_lang.semantics.const_eval import allocates_nothing
-        if allocates_nothing(var.value):
+        if var.empty:
             # The empty descriptor `{0, 0, null}` is the zero value of its type.
             initializer = ir.Constant(ll_type, None)
         else:
-            const_value = self._value_of_global(var, ty, unit_name, filename)
-            initializer = self._materialize_constant(
-                const_value, mangle_unit_symbol(unit_name, f".str_data.{var.name}"),
-                var.loc, filename)
-        self._register_global_constant(var.name, ll_type, initializer, unit_name,
-                                       symbol=global_symbol(var, unit_name), storage=True)
+            value = self._value_of_global(var, filename)
+            initializer = self._materialize_constant(value, var.data_name, var.loc, filename)
+        self._register_global_constant(var.name, ll_type, initializer, var.unit,
+                                       symbol=var.symbol, storage=True)
 
-    def _emit_global_constant(self, const: ConstDef,
-                              unit_name: str | None = None, *,
-                              defining: bool = True,
+    def _emit_global_constant(self, const: 'GlobalDecl', *, defining: bool = True,
                               filename: Optional[str] = None) -> None:
         """Emit a global constant definition, or a unit variable's storage.
 
@@ -595,55 +495,37 @@ class LLVMCodegen:
         `const string ALIAS = GREETING` registered no global at all and every use said
         CE0055, an internal error, on a valid program (#441; #260 was the same hazard
         for a literal array). The round makes a global or raises an internal error; it never
-        drops one (docs/design/ir.md 8.2).
+        drops one (docs/design/ir.md 8.2). The record holds the folded value (ir.md 6.3).
         """
-        # A compiled library's constant is a name of the library unit, and its
-        # initializer reads that unit's scope (#1120).
-        unit_name = const.scope_unit or unit_name
-        ty = self._declared_type(const, unit_name, filename)
+        ty = self._declared_type(const, filename)
 
-        if isinstance(const, VarDef):
-            self._emit_unit_variable(const, ty, unit_name, defining, filename)
+        if const.is_var:
+            self._emit_unit_variable(const, ty, defining, filename)
             return
 
-        # Materializing at the DECLARED type keeps a context-typed literal at its own
-        # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.
-        const_value = self._value_of_global(const, ty, unit_name, filename)
-
-        # A library constant's copy takes the symbol of the unit that declared it, so
-        # it never takes the name of a function in the unit that holds the copy (#1101).
-        symbol_unit = const.home_unit or unit_name
-        initializer = self._materialize_constant(
-            const_value, mangle_unit_symbol(symbol_unit, f".str_data.{const.name}"),
-            const.loc, filename)
+        value = self._value_of_global(const, filename)
+        initializer = self._materialize_constant(value, const.data_name, const.loc, filename)
 
         self._register_global_constant(
-            const.name, self.types.ll_type(ty), initializer, unit_name,
-            symbol=global_symbol(const, unit_name))
+            const.name, self.types.ll_type(ty), initializer, const.unit, symbol=const.symbol)
 
-    def _declared_type(self, const: ConstDef, unit_name: str | None,
-                       filename: Optional[str]) -> Type:
-        """The declared type of a constant or a `var`, from its record in the constant table."""
-        sig = self.const_table.record_of(const, unit_name)
-        if sig is None or sig.const_type is None:
+    @staticmethod
+    def _declared_type(const: 'GlobalDecl', filename: Optional[str]) -> Type:
+        """The declared type of a constant or a `var`. A global with no type is an internal
+        error."""
+        if const.ty is None:
             raise_internal_error("CE0000", span=const.loc, filename=filename,
                                  detail=f"the constant '{const.name}' has no type")
-        return sig.const_type
+        return const.ty
 
-    def _evaluate_constant_expression(self, expr, expected_type=None,
-                                      unit_name=None) -> Optional["ConstantValue"]:
-        """Evaluate a constant expression at compile time, as a value not an initializer."""
-        return self.constant_evaluator(unit_name).evaluate(expr, expected_type, None)
-
-    def _value_of_global(self, const: ConstDef, ty: Type, unit_name: str | None,
-                         filename: Optional[str]) -> "ConstantValue":
-        """The value of the initializer of a constant or a `var`. A constant with no value
-        is an internal error."""
-        value = self._evaluate_constant_expression(const.value, ty, unit_name)
-        if value is None:
+    @staticmethod
+    def _value_of_global(const: 'GlobalDecl', filename: Optional[str]) -> "ConstantValue":
+        """The folded value of the initializer of a constant or a `var`. A constant with no
+        value is an internal error."""
+        if const.value is None:
             raise_internal_error("CE0000", span=const.loc, filename=filename,
                                  detail="a constant with no value reached the backend")
-        return value
+        return const.value
 
     def _materialize_constant(self, value, data_name: str, span: Optional[Span],
                               filename: Optional[str]) -> ir.Constant:
