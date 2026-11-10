@@ -301,8 +301,7 @@ class OwnMethodInferrer:
 
 # The family table: the families that answer before a perk implementation, then the ones
 # that answer after it. The claims are disjoint, so the order changes no answer; stating
-# ONE order is the point (#273), and `tests/unit/test_method_resolution_family_order.py`
-# pins it.
+# ONE order is the point (#273).
 #
 # A claim reads the receiver type as the caller hands it in. The caller
 # (`calls/dotcall.py:resolve_dotted`) derefs a borrow before it asks, so no claim derefs.

@@ -98,8 +98,6 @@ The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived p
 contract methods apply to `StructType`/`EnumType` (`eq` and `compare` also to a primitive),
 the function-value clone to `FunctionType` -- and the method names are disjoint, so the order
 is arbitrary. What matters is that the one table states it once.
-`tests/unit/test_method_resolution_family_order.py` pins the order of the table and of the
-ladder in `calls/methods.py`.
 
 **The families claim pairwise disjointly, and a gate proves it.** At most ONE family claims any
 (receiver kind, method name), over a space proved to reach every family

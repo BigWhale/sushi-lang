@@ -406,8 +406,8 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
 
     A perk implementation is the sanctioned override and wins
     (`docs/design/method-resolution.md`), so it is asked first. Built-in methods are NOT
-    on this ladder: each family resolves its own before the ladder is reached, and that
-    order is pinned by `tests/unit/test_method_resolution_family_order.py`.
+    on this ladder: each family resolves its own before the ladder is reached, and the
+    claims of the families are disjoint (`tests/unit/test_method_family_dispatch_is_one.py`).
 
     Returns a `ResolvedMethod`, None, or RESOLUTION_REPORTED. The `foreach` protocol and
     the static path read it, and the point of one function is that a third cannot drift.

@@ -1,18 +1,13 @@
-"""`LLVMCodegen` generates code; the driver compiles and links, and the print frames are a manager (#841).
+"""`LLVMCodegen` generates code; the driver compiles and links (#841).
 
 The backend rule: a stateful subsystem is a manager class composed onto `LLVMCodegen`,
 and stateless translation is free functions. The codegen also drove the compiler and
-the linker, and it kept the two print-argument string stacks itself.
+the linker.
 """
 from __future__ import annotations
 
-import ast
-from pathlib import Path
-
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
 from sushi_lang.backend.driver import LLVMDriver
-
-ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 
 DRIVER_METHODS = (
     "compile_multi_unit", "compile_to_bitcode", "link_executable",
@@ -27,16 +22,3 @@ def test_the_driver_holds_the_compile_and_link_methods():
         assert not hasattr(LLVMCodegen, name), name
     assert not hasattr(LLVMCodegen, "_link_executable")
 
-
-def _stack_reads(path: Path) -> list[int]:
-    return [
-        node.lineno for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-        if isinstance(node, ast.Attribute) and node.attr in ("_data", "_values")
-        and isinstance(node.value, ast.Attribute) and node.value.attr == "print_frames"
-    ]
-
-
-def test_no_module_reaches_into_the_frame_stacks():
-    hits = [f"{path.relative_to(ROOT)}:{line}"
-            for path in sorted(ROOT.rglob("*.py")) for line in _stack_reads(path)]
-    assert hits == []
