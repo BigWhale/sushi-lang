@@ -3779,9 +3779,11 @@ or one `memset`, and a `T[N]` of constant parts with one store of its constant. 
 builds a `T[N]` in the place of its `Assign`. A `T[N]` of more than 64 bytes is never one
 first-class LLVM value (LLVM is slow on a large aggregate load or store): it is never one
 constant, a `Use` of it is one `memcpy` from the address of its place, and a part of that
-element type is the address of its value, which each slot takes with one `memcpy`. When
-such a part reads the root of the place of the `Assign`, the emitter builds the array in a
-fresh slot and then copies it. A call argument, a parameter and a return value of a `T[N]`
+element type is the address of its value, which each slot takes with one `memcpy`. Such a
+part is read while the slots fill, and a reference can make any place an alias of the place
+of the `Assign`. So when a part moves by address, the emitter builds the array in a fresh
+slot and then copies it with one `memcpy`. A part that does not move by address is a value
+that the emitter reads before the first slot changes, so that array is built in the place. A call argument, a parameter and a return value of a `T[N]`
 stay first-class values (`backend/types/arrays/runs.py`, `backend/slir/values.py`). Over an
 owning element, the part of a `RunOne` is a `Move` or a constant: the slot takes the value.
 The value part of a `RunRepeat` is a `Copy` or a constant, never a `Move`: the run BORROWS
