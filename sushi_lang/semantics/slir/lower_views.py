@@ -16,6 +16,7 @@ ends with the storage of the temporary. Each arm is a free function that takes t
 """
 from __future__ import annotations
 
+from enum import Enum
 from typing import TYPE_CHECKING, Optional, cast
 
 from sushi_lang.internals import errors as er
@@ -41,7 +42,7 @@ from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.slir.drops import OpenRegion
 from sushi_lang.semantics.slir.ids import LocalId
 from sushi_lang.semantics.slir.function import STAGE
-from sushi_lang.semantics.slir.lower_values import CallValue, ViewValue
+from sushi_lang.semantics.slir.lower_values import CallValue, Value, ViewValue
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Lowering
@@ -280,20 +281,59 @@ def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:
     return ViewValue(value, (p.root_of(read.place),))
 
 
-def wrapper(low: Lowering, inner: e.ShirExpr) -> tuple[p.Place, bool]:
-    """The place of the wrapper that a `??` reads, and whether the `??` reads through it: a
-    borrowed wrapper (a `reject` row) is read where it is, and a wrapper that is a view (a
-    nested `??`) is read through too. Any other wrapper goes into a temporary, which the
-    `??` takes."""
+class Held(Enum):
+    """How a read of a `Result` or a `Maybe` holds the wrapper that it switches on."""
+    PLACE = "place"
+    VIEW = "view"
+    CONSTANT = "constant"
+    VALUE = "value"
+
+
+#: The places that a read method of a `Result` or a `Maybe` reads where they are.
+PLACES = (e.LocalRef, e.StorageRef, e.Field, e.Index, e.Slice)
+
+
+def wrapper(low: Lowering, inner: e.ShirExpr, every_place: bool = False) -> tuple[p.Place, Held]:
+    """The place of the wrapper that a `??` or a read method (`expect`, `realise`, `err`)
+    switches on, and how the read holds it. The difference of the two rules is
+    `every_place`. A `??` (the default) TAKES its wrapper: it reads a borrowed wrapper (a
+    `reject` row) where it is, and a wrapper that is a view (a nested `??`) through the view.
+    A read method BORROWS its wrapper: it reads every place where it is, and a constant goes
+    into a temporary, because a `Discriminant` reads a place. Any other wrapper goes into a
+    temporary of the statement: a view local for a view, else a temporary that the read can
+    take."""
+    if every_place:
+        operand, held = read_in_place(low, inner)
+        if isinstance(operand, p.Const):
+            return p.Local(low.temporary(r.Use(operand), low.type_of(inner), inner.loc)), held
+        return operand.place, held
     if (low.answers.ownership.ownership_of(inner.shir_id) is Ownership.REJECT
             and isinstance(inner, (e.LocalRef, e.Field, e.Index))):
-        return agg.place_of(low, inner), True
+        return agg.place_of(low, inner), Held.PLACE
     lowered = low.value(inner)
     if (isinstance(lowered, ViewValue) and isinstance(lowered.value, r.Use)
             and isinstance(lowered.value.operand, p.Copy)):
-        return lowered.value.operand.place, True
-    return p.Local(low.temporary(lowered, low.type_of(inner), inner.loc)), isinstance(
-        lowered, ViewValue)
+        return lowered.value.operand.place, Held.PLACE
+    return _held_in_a_temporary(low, inner, lowered)
+
+
+def read_in_place(low: Lowering, expr: e.ShirExpr) -> tuple[p.Const | p.Copy, Held]:
+    """A constant, a place read where it is, or a new value in a temporary of the
+    statement."""
+    if isinstance(expr, (e.Lit, e.ConstRef)):
+        constant = low.operand(expr)
+        if isinstance(constant, p.Const):
+            return constant, Held.CONSTANT
+    if isinstance(expr, PLACES):
+        return p.Copy(agg.place_of(low, expr)), Held.PLACE
+    place, held = _held_in_a_temporary(low, expr, low.value(expr))
+    return p.Copy(place), held
+
+
+def _held_in_a_temporary(low: Lowering, expr: e.ShirExpr, value: Value) -> tuple[p.Place, Held]:
+    """`value` in a temporary of the statement: a view goes into a view local."""
+    held = Held.VIEW if isinstance(value, ViewValue) else Held.VALUE
+    return p.Local(low.temporary(value, low.type_of(expr), expr.loc)), held
 
 
 def receiver_of(low: Lowering, call: e.ShirExpr) -> e.ShirExpr:
@@ -319,7 +359,7 @@ def read_through(low: Lowering, inner: e.ShirExpr) -> Optional[tuple[p.Place, p.
     receiver = resolved.callee.recv
     if low.answers.ownership.ownership_of(receiver.shir_id) is not Ownership.REJECT:
         return None
-    place, _borrowed = wrapper(low, receiver)
+    place, _held = wrapper(low, receiver)
     value = inner.args[0].value
     error = low.operand(value)
     if isinstance(error, p.Move) and isinstance(value, (e.LocalRef, e.Field)):

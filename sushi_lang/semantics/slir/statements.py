@@ -121,6 +121,13 @@ def operands_of(stmt: SlirStatement) -> tuple[Operand | Place, ...]:
     if isinstance(stmt, Assign):
         return rvalue_operands(stmt.rvalue)
     if isinstance(stmt, Call):
-        callee = (stmt.callee.operand,) if isinstance(stmt.callee, Indirect) else ()
-        return (*(operand for operand, _ in stmt.args), *callee)
+        return call_operands(stmt.callee, stmt.args)
     return ()
+
+
+def call_operands(callee: SlirCallee,
+                  args: tuple[tuple[Operand, Convention], ...]) -> tuple[Operand, ...]:
+    """The operands of a call, in order: each argument, then the indirect callee. A `Call`
+    statement and a call value of lowering both read them here."""
+    indirect = (callee.operand,) if isinstance(callee, Indirect) else ()
+    return (*(operand for operand, _ in args), *indirect)

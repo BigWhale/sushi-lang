@@ -92,7 +92,7 @@ def holds(constant: k.Constant) -> bool:
 
 def moves_of(value: r.Rvalue | CallValue) -> list[p.Place]:
     """The place of each `move` operand of a value."""
-    parts = (tuple(operand for operand, _ in value.args) if isinstance(value, CallValue)
+    parts = (st.call_operands(value.callee, value.args) if isinstance(value, CallValue)
              else r.operands_of(value))
     return [part.place for part in parts if isinstance(part, p.Move)]
 

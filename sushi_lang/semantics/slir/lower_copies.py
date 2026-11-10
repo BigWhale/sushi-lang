@@ -22,8 +22,8 @@ from sushi_lang.semantics.method_effects import MAYBE_FAMILY, RESULT_FAMILY
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod
 from sushi_lang.semantics.slir import constants as k
-from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_control as ctl
+from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -40,9 +40,6 @@ _SUCCESS = {RESULT_FAMILY: "Ok", MAYBE_FAMILY: "Some"}
 
 #: The methods of a `Result` or a `Maybe` that read a payload with no call.
 _READS = frozenset({"expect", "realise", "err"})
-
-_PLACES = (e.LocalRef, e.StorageRef, e.Field, e.Index, e.Slice)
-
 
 @dataclass(frozen=True, slots=True)
 class Source:
@@ -78,7 +75,7 @@ def clone(low: Lowering, callee: Builtin) -> Value:
     """`x.clone()` (ir.md 8.7): `Clone` of a copy of a place, of a constant and of a view.
     A temporary is the copy itself, so it gives its value and no `Clone`."""
     recv = callee.recv
-    if isinstance(recv, (e.Lit, e.ConstRef, *_PLACES)):
+    if isinstance(recv, (e.Lit, e.ConstRef, *views.PLACES)):
         return r.Clone(source(low, recv).operand)
     value = low.value(recv)
     if not isinstance(value, ViewValue):
@@ -91,7 +88,7 @@ def expect(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     failing block evaluates the message and ends in the trap RE2029, which reads the position
     of the call and the message, and drops nothing. The next block reads the payload."""
     ty = low.type_of(callee.recv)
-    receiver = _wrapper(low, callee.recv, ty)
+    receiver = _wrapper(low, callee.recv)
     wrapper = receiver.operand.place
     success = _SUCCESS[callee.method.family]
     tag, payload = ctl.variant_of(ty, success, node.loc)
@@ -109,7 +106,7 @@ def realise(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     success path writes the payload, and the other path writes the default. A temporary
     drops on each path that does not take it."""
     ty, answer = low.type_of(callee.recv), low.type_of(node)
-    receiver = _wrapper(low, callee.recv, ty)
+    receiver = _wrapper(low, callee.recv)
     wrapper = receiver.operand.place
     (arg,) = node.args
     default = source(low, arg.value)
@@ -139,7 +136,7 @@ def err(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     path. A copy of the error is a temporary of its path, which the `Some` takes. A
     temporary drops on each path that does not take it."""
     ty, answer = low.type_of(callee.recv), low.type_of(node)
-    receiver = _wrapper(low, callee.recv, ty)
+    receiver = _wrapper(low, callee.recv)
     wrapper = receiver.operand.place
     tag, payload = ctl.variant_of(ty, "Err", node.loc)
     takes = receiver.spent and low.owns(payload[0])
@@ -163,27 +160,17 @@ def err(low: Lowering, node: e.Call, callee: Builtin) -> Value:
 
 
 def source(low: Lowering, expr: e.ShirExpr) -> Source:
-    """A constant, a place read where it is, or a new value in a temporary of the statement:
-    a view goes into a view local, which owns nothing to spend."""
-    if isinstance(expr, (e.Lit, e.ConstRef)):
-        constant = low.operand(expr)
-        if isinstance(constant, p.Const):
-            return Source(constant, False)
-    if isinstance(expr, _PLACES):
-        return Source(p.Copy(agg.place_of(low, expr)), False)
-    value, ty = low.value(expr), low.type_of(expr)
-    temp = low.temporary(value, ty, expr.loc)
-    return Source(p.Copy(p.Local(temp)), low.owns(ty) and not isinstance(value, ViewValue))
+    """A constant, a place read where it is, or a new value in a temporary of the statement
+    (`views.read_in_place`): a view goes into a view local, which owns nothing to spend."""
+    operand, held = views.read_in_place(low, expr)
+    return Source(operand, held is views.Held.VALUE and low.owns(low.type_of(expr)))
 
 
-def _wrapper(low: Lowering, recv: e.ShirExpr, ty: Type) -> _Placed:
-    """The source of a receiver, in a place: a constant goes into a temporary, because a
-    `Discriminant` reads a place."""
-    receiver = source(low, recv)
-    if isinstance(receiver.operand, p.Const):
-        return _Placed(p.Copy(p.Local(low.temporary(r.Use(receiver.operand), ty, recv.loc))),
-                       False)
-    return _Placed(receiver.operand, receiver.spent)
+def _wrapper(low: Lowering, recv: e.ShirExpr) -> _Placed:
+    """The source of a receiver, in a place (`views.wrapper`): a path spends a temporary
+    that owns."""
+    place, held = views.wrapper(low, recv, every_place=True)
+    return _Placed(p.Copy(place), held is views.Held.VALUE and low.owns(low.type_of(recv)))
 
 
 def _read(low: Lowering, origin: Source, projection: p.Place | None, ty: Type) -> r.Rvalue:

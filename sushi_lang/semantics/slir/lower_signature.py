@@ -27,7 +27,8 @@ def symbol_of(decl: object, home: Optional[str], body: ShirBody,
               perk_impls: PerkImplementationTable) -> str:
     """The symbol of the function in its module: `extension_decl_symbol` for an extension
     method or a static, the perk symbol of the target for a method of a perk implementation
-    (ir.md 8.2), and `function_symbol` for a free function. The copy of a generic function
+    (ir.md 8.2), and `function_symbol` for a free function. A body with a receiver that no
+    perk implementation holds is an internal error. The copy of a generic function
     is a free function: its name is the instance name, and `home` is the unit that declares
     the template. A conversion is an extension method `as` with no unit, and its target is
     its one method type argument."""
@@ -37,6 +38,10 @@ def symbol_of(decl: object, home: Optional[str], body: ShirBody,
         impl = perk_impl_of(decl, perk_impls)
         if impl is not None:
             return method_symbol(impl.target_type, decl.name, None)
+        if _has_receiver(body):
+            er.raise_internal_error("CE0000", span=body.block.loc,
+                                    detail=f"the method '{decl.name}' of no perk "
+                                           f"implementation reached SLIR")
     elif not isinstance(decl, GenericFuncDef) or decl.type_params:
         er.raise_internal_error("CE0000", span=body.block.loc,
                                 detail=f"a body of {type(decl).__name__} reached SLIR")
@@ -49,6 +54,12 @@ def perk_impl_of(decl: FuncDef, perk_impls: PerkImplementationTable) -> Optional
         if any(method is decl for method in impl.methods):
             return impl
     return None
+
+
+def _has_receiver(body: ShirBody) -> bool:
+    """Whether the first parameter of the body is the receiver `self` of a method."""
+    names = {local.id: local.name for local in body.locals}
+    return bool(body.params) and names.get(body.params[0].local) == "self"
 
 
 def return_type_of(decl: object, tables: SymbolTables, body: ShirBody) -> Type:
