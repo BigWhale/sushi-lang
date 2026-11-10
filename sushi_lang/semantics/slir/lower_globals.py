@@ -58,8 +58,9 @@ def owner_place(low: Lowering, symbol: str, span: Span) -> p.Global:
 def rebind_global(low: Lowering, stmt: s.Assign, target: e.StorageRef) -> None:
     """`v := x` of a `var`: the new value, then the store into its global. A plain `var`
     drops nothing, and `and`, `or` and a value of a `var` that a view lends go into a
-    temporary first, because the value can read the `var` again. A `var` that owns drops its old value right before the
-    store, which moves the temporary of the new value (ir.md 8.10, rule 6)."""
+    temporary first, because the value can read the `var` again. A `var` that owns drops
+    its old value right before the store, which moves the temporary of the new value
+    (ir.md 8.10, rule 6)."""
     place = global_place(low, target)
     value = low.value(stmt.value)
     ty = low.type_of(stmt.value)

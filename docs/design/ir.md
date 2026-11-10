@@ -3783,9 +3783,10 @@ element type is the address of its value, which each slot takes with one `memcpy
 part is read while the slots fill, and a reference can make any place an alias of the place
 of the `Assign`. So when a part moves by address, the emitter builds the array in a fresh
 slot and then copies it with one `memcpy`. A part that does not move by address is a value
-that the emitter reads before the first slot changes, so that array is built in the place. A call argument, a parameter and a return value of a `T[N]`
-stay first-class values (`backend/types/arrays/runs.py`, `backend/slir/values.py`). Over an
-owning element, the part of a `RunOne` is a `Move` or a constant: the slot takes the value.
+that the emitter reads before the first slot changes, so that array is built in the
+place. A call argument, a parameter and a return value of a `T[N]` stay first-class
+values (`backend/types/arrays/runs.py`, `backend/slir/values.py`). Over an owning element,
+the part of a `RunOne` is a `Move` or a constant: the slot takes the value.
 The value part of a `RunRepeat` is a `Copy` or a constant, never a `Move`: the run BORROWS
 its value, and the emitter writes a deep copy of it into each slot, over `copy_out` (the
 seam of the `Clone` arm). A value that is a new value is a temporary of the statement, which
