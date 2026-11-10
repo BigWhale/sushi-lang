@@ -37,11 +37,11 @@ from sushi_lang.semantics.passes.types.visibility import (
 from sushi_lang.semantics.passes.types.visit.extern_calls import check_extern_variable
 from sushi_lang.semantics.passes.types.visit.generic_calls import declared_or_late_instance
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
+from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Free, Indirect
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
-from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.typesys import FunctionType, Type, deref_type
 from sushi_lang.semantics.visibility import VALUE_VERB
 

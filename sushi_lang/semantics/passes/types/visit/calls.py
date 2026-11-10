@@ -126,12 +126,12 @@ from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
 from sushi_lang.semantics.passes.types.visit.perk_calls import check_perk_call
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.passes.types.visit.signature_methods import check_signature_method
+from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Free, Intrinsic, Method, Static)
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
-from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.passes.types.visit.variadic_tails import variadic_tail
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.stdlib_registry import StdlibFunction

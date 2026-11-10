@@ -10,7 +10,8 @@ its types only.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from functools import partial
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -118,8 +119,7 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         return closures.indirect(low, node, callee)
     if isinstance(callee, Free):
         name = free_callee_name(low.decls, node, callee)
-        return st.Direct(callee_symbol(resolved, lambda unit: function_symbol(name, unit)),
-                         name)
+        return st.Direct(callee_symbol(resolved, partial(function_symbol, name)), name)
     if isinstance(callee, (Method, Static)):
         return user_method(low, callee, resolved)
     if isinstance(callee, Stdlib):
@@ -158,8 +158,11 @@ def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) 
     if (isinstance(callee, Method) and owner is not None
             and low.tables.perk_impls.get_method(owner, method) is not None):
         return st.Direct(method_symbol(owner, method, None), name)
-    return st.Direct(callee_symbol(resolved, lambda unit: method_symbol(
-        owner, method, unit, resolved.type_args)), name)
+
+    def in_unit(unit: Optional[str]) -> str:
+        return method_symbol(owner, method, unit, resolved.type_args)
+
+    return st.Direct(callee_symbol(resolved, in_unit), name)
 
 
 def never_returns(callee: st.SlirCallee) -> bool:

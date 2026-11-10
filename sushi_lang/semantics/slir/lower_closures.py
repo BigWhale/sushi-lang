@@ -16,6 +16,7 @@ of glue. This module reads `lower.py` for its types only.
 """
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Sequence, cast
 
 from sushi_lang.internals import errors as er
@@ -55,7 +56,7 @@ def function_value(low: Lowering, node: e.GlobalRef) -> Value:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail="a function value with no callee reached SLIR")
     name = free_function_name(low.decls, node.decl, resolved.callee.decl)
-    symbol = callee_symbol(resolved, lambda unit: function_symbol(name, unit))
+    symbol = callee_symbol(resolved, partial(function_symbol, name))
     return r.Aggregate(r.AggClosure(low.type_of(node)), (p.Const(k.FnRef(symbol)),))
 
 

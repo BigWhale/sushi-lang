@@ -34,10 +34,10 @@ from sushi_lang.semantics.passes.types.visit.container_statics import type_name_
 from sushi_lang.semantics.passes.types.visit.constructions import (
     TypedArguments, is_bare_lambda, names_a_parameter, type_lambda, typed_alone, walk_unchecked)
 from sushi_lang.semantics.passes.types.visit.signature_methods import unsolved_help
+from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import BuiltinStatic, Method
 from sushi_lang.semantics.shir.typeck import ResolvedCall
-from sushi_lang.semantics.passes.types.visit.user_callees import user_callee
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.typesys import IteratorType, Type, UnknownType, deref_type
 
