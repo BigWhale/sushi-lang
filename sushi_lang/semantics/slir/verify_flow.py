@@ -399,4 +399,3 @@ def _parts_of(check: Check, place: p.Place, inside: list[p.Place],
     else:
         return []
     return [p.Field(place, index) for index in range(count)]
-

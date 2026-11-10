@@ -21,4 +21,3 @@ def test_the_driver_holds_the_compile_and_link_methods():
         assert callable(getattr(LLVMDriver, name, None)), name
         assert not hasattr(LLVMCodegen, name), name
     assert not hasattr(LLVMCodegen, "_link_executable")
-
