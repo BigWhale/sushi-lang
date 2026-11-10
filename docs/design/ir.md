@@ -146,6 +146,9 @@ changes each `let`-borrow out of it; an unmarked argument of it is a shared borr
 write may not read it), 8.4, 8.9 and 8.10 (the `Global` that owns, as built:
 a `match` scrutinee and a region owner are the `Global`) and 8.13 (the drop of a `Global`
 is checked in `verify_globals.py`).
+Amended on 2026-11-10 by shape S30 (Phase 7): 6.3 (the declaration table: its fields, its
+builder and its readers), 6.4 (the third gate loses the declaration round) and 8.2 (the
+declaration round reads the table, and the global round takes the folded value from it).
 
 ## The decisions, in one place
 
@@ -693,6 +696,84 @@ declarations(program)                -> DeclTable  # declarations, whole-program
 Anything that needs a third entry point is a design smell and must be argued for in this
 document first.
 
+**The declaration table (S30).** `declarations` makes ONE `DeclTable` for each program
+(`semantics/decl_table.py`). `codegen_for` (`compiler/pipeline.py`) calls it at the hand-off
+to the backend, after the last pass of the analysis: the copy fixpoint adds instances after
+the per-unit loop, so an earlier table does not hold them. The table is frozen. The builder
+reads the declarations of the AST of each unit, the symbol tables (`SymbolTables`), the SHIR
+program (for the `DeclId` of each body) and the constant evaluator. The builder is the one
+reader of a declaration of the AST after the analysis. The table is in `semantics/`, and the
+backend reads it (`semantics` never imports `backend`). Its fields are the facts that the
+declaration round of the backend reads, and no more:
+
+```
+DeclTable
+  units           : {str: UnitDecls}   # by unit name; a unit with no AST has no row
+  copies          : [MethodDecl]       # each monomorphized extension; its home unit defines it
+  shipped_perks   : [MethodDecl]       # each method of a perk implementation that a library ships
+  shipped_methods : [MethodDecl]       # each extension method that a library ships
+
+UnitDecls
+  functions    : [FunctionDecl]        # the written functions in source order, then the instances by name
+  methods      : [MethodDecl]          # the extensions, then the methods of each perk implementation
+  globals      : [GlobalDecl]          # each constant and each `var`, in source order
+  perk_symbols : [str]                 # the symbol of each perk method (`weak_odr` in a library)
+
+FunctionDecl
+  name, unit, symbol                   # `declaring_unit`, `function_symbol`
+  is_public : bool
+  params    : [(str, Type)]
+  ret, err_type, written_channel, resolved_result   # the written signature
+  body      : DeclId | None            # the key of its `SlirFunction`
+
+MethodDecl
+  name, symbol                         # the symbol of a call site: `extension_decl_symbol`
+  link_name  : str                     # the `link_symbol` of a binary library, else `symbol`
+  receiver   : Type | None             # None for a static
+  by_pointer : bool                    # a `peek self` or a `poke self` receiver
+  params     : [(str, Type)]
+  ret, err_type, written_channel       # the written signature
+  home_unit  : str | None
+  body       : DeclId | None
+
+GlobalDecl
+  name, unit, symbol                   # `global_symbol`; `unit` is the unit of its scope
+  data_name   : str                    # the name of the bytes of a string value
+  ty          : Type | None
+  is_var      : bool
+  link_symbol : str | None             # a `var` of a binary library
+  empty       : bool                   # a `var` whose initializer allocates nothing
+  value       : ConstantValue | None   # the folded value of the initializer (Q5)
+  loc         : Span
+```
+
+Five rules hold the table:
+
+- The builder folds the initializer of each constant and each `var` with the constant
+  evaluator, as the unit of its scope reads it (Q5). The table holds the value, not the
+  expression. A `var` of a binary library, and a `var` whose initializer allocates nothing,
+  have no value: the backend gives them no initializer, or the zero value of the type.
+- The table keeps a fault for the backend. A global with no type, or with no value where the
+  round needs one, is an internal error of the declaration round (8.2), as before.
+- A record keeps the WRITTEN signature (`ret`, `err_type`, `written_channel`), because the
+  backend has one reader of the channel (`channel_result_of`), and that reader also reads a
+  signature of a library. A function record also keeps `resolved_result`, the interned
+  `Result` of a spelled `Result@(T, E)` return; a method record has no such field, because
+  an extension declaration has none.
+- The builder resolves a type that a shipped perk implementation writes and that the program
+  declares (an `UnknownType`, from the source text of a library) with `require_named_type`
+  (`semantics/type_resolution.py`): a name with no declaration is the internal error CE0020.
+  It writes nothing on the AST.
+- The symbols are those of the mangling seams (`function_symbol`, `extension_decl_symbol`,
+  `global_symbol`, `impl_method_symbol`). The table holds each symbol, and the backend
+  derives none from a declaration.
+
+The readers: the declaration round of `codegen_llvm.py` (the functions, the methods, the
+globals and the body of each), `functions/` (each prototype), `driver.py` (the perk symbols of
+a library), and `backend/slir/bodies.py` (the `SlirFunction` of a `body`). The stdlib link set
+(`stdlib_linker.py`) and the manifest of a library (`library_manifest.py`) still read the AST
+(6.4).
+
 **The one third entry point: an initializer body.** Lowering makes a one-expression
 `ShirBody`, with an origin of its own, from each constant initializer and each `var`
 initializer. The argument: `typecheck` checks an initializer with the same helpers that
@@ -734,15 +815,15 @@ a body: `externals.py` walks the types that the bodies of a unit write (`body_ty
 declaration module, and `effects` is a whole-program pass with its own module
 (`passes/effects.py`, S4).
 
-The third gate has one exception: the declaration round of the backend reads the
-declarations of the AST (8.2), and the declaration table of 6.3 does not exist. The gate
-names each backend module that still imports the AST, with each name: the declaration
-round (`codegen_llvm.py`, `driver.py`, `functions/`), the stdlib modules of the `use`
-declarations (`stdlib_linker.py`), and the manifest of a library (`library_manifest.py`),
-which writes no LLVM. Two of these read more than a declaration. The global round of
-`codegen_llvm.py` gives the AST initializer expression of each constant and each `var` to
-the constant evaluator (Q5). `library_manifest.py` walks the body of each exported
-template, for the names that it reads and the types that it writes. A row may only go. The SLIR emitter (`backend/slir/`) imports no AST.
+The third gate has one exception: two modules of the backend read the AST, and the
+declaration table of 6.3 does not hold what they read yet. The declaration round
+(`codegen_llvm.py`, `driver.py`, `functions/`) reads the table and imports no AST. The gate
+names each backend module that still imports the AST, with each name: the stdlib modules of
+the `use` declarations (`stdlib_linker.py`), and the manifest of a library
+(`library_manifest.py`), which writes no LLVM. `library_manifest.py` reads more than a
+declaration: it walks the body of each exported template, for the names that it reads and
+the types that it writes. A row may only go. The SLIR emitter (`backend/slir/`) imports no
+AST.
 
 ---
 
@@ -3005,10 +3086,11 @@ lowering finished.
 
 **An initializer body.** The SLIR stage does not lower the initializer body of a constant or
 a `var` (6.3). The body gives `typecheck` and `borrow` a SHIR node to check, and nothing
-more. The value of the constant is the value of the constant evaluator (Q5). The backend
-makes the global of each constant and each `var` from that value, in its declaration round
-(`codegen_llvm.py`, `_emit_global_constant`), and names it with `global_symbol`
-(`unit_symbols.py`). This is the one path of a global: no SLIR function makes the value of a
+more. The value of the constant is the value of the constant evaluator (Q5). The builder of
+the declaration table folds it, and the `GlobalDecl` of the constant holds it (6.3). The
+backend makes the global of each constant and each `var` from that value, in its declaration
+round (`codegen_llvm.py`, `_emit_global_constant`), and names it with the symbol of the
+record (`global_symbol`, `unit_symbols.py`). This is the one path of a global: no SLIR function makes the value of a
 global, and the dump shows no function for an initializer. A constant is an `internal`
 `.rodata` global in each module. A `var` is defined in the module of its unit, and
 declared in each other module, so a body of any module reads and writes it by address: the
@@ -3025,8 +3107,8 @@ functions, and one state object for each function (`FunctionState`: the codegen,
 storage of each local and the LLVM block of each `BlockId`). The stage entry
 (`emit_function`) takes `codegen` first and makes the state; every other function of the
 package takes the state first and reads the codegen from it, so one route reaches it. The
-declarations of a module still come from the AST. Each body comes from the `SlirFunction`
-of the analysis, keyed by the `DeclId` of the body: `codegen_for` hands the SLIR of the
+declarations of a module come from the declaration table (6.3). Each body comes from the
+`SlirFunction` of the analysis, keyed by the `DeclId` of the body that its record holds: `codegen_for` hands the SLIR of the
 program to the backend (`SlirBodies`), and a body that has no `SlirFunction` there is an
 internal error. There is no fallback to the AST body emitter. The emitter defines the LLVM
 function that the declaration round made for the symbol. One function derives the symbol of
