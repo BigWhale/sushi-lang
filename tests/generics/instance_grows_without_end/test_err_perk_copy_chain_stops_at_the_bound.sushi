@@ -1,0 +1,26 @@
+# A generic function and a perk implementation on a generic target call each other, and
+# each step makes a larger type argument. The copy of a perk implementation is no link
+# that the growth rule reads, so the copy fixpoint stops at its bound. The late copy of
+# the function that waits at the bound is CE0151, at the call that names it.
+# EXPECT_ERROR_CODES_EXACT: CE0151
+# EXPECT_STDERR_CONTAINS: test_err_perk_copy_chain_stops_at_the_bound.sushi:21:16: error [CE0151]
+perk Deepen:
+    fn deeper(i32 n) i32
+
+struct Tag@(T):
+    i32 n
+
+fn go@(U: Deepen)(U x, i32 n) i32:
+    return x.deeper(n)
+
+extend Tag@(T) with Deepen:
+    fn deeper(i32 n) i32:
+        if (n == 0):
+            return 0
+        let Tag@(Tag@(T)) t = Tag(n)
+        return go(t, n - 1) + 1
+
+fn main() i32:
+    let Tag@(i32) t = Tag(0)
+    println(go(t, 3))
+    return 0
