@@ -1,0 +1,33 @@
+# a rebind whose new value holds the last use of a `let peek` view of the rebound local
+# or `var`: the new value reads the view before the store changes the owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "9 1 1 1\n9 1\n1 5\n2\n4\n"
+var i32 N = 3
+
+struct Pair:
+    i32 a
+    i32 b
+
+fn main() i32:
+    let i32[32][4] g = [[1; 32], [2; 32], [3; 32], [4; 32]]
+    let i32[32] o = [9; 32]
+    let peek i32[32] row = g[0]
+    g := [o, row, row, row]
+    println("{g[0][0]} {g[1][0]} {g[2][0]} {g[3][0]}")
+    let i32[2][2] h = [[1; 2], [2; 2]]
+    let peek i32[2] first = h[0]
+    h := [[9; 2], first]
+    println("{h[0][0]} {h[1][0]}")
+    let Pair s = Pair(1, 2)
+    let peek i32 x = s.a
+    s := Pair(x, 5)
+    println("{s.a} {s.b}")
+    let i32 n = 1
+    let peek i32 m = n
+    n := m + 1
+    println("{n}")
+    let peek i32 k = N
+    N := k + 1
+    println("{N}")
+    return 0

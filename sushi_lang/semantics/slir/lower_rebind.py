@@ -35,8 +35,9 @@ if TYPE_CHECKING:
 def rebind(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     """A rebind: the new value first, then the drop of the old one, then the store, then
     the flag (rules 4 and 6). An old value that a move took, or that the caller owns,
-    drops nothing. A new value that may still read the old one (a live owning value, `and`,
-    `or`) goes into a temporary first."""
+    drops nothing. A new value that may still read the old one (a live owning value, a
+    local that a view lends, `and`, `or`) goes into a temporary first: then the region of a
+    view whose last use is the new value ends before the store."""
     capture = low.captures.get(target.local)
     if capture is not None:
         _rebind_capture(low, stmt, capture)
@@ -45,8 +46,9 @@ def rebind(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     if concat_in_place(low, stmt, target, ident):
         return
     value = low.value(stmt.value)
-    if isinstance(value, ShortCircuit) or (low.placement.holds_live_value(ident) and not (
-            isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
+    if isinstance(value, ShortCircuit) or (
+            (low.placement.holds_live_value(ident) or low.placement.is_lent(p.Local(ident)))
+            and not (isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
         ty = low.type_of(stmt.value)
         temp = p.Local(low.temporary(value, ty, stmt.value.loc))
         value = r.Use(p.Move(temp) if low.owns(ty) else p.Copy(temp))

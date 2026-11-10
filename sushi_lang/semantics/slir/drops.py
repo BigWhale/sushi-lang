@@ -191,6 +191,10 @@ class DropPlacement:
         return local in self._owning_addresses or (local in self._owning
                                                    and local not in self._moved)
 
+    def is_lent(self, root: p.Place) -> bool:
+        """Whether an open region has the local or the global `root` as an owner."""
+        return any(root in region.owners for region in self._open)
+
     def holds_own_value(self, local: LocalId) -> bool:
         """Whether `local` holds a value of its own on every path here: a live owning
         local, an `Inout` parameter, or an owning address local (the concat peephole,
