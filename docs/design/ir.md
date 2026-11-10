@@ -833,8 +833,11 @@ The third gate has no exception. The declaration round (`codegen_llvm.py`, `driv
 SLIR emitter (`backend/slir/`) reads SLIR. No backend module imports the AST or reads
 `Unit.ast`. The manifest of a library is a module of the compiler (6.3).
 
-After `collect`, no pass writes a declaration field on the AST, except `monomorphize` (the
-copies it makes, ruling Q1) and the driver (the home and the scope of a copy that it places).
+After `collect`, a pass writes a declaration field on the AST only in these cases:
+`monomorphize` (the copies that it makes, ruling Q1), the driver (the home and the scope of a
+copy that it places), the template check (the header copy that it cuts, 6.2), and `resolve`
+(the interned `Result` of a spelled `Result@(T, E)` return, `FuncDef.resolved_result`, a
+whole-program declaration pass).
 `typecheck` keeps what it resolves in its tables: the type of a parameter in the signature
 record, and the folded link name of an extern declaration in the extern table
 (`ExternalTable.folded`, by the id of the declaration). The constant evaluator reads an alias
