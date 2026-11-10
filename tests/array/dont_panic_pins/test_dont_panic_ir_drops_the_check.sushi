@@ -1,5 +1,8 @@
 # The marker removes the bounds check from the emitted code, and only in the marked body.
 # Each marked function has an unmarked twin with the same body. The twin keeps its check.
+# The IR directives read the symbol `_bounds_fail`: the emitter makes the call of this runtime
+# function in the failure branch of each bounds check, so the call is in the IR of a checked
+# body and absent from the IR of a marked body. A program run cannot show this.
 # COMPILER_FLAGS: --dont-panic
 # EXPECT_IR_LACKS: read_dynamic _bounds_fail
 # EXPECT_IR_HOLDS: read_dynamic_checked _bounds_fail

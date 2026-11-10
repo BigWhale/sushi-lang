@@ -1,6 +1,10 @@
 # A borrowed iterator keeps its state on the stack and an owned one keeps it on the
 # heap. A direct walk calls no `next_fn` and allocates nothing; a walk of a value calls
 # `next_fn`.
+# The IR directives read two symbols. `iter_next_fn` is the function that the emitter calls
+# for each item of an iterator value: it is in the IR of a walk of a value and absent from a
+# direct walk. `malloc` is the call that allocates an owned state on the heap: it is absent
+# from a walk of a borrowed iterator. The output of the program is the same for each place.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "6\n6\n6\n6\n"
 # EXPECT_NO_LEAKS

@@ -1,6 +1,9 @@
 # A function returns `peek Iterator@(i32)`: an iterator that borrows its array argument.
 # Its state leaves the function, so the state is on the heap, every link of a chain of
 # adapters included. The caller walks it, adapts it, and walks it through a `let`.
+# The IR directives read the symbol `malloc`: the emitter allocates the state of a returned
+# iterator on the heap, so the call is in the IR of the function that returns it. The output
+# of the program is the same for a state on the stack, so only the IR shows the allocation.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "2\n4\n6\n40\n60\n2\n4\n12\n5\n8\n"
 # EXPECT_NO_LEAKS
