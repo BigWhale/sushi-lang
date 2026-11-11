@@ -31,13 +31,13 @@ The emit order in a module is: the declarations of the runtime and the libc exte
 user externs (`declare_user_externs`, `backend/runtime/externs/user_externs.py`), the
 constants and unit variables, the function declarations, and then the function bodies.
 The declarations come from the `DeclTable` (`semantics/decl_table.py`), which `codegen_for`
-makes after the analysis; no backend module imports the AST. Each body comes from the `SlirFunction` of the
-analysis (`codegen_for` hands over the SLIR of the program as `SlirBodies`), through the
-SLIR emitter in `backend/slir/` (`emit_function`): every local is a slot in the entry
-block, and each SLIR block is one LLVM block. A drop goes through the one destroy seam
-(`emit_value_destructor`), and a call of an intrinsic (`interp`, `print`, `println`)
-through its row of `INTRINSICS` (`backend/slir/intrinsics.py`), which gives LLVM values to
-the string builder or to the print emitter. A SLIR shape that the emitter does not
+makes after the analysis; no backend module imports the AST. Each body comes from the
+`SlirFunction` of the analysis (`codegen_for` hands over the SLIR of the program as
+`SlirBodies`), through the SLIR emitter in `backend/slir/` (`emit_function`): every local is
+a slot in the entry block, and each SLIR block is one LLVM block. A drop goes through the
+one destroy seam (`emit_value_destructor`), and a call of an intrinsic (`interp`, `print`,
+`println`) through its row of `INTRINSICS` (`backend/slir/intrinsics.py`), which gives LLVM
+values to the string builder or to the print emitter. A SLIR shape that the emitter does not
 handle is an internal error ([`CE0000`](../error-catalog.md#ce0000)) before any output is
 written; the incremental path builds the module of every unit before it writes the first
 object for this reason. `backend/functions/` holds the function
@@ -45,7 +45,8 @@ manager: `declarations.py`, `helpers.py`, and `main_wrapper.py`, whose `emit_mai
 emits the C `main`. The C `main` calls the Sushi
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
 `string[]` when `main` takes `args`, and returns the value of the Sushi `main` as the exit
-code. The Sushi `main` is bare ([`CE0106`](../error-catalog.md#ce0106) refuses a channel), so its value IS the exit code.
+code. The Sushi `main` is bare ([`CE0106`](../error-catalog.md#ce0106) refuses a channel),
+so its value IS the exit code.
 
 ## Type system
 
@@ -210,9 +211,9 @@ one width.
 **Constants.** A scalar is `scalar_initializer` (`backend/constants/enum_initializers.py`):
 an integer at the width of its type. A struct, a tuple and an enum variant go through the
 one converter of an aggregate constant (`constant_initializer`, same module), which the
-SLIR emitter and the global of a `const` both call. A string is a private constant global (`StringConstantManager`,
-`backend/string_constants.py`, one global for each distinct text) and a fat pointer with
-owned = 0.
+SLIR emitter and the global of a `const` both call. A string is a private constant global
+(`StringConstantManager`, `backend/string_constants.py`, one global for each distinct text)
+and a fat pointer with owned = 0.
 
 **Arrays** (`backend/types/arrays/`): `arr[i]` is bounds-checked by
 `emit_bounds_check(codegen, index, size, ...)` (`backend/types/arrays/bounds.py`). It tests
@@ -225,14 +226,14 @@ internal error, never a widening.
 ### The method families
 
 A container method has its row in `LIST_EMITTERS` or `HASHMAP_EMITTERS`
-(`emit_with_operands`, `backend/generics/container_table.py`), a stdlib call its row in `STDLIB_EMITTERS`
-(`backend/expressions/calls/stdlib/__init__.py`), and a built-in array method its row in
-`backend/types/arrays/`. An extension method symbol comes from `extension_symbol`
-(`semantics/generics/name_mangling.py`), for example `Pair__i32_string_swapped`.
-Each family of built-in methods takes the operands of the SLIR call, never an AST node
-(`docs/design/ir.md` Q7). The row of each family is in `METHOD_FAMILIES`
-(`backend/slir/methods.py`). A `BuiltinMethod` callee of a family with no row is an internal
-error.
+(`emit_with_operands`, `backend/generics/container_table.py`), a stdlib call its row in
+`STDLIB_EMITTERS` (`backend/expressions/calls/stdlib/__init__.py`), and a built-in array
+method its row in `backend/types/arrays/`. An extension method symbol comes from
+`extension_symbol` (`semantics/generics/name_mangling.py`), for example
+`Pair__i32_string_swapped`. Each family of built-in methods takes the operands of the SLIR
+call, never an AST node (`docs/design/ir.md` Q7). The row of each family is in
+`METHOD_FAMILIES` (`backend/slir/methods.py`). A `BuiltinMethod` callee of a family with no
+row is an internal error.
 
 ## Memory management
 
@@ -325,15 +326,15 @@ registry text of each RExxxx code (`internals/errors/runtime.py`) is the format 
   owned fat pointer (`backend/runtime/strings.py`).
 
 `RESERVED_EXTERNS` (`semantics/externs_manifest.py`) holds `malloc`, `free` and `exit`,
-read from the libc table. Each one is the first declaration of its name for [`CE5001`](../error-catalog.md#ce5001) (#1099).
-The compiler's declarations of a libc symbol and a user's declarations of it are
-independent (#1099). Every libc signature that the compiler declares is in one table,
-`LIBC_SIGNATURES` (`sushi_stdlib/src/libc_signatures.py`), and the generators and the
-runtime declare through `declare_libc`. A call goes through the type of its own
-declaration: when the module already holds the symbol with another function type,
-`declare_extern` gives a bitcast of it to the caller's type. `_declare_one` and
-`_declare_variable` (`runtime/externs/user_externs.py`) do the same for a user
-declaration.
+read from the libc table. Each one is the first declaration of its name for
+[`CE5001`](../error-catalog.md#ce5001) (#1099). The compiler's declarations of a libc symbol
+and a user's declarations of it are independent (#1099). Every libc signature that the
+compiler declares is in one table, `LIBC_SIGNATURES`
+(`sushi_stdlib/src/libc_signatures.py`), and the generators and the runtime declare through
+`declare_libc`. A call goes through the type of its own declaration: when the module already
+holds the symbol with another function type, `declare_extern` gives a bitcast of it to the
+caller's type. `_declare_one` and `_declare_variable` (`runtime/externs/user_externs.py`) do
+the same for a user declaration.
 
 ## Optimization
 
@@ -384,9 +385,10 @@ PYTHONHASHSEED=0 ./sushic --dump-ll --opt O2 program.sushi > optimized.ll
   compiled to its own cached object (`compiler/cache.py`), and `link_object_files` links
   all of them.
 
-The linker is `cc`. The command is `cc <objects> -o <output>`, with `-lm` on Linux. The stdlib linker is `StdlibLinker` (`backend/stdlib_linker.py`);
-`TwoPhaseLinker` (`backend/module_linker.py`) resolves a duplicate symbol by its source on
-the monolithic path. A library definition that a consumer can also hold is `weak_odr`
+The linker is `cc`. The command is `cc <objects> -o <output>`, with `-lm` on Linux. The
+stdlib linker is `StdlibLinker` (`backend/stdlib_linker.py`); `TwoPhaseLinker`
+(`backend/module_linker.py`) resolves a duplicate symbol by its source on the monolithic
+path. A library definition that a consumer can also hold is `weak_odr`
 (`backend/library_linkage.py`).
 
 ---
