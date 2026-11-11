@@ -1,14 +1,17 @@
-"""The written name of each `DeclId`, until the declaration table exists (docs/design/ir.md 6.3).
+"""The written name of each `DeclId` that lowering gives (docs/design/ir.md 6.3).
 
-`declarations(program) -> DeclTable` is the second entry point of ir.md 6.3, and no chunk
-has built it yet. Until then, lowering gives a `DeclId` to each declaration that it
-names, and this table keeps the written name of the id, so that the printer can show it.
-The ids are given in the order of the calls, as every SHIR id is (ir.md 11.3).
+Lowering gives a `DeclId` to each declaration that it names, and this table keeps the
+written name of the id, so that the printer and the SLIR lowering can show it. The ids
+are given in the order of the calls, as every SHIR id is (ir.md 11.3).
 
 A body takes a new id (`declare`). A name that a body refers to (a constant, a `var`, a
-function) takes one id for each written name (`refer`), so two references to one
-declaration share an id. The two kinds of id are apart until the declaration table
-exists.
+function, a type) takes one id for each written name (`refer`), so two references to one
+declaration share an id. A reference id is not the id of the body that it names.
+
+The declaration table (`declarations`, `semantics/decl_table.py`) is a different record:
+it is made after the analysis, from the AST and the symbol tables, and its entry of a
+function or a method keeps the `DeclId` that `declare` gave to its body. It keeps no
+reference id.
 """
 from __future__ import annotations
 

@@ -9,8 +9,10 @@ the dead code and the documents). The backend emits each function from SLIR, and
 module reads the AST. In a program with no error, a construct that a stage does not handle is
 an internal error (CE0000). The numbers in sections 1 to 5 describe the tree at `cc4088ca`.
 This document is the DESIGN: what the two IRs are, why they have this shape, and what
-a migration must keep. The phases, the risks and the progress tracking are not part of this
-document; a migration plan comes from it. Nothing in the language changes: every behaviour
+a migration must keep. The reference of the code as built is [the SHIR
+reference](../internals/shir.md) and [the SLIR reference](../internals/slir.md). The phases,
+the risks and the progress tracking are not part of this document; a migration plan comes
+from it. Nothing in the language changes: every behaviour
 test passes before and after, unchanged. There are the exceptions that N4 names.
 
 Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bodies), 6.4
@@ -724,9 +726,16 @@ Only these may be asked of the AST once the migration completes:
 The entire interface between the AST and everything downstream is two entry points:
 
 ```
-lower_body(ast_block, bindings, ctx) -> ShirBody   # bodies, once scope has run
-declarations(program)                -> DeclTable  # declarations, for the backend (S30)
+lower_body(bindings, ctx) -> ShirBody      # bodies, once scope has run
+declarations(units, tables, shir, *,       # declarations, for the backend (S30)
+             copies, shipped_methods, shipped_perks) -> DeclTable
 ```
+
+`lower_body` (`semantics/shir/lowering.py`) reads the AST body from `bindings.body`.
+`declarations` (`semantics/decl_table.py`) reads the units, the `SymbolTables`, the
+`LoweredProgram` of SHIR, and three lists that the analyzer keeps: the monomorphized
+extensions (`copies`), and the extension methods and the perk implementations that a
+library ships.
 
 Anything that needs a third entry point is a design smell and must be argued for in this
 document first.
@@ -736,7 +745,9 @@ document first.
 to the backend, after the last pass of the analysis: the copy fixpoint adds instances after
 the per-unit loop, so an earlier table does not hold them. The table is frozen. The builder
 reads the declarations of the AST of each unit, the symbol tables (`SymbolTables`), the SHIR
-program (for the `DeclId` of each body) and the constant evaluator. The builder is the one
+program (for the `DeclId` of each body) and the constant evaluator. The `DeclId` of a body
+is the id that `DeclNames.declare` gave it in lowering (`semantics/shir/decls.py`); the
+table keeps no id of a reference, which `DeclNames.refer` gives. The builder is the one
 reader of a declaration of the AST after the analysis. The table is in `semantics/`, and the
 backend reads it (`semantics` never imports `backend`). Its fields are the facts that the
 declaration round of the backend reads, and no more:
@@ -960,7 +971,7 @@ ShirBody
   params  : [ShirParam]
   locals  : [ShirLocal]            # from the `scope` pass
   block   : ShirBlock
-  copies  : ShirId -> [CopyRange]  # the copies of an unrolled `expand`, by block (4.5)
+  copies  : ExpandCopies           # the copies of an unrolled `expand`, by block (4.5)
 
 ShirParam
   local      : LocalId
@@ -968,6 +979,12 @@ ShirParam
   convention : Convention          # from the declared mode -- section 8.3
   loc        : Span                # of the receiver: the type that the method extends
   pack       : bool                # the written `...` of a value pack parameter
+
+ExpandCopies                       # a class of `body.py`, keyed by the ShirId of a block
+  record_copies(block, ranges)     # lowering, the one writer
+  blocks()        -> [ShirId]      # each block that holds a copy, in id order
+  ranges_of(block) -> [CopyRange]  # in the order of the start, the outer copy first
+  holding(block, index) -> [CopyRange]   # the copies that hold one statement
 
 CopyRange
   start, stop : int                # the statements of one copy; `stop` is not included
@@ -1607,6 +1624,7 @@ not reach prints as lowering made it.
 | `ArrayInit` | `kind: Fixed \| Dynamic(new: bool)`, `runs: [ArrayRun]`; `new` is true for `new()` and false for `from([...])`, so a diagnostic names the form that the source writes |
 | `Range` | `start: Expr`, `end: Expr`, `inclusive: bool`, `reverse: bool` |
 | `Interp` | `parts: [Str \| Expr]`; kept whole so `typecheck` reports per part |
+| `Hole` | `ast_class: str`, `codes: [str]`, `member: UnknownMember \| None`, `named: str \| None`, `call: ShirNode \| None`, `type_args_loc: Span \| None`; a construct that lowering does not handle (`semantics/shir/nodes.py`). `ast_class` names its AST class. A hole with `codes` is an ERROR HOLE, and the other fields are its data; the text after the `CallTarget` block gives each one. A hole with no codes is the backstop of an AST class with no lowering row |
 
 ```
 CallTarget = Named(ref: Expr, type_args: [TypeRef], type_args_loc: Span | None)
@@ -1932,6 +1950,7 @@ descriptor and drops would free the array two times.
 | `Assert` | `cond: Expr`, `message: Expr \| None` |
 | `Break` / `Continue` | none |
 | `Expand` | `binder: LocalId`, `pack: str`, `body: ShirBlock`; a template check body only (4.5) |
+| `Hole` | the fields of 7.4; a hole is in the statement union too (a `break` or a `continue` outside a loop) |
 
 ```
 LoopSource = Cond(cond: Expr)                                              # `while`
@@ -4319,47 +4338,60 @@ locals, and the locals that own nothing, and nothing else:
 
 The source:
 
-<!-- docs-sweep: skip (fragment: calls functions the example does not declare) -->
 ```sushi
+fn decorate(nom string name) string | StdError:
+    return Result.Ok("{name}!")
+
+fn shout(nom string msg) ~:
+    println(msg)
+
 fn greet(nom string name, bool loud) ~ | StdError:
     let string msg = decorate(nom name)??
     if (loud):
         shout(nom msg)
     return Result.Ok(~)
+
+fn main() i32:
+    let string name = "Mostly Harmless"
+    let Result@(~, StdError) done = greet(nom name, true)
+    if (done.is_ok()):
+        return 0
+    return 1
 ```
 
-`msg` is moved on one path and not on the other, so it needs a drop flag. This is the case
-that 1.4 handles today with a name string.
+In `greet`, `msg` is moved on one path and not on the other, so it needs a drop flag. This
+is the case that 1.4 handles today with a name string.
 
 **SHIR**: a tree, `Try` intact, no drops, no blocks. The printer shows side-table answers
-in place, so `Free(@decorate)` and the conventions below are `TypeckResults` facts (S5)
-shown inline:
+in place: `Free(@decorate)` and the conventions are `TypeckResults` facts (S5), and `move`,
+`adopt` and the `cond_moved` line are the answers of `borrow` (7.10). This is the
+`--dump-shir` text of `greet`:
 
-```
+```text
 ShirBody greet
   params : [(_0 "name": string, Owned), (_1 "loud": bool, Guaranteed)]
   locals : [_2 "msg": string]
+  cond_moved : [_2]
   block  :
-    Assign(LocalRef(_2), Try(Call(Free(@decorate), [(LocalRef(_0), Owned)])), is_init: true)
-    If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(LocalRef(_2), Owned)]))])
-    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
+    Assign(LocalRef(_2), adopt Try(adopt Call(Free(@decorate), [(move LocalRef(_0), Owned)])), is_init: true)
+    If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(move LocalRef(_2), Owned)]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 ```
 
-This is the `--dump-shir` text: one line for each statement, and a declaration keeps its
-`@`. SHIR counts its locals from `_0`. SLIR gives `_0` to the return slot and gives ids to
-its temporaries, so the ids of the two levels differ (`msg` is `_2` in SHIR and `_5` in
-SLIR).
+The printer writes one line for each statement, and a declaration keeps its `@`. SHIR
+counts its locals from `_0`. SLIR gives `_0` to the return slot and gives ids to its
+temporaries, so the ids of the two levels differ (`msg` is `_2` in SHIR and `_5` in SLIR).
 
-**SLIR**: this is also the `--dump-slir` text format:
+**SLIR**: this is the `--dump-slir` text of `greet`, as the compiler writes it:
 
-```
+```text
 fn greet(_1: string @owned, _2: bool @guaranteed) -> Result@(~, StdError) {
-    let _0: Result@(~, StdError)           // return slot
+    let _0: Result@(~, StdError)
     let _3: Result@(string, StdError)
-    let _4: i32                            // discriminant
+    let _4: i32
     let _5: string                         // msg
-    let _6: bool                           // drop flag for _5
-    let _7: Result@(~, StdError)           // shout(), unused
+    let _6: bool
+    let _7: ~
 
   bb0:
     StorageLive(_3)
@@ -4367,7 +4399,7 @@ fn greet(_1: string @owned, _2: bool @guaranteed) -> Result@(~, StdError) {
     _4 = discriminant(_3)
     switchInt(copy _4) -> [0: bb1, 1: bb2, otherwise: unreachable]
 
-  bb1:                                     // Ok
+  bb1:
     StorageLive(_5)
     _5 = move ((_3 as Ok).0)
     StorageDead(_3)
@@ -4375,19 +4407,19 @@ fn greet(_1: string @owned, _2: bool @guaranteed) -> Result@(~, StdError) {
     _6 = const true
     switchInt(copy _2) -> [0: bb4, otherwise: bb3]
 
-  bb2:                                     // Err -- `??` propagates
+  bb2:
     _0 = Result::Err(move ((_3 as Err).0))
     StorageDead(_3)
     return
 
-  bb3:                                     // loud
+  bb3:
     StorageLive(_7)
     _7 = call @shout(move _5 @owned)
-    _6 = const false                       // msg was moved on this path
+    _6 = const false
     StorageDead(_7)
     goto -> bb4
 
-  bb4:                                     // join
+  bb4:
     _0 = Result::Ok(const ~)
     DropIfSet(_5, _6)
     StorageDead(_6)
@@ -4396,9 +4428,72 @@ fn greet(_1: string @owned, _2: bool @guaranteed) -> Result@(~, StdError) {
 }
 ```
 
-The comments are notes for this example. The printer writes one comment only: the source
-name of a local (`// msg`). In `bb4` the `return` writes `_0` first, and then the drops of
-the scope exit run (8.10, rule 2).
+The printer writes one comment only: the source name of a local (`// msg`). The other
+locals are the return slot `_0`, the result of `decorate` (`_3`), its discriminant (`_4`),
+the drop flag of `_5` (`_6`) and the unused result of `shout` (`_7`). `bb1` is the `Ok`
+path, `bb2` is the `Err` path where `??` propagates, `bb3` is the `loud` path, and `bb4`
+is the join. In `bb4` the `return` writes `_0` first, and then the drops of the scope exit
+run (8.10, rule 2).
+
+The SLIR of `shout` and `main` shows three more facts:
+
+```text
+fn shout(_1: string @owned) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    Drop(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string                         // name
+    let _2: Result@(~, StdError)           // done
+    let _3: bool
+
+  bb0:
+    StorageLive(_1)
+    _1 = const "Mostly Harmless"
+    StorageLive(_2)
+    _2 = call @greet(copy _1 @owned, const true @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin result.is_ok(copy _2 @guaranteed)
+    switchInt(copy _3) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_3)
+    _0 = const 0_i32
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    return
+
+  bb2:
+    StorageDead(_3)
+    goto -> bb3
+
+  bb3:
+    _0 = const 1_i32
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}
+```
+
+- `println` is a built-in call (`call builtin println@(string)`), not a call of a
+  declaration.
+- A string bound from a literal owns no heap. The local `_1` takes `const "Mostly
+  Harmless"`, and the `nom` argument of `greet` is a `copy` with the convention `@owned`,
+  not a `move` (the carve-out of 8.13, the rule of an owned copy).
+- The condition of an `if` that is a call goes through a `bool` temporary (`_3`), and the
+  `switchInt` reads that temporary.
 
 Read `bb3` and `bb4` together. The whole of 1.4, the LLVM-keyed move set, the name-string
 drop-flag lookup, `arm_if_conditional` and `emit_free_unless_moved`, is those three lines.
@@ -4438,7 +4533,12 @@ where they are. Also not in the table: the per-type emitter families. Ruling Q7 
 
 ### 8.13 The verifier
 
-Runs after lowering, before the backend. It checks:
+Runs on every compile, in the analysis. `SlirStage.lower_body` (`semantics/slir/lower.py`)
+lowers one body, then verifies the `SlirFunction` and each function that it lifts
+(`SlirVerifier.verify`, then `verify_function` in `semantics/slir/verify.py`), and only then
+records the function in the `SlirProgram` (`SlirProgram.record`). So the backend never
+receives a function that the verifier did not check. A failed rule is the internal error
+CE0158. It checks:
 
 - every local is typed, and every `Place` type-checks against it
 - every `Downcast` names a real variant of the place's enum
