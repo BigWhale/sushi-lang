@@ -4,13 +4,17 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-11
+
 The compiler has a new pipeline. The semantic passes and the backend now work on two
 typed intermediate representations, SHIR (high level, after name and type resolution)
 and SLIR (low level, where the control flow, each move and each drop are explicit),
 where they worked on the syntax tree before. A language rule did not change, and every
 program of the test corpus compiles to the same result, with the exceptions that the lists
 below name. Most of these exceptions are faults of the old pipeline that the new one does
-not have.
+not have. A program does not need a change. A `.slib` built by 0.16 needs a rebuild: it
+requires the compiler minor version that built it, so 0.17 refuses it with `CE3503`
+(`--ignore-compiler-version` skips the check).
 
 ### Added
 
@@ -75,6 +79,12 @@ not have.
   at the template. A wrong count of a static adds no `CE2427` for a parameter that does not
   exist.
 
+### Documentation
+
+- **Reference pages for the two intermediate representations**: `docs/internals/shir.md`
+  and `docs/internals/slir.md` list each node, each table and each verifier rule, and show
+  how to read a dump. `docs/design/ir.md` is the design.
+
 ### Fixed
 
 - **A function value of a variadic function is refused.** `let fn(i32[]) -> i32 f = sum`,
@@ -130,6 +140,9 @@ not have.
 - A static with a method-level type parameter on a generic target
   (`extend Box@(T) static make@(U)(nom T a, U seed)`) is the internal error `CE0000`
   "no copy of 'make' applies" (#1276).
+- A signed constant whose radix literal fills its bit pattern (`const i8 K = 0xff`) is the
+  internal error `CE0000` "a constant value that its type cannot hold". The old compiler
+  compiled such a program (#1274).
 
 ## [0.16.0] - 2026-10-11
 
