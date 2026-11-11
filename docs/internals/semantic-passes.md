@@ -36,7 +36,8 @@ each named for the stage it runs.
 
 The last four run per unit, in one loop, so the whole-program passes above them see every
 unit before any function body is walked. Lowering to SHIR runs in the loop too, after
-`scope`; it is not a pass.
+`scope`; it is not a pass. [The SHIR reference](shir.md) and [the SLIR reference](slir.md)
+describe the two IRs as built.
 
 **The move to SHIR** ([the IR design](../design/ir.md), 7.9). The compiler lowers each body
 to SHIR after `scope`, and the three SHIR passes walk the SHIR body of each declaration in

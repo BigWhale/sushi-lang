@@ -5,7 +5,8 @@
 The backend translates the SLIR of the analysis into LLVM IR, optimizes the IR, emits object
 code and links a native executable. All paths on this page are relative to
 `sushi_lang/`. The code sketches show the shape of the emitted IR; the module that each
-section names holds the real code.
+section names holds the real code. [The SLIR reference](slir.md) describes the input of the
+backend.
 
 ## Main components
 

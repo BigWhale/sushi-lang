@@ -48,6 +48,8 @@ compiled again. A single-file program, a library build (`--lib`), `--no-incremen
 | `semantics/` | The AST (`ast.py`), the type system (`typesys.py`), the symbol tables (`tables.py`), the analyzer (`semantic_analyzer.py`), and the one-seam modules of the analysis (see below) |
 | `semantics/passes/` | The passes: `collect/`, `docs.py`, `namespaces.py`, `resolve.py`, `finite_types.py`, `derive.py`, `scope.py`, `types/` (the `typecheck` pass), `lift.py`, `borrow/` |
 | `semantics/generics/` | Instantiation (`instantiate/`), monomorphization (`monomorphize/`), the Result and Maybe interning, derived `hash` and `clone`, name mangling, type display |
+| `semantics/shir/` | SHIR, the tree IR of each body, and its lowering from the AST ([the SHIR reference](shir.md)) |
+| `semantics/slir/` | SLIR, the control-flow IR of each function, its lowering from SHIR and its verifier ([the SLIR reference](slir.md)) |
 | `backend/` | LLVM IR generation. `codegen_llvm.py` GENERATES a module; `driver.py` compiles, links and builds library bitcode |
 | `backend/slir/` | The emitter of a `SlirFunction`: one LLVM function for each body |
 | `backend/expressions/` | The value halves of the operators, the casts, the integer constants and the enum variants; the memory helpers of the families; the stdlib call table |
