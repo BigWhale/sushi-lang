@@ -76,6 +76,7 @@ from sushi_lang.semantics.shir.body import Initializer, ShirBody
 from sushi_lang.semantics.shir.loop_kind import CountedRange, While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.typeck import MatchFacts
+from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, EnumType, ReferenceType, Type, deref_type)
@@ -286,9 +287,10 @@ def check_return(validator: TypeValidator, node: s.Return) -> None:
 
 def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
     """The `Return` of an initializer body: the value at the declared type, as a `let`
-    checks it. A generic function value has no value there (CE2093). Any other initializer
-    that fits and has no value, and is no empty container, is an internal error. The pass writes no value row: the backend makes the global from the constant
-    evaluator (docs/design/ir.md 7.3, 8.2)."""
+    checks it. A generic function value, at any depth of the value, has no value there
+    (CE2093). Any other initializer that fits and has no value, and is no empty container,
+    is an internal error. The pass writes no value row: the backend makes the global from
+    the constant evaluator (docs/design/ir.md 7.3, 8.2)."""
     facts = validator.initializer
     if facts is None:
         er.raise_internal_error("CE0000", span=node.loc,
@@ -301,21 +303,28 @@ def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
         return
     if got is None or facts.empty:
         return
-    if facts.value is None and _is_generic_function_value(validator, node.value):
-        reject_unsolved_generic_value(validator, node.value.loc,
-                                      validator.decl_name(node.value.decl), facts.ty)
-        return
     if facts.value is None:
-        visit.unhandled_with_no_value(validator, node)
+        generic_values = _generic_function_values(validator, node.value)
+        if not generic_values:
+            visit.unhandled_with_no_value(validator, node)
+        answers = validator.body_answers()
+        for ref in generic_values:
+            reject_unsolved_generic_value(validator, ref.loc, validator.decl_name(ref.decl),
+                                          answers.type_of(ref.shir_id))
 
 
-def _is_generic_function_value(validator: TypeValidator, value: e.ShirExpr) -> bool:
-    """True for an instance of a generic function used as a value. A constant holds no
+def _generic_function_values(validator: TypeValidator, value: e.ShirExpr) -> list[e.GlobalRef]:
+    """Each instance of a generic function used as a value in an initializer, at any
+    depth: the value itself, a field, a payload or an element. A constant holds no
     instance, so the constant evaluator gives it no value (CE2093)."""
-    if not isinstance(value, e.GlobalRef):
-        return False
-    row = validator.body_answers().callee_of(value.shir_id)
-    return row is not None and bool(row.type_args)
+    answers = validator.body_answers()
+    found = []
+    for _path, part in walk(value, ""):
+        if isinstance(part, e.GlobalRef):
+            row = answers.callee_of(part.shir_id)
+            if row is not None and row.type_args:
+                found.append(part)
+    return found
 
 
 def _check_channel_return(validator: TypeValidator, value: e.ShirExpr, channel: Type) -> None:

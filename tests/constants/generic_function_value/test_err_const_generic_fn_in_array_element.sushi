@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093, CE2093
+# EXPECT_STDERR_CONTAINS: test_err_const_generic_fn_in_array_element.sushi:13:41: error [CE2093]
+# EXPECT_STDERR_CONTAINS: test_err_const_generic_fn_in_array_element.sushi:13:45: error [CE2093]
+#
+# A generic function is no value in an element of an array constant. Each element is
+# one error.
+fn id@(T)(nom T x) T:
+    return x
+
+fn inc(nom i32 x) i32:
+    return x + 1
+
+const (fn(nom i32) -> i32)[3] C = [inc, id, id]
+
+fn main() i32:
+    println(1)
+    return 0
