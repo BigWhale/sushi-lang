@@ -279,8 +279,11 @@ of the program cannot show, for example a bounds check that `dont_panic` removes
 - The value is `<function> <text>`. The text is a substring of the body of the function
 - The function is its source name. The runner finds the symbol that is the name, or the
   name after its unit (`prog$read_dynamic`). No symbol, or two symbols, fail the fixture
-- The runner adds `--write-ll --no-incremental` to the compilation and reads the IR
-  before optimization. A program of more than one unit gets the one-module build too
+- The runner adds `--write-ll --no-incremental` to the compilation and reads the `.ll`
+  file. That file holds the module after the driver links and OPTIMIZES it, at the
+  `--opt` level of the build (the default level, `mem2reg`, runs SROA). A fixture that
+  needs the IR before optimization adds `# COMPILER_FLAGS: --opt none`. A program of more
+  than one unit gets the one-module build too
 - Put a marked function and an unmarked twin in one fixture, and assert both. The twin
   proves that the text is there when the rule does not apply
 - The directive may be repeated. A fixture that does not compile has no IR, and fails

@@ -3195,8 +3195,8 @@ error. `SwitchInt` with `otherwise: None` goes to a block that holds `unreachabl
 Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
 where a family took an AST node, its value half is cut out. The AST body emitter is deleted:
 its statement, expression, call dispatch and ownership layers went (8.12), and so did the
-AST entry of each family that has a value half. A family that has no value half yet keeps
-its AST argument half, with no caller, until its construct gives it operands. A
+AST entry and the AST argument half of each family. Every family takes operands, and no
+module of the backend imports the AST (gate: `tests/unit/test_backend_imports_no_ast.py`). A
 `Str` constant comes from the string constant seam and owns no heap (owned flag 0). `Copy`
 and `Move` both load the value: a `Move` emits no code of its own, because lowering placed
 every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`). A string
@@ -3535,7 +3535,7 @@ evaluator (#1273 to #1275), and ruling R-AF fixes it after the merge, not on thi
 A signed constant whose radix literal fills its bit pattern (`const i8 K = 0xff`) gets this
 internal error too, where the old pipeline compiled the program.
 So `tests/literals/hex_literals/test_hex_literals_constants.sushi` stays red by name at Gate
-6, with R-AF as the reason, until #1273 lands.
+6, with R-AF as the reason, until #1274 lands.
 
 ### 8.6 Statements
 
