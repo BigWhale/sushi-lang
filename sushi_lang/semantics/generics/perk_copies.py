@@ -2,11 +2,12 @@
 
 `extend T[] with P` covers every dynamic array. An array type has no instantiation set:
 `i32[]` is written, inferred and nested anywhere. `extend Box@(T) with P` covers every
-instance of `Box`, and the instance that only the typecheck pass names (the return of a
-copy that a call cut) comes after the cut per instantiation (`for_each_instantiation`). So
-the copy for one type is cut when a lookup of the perk-implementation table misses for it
-(`PerkImplementationTable.on_perk_miss`), and every reader of the table -- a method call, a
-constraint, a contract walk, the hash override -- agrees with no edit.
+instance of `Box`, and a late instance (a generic call that only its arguments solve, which
+the `typecheck` pass types on SHIR) comes after the cut per instantiation
+(`for_each_instantiation`). So the copy for one type is cut when a lookup of the
+perk-implementation table misses for it (`PerkImplementationTable.on_perk_miss`), and every
+reader of the table -- a method call, a constraint, a contract walk, the hash override --
+agrees with no edit.
 
 A cut copy is registered at once, so the lookup that asked answers. Its BODY waits on
 `pending` until the analyzer places it in the home unit of its template and checks it,

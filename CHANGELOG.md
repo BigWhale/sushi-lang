@@ -42,8 +42,8 @@ not have.
 - **A bare variant at a position of a different declared type is a type error.** At an
   `i32` position, `let i32 y = Maybe.None` and `y := Maybe.None` are `CE2002`,
   `id(Maybe.None)` is `CE2006`, and `return Maybe.None` is `CE2003`. The old compiler gave
-  the error `CE0056` ("cannot determine type for variable"), or no diagnostic when the body
-  had another error.
+  the internal error `CE0056` ("cannot determine type for variable"), or no diagnostic when
+  the body had another error.
 - **A constraint that a generic template breaks is `CE4006` at the template.** The text
   names the type parameter (`type T`) with a note at its declaration and a help. The old
   text named the type of the instance and the note "this instance is required by the call
@@ -90,8 +90,9 @@ not have.
 - **`let b = a` of an iterator that borrows its source (from `.iter()`) moves it.**
   `return b` from a `peek` function works, and a later use of `a` is `CE2405`. Before, the
   copy compiled and crashed at run time.
-- **A perk method on an instance that only the type of an expression names** (`extend
-  Box@(Pt) with Named`) compiles. Before, it was `CE2008`, or the internal error `CE0024`.
+- **A perk method on an instance that only the return type of a generic call names**
+  (`extend Box@(Pt) with Named`) compiles. Before, it was `CE2008`, or the internal error
+  `CE0024`.
 - **An override of `Display`, `Eq` or `Hashable` runs on such an instance.** Before, the
   compiler used the derived form with no diagnostic, so the output was wrong.
 - **The receiver of a perk method with `peek self` or `poke self` is evaluated one time.**
