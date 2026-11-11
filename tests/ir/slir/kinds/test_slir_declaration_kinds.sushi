@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_DUMP_SLIR: test_slir_stopped_kinds.slir
+# EXPECT_DUMP_SLIR: test_slir_declaration_kinds.slir
 #
 # The SLIR lowering lowers a generic instance, a conversion, a perk method and an extension
 # method. Each one is a function of the dump.

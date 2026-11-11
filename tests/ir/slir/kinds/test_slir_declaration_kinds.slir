@@ -1,4 +1,4 @@
-unit test_slir_stopped_kinds
+unit test_slir_declaration_kinds
 
 fn main() -> i32 {
     let _0: i32
