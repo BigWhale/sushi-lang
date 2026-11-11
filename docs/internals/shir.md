@@ -131,7 +131,7 @@ A resolution is one of these classes:
 ## Node reference
 
 The tables below list every node class, with its fields as the dataclass declares them.
-A script generated the field lists from the code. The classes are data only.
+The classes are data only.
 
 Every node class has the fields `shir_id` and `loc` from `ShirNode` (`nodes.py`). The
 tables omit those two fields. A "part" is a class that a node holds. A part is not a node:
