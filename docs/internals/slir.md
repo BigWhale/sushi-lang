@@ -269,8 +269,10 @@ the SLIR of the function '{function}' breaks the verifier rule '{rule}': {detail
 ```
 
 The error is a fault in the compiler, not in the program. The code is registered in
-`sushi_lang/internals/errors/internal.py`. The tests are in
-`tests/unit/test_slir_verifier*.py` and `tests/unit/test_slir_verify_regions.py`.
+`sushi_lang/internals/errors/internal.py`. The tests are
+`tests/unit/test_slir_verifier.py`, `test_slir_verifier_arrays.py`,
+`test_slir_verifier_globals.py`, `test_slir_verifier_libraries.py`,
+`test_slir_verifier_values.py` and `test_slir_verify_regions.py`.
 
 The order of the checks in `verify_function` is: the structure, the `ptr` quarantine (a
 public function only), the capture places, the stack iterators, the regions, and the
@@ -279,7 +281,7 @@ dataflow. The names of the rules are the constants of `verify_rules.py`.
 | Rule | Module | What it refuses |
 |---|---|---|
 | typed locals | `verify.py` | A local with no type, an unresolved type, or an id that is not its position. A parameter that is no local of the function. |
-| typed places | `verify.py` | A place on a local that the function lacks. A projection that does not fit its type: a field of a type with no fields or out of range, an index that is no `i32` or of a value that is no array, a `Downcast` of a variant the enum lacks, a `Deref` of a value that is no pointer. |
+| typed places | `verify.py` | A place on a local that the function does not have.<br>A field of a type that has no fields.<br>A field number out of range.<br>An index that is no `i32`.<br>An index of a value that is no array.<br>A `Downcast` to a variant that the enum does not have.<br>A `Deref` of a value that is no pointer. |
 | known blocks | `verify.py` | A duplicate block id, an entry that is no block, a jump to a missing block. |
 | one terminator per block | `verify.py` | A block with no terminator, or a terminator among the statements. |
 | spans | `verify.py` | A statement or a terminator with no span. |
@@ -295,12 +297,12 @@ dataflow. The names of the rules are the constants of `verify_rules.py`.
 | a switch on a tag | `verify.py` | A case that is no tag of the enum that a `Discriminant` read. |
 | an enum value | `verify.py` | A variant that the enum does not declare, or a payload part of a wrong count or type. A `Discriminant` of a value that is no enum. |
 | a struct value | `verify.py` | A struct value of a type that is no struct, or with a wrong field count or type. |
-| an array value | `verify.py`, `verify_arrays.py` | An array value of a type that is no array. Parts that do not fit the runs or the element type, a repeat run that moves, a sequence run whose element is no `i32`, a run count that is no constant. |
+| an array value | `verify.py`, `verify_arrays.py` | An array value of a type that is no array.<br>Parts that do not fit the runs.<br>Parts that do not fit the element type.<br>A repeat run that moves its part.<br>A sequence run whose element is no `i32`.<br>A run count that is no constant. |
 | a length and a slice | `verify_arrays.py` | A `Len` of a type that has no length. A `Slice` of a non-array, or with a bound that is no `i32`. |
-| a view | `verify.py`, `verify_arrays.py` | A view local that is no `T[]`, that anything but a `Slice` writes, or that is moved or dropped. A copy of a view into a local that owns. A drop of a part of a view. |
+| a view | `verify.py`, `verify_arrays.py` | A view local that is no `T[]`.<br>A view local that a statement other than a `Slice` writes.<br>A move or a drop of a view local.<br>A copy of a view into a local that owns.<br>A drop of a part of a view. |
 | a peek return | `verify.py` | A `Copy` of an owning value into `_0` when `_0` is no view local. |
 | registered trap | `verify.py` | A `Trap` with an unknown code, or with operands that do not fit the conversions of its text. |
-| declared conventions | `verify_calls.py`, `verify_values.py` | A `Direct` call of a callee with no declaration, or with a wrong argument count or an argument convention that differs from its declared parameter. The same for a static and a built-in method. An `Indirect` call of an operand that is no function type, or with a count or a convention that differs from its function type. |
+| declared conventions | `verify_calls.py`, `verify_values.py` | A `Direct` call of a callee that has no declaration.<br>A `Direct` call with a wrong argument count.<br>An argument convention that is not the convention of the declared parameter.<br>The same rules for a static and for a built-in method.<br>An `Indirect` call of an operand that is no function type.<br>An `Indirect` call whose count or conventions are not those of its function type. |
 | a receiver operand | `verify_calls.py` | A built-in method call with no receiver operand. |
 | no copy of an owning value into an owned argument | `verify_calls.py` | A `Copy` of an owning value into an `OWNED` argument. A `string` and a function value are the carve-outs. |
 | capture places | `verify_values.py` | A closure value of a wrong shape, a write of the environment, a move out of a capture. |
@@ -309,7 +311,7 @@ dataflow. The names of the rules are the constants of `verify_rules.py`.
 | no use after a move | `verify_flow.py` | A read or a move of a local that a path moved or dropped. A drop after a move. |
 | no use of a local outside its storage | `verify_flow.py` | A read or a move of a local that holds no value on a path. |
 | a written return slot | `verify_flow.py` | A `return` on a path that did not write `_0`. |
-| one drop or move on every path | `verify_flow.py` | An owning local that is not dropped or moved exactly one time on a path: a drop two times, a drop of no value, a write or a `StorageDead` while it holds a value, a `return` while it holds a value, an `inout` parameter that holds no value at a `return`. A move of a parameter that the function does not own, a drop of a borrowed parameter. A drop flag that does not agree with the state of its local. A take that leaves an owning part with no `Drop`. |
+| one drop or move on every path | `verify_flow.py` | An owning local must be dropped or moved one time on each path. The verifier refuses:<br>A drop two times.<br>A drop of a local that holds no value.<br>A write or a `StorageDead` while the local holds a value.<br>A `return` while the local holds a value.<br>An `inout` parameter that holds no value at a `return`.<br>A move of a parameter that the function does not own.<br>A drop of a borrowed parameter.<br>A drop flag that does not agree with the state of its local.<br>A take that leaves an owning part with no `Drop`. |
 | a view local | `verify_regions.py` | A view local that is not written by one statement on each path, that drops, moves, or is an owned argument. |
 | an address local | `verify_regions.py` | A `Ref` that does not come before each use, or an address local that moves or drops as a whole. |
 | a borrow region | `verify_regions.py` | A region that does not begin and end one time on each path, or that is open at a `return`. |
@@ -332,7 +334,8 @@ table that resolves the argument of the list. The follow-up is issue #1278.
 `verify.py` is at its limit of 600 lines. Never add a rule to it. Put a rule that checks a
 value or a place in `verify_values.py`, a rule that checks a call in `verify_calls.py`,
 and a rule that checks a region in `verify_regions.py`. Add the name of the rule to
-`verify_rules.py`, and a test to `tests/unit/test_slir_verifier*.py`.
+`verify_rules.py`. Add a test to the test file of the module: `test_slir_verifier_values.py`,
+`test_slir_verifier.py` (for `verify_calls.py`) or `test_slir_verify_regions.py`.
 
 ## The emitter
 
@@ -517,7 +520,7 @@ Follow this list. Write the failing fixture first.
    docstring.
 5. **Verifier.** Add the rule name to `verify_rules.py`. Add the check to
    `verify_values.py`, `verify_calls.py` or `verify_regions.py`. Do not add to
-   `verify.py`. Add a test to `tests/unit/test_slir_verifier*.py`.
+   `verify.py`. Add a test to the test file of that module (see "Where to add a rule").
 6. **Emitter.** Add the row: a new callee kind goes into `CALL_EMITTERS`, a new intrinsic
    into `INTRINSICS`, a new method family into `METHOD_FAMILIES`. Other classes get an arm
    in `emit.py` or `values.py`. The emitter must not import the AST.

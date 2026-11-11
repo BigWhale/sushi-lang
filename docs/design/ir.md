@@ -4615,7 +4615,9 @@ CE0158. It checks:
   one argument is `Guaranteed`. For the `cursor_next` row of the
   `hashmap` family (8.6, 8.9), the map is `InGuaranteed` and the cursor is `Inout`
 - no `Copy` of an owning value into an `Owned` argument, except a `string` and a function
-  value: a named function owns no heap, and `borrow` adopts it (7.9)
+  value: a named function owns no heap, and `borrow` adopts it (7.9). A string bound
+  directly from a literal also owns no heap and gets `ADOPT` (7.9). So a `nom` argument
+  of such a string is a `copy` with `@owned`, not a `move` (the example of 8.11)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
 - a switch on an integer: the operand of a `SwitchInt` is an integer or a `bool`, and each
