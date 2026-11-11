@@ -1,16 +1,14 @@
 """The typecheck pass resolves the built-in method families in ONE order.
 
-Issue #273: validation and the old codegen dispatcher ordered the primitive and
-auto-derived families oppositely. The receiver kinds are disjoint, so the canonical
-order below is arbitrary where the kinds are disjoint; what matters is that it is
-stated once (docs/design/method-resolution.md). The codegen dispatcher is deleted with
-the AST body emitter, so its half of this gate went with it.
+Issue #273: two places ordered the primitive and the auto-derived families in opposite
+orders. The receiver kinds are disjoint, so the order below is arbitrary where the kinds
+are disjoint. It must be stated once (docs/design/method-resolution.md).
 
-Since #751 the typecheck pass states its half in ONE place: the family table in
-`semantics/passes/types/method_registry.py`. So the order below is the table's, and the
-two rungs that are the LADDER's and not a family's -- the perk implementation and the
-extension -- are read from `calls/dotcall.py:resolve_dotted`, where the claim of the
-table puts the perk rung between the two halves of the table.
+Since #751 the order of the families is in ONE place: the family table in
+`semantics/passes/types/method_registry.py`. So the order below is the order of the
+table. The two rungs that are the rungs of the ladder and not of a family -- the perk
+implementation and the extension -- are read from `calls/dotcall.py:resolve_dotted`,
+where the claim of the table puts the perk rung between the two halves of the table.
 """
 from __future__ import annotations
 
@@ -20,7 +18,7 @@ from pathlib import Path
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
-SHIR_LADDER = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "dotcall.py"
+DOTCALL_LADDER = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "dotcall.py"
 
 # The canonical family order, highest priority first.
 CANONICAL_ORDER = [
@@ -72,17 +70,17 @@ def test_validation_resolves_families_in_the_canonical_order():
     assert order == CANONICAL_ORDER
 
 
-# The ladder over SHIR (docs/design/ir.md 7.3): the claim of the table, which puts a perk
-# implementation between the two halves of the table, then the perk rung, then the
+# The ladder of `resolve_dotted` (docs/design/ir.md 7.3): the claim of the table, which puts
+# a perk implementation between the two halves of the table, then the perk rung, then the
 # extension rung.
-SHIR_MARKERS = {
+RUNG_MARKERS = {
     "FAMILIES": r"METHOD_TYPE_REGISTRY\.claim\(",
     "PERK": r"perk_impl_table\.get_method\(",
     "EXTENSION": r"declaring_units\(",
 }
 
 
-def test_the_shir_ladder_asks_the_rungs_in_that_order():
-    """The SHIR ladder reads the same order: the table, the perk, the extension."""
-    assert _family_order(SHIR_LADDER, SHIR_MARKERS, scope="def resolve_dotted(",
+def test_resolve_dotted_asks_the_rungs_in_that_order():
+    """`resolve_dotted` reads the same order: the table, the perk, the extension."""
+    assert _family_order(DOTCALL_LADDER, RUNG_MARKERS, scope="def resolve_dotted(",
                          one_function=True) == ["FAMILIES", "PERK", "EXTENSION"]
