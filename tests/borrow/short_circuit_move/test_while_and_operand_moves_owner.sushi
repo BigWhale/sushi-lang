@@ -1,0 +1,16 @@
+# A `nom` move in the right operand of `and` in a `while` condition. The body gives the
+# local a new value, so each test of the condition reads a value that is not moved.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_NO_LEAKS
+
+fn take(nom string s) bool:
+    return s.len() > 5
+
+fn main() i32:
+    let string s = "Mostly Harmless {1}"
+    let i32 n = 0
+    while (n < 3 and take(nom s)):
+        n := n + 1
+        s := "Mostly Harmless {n}"
+    println("n={n}")
+    return 0
