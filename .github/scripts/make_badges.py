@@ -5,7 +5,7 @@ Stdlib only, deliberately: the badges job installs no toolchain, so this runs on
 runner's system python3.
 
 Inputs are the two artifacts produced by the SAME workflow run that gated the commit:
-  --corpus  tests/run_tests.py --enhanced --json   (the .sushi corpus)
+  --corpus  tests/run_tests.py --enhanced --json-out PATH   (the .sushi corpus)
   --pytest  pytest --junit-xml=...                 (the Python unit layer)
 
 Reading this run's artifacts rather than re-running the suites is the point. The job this
@@ -73,7 +73,7 @@ def _load_json(path: Path) -> dict:
 
 
 def load_corpus(path: Path) -> Suite:
-    """Parse `tests/run_tests.py --enhanced --json`."""
+    """Parse the report of `tests/run_tests.py --enhanced --json-out PATH`."""
     data = _load_json(path)
     for key in ("total_tests", "passed", "failed"):
         if not isinstance(data.get(key), int):

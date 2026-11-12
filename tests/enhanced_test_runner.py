@@ -432,7 +432,8 @@ class TestRunner:
                  leaks_only: bool = False, allow_leak_skips: bool = False,
                  compile_only: bool = False, project_root: Optional[Path] = None,
                  fresh_processes: bool = True, list_file: Optional[str] = None,
-                 bless: bool = False, env_overrides: Optional[Dict[str, str]] = None):
+                 bless: bool = False, env_overrides: Optional[Dict[str, str]] = None,
+                 json_out: Optional[Path] = None):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
         # `--list FILE`: the fixtures the file names. The caller has read it once already,
@@ -455,6 +456,7 @@ class TestRunner:
         self.verbose = verbose
         self.parallel_jobs = default_jobs() if parallel_jobs is None else parallel_jobs
         self.json_output = json_output
+        self.json_out = json_out
         self.leaks_only = leaks_only
         self.allow_leak_skips = allow_leak_skips
         self.compile_only = compile_only
@@ -577,22 +579,21 @@ class TestRunner:
         if not test_files:
             self.selected_nothing = True
             selection = self._describe_selection(filter_pattern)
-            if self.json_output:
-                # A consumer of the JSON reads a report, not an exit code, so the empty
-                # selection has to BE a report. Printing nothing would make a consumer
-                # crash on an empty file where it should read a clear failure.
-                print(json.dumps({
-                    "total_tests": 0, "compilation_tests": 0, "runtime_tests": 0,
-                    "passed": 0, "failed": 0, "duration_seconds": 0.0,
-                    "failed_tests": [],
-                    "leak_checks_run": 0, "leak_checks_skipped": 0,
-                    "leak_checks_skipped_detail": [],
-                    "leak_skips_allowed": self.allow_leak_skips,
-                    "selected_nothing": True,
-                    "selection": selection,
-                    "stdlib_doc_gate": self._doc_gate_json(),
-                }, indent=2))
-            else:
+            # A consumer of the JSON reads a report, not an exit code, so the empty
+            # selection has to BE a report. Printing nothing would make a consumer
+            # crash on an empty file where it should read a clear failure.
+            self._publish_json({
+                "total_tests": 0, "compilation_tests": 0, "runtime_tests": 0,
+                "passed": 0, "failed": 0, "duration_seconds": 0.0,
+                "failed_tests": [],
+                "leak_checks_run": 0, "leak_checks_skipped": 0,
+                "leak_checks_skipped_detail": [],
+                "leak_skips_allowed": self.allow_leak_skips,
+                "selected_nothing": True,
+                "selection": selection,
+                "stdlib_doc_gate": self._doc_gate_json(),
+            })
+            if not self.json_output:
                 self._print_doc_gate()
                 print(f"No fixture matched this selection: {selection}.")
                 print("A run that covered nothing is a failure, not a pass.")
@@ -1466,6 +1467,14 @@ class TestRunner:
         full_message = summary + "\n" + "\n".join(f"  {msg}" for msg in messages)
         return success, full_message
 
+    def _publish_json(self, report: dict) -> None:
+        """Give the JSON report to each consumer this run has: stdout, a file, or both."""
+        text = json.dumps(report, indent=2)
+        if self.json_output:
+            print(text)
+        if self.json_out is not None:
+            self.json_out.write_text(text + "\n", encoding="utf-8")
+
     def _emit(self, block: str) -> None:
         """Write a block of output without corrupting a live progress bar."""
         if self._pbar is not None:
@@ -1499,42 +1508,42 @@ class TestRunner:
         runtime_tests = sum(1 for r in results.values() if not r.skipped_runtime)
         unexcused = self.unexcused_leak_skips()
 
-        if self.json_output:
-            # Build list of failed tests with details
-            failed_test_list = []
-            for name, result in results.items():
-                if not result.total_success:
-                    failed_info = {
-                        "name": name,
-                        "category": result.category
-                    }
-                    if not result.compilation_success:
-                        failed_info["failure_type"] = "compilation"
-                        failed_info["message"] = result.compilation_message
-                    elif not result.runtime_success:
-                        failed_info["failure_type"] = "runtime"
-                        failed_info["message"] = result.runtime_message
-                    failed_test_list.append(failed_info)
+        # Build list of failed tests with details
+        failed_test_list = []
+        for name, result in results.items():
+            if not result.total_success:
+                failed_info = {
+                    "name": name,
+                    "category": result.category
+                }
+                if not result.compilation_success:
+                    failed_info["failure_type"] = "compilation"
+                    failed_info["message"] = result.compilation_message
+                elif not result.runtime_success:
+                    failed_info["failure_type"] = "runtime"
+                    failed_info["message"] = result.runtime_message
+                failed_test_list.append(failed_info)
 
-            json_output = {
-                "total_tests": total_tests,
-                "compilation_tests": compilation_tests,
-                "runtime_tests": runtime_tests,
-                "passed": passed_tests,
-                "failed": failed_tests,
-                "duration_seconds": round(duration, 2),
-                "failed_tests": failed_test_list,
-                "leak_checks_run": len(self.leaks_checked),
-                "leak_checks_skipped": len(self.leaks_skipped),
-                "leak_checks_skipped_detail": [
-                    {"name": name, "reason": reason}
-                    for name, reason in sorted(self.leaks_skipped)
-                ],
-                "leak_skips_allowed": self.allow_leak_skips,
-                "stdlib_doc_gate": self._doc_gate_json(),
-                "blessed": [_spelled_path(p, self.project_root) for p in self.blessed_files()],
-            }
-            print(json.dumps(json_output, indent=2))
+        json_output = {
+            "total_tests": total_tests,
+            "compilation_tests": compilation_tests,
+            "runtime_tests": runtime_tests,
+            "passed": passed_tests,
+            "failed": failed_tests,
+            "duration_seconds": round(duration, 2),
+            "failed_tests": failed_test_list,
+            "leak_checks_run": len(self.leaks_checked),
+            "leak_checks_skipped": len(self.leaks_skipped),
+            "leak_checks_skipped_detail": [
+                {"name": name, "reason": reason}
+                for name, reason in sorted(self.leaks_skipped)
+            ],
+            "leak_skips_allowed": self.allow_leak_skips,
+            "stdlib_doc_gate": self._doc_gate_json(),
+            "blessed": [_spelled_path(p, self.project_root) for p in self.blessed_files()],
+        }
+        self._publish_json(json_output)
+        if self.json_output:
             for line in self._bless_report():
                 print(line, file=sys.stderr)
         else:
@@ -1681,6 +1690,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--json-out",
+        metavar="PATH",
+        help="Write the JSON report to PATH and keep the human output on stdout"
+    )
+
+    parser.add_argument(
         "--skip-build",
         action="store_true",
         help="Skip building stdlib and test helpers"
@@ -1782,7 +1797,8 @@ def main():
     with TestRunner(tests_dir, args.verbose, args.jobs, args.json,
                     args.leaks_only, args.allow_leak_skips, args.compile_only,
                     fresh_processes=args.fresh_processes, list_file=args.list,
-                    bless=args.bless) as runner:
+                    bless=args.bless,
+                    json_out=Path(args.json_out) if args.json_out else None) as runner:
         runner.failed_helpers = failed_helpers
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,

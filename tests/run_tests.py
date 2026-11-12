@@ -1377,6 +1377,9 @@ def build_parser() -> argparse.ArgumentParser:
                             "each dump to its golden file. A run without it never writes one")
     parser.add_argument("--json", action="store_true",
                        help="Output results in JSON format")
+    parser.add_argument("--json-out", metavar="PATH",
+                       help="Write the JSON report to PATH and keep the human output "
+                            "on stdout")
     parser.add_argument("--skip-build", action="store_true",
                        help="Skip building stdlib and test helpers")
     parser.add_argument("--leaks-only", action="store_true",
@@ -1426,6 +1429,8 @@ def main():
     sys.argv.extend(["--jobs", str(args.jobs)])
     if args.json:
         sys.argv.append("--json")
+    if args.json_out:
+        sys.argv.extend(["--json-out", str(Path(args.json_out).resolve())])
     if args.bless:
         sys.argv.append("--bless")
     if args.skip_build:
