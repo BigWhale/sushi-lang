@@ -1,0 +1,17 @@
+# The condition of a `while` runs before the body on every iteration. A `nom` move of a
+# local in the condition is a use after move on the next iteration, CE2405 (#1271).
+# EXPECT_ERROR_CODE: CE2405
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: 13:21: error [CE2405]
+
+fn take(nom string s) bool:
+    return s.len() > 0
+
+fn main() i32:
+    let string s = "Mostly Harmless {1}"
+    let i32 n = 0
+    while (take(nom s)):
+        n := n + 1
+        if (n > 2):
+            break
+    return 0

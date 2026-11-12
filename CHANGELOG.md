@@ -10,6 +10,14 @@ All notable changes to Sushi Lang will be documented in this file.
   now `CE1003` at the `break` or the `continue`, as in a lambda with no loop around it. A
   lambda body starts with no loop, as a function body does. Before, the compiler stopped
   with an internal error (#1272).
+- **A `nom` move in the condition of a `while` loop is `CE2405`.** The condition runs
+  before the body on every iteration, so the borrow pass now checks it in each round of
+  the loop. Before, the compiler stopped with an internal error `CE0000` (#1271).
+- **A `nom` move in the right operand of `and` or `or` is a move on some paths.** The right
+  operand runs only when the left operand does not decide the result, so the borrow pass
+  now joins the path that skips it with the path through it, as for the two blocks of an
+  `if`. The local is freed one time on each path. Before, a program such as
+  `if (n < 3 and take(nom s)):` stopped with an internal error `CE0000`.
 
 ## [0.17.0] - 2026-11-11
 

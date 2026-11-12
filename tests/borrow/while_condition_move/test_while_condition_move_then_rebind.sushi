@@ -1,0 +1,18 @@
+# A `while` condition that moves a local is legal when each path back to the condition
+# gives the local a new value, and each other path leaves the loop (#1271).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 1\nMostly Harmless 2\nMostly Harmless 3\n"
+# EXPECT_NO_LEAKS
+
+fn take(nom string s) bool:
+    println(s)
+    return s.len() > 0
+
+fn main() i32:
+    let string s = "Mostly Harmless {1}"
+    let i32 n = 1
+    while (take(nom s)):
+        n := n + 1
+        if (n > 3):
+            break
+        s := "Mostly Harmless {n}"
+    return 0

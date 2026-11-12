@@ -18,7 +18,7 @@ reads its value, and `x.destroy()` destroys the local `x`.
 An `if` checks each block from the state before it, and the paths that reach the code
 after it join. A `match` reads its scrutinee (`match nom r:` takes it), each arm declares
 its bare binders, and its arms join as the blocks of an `if` do. A `while` loop checks its
-condition once, then its body in two rounds (`check_loop_body`): the paths of a
+condition and then its body in each of two rounds (`check_loop_body`): the paths of a
 `continue` and of the end of the body go round the back edge, and the paths of a `break`
 leave the loop. A counted loop reads the bounds of its range once, and declares its binder
 as a read-only view before its body. A direct walk has its own arm (`walks.py`). A loop over
@@ -519,19 +519,19 @@ def _view_owners_of(checker: 'BorrowChecker', node: s.Match, root: e.ShirExpr) -
 
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
-    """`while (cond)`: the condition is read at the entry, then the body is checked to its
-    fixed point, and each view that the condition reads is read again at the back edge: a
-    change of its owner in the body is CE2412 there. A counted loop reads the bounds of its range once, at the entry,
-    and its binder is a read-only view, as a bare binder of a match is. A direct walk has
-    its own arm (`walks.py`), and so does a walk of a value: an `IteratorValue` or a
-    `Protocol`."""
+    """`while (cond)`: the condition is the first step of each round of the fixed point,
+    because it runs before the body on every iteration (#1271). A move in it comes round
+    the back edge as a move in the body does, and a change of the owner of a view that it
+    reads is CE2412 at the condition. A counted loop reads the bounds of its range once, at
+    the entry, and its binder is a read-only view, as a bare binder of a match is. A direct
+    walk has its own arm (`walks.py`), and so does a walk of a value: an `IteratorValue` or
+    a `Protocol`."""
     source = node.source
-    again: Optional[Callable[[], None]] = None
     kind = checker.answers().loop_kind_of(node.shir_id)
     if isinstance(source, s.Cond):
-        arms.check(checker, source.cond)
-        again = partial(read_views_again, checker, source.cond)
-    elif isinstance(kind, (Cursor, HashMapCursor)):
+        check_loop_body(checker, node.body, head=partial(_check_condition, checker, source.cond))
+        return
+    if isinstance(kind, (Cursor, HashMapCursor)):
         check_direct_walk(checker, node, source)
         return
     elif isinstance(kind, (IteratorValue, Protocol)):
@@ -547,7 +547,13 @@ def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     else:
         arms.unhandled(checker, node)
     clear_borrows(checker)
-    check_loop_body(checker, node.body, again)
+    check_loop_body(checker, node.body)
+
+
+def _check_condition(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
+    """The condition of a `while` loop, at the start of one round."""
+    arms.check(checker, cond)
+    clear_borrows(checker)
 
 
 def check_expand(checker: 'BorrowChecker', node: s.Expand) -> None:
@@ -566,9 +572,8 @@ def check_expand(checker: 'BorrowChecker', node: s.Expand) -> None:
 
 
 def read_views_again(checker: 'BorrowChecker', cond: e.ShirExpr) -> None:
-    """The condition of a `while` loop, or the place of a walk in place, at the back edge:
-    each local that it reads is a use again, so a view whose owner the body changed is
-    CE2412, one time for each view."""
+    """The place of a walk in place, at the back edge: each local that it reads is a use
+    again, so a view whose owner the body changed is CE2412, one time for each view."""
     seen: set[LocalId] = set()
     for _path, value in walk(cond, ""):
         if isinstance(value, e.LocalRef) and value.local not in seen:
@@ -580,14 +585,17 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
                     again: Optional[Callable[[], None]] = None,
                     *, per_round: frozenset[LocalId] = frozenset(),
                     walk: Optional[BorrowState] = None,
-                    leaves_to_outer: bool = False) -> None:
+                    leaves_to_outer: bool = False,
+                    head: Optional[Callable[[], None]] = None) -> None:
     """Check a loop body to a fixed point, so that the back edge is honoured.
 
     The first round discovers the facts that come round the back edge: it reports no
     error, writes no row and records no exit. The second round starts from the entry
     joined with that back edge, and reports. The code after the loop sees the fixed point
     (the condition is false) joined with each `break` path of the second round (#993).
-    `again` reads the condition of the loop at the back edge of the second round.
+    `head` is the condition of a `while` loop: it is the first step of each round, and the
+    code after the loop sees the facts after it. `again` runs at the back edge of the second
+    round.
     `per_round` holds the locals that each round makes again, so their facts do not go round
     the back edge. `walk` is the state of a direct walk (`walks.py`): when a move of its
     owner comes round the back edge, the walk reports it, one time. With `leaves_to_outer`
@@ -599,6 +607,8 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
     checker.err.suppressed = True
     checker.discovery_rounds += 1
     try:
+        if head is not None:
+            head()
         first_back, _first_breaks = _check_round(checker, body, per_round, leaves_to_outer)
     finally:
         checker.discovery_rounds -= 1
@@ -609,6 +619,10 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
     reported = _move_reported_by_walk(checker, walk, entry, first_back)
     if reported is not None and walk is not None:
         reported.move_reported_by = walk.local
+    leaves = fixed_point
+    if head is not None:
+        head()
+        leaves = snapshot_flow(checker)
     try:
         back, breaks = _check_round(checker, body, per_round, leaves_to_outer, outer)
     finally:
@@ -617,7 +631,7 @@ def check_loop_body(checker: 'BorrowChecker', body: ShirBlock,
     if again is not None and back is not None:
         restore_flow(checker, back)
         again()
-    restore_flow(checker, fixed_point if breaks is None else fixed_point | breaks)
+    restore_flow(checker, leaves if breaks is None else leaves | breaks)
 
 
 def _leave_to_the_items(checker: 'BorrowChecker', walk: Optional[BorrowState],

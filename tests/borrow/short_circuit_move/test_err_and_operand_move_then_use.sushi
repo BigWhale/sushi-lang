@@ -1,0 +1,16 @@
+# A `nom` move in the right operand of `and` is a move on some paths. A later use of
+# the local is CE2405, one time.
+# EXPECT_ERROR_CODE: CE2405
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: 15:13: error [CE2405]
+
+fn take(nom string s) bool:
+    return s.len() > 5
+
+fn main() i32:
+    let string s = "Mostly Harmless {1}"
+    let i32 n = 0
+    if (n < 3 and take(nom s)):
+        n := n + 1
+    println(s)
+    return 0

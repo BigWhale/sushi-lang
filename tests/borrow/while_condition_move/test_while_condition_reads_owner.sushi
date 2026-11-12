@@ -1,0 +1,12 @@
+# A `while` condition that only reads a string, and a body that rebinds the string (#1271).
+# EXPECT_STDOUT_EXACT: "Mostly\nHarm\nes\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 n = 6
+    while (s.len() > 0):
+        println(s.ss(0, n))
+        s := s.ss(n + 1, s.len())
+        n := n - 2
+    return 0
