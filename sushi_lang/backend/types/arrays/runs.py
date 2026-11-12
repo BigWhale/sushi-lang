@@ -248,20 +248,21 @@ def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
                    element_llvm_type: ir.Type, number: int) -> None:
     """One value into every slot the run fills: stores, `memcpy`s, one `memset`, or a walk.
     An owning value takes its own `copy_out` per slot; the buffer is fresh, so no slot holds
-    a value to destroy first. A value that moves by address and owns nothing is copied from
-    its address."""
-    from sushi_lang.backend.ownership import copy_out
+    a value to destroy first. A value that moves by address is copied, or cloned, from its
+    address."""
+    from sushi_lang.backend.ownership import copy_out, copy_out_into
 
     owning = run.owning
-    source = run.source if owning is None else None
+    source = run.source
     raw = run.value
-    if run.source is not None and owning is not None:
-        raw = codegen.builder.load(run.source)          # `copy_out` reads a value
     if raw is None and source is None:
         raise_internal_error("CE0000", detail="a repeated run of an array has no value")
     value = None if raw is None else codegen.utils.cast_for_param(raw, element_llvm_type)
 
     def store_one(slot: ir.Value, _index: ir.Value) -> None:
+        if source is not None and owning is not None:
+            copy_out_into(codegen, slot, source, owning)
+            return
         if source is not None:
             emit_fixed_array_copy(codegen, slot, source, element_llvm_type)
             return

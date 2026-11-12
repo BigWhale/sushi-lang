@@ -89,6 +89,39 @@ A borrowed `T[N]` ARGUMENT (the source of a bulk copy) arrives as its value.
 `as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`), the fixed twin of
 `as_array_address`, keeps an address and spills a value into an entry-block slot.
 
+## A large fixed array moves and clones by address
+
+LLVM is slow on one first-class value of a large aggregate: the time for one `load` or
+`store` of it grows faster than its size. Thus a `T[N]` of more than `AGGREGATE_VALUE_LIMIT`
+(64) bytes never travels as one value (`moves_by_address`, `backend/types/arrays/runs.py`).
+A move or a copy of it is one `memcpy` (`emit_fixed_array_copy`), and a literal fills its
+slot.
+
+**A fixed array above the bound is CLONED by address** (#1279). The deep copy reads a
+source address and writes a destination slot that the caller gives:
+
+- The seam is `copy_out_into(codegen, dest, source, type)` (`backend/ownership.py`),
+  the destination form of `copy_out`. `copy_out` stays the one deep-clone entry.
+- A plain element is one `memcpy`. An owning element is a counted walk over the slots
+  (`emit_container_walk`), and each slot takes `copy_out_into`. The clone is not unrolled.
+- The clone half of the fixed-array row in the `backend/lifecycle.py` handler table takes
+  `dest=`. The out-of-line clone function of such a type is
+  `void __sushi_clone_<T>(<T>* dest, <T>* source)`. Each other type keeps
+  `<T> __sushi_clone_<T>(<T> value)`.
+- The SLIR emitter gives `assign` of a `Clone` the address of the source place and of the
+  destination place (`backend/slir/values.py`). It does not load the operand.
+- A struct with a field above the bound is cloned in a slot: each owning field is cloned in
+  place, so no field is one value. An enum payload is cloned in place too.
+- A repeated element above the bound that owns a resource (`[["x".clone(); 512]; 4]`)
+  takes `copy_out_into` from the address of the value for each slot.
+- A caller that has only a value (for example a constant) spills it into a slot and loads
+  the clone from a second slot.
+
+The destination holds no value to destroy. The two addresses are equal or do not overlap:
+two places of one fixed-array type cannot overlap in part.
+
+A fixed array of 64 bytes or less keeps the clone by value, one element at a time.
+
 ## A run-time length, and the cursor
 
 An array literal element may fill more than one slot: `value; count` repeats one value, and
