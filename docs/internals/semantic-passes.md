@@ -1494,6 +1494,9 @@ value: a local moved on some paths only before a rebind is recorded too
 (`flow.record_rebind`). A local that is moved on some path and that an exit sees not moved on
 every path is a row of the conditionally moved locals: SLIR lowering gives it a drop flag. A
 local moved in each arm of an `if`, or before every exit, has no row and gets no drop.
+The right operand of `and` and of `or` runs on some paths only, so a move in it is a move on
+some paths: the path that skips it and the path through it join as the two blocks of an `if`
+do (`check_binary`, `passes/borrow/expressions.py`).
 
 ### Borrow Tracking
 
