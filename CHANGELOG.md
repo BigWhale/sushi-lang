@@ -6,6 +6,10 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is
+  now `CE1003` at the `break` or the `continue`, as in a lambda with no loop around it. A
+  lambda body starts with no loop, as a function body does. Before, the compiler stopped
+  with an internal error (#1272).
 - **A `nom` move in the condition of a `while` loop is `CE2405`.** The condition runs
   before the body on every iteration, so the borrow pass now checks it in each round of
   the loop. Before, the compiler stopped with an internal error `CE0000` (#1271).
