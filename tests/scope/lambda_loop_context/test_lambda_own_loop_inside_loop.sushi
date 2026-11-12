@@ -1,0 +1,21 @@
+# A `break` and a `continue` in a lambda are legal when a loop inside the lambda
+# holds them, also when the lambda stands inside an outer loop (#1272).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n4\n5\nMostly Harmless\n"
+
+fn main() i32:
+    let i32 n = 0
+    while (n < 3):
+        let fn(i32) -> i32 f = |i32 x|:
+            let i32 total = 0
+            foreach(i in 0..10):
+                if (i == 1):
+                    continue
+                if (i > x + 2):
+                    break
+                total := total + 1
+            return total
+        println(f(n) + 1)
+        n := n + 1
+    println("Mostly Harmless")
+    return 0
