@@ -12,7 +12,7 @@ difference: the dataclasses of `semantics/ast.py`, and every class of each modul
 SHIR package and of the SLIR package.
 
 A default value that is a mutable object is ONE object for all instances, so a change
-through one instance changes all of them. The gate refuses that for SHIR and SLIR.
+through one instance changes all of them. The gate refuses that for the three trees.
 
 Every statement and every terminator of SLIR carries a REQUIRED span (G9): the gate
 refuses a default value on the `span` field.
@@ -135,7 +135,7 @@ def test_no_node_class_carries_a_dict(cls: type) -> None:
     )
 
 
-@pytest.mark.parametrize("cls", [*_SHIR, *_SLIR], ids=_id)
+@pytest.mark.parametrize("cls", _ALL, ids=_id)
 def test_no_node_class_shares_a_mutable_default(cls: type) -> None:
     assert _shared_defaults(cls) == [], (
         f"{cls.__qualname__} holds a mutable default that all its instances share; "

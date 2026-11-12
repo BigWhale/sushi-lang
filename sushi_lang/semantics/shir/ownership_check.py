@@ -52,7 +52,7 @@ from typing import Any, Callable, Iterator, TypeAlias
 
 from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
 from sushi_lang.semantics.generics.iterators import (
-    answers_an_iterator, is_lazy_adapter, produces_from_a_container)
+    answers_an_iterator, is_lazy_adapter, lends_a_part, produces_from_a_container)
 from sushi_lang.semantics.method_effects import ITERATOR_FAMILY, receiver_convention
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention, bloom_moves
@@ -243,7 +243,7 @@ def _binder_borrows(loop: s.Loop, typeck: TypeckResults) -> bool:
         source = loop.source
         iterator = (deref_type(typeck.type_of(source.iterable.shir_id))
                     if isinstance(source, s.Items) else None)
-        return isinstance(iterator, IteratorType) and bool(iterator.peeks)
+        return isinstance(iterator, IteratorType) and lends_a_part(iterator)
     return isinstance(kind, (Cursor, HashMapCursor))
 
 

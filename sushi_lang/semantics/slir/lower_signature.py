@@ -38,7 +38,7 @@ def symbol_of(decl: object, home: Optional[str], body: ShirBody,
         impl = perk_impl_of(decl, perk_impls)
         if impl is not None:
             return method_symbol(impl.target_type, decl.name, None)
-        if _has_receiver(body):
+        if body.has_receiver:
             er.raise_internal_error("CE0000", span=body.block.loc,
                                     detail=f"the method '{decl.name}' of no perk "
                                            f"implementation reached SLIR")
@@ -54,12 +54,6 @@ def perk_impl_of(decl: FuncDef, perk_impls: PerkImplementationTable) -> Optional
         if any(method is decl for method in impl.methods):
             return impl
     return None
-
-
-def _has_receiver(body: ShirBody) -> bool:
-    """Whether the first parameter of the body is the receiver `self` of a method."""
-    names = {local.id: local.name for local in body.locals}
-    return bool(body.params) and names.get(body.params[0].local) == "self"
 
 
 def return_type_of(decl: object, tables: SymbolTables, body: ShirBody) -> Type:

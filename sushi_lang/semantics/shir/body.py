@@ -92,9 +92,12 @@ class ExpandCopies:
 
 @dataclass(slots=True)
 class ShirBody:
+    """`has_receiver` is true when the first parameter is the receiver `self` of a method.
+    SHIR lowering sets it from the declaration."""
     fn_id: DeclId
     origin: BodyOrigin
     params: list[ShirParam]
     locals: list[ShirLocal]
     block: ShirBlock
     copies: ExpandCopies
+    has_receiver: bool = False

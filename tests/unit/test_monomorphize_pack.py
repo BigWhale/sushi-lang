@@ -120,7 +120,7 @@ def test_regular_generic_builds_1to1_substitution():
 def test_regular_generic_arity_mismatch_raises():
     fm = FunctionMonomorphizer(_FakeMono())
     generic = _generic("f", [_param("T"), _param("E")])
-    with pytest.raises(ValueError, match="Type argument count mismatch"):
+    with pytest.raises(ValueError, match=r"^Type argument count mismatch"):
         fm.build_substitution(generic, (I32,))
 
 

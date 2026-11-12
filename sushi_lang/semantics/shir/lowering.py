@@ -115,7 +115,8 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
                           ctx.stops, template=ctx.template is not None)
     block = _lower_block(decl, lowerer)
     every_local = sorted([*locals_, *lowerer.locals], key=lambda local: local.id)
-    return ShirBody(fn_id, _origin(decl, ctx), params, every_local, block, lowerer.copies)
+    return ShirBody(fn_id, _origin(decl, ctx), params, every_local, block, lowerer.copies,
+                    has_receiver=_receiver_type(decl, ctx) is not None)
 
 
 @dataclass(slots=True)
@@ -333,6 +334,14 @@ def _owner_type(decl: Declaration, ctx: LoweringContext) -> Optional[TypeRef]:
     return None
 
 
+def _receiver_type(decl: Declaration, ctx: LoweringContext) -> Optional[TypeRef]:
+    """The type of the receiver `self`: the type that a method extends. None for a static
+    method, a function and a constant."""
+    if isinstance(decl, ExtendDef) and decl.is_static:
+        return None
+    return _owner_type(decl, ctx)
+
+
 def _owner_type_span(decl: Declaration, ctx: LoweringContext) -> Optional[Span]:
     """Where the type that a method extends is written: the span of its receiver, where a
     note about the receiver points."""
@@ -373,9 +382,8 @@ def _frame(decl: Declaration, bindings: Bindings,
         return [], []
     params: list[ShirParam] = []
     locals_: list[ShirLocal] = []
-    receiver = _owner_type(decl, ctx)
-    if isinstance(decl, (FuncDef, ExtendDef)) and receiver is not None and not (
-            isinstance(decl, ExtendDef) and decl.is_static):
+    receiver = _receiver_type(decl, ctx)
+    if isinstance(decl, (FuncDef, ExtendDef)) and receiver is not None:
         local = binder_local(bindings, decl, "self")
         params.append(ShirParam(local, receiver, receiver_mode(decl.self_mode).convention,
                                 _span(_owner_type_span(decl, ctx), decl.self_mode_span,
