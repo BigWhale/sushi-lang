@@ -1,7 +1,7 @@
 # SLIR reference
 
 SLIR is the Sushi Low-level IR. It is the input of code generation. This page is the
-reference for SLIR as the code builds it today. For the reasons behind each choice, read
+reference for SLIR as the code builds it. For the reasons behind each choice, read
 [the IR design](../design/ir.md), section 8. This page does not repeat that text.
 
 ## What SLIR is

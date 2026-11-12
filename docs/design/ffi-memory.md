@@ -28,8 +28,7 @@ readers ask it, and before this work each one had its own copy: the collector
 The backend half is the conversion of one value at the boundary: a `string` argument goes in
 as a `char*` (`emit_to_cstr`), a `string` return comes out as an owned fat pointer
 (`emit_cstr_to_owned_fat_pointer`, both in `backend/runtime/strings.py`), and an external
-variable read follows the rule of a return. The externs group D5 brings the call back
-through SLIR.
+variable read follows the rule of a return. The call goes through SLIR.
 
 ## Null is a state of the boundary (#1085)
 

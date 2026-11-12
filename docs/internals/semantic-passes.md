@@ -1313,7 +1313,7 @@ let i32 y = get_value().realise(0)
 
 **File:** `semantics/passes/lift.py`
 
-**On SHIR** ([the IR design](../design/ir.md), 7.9, ruling Q8), `LiftPass` runs between
+**On SHIR** ([the IR design](../design/ir.md), 7.9 and 9.8), `LiftPass` runs between
 `typecheck` and `borrow`, per body. It rewrites no node: the symbol of each lambda and its
 environment layout are rows of the `LiftResults` of the body, and SLIR lowering cuts the
 function from them. The pass stops at nothing. A body has its table checked (`check_lift`,

@@ -178,7 +178,7 @@ it:
   whole gives owned binders, a borrowed whole gives `let`-borrows of the whole's owner.
 - SHIR-to-SLIR lowering moves each element of an owned whole into its binder, drops each
   `_` element at once, and drops nothing of the whole after that, so nothing is freed twice.
-  A borrowed whole gives views that free nothing. The struct and tuple group A5 builds it.
+  A borrowed whole gives views that free nothing.
 
 **Ruling 4.** A bare binder in a `let` destructure OWNS its element (from an owned value).
 A bare pattern binding in a `match` BORROWS (S10b). Both rules stay; borrow-model.md states

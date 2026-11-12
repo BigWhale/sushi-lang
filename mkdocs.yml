@@ -172,32 +172,33 @@ nav:
       - "SLIR (reference)": internals/slir.md
       - Backend: internals/backend.md
       - Stdlib Build: internals/stdlib-build.md
-      - "Variadics (design)": design/variadics.md
-      - "Tuples (design)": design/tuples.md
-      - "Closures & First-Class Functions (design)": design/closures.md
-      - "Libraries & Export Closure (design)": design/libraries.md
-      - "Move Semantics (design)": design/move-semantics.md
-      - "Omakase Install (design)": design/omakase-install.md
-      - "String Representation (design)": design/string-representation.md
-      - "Method Resolution (design)": design/method-resolution.md
-      - "Type Identity (design)": design/type-identity.md
-      - "Ownership Conventions (design)": design/ownership-conventions.md
-      - "Borrow Model (design)": design/borrow-model.md
-      - "Borrowing (design)": design/borrowing.md
-      - "Visibility (design)": design/visibility.md
-      - "Unit Namespaces (design)": design/unit-namespaces.md
-      - "UFCS Combinators (design)": design/ufcs-combinators.md
-      - "Error Channel (design)": design/error-channel.md
-      - "Iteration (design)": design/iteration.md
-      - "Unit Storage (design)": design/unit-storage.md
-      - "Derived Contracts (design)": design/derived-contracts.md
-      - "Checked Generics (design)": design/checked-generics.md
-      - "Array Representation (design)": design/array-representation.md
-      - "Slices (design)": design/slices.md
-      - "Compile-Time Evaluation (design)": design/compile-time-evaluation.md
-      - "Documentation Blocks (design)": design/documentation.md
-      - "Intermediate Representation (design)": design/ir.md
-      - "Slib Info Tool (design)": design/slib-info.md
-      - "Stdlib Syscall Layer (design)": design/stdlib-syscall-layer.md
-      - "FFI Memory Features (design)": design/ffi-memory.md
+      - Design:
+          - "Variadics": design/variadics.md
+          - "Tuples": design/tuples.md
+          - "Closures & First-Class Functions": design/closures.md
+          - "Libraries & Export Closure": design/libraries.md
+          - "Move Semantics": design/move-semantics.md
+          - "Omakase Install": design/omakase-install.md
+          - "String Representation": design/string-representation.md
+          - "Method Resolution": design/method-resolution.md
+          - "Type Identity": design/type-identity.md
+          - "Ownership Conventions": design/ownership-conventions.md
+          - "Borrow Model": design/borrow-model.md
+          - "Borrowing": design/borrowing.md
+          - "Visibility": design/visibility.md
+          - "Unit Namespaces": design/unit-namespaces.md
+          - "UFCS Combinators": design/ufcs-combinators.md
+          - "Error Channel": design/error-channel.md
+          - "Iteration": design/iteration.md
+          - "Unit Storage": design/unit-storage.md
+          - "Derived Contracts": design/derived-contracts.md
+          - "Checked Generics": design/checked-generics.md
+          - "Array Representation": design/array-representation.md
+          - "Slices": design/slices.md
+          - "Compile-Time Evaluation": design/compile-time-evaluation.md
+          - "Documentation Blocks": design/documentation.md
+          - "Intermediate Representation": design/ir.md
+          - "Slib Info Tool": design/slib-info.md
+          - "Stdlib Syscall Layer": design/stdlib-syscall-layer.md
+          - "FFI Memory Features": design/ffi-memory.md
   - Examples: examples/README.md
