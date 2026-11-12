@@ -187,10 +187,8 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     # and both free at scope exit. `emit_value_clone` is a no-op for a non-owning element
     # and recursion-safe for a self-referential one.
     def copy_element(src_elem_ptr: ir.Value, idx: ir.Value) -> None:
-        elem = codegen.builder.load(src_elem_ptr)
-        elem = emit_value_clone(codegen, elem, element_type)
-        dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
-        codegen.builder.store(elem, dst_elem_ptr)
+        emit_value_clone_into(codegen, codegen.builder.gep(new_data_ptr, [idx]), src_elem_ptr,
+                              element_type)
 
     emit_container_walk(codegen, source_data_ptr, source_len, copy_element, prefix="copy")
     copy_exit = codegen.builder.block
@@ -272,7 +270,8 @@ def emit_value_clone_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Val
         _emit_composite_clone_into(codegen, dest, source, value_type)
         return
     b = codegen.builder
-    b.store(emit_value_clone(codegen, b.load(source, name="clone_source"), value_type), dest)
+    clone = emit_value_clone(codegen, b.load(source, name="clone_source"), value_type)
+    b.store(codegen.utils.cast_for_param(clone, dest.type.pointee), dest)
 
 
 def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
@@ -514,11 +513,9 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
 
     is_not_null = b.icmp_unsigned("!=", ptr, ir.Constant(ptr.type, None))
     with b.if_then(is_not_null):
-        pointee = b.load(ptr, name="own_pointee")
-        cloned_pointee = emit_value_clone(codegen, pointee, elem_ty)
         new_raw = emit_malloc(codegen, codegen.builder, codegen.types.get_type_size_constant(elem_ty))
         new_ptr = b.bitcast(new_raw, ir.PointerType(elem_llvm), name="own_new_ptr")
-        b.store(cloned_pointee, new_ptr)
+        emit_value_clone_into(codegen, new_ptr, ptr, elem_ty)
         b.store(b.insert_value(value, new_ptr, 0), slot)
 
     return b.load(slot, name="cloned_own")
@@ -556,9 +553,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
 
         if needs_cleanup(codegen, elem_ty):
             def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
-                loaded = codegen.builder.load(element_ptr, name="list_clone_elem")
-                cloned = emit_value_clone(codegen, loaded, elem_ty)
-                codegen.builder.store(cloned, element_ptr)
+                emit_value_clone_into(codegen, element_ptr, element_ptr, elem_ty)
 
             emit_container_walk(codegen, new_data, length, clone_element,
                                 prefix="list_clone")
@@ -607,10 +602,8 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
         def clone_entry(entry_ptr: ir.Value, _index: ir.Value) -> None:
             key_ptr = codegen.builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="hm_key_ptr")
             val_ptr = codegen.builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="hm_val_ptr")
-            k = codegen.builder.load(key_ptr, name="hm_key")
-            codegen.builder.store(emit_value_clone(codegen, k, key_type), key_ptr)
-            v = codegen.builder.load(val_ptr, name="hm_val")
-            codegen.builder.store(emit_value_clone(codegen, v, val_type), val_ptr)
+            emit_value_clone_into(codegen, key_ptr, key_ptr, key_type)
+            emit_value_clone_into(codegen, val_ptr, val_ptr, val_type)
 
         emit_container_walk(codegen, new_data, capacity, clone_entry,
                             should_visit=occupied, prefix="hm_clone")

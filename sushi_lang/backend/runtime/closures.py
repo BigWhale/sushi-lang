@@ -160,7 +160,8 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
 
 def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     """Return (creating once, cached) the type-erased env duplicator for a closure."""
-    from sushi_lang.backend.ownership import copy_out
+    from sushi_lang.backend.expressions.memory import emit_memcpy_bytes
+    from sushi_lang.backend.ownership import copy_out_into
 
     clone_name = f"{env_struct.name}.__closure_clone"
     clone_ty = ir.FunctionType(codegen.types.str_ptr, [codegen.types.str_ptr])
@@ -185,9 +186,8 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
         size = codegen.types.get_type_size_bytes(env_struct)
         raw = emit_malloc(codegen, b, ir.Constant(codegen.types.i64, size))
         new_ptr = b.bitcast(raw, env_ptr_ty, name="cloned_env")
-        old_ptr = b.bitcast(env_i8, env_ptr_ty, name="src_env")
 
-        b.store(b.load(old_ptr, name="src_env_val"), new_ptr)
+        emit_memcpy_bytes(codegen, raw, env_i8, ir.Constant(codegen.types.i64, size))
 
         i32 = codegen.types.i32
         zero = ir.Constant(i32, 0)
@@ -196,8 +196,7 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
                 continue
             field_ptr = b.gep(new_ptr, [zero, ir.Constant(i32, idx)],
                               inbounds=True, name="clone_cap_field")
-            orig = codegen.builder.load(field_ptr, name="clone_cap_orig")
-            codegen.builder.store(copy_out(codegen, orig, fty), field_ptr)
+            copy_out_into(codegen, field_ptr, field_ptr, fty)
 
         codegen.builder.ret(raw)
     finally:
