@@ -191,7 +191,8 @@ The limits of this rule:
 - A stdlib row (`backend/expressions/calls/stdlib/signatures.py`) keeps the signature of
   its generator. No row takes or answers a type above the bound; a unit test holds it.
 - A container method that answers a `Maybe@(T)` (`List.get`, `pop`, `first`, `last`)
-  builds the `Maybe` as one value. The hash of a value (`emit_value_hash`) reads a value.
+  builds the `Maybe` as one value (#1290). The hash of a value (`emit_value_hash`) reads a
+  value.
 
 ## A run-time length, and the cursor
 

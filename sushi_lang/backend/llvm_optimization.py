@@ -17,7 +17,7 @@ _ModulePass = Callable[[llvm.ModulePassManager], None]
 
 
 # The code generation level of the target machine for each `--opt` mode.
-_CODEGEN_LEVEL: dict[str, int] = {"none": 0, "o0": 0, "mem2reg": 0, "o1": 1, "o2": 2, "o3": 3}
+_CODEGEN_LEVEL: dict[str, int] = {"none": 0, "o0": 0, "mem2reg": 2, "o1": 1, "o2": 2, "o3": 3}
 
 
 def codegen_level(mode: str | None) -> int:
