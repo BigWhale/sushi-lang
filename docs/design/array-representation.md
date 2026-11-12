@@ -108,6 +108,14 @@ and then copied into the place, because a reference can make any place an alias 
 destination. The tag of an enum in a place is read through its address
 (`enum_utils.get_tag_ptr`), never from a loaded value.
 
+**A container method writes a `Maybe@(T)` above the bound into its place** (#1290). The
+rows of `List.get`, `first`, `last` and `pop` in `LIST_EMITTERS` are `into_place`: the
+SLIR container row gives them the address of the destination place, and they answer None.
+Each branch writes the tag, and `Some` copies the bytes of the element from its address
+into the payload (`emit_maybe_into`, `backend/generics/maybe.py`). There is no load of the
+element and no `phi` of the `Maybe`. The ownership does not change: `get`, `first` and
+`last` give a borrow, and `pop` lowers the length before the copy.
+
 **A position that stores a part takes its address.** A part of a type that moves by
 address is the address of its value, and `emit_part_into` (`runs.py`) copies its bytes:
 
@@ -190,9 +198,8 @@ The limits of this rule:
 - `main` keeps its fixed signature.
 - A stdlib row (`backend/expressions/calls/stdlib/signatures.py`) keeps the signature of
   its generator. No row takes or answers a type above the bound; a unit test holds it.
-- A container method that answers a `Maybe@(T)` (`List.get`, `pop`, `first`, `last`)
-  builds the `Maybe` as one value (#1290). The hash of a value (`emit_value_hash`) reads a
-  value.
+- The `.get()` of a `T[]` and a `T[N]` builds its `Maybe@(T)` as one value.
+- The hash of a value (`emit_value_hash`) reads a value.
 
 ## A run-time length, and the cursor
 

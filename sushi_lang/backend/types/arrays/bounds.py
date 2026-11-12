@@ -80,3 +80,29 @@ def emit_checked_maybe(
     result_phi.add_incoming(some_result, some_pred)
     result_phi.add_incoming(none_state["result"], none_state["pred"])
     return result_phi
+
+
+def emit_checked_maybe_into(
+    codegen: 'LLVMCodegen',
+    index_value: ir.Value,
+    size_value: ir.Value,
+    element_type: 'Type',
+    element_address: Callable[[], ir.Value],
+    dest: ir.Value,
+    prefix: str = "get",
+) -> None:
+    """`Maybe.Some` of the bytes at `element_address()` when `0 <= index < size`, else
+    `Maybe.None`, written into the slot `dest`. Each branch writes `dest`: no `phi`."""
+    from sushi_lang.backend.generics.maybe import emit_maybe_into
+
+    builder = codegen.builder
+    merge_block = codegen.func.append_basic_block(f"{prefix}_merge")
+
+    def on_fail() -> None:
+        emit_maybe_into(codegen, element_type, dest)
+        builder.branch(merge_block)
+
+    emit_bounds_check(codegen, index_value, size_value, prefix=prefix, on_fail=on_fail)
+    emit_maybe_into(codegen, element_type, dest, element_address())
+    builder.branch(merge_block)
+    builder.position_at_end(merge_block)

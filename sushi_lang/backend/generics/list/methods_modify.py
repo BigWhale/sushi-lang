@@ -1,6 +1,6 @@
 """List<T> modification methods: push(), pop(), get(), first(), last(), clear(), insert(), remove()."""
 
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
@@ -48,74 +48,82 @@ def emit_list_append(codegen: Any, list_ptr: ir.Value, element_value: ir.Value) 
     codegen.builder.store(new_len, len_ptr)
 
 
-def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.pop() - remove and return last element."""
+def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType,
+                  dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
+    """`list.pop()`: remove the last element and answer it as `Maybe@(T)`, or `Maybe.None`
+    when the list is empty. The length goes down before the element is read: the answer
+    owns the element.
+
+    With `dest`, each branch writes the `Maybe` into that slot, the bytes of the element
+    are copied from its address, and the answer is None. Else the two `Maybe` values are
+    joined with a `phi`.
+    """
     from sushi_lang.backend import gep_utils
+    from sushi_lang.backend.generics import maybe
 
+    builder = codegen.builder
     element_type = extract_element_type(list_type, codegen)
-
-    list_alloca = list_ptr
-
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
-
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
-
-    zero = ir.Constant(codegen.types.i32, 0)
-    is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
+    len_ptr = get_list_len_ptr(builder, list_ptr)
+    data_ptr_ptr = get_list_data_ptr(builder, list_ptr)
+    current_len = builder.load(len_ptr, name="current_len")
+    data_ptr = builder.load(data_ptr_ptr, name="data_ptr")
+    is_empty = builder.icmp_unsigned("==", current_len, ir.Constant(codegen.types.i32, 0))
 
     empty_block = codegen.func.append_basic_block("pop_empty")
     not_empty_block = codegen.func.append_basic_block("pop_not_empty")
     end_block = codegen.func.append_basic_block("pop_end")
+    builder.cbranch(is_empty, empty_block, not_empty_block)
 
-    codegen.builder.cbranch(is_empty, empty_block, not_empty_block)
+    builder.position_at_end(empty_block)
+    none_value = None
+    if dest is None:
+        none_value = maybe.emit_maybe_none(codegen, element_type)
+    else:
+        maybe.emit_maybe_into(codegen, element_type, dest)
+    builder.branch(end_block)
+    empty_predecessor = builder.block
 
-    codegen.builder.position_at_end(empty_block)
-    from sushi_lang.backend.generics import maybe
-    none_value = maybe.emit_maybe_none(codegen, element_type)
-    codegen.builder.branch(end_block)
-    empty_predecessor = codegen.builder.block
-
-    codegen.builder.position_at_end(not_empty_block)
-
-    one = ir.Constant(codegen.types.i32, 1)
-    new_len = codegen.builder.sub(current_len, one, name="new_len")
-    codegen.builder.store(new_len, len_ptr)
-
+    builder.position_at_end(not_empty_block)
+    new_len = builder.sub(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
+    builder.store(new_len, len_ptr)
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, new_len, "element_ptr")
-    element_value = codegen.builder.load(element_ptr, name="element")
+    some_value = None
+    if dest is None:
+        some_value = maybe.emit_maybe_some(codegen, element_type,
+                                           builder.load(element_ptr, name="element"))
+    else:
+        maybe.emit_maybe_into(codegen, element_type, dest, element_ptr)
+    builder.branch(end_block)
+    not_empty_predecessor = builder.block
 
-    some_value = maybe.emit_maybe_some(codegen, element_type, element_value)
-    codegen.builder.branch(end_block)
-    not_empty_predecessor = codegen.builder.block
-
-    codegen.builder.position_at_end(end_block)
-    maybe_type = maybe.get_maybe_enum_type(codegen, element_type)
-    phi = codegen.builder.phi(maybe_type, name="pop_result")
+    builder.position_at_end(end_block)
+    if dest is not None:
+        return None
+    phi = builder.phi(maybe.get_maybe_enum_type(codegen, element_type), name="pop_result")
     phi.add_incoming(none_value, empty_predecessor)
     phi.add_incoming(some_value, not_empty_predecessor)
-
     return phi
 
 
 def emit_list_get(codegen: Any, list_ptr: ir.Value, list_type: StructType,
-                  args: Sequence[ir.Value]) -> ir.Value:
-    """`list.get(index)`: the element as `Maybe@(T)`, or `Maybe.None` out of range."""
+                  args: Sequence[ir.Value],
+                  dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
+    """`list.get(index)`: the element as `Maybe@(T)`, or `Maybe.None` out of range. With
+    `dest`, the `Maybe` is written into that slot and the answer is None."""
     length, data = list_slots(codegen, list_ptr)
     return emit_array_get_maybe(codegen, data, length, codegen.utils.require_i32(args[0]),
-                                extract_element_type(list_type, codegen))
+                                extract_element_type(list_type, codegen), dest)
 
 
 def emit_list_end(codegen: Any, list_ptr: ir.Value, list_type: StructType, *,
-                  last: bool) -> ir.Value:
+                  last: bool, dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
     """`list.first()` is `get(0)`, and `list.last()` is `get(len() - 1)`. An empty list gives
     the index -1 for `last`, which the bounds check turns into `Maybe.None()`."""
     length, data = list_slots(codegen, list_ptr)
     index = (codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1), name="last_index")
              if last else ir.Constant(codegen.types.i32, 0))
     return emit_array_get_maybe(codegen, data, length, index,
-                                extract_element_type(list_type, codegen))
+                                extract_element_type(list_type, codegen), dest)
 
 
 def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:

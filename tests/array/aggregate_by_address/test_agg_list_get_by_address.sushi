@@ -1,0 +1,42 @@
+# a `Maybe@(T)` of more than 64 bytes that `List.get`, `first`, `last` and `pop` answer is
+# written into its place: the tag, and for `Some` the bytes of the element. The IR of `main`
+# has no first-class load or store of the element and no first-class `Maybe`. The IR is
+# read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x\nx\ny\nnone\ny\nx\nnone\nnone\n"
+# EXPECT_IR_LACKS: user_main load [4 x [512 x
+# EXPECT_IR_LACKS: user_main store [4 x [512 x
+# EXPECT_IR_LACKS: user_main insertvalue { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main phi { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main store { i32, [4096 x i64] }
+fn main() i32:
+    let List@(string[512][4]) xs = List.new()
+    xs.push([["x".clone(); 512]; 4])
+    xs.push([["y".clone(); 512]; 4])
+    match xs.get(0):
+        Maybe.Some(a) -> println("{a[3][511]}")
+        Maybe.None -> println("none")
+    match xs.first():
+        Maybe.Some(a) -> println("{a[0][0]}")
+        Maybe.None -> println("none")
+    match xs.last():
+        Maybe.Some(a) -> println("{a[3][511]}")
+        Maybe.None -> println("none")
+    match xs.get(5):
+        Maybe.Some(a) -> println("{a[0][0]}")
+        Maybe.None -> println("none")
+    match xs.pop():
+        Maybe.Some(b) -> println("{b[0][0]}")
+        Maybe.None -> println("none")
+    match xs.pop():
+        Maybe.Some(b) -> println("{b[3][511]}")
+        Maybe.None -> println("none")
+    match xs.pop():
+        Maybe.Some(b) -> println("{b[0][0]}")
+        Maybe.None -> println("none")
+    match xs.last():
+        Maybe.Some(a) -> println("{a[0][0]}")
+        Maybe.None -> println("none")
+    return 0

@@ -21,16 +21,20 @@ from sushi_lang.semantics.typesys import BuiltinType, StructType
 class ContainerMethod(NamedTuple):
     """One row of a container's emitter table: the emitter, whether it answers a `bool`,
     whether it is a static (`List.new`), which builds a value and has no receiver, and
-    whether an argument that moves by address comes as the address of its value.
+    whether an argument that moves by address comes as the address of its value, and
+    whether the row can write its answer into the destination slot.
 
     A row takes `(codegen, receiver_address, receiver_type, argument_values)`; the receiver
-    address of a static is None. A `bool` answer is an `i8` after the call.
+    address of a static is None. A `bool` answer is an `i8` after the call. An `into_place`
+    row also takes the destination address when its answer moves by address, writes the
+    answer there and answers None.
     """
 
     emit: Callable[[Any, Any, Any, Any], ir.Value]
     answers_bool: bool = False
     static: bool = False
     by_address: bool = False
+    into_place: bool = False
 
 
 def blank(codegen: Any) -> ir.Value:
@@ -40,13 +44,19 @@ def blank(codegen: Any) -> ir.Value:
 
 def emit_with_operands(table: Mapping[str, ContainerMethod], missing_code: str, codegen: Any,
                        name: str, address: ir.Value, receiver_type: StructType,
-                       args: Sequence[ir.Value]) -> ir.Value:
+                       args: Sequence[ir.Value],
+                       dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
     """The value of the method `name` on the container at `address`, with the values of
     its arguments. A `bool` is an `i8`. The name of a static, called on a value, answers
-    `~` and builds nothing."""
+    `~` and builds nothing. With `dest`, an `into_place` row writes its answer into that
+    slot and answers None; `dest` is given only to such a row."""
     row = _row(table, missing_code, name)
     if row.static:
         return blank(codegen)
+    if dest is not None:
+        if not row.into_place:
+            raise_internal_error("CE0000", detail=f"the row '{name}' has no place form")
+        return row.emit(codegen, address, receiver_type, args, dest)
     result = row.emit(codegen, address, receiver_type, args)
     if row.answers_bool:
         result = codegen.utils.bool_answer(result, False)

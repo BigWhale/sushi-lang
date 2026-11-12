@@ -110,8 +110,9 @@ def _array(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> i
 
 
 #: The emitter of a container family: the codegen, the method name, the address of the
-#: receiver, the receiver type and the value of each argument.
-_ContainerEmitter = Callable[[Any, str, ir.Value, StructType, list[ir.Value]], ir.Value]
+#: receiver, the receiver type, the value of each argument and, for an `into_place` row,
+#: the address of the destination.
+_ContainerEmitter = Callable[..., ir.Value | None]
 
 
 _MethodRow = Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]
@@ -122,9 +123,11 @@ def _container(base: str, emit: _ContainerEmitter,
     """The row of a built-in container family (`List@(T)`, `HashMap@(K, V)`, `Own@(T)`):
     the ADDRESS of the receiver, an `Inout` receiver and a `Guaranteed` one alike, then
     the value of each argument. A method whose row of `table` is `by_address` takes the
-    address of an argument that moves by address. The family reads the state of the
+    address of an argument that moves by address, and an `into_place` row whose answer
+    moves by address writes it into the destination and answers None. The family reads the state of the
     container when it runs, after the last argument (docs/design/ir.md 8.6)."""
-    def row(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
+    def row(state: FunctionState, method: BuiltinMethod,
+            statement: st.Call) -> ir.Value | None:
         if not statement.args:
             state.fault(f"the call of '{method.name}' has no receiver")
         receiver, _ = statement.args[0]
@@ -139,6 +142,10 @@ def _container(base: str, emit: _ContainerEmitter,
                 if by_address and moves_by_address(
                     state.codegen.types.ll_type(type_of_operand(state, operand)))
                 else operand_value(state, operand) for operand, _ in statement.args[1:]]
+        if row_of is not None and row_of.into_place and moves_by_address(
+                state.codegen.types.ll_type(type_of_place(state, statement.dest))):
+            return emit(state.codegen, method.name, address, receiver_type, args,
+                        place_address(state, statement.dest))
         return emit(state.codegen, method.name, address, receiver_type, args)
     return row
 

@@ -147,6 +147,26 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
     return enum_value
 
 
+def emit_maybe_into(codegen: 'LLVMCodegen', value_type: Type, dest: ir.Value,
+                    source: Optional[ir.Value] = None) -> None:
+    """A `Maybe@(T)` built in the slot `dest`: `Maybe.Some` of the bytes of the value at
+    `source`, or `Maybe.None` when `source` is None. No load of the whole value."""
+    from sushi_lang.backend import enum_utils
+    from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy
+
+    maybe_enum = ensure_maybe_type_exists(codegen, value_type)
+    if maybe_enum is None:
+        raise_internal_error("CE0047", type=str(value_type))
+    variant = "None" if source is None else "Some"
+    codegen.builder.store(ir.Constant(codegen.types.i32, maybe_enum.get_variant_index(variant)),
+                          enum_utils.get_tag_ptr(codegen, dest, name="maybe_tag"))
+    if source is None:
+        return
+    payload = enum_utils.variant_field_address(
+        codegen, enum_utils.get_data_ptr(codegen, dest), value_type, 0, name="maybe_some")
+    emit_aggregate_copy(codegen, payload, source, codegen.types.ll_type(value_type))
+
+
 def emit_maybe_none(codegen: 'LLVMCodegen', value_type: Type) -> ir.Value:
     """Emit Maybe.None() constructor."""
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)
