@@ -4,6 +4,12 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `nom` move in the condition of a `while` loop is `CE2405`.** The condition runs
+  before the body on every iteration, so the borrow pass now checks it in each round of
+  the loop. Before, the compiler stopped with an internal error `CE0000` (#1271).
+
 ## [0.17.0] - 2026-11-11
 
 The compiler has a new pipeline. The semantic passes and the backend now work on two

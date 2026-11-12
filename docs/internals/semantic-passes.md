@@ -1463,7 +1463,9 @@ reference binding adds the WRITE path -- a store through it reaches the owner.
 6. **A loop body is checked in rounds, and `break` / `continue` end a path**
 
 `check_loop_body` (`passes/borrow/statements.py`) checks the body of a `while` loop in two
-rounds. The condition is read once, at the entry.
+rounds. The condition runs before the body on every iteration, so it is the first step of
+each round (#1271): a move in the condition comes round the back edge as a move in the body
+does.
 
 - `entry`: the facts before the loop.
 - Round 1 is a discovery round: it reports no error, writes no row of `OwnershipResults` and
@@ -1471,8 +1473,9 @@ rounds. The condition is read once, at the entry.
 - `fixed_point`: `entry` joined with the facts that reach the back edge after round 1 -- the end
   of the body and every `continue`. Round 2, the reporting round, starts here, so a move in one
   round is seen by the next.
-- The exit: `fixed_point` joined with every `break` path of round 2. This is the state after the
-  loop, so a move before a `break` is still seen after the loop.
+- The exit: the facts after the condition of round 2 (the condition is false) joined with every
+  `break` path of round 2. This is the state after the loop, so a move before a `break` is still
+  seen after the loop.
 
 A `break` or a `continue` ends its path for the joins of an `if` inside the body
 (`terminates(..., leaves_round=True)`, the one path predicate of SHIR, `semantics/shir/paths.py`).
