@@ -134,15 +134,17 @@ requires the compiler minor version that built it, so 0.17 refuses it with `CE35
   change of the owner.
 - **A `foreach` binder of type `ptr` in a unit with no `unsafe external` block** is `CE5009`
   alone, with no `CE2034` beside it.
+- **A constant holds the value of a literal that spells bits**, as a body does:
+  `const i8 A = 0xFF` holds -1, and `const i8 B = A + 1` is 0. The constant evaluator
+  kept the written value (255), so an operator on it was a false `CE2077`, and SLIR
+  lowering stopped with the internal error `CE0000` "a constant value that its type cannot
+  hold" (#1274).
 
 ### Known issues
 
 - A static with a method-level type parameter on a generic target
   (`extend Box@(T) static make@(U)(nom T a, U seed)`) is the internal error `CE0000`
   "no copy of 'make' applies" (#1276).
-- A signed constant whose radix literal fills its bit pattern (`const i8 K = 0xff`) is the
-  internal error `CE0000` "a constant value that its type cannot hold". The old compiler
-  compiled such a program (#1274).
 
 ## [0.16.0] - 2026-10-11
 

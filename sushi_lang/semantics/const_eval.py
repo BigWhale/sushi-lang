@@ -208,6 +208,9 @@ def negate_constant(operand: ScalarConstant,
     if not is_integer_constant(operand):
         return ScalarConstant(-operand.value, operand.semantic_type)
     negated = integer_ops.negate(int(operand.value), operand.semantic_type)
+    if leaf and negated.overflows:
+        return ScalarConstant(integer_ops.cast(negated.value, operand.semantic_type),
+                              operand.semantic_type)
     if leaf or not negated.overflows:
         return ScalarConstant(negated.value, operand.semantic_type)
     return negated
@@ -575,9 +578,10 @@ class ConstantEvaluator:
                           span: Optional[Span]) -> ScalarConstant:
         """Evaluate integer literal with type inference."""
         from sushi_lang.semantics.passes.types.inference import int_literal_default
-        if is_integer_type(expected_type):
-            return ScalarConstant(expr.value, expected_type)
-        return ScalarConstant(expr.value, int_literal_default(expr))
+        ty = expected_type if is_integer_type(expected_type) else int_literal_default(expr)
+        if expr.radix != 10:
+            return ScalarConstant(integer_ops.cast(expr.value, ty), ty)
+        return ScalarConstant(expr.value, ty)
 
     def _evaluate_float_lit(self, expr: FloatLit, expected_type: Type,
                             span: Optional[Span]) -> ScalarConstant:
