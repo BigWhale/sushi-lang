@@ -62,8 +62,11 @@ def _interned_static_target(validator: 'TypeValidator', method: str, site: Optio
             return None
 
     # An instance that fails a target bound gets no copy (#1070); the call is refused by
-    # the last rung of the method ladder.
+    # the last rung of the method ladder. A method-generic static has no copy for the
+    # instance alone: the method-generic rung cuts it when the arguments solve its
+    # method-level parameters (#1276).
     if (interner is not None and validator.queues_late_copies
+            and not template.method_type_params
             and not any(record.is_static and record.unit_name == template.unit_name
                         for record in validator.extension_table.declarations(
                             target, method))
