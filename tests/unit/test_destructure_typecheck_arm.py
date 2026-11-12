@@ -2,23 +2,21 @@
 
 Each target takes its element, and the path of the target keys its element type row: the
 index of the target, then the index in each `Nested` level. A bare binder takes the type
-of its element. A `Place` of a place that is not a local, a field or an element is an
-internal error for `Destructure`. The tests run the arm over SHIR built by hand, with a stand-in
+of its element. A `Place` target that is not a place is CE2130, which the fixtures under
+`tests/types/rebind_target_is_a_place/` hold. The tests run the arm over SHIR built by hand, with a stand-in
 for the pass; they do not run the compiler.
 """
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
-from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirLocal
-from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
+from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
 
@@ -58,12 +56,3 @@ def test_each_target_takes_its_element_by_its_path() -> None:
     assert answers.local_type(LocalId(1)) == BuiltinType.I32
     assert answers.local_type(LocalId(2)) == BuiltinType.BOOL
 
-
-def test_a_place_that_is_not_typed_is_an_internal_error() -> None:
-    validator = _validator(OUTER)
-    place = e.GlobalRef(ShirId(3), SPAN, DeclId(0))
-    node = s.Destructure(ShirId(2), SPAN, [s.Place(place), LocalId(1)], _value())
-    with pytest.raises(InternalCompilerError) as caught:
-        visit.check(validator, node)
-    assert caught.value.span == SPAN
-    assert caught.value.params == {"detail": "the typecheck stage does not handle the construct 'Destructure'"}

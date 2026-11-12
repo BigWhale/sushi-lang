@@ -59,7 +59,7 @@ def _want(validator: TypeValidator, node: s.Destructure, target: s.DestructureTa
     if isinstance(target, s.Nested):
         return [_want(validator, node, inner) for inner in target.targets]
     if isinstance(target, s.Place):
-        return _place_type(validator, node, target.target)
+        return _place_type(validator, target.target)
     if isinstance(target, s.Discard):
         return None
     return _written_type(validator, target)
@@ -78,8 +78,7 @@ def _written_type(validator: TypeValidator, binder: LocalId) -> Optional[Type]:
     return None if refused else ty
 
 
-def _place_type(validator: TypeValidator, node: s.Destructure,
-                place: e.ShirExpr) -> Optional[Type]:
+def _place_type(validator: TypeValidator, place: e.ShirExpr) -> Optional[Type]:
     """The type of a place with no `peek` or `poke`; None after an error of the place: a C
     global is CE5016, and a target that is not a place CE2130."""
     if reject_extern_variable_write(validator, place) or reject_non_place(validator, place):
