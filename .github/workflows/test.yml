@@ -214,55 +214,13 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # Stage 2: leak gate on both platforms, after pytest and before the full suites.
-  # Uses the malloc-interposer (tests/leakcheck), which runs in hosted CI on both
-  # Linux and macOS (unlike `leaks`, which cannot attach on the hosted macOS runner).
-  # --leaks-only is a SELECTOR, not a stronger check: the stage 3 full suites enforce
-  # EXPECT_NO_LEAKS too. This stage exists to fail fast over the ~350 annotated tests
-  # instead of the whole corpus.
-  leaks-linux:
-    needs: [changes, pytest]
-    runs-on: ubuntu-latest
-    container:
-      image: debian:trixie-slim
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Sushi toolchain
-        if: needs.changes.outputs.code == 'true'
-        uses: ./.github/actions/setup-sushi
-
-      - name: Run leak gate
-        if: needs.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run python tests/run_tests.py --leaks-only
-
-  leaks-macos:
-    needs: [changes, pytest]
-    runs-on: macos-15
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Sushi toolchain
-        if: needs.changes.outputs.code == 'true'
-        uses: ./.github/actions/setup-sushi
-        with:
-          python-version: '3.13'
-
-      - name: Run leak gate
-        if: needs.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run --python 3.13 python tests/run_tests.py --leaks-only
-
-  # Stage 3: the full suites, only after the leak gate passes on both platforms.
+  # Stage 2: the full suites, on both platforms, in parallel after pytest. They enforce
+  # every directive, EXPECT_NO_LEAKS included, through the malloc-interposer
+  # (tests/leakcheck), which runs in hosted CI on both Linux and macOS (unlike `leaks`,
+  # which cannot attach on the hosted macOS runner). There is no separate leak job:
+  # `--leaks-only` is a selector, so it checked again what these suites check.
   test-linux:
-    needs: [changes, leaks-linux, leaks-macos]
+    needs: [changes, pytest]
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -279,16 +237,15 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          # pipefail so a failing runner is not masked by tee's exit status. This job is
-          # the gate AND the source of the sushi badge, so both have to stay honest.
-          set -o pipefail
           # Guard 1 of the fork-server (#1059): every run that is not a pull request
           # (the nightly run and a manual one) starts a fresh `sushic` process for each
           # compile, as a user does, on both platforms. A pull request compiles in
           # children of the fork-server, which is faster.
           flags=""
           if [ "${{ github.event_name }}" != "pull_request" ]; then flags="--fresh-processes"; fi
-          uv run python tests/run_tests.py --enhanced $flags --json | tee corpus-results.json
+          # --json-out, not --json: the badge job gets the report as a file, and the log
+          # keeps the progress, the failure blocks and the summary.
+          uv run python tests/run_tests.py --enhanced $flags --json-out corpus-results.json
 
       # if-no-files-found: error is load-bearing. A runner that died before emitting
       # anything must fail this job, not hand the badge step an empty file to guess at.
@@ -306,7 +263,7 @@ jobs:
           if-no-files-found: error
 
   test-macos:
-    needs: [changes, leaks-linux, leaks-macos]
+    needs: [changes, pytest]
     runs-on: macos-15
 
     steps:

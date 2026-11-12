@@ -21,7 +21,7 @@ import run_tests
 # The options that narrow the list of fixtures a run holds.
 SELECTS = {"--filter", "--leaks-only", "--compile-only", "--list"}
 # The options that change how a run is shown or scheduled, and nothing it asserts.
-REPORTS = {"-h", "--help", "-v", "--verbose", "-j", "--jobs", "--json"}
+REPORTS = {"-h", "--help", "-v", "--verbose", "-j", "--jobs", "--json", "--json-out"}
 # `--skip-build` skips the builds a run needs; it does not skip a check.
 PREPARES = {"--skip-build"}
 # `--enhanced` is accepted and does nothing: every run is the enhanced run.
