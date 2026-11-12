@@ -232,7 +232,7 @@ A container method has its row in `LIST_EMITTERS` or `HASHMAP_EMITTERS`
 method its row in `backend/types/arrays/`. An extension method symbol comes from
 `extension_symbol` (`semantics/generics/name_mangling.py`), for example
 `Pair__i32_string_swapped`. Each family of built-in methods takes the operands of the SLIR
-call, never an AST node (`docs/design/ir.md` Q7). The row of each family is in
+call, never an AST node (`docs/design/ir.md` 9.7). The row of each family is in
 `METHOD_FAMILIES` (`backend/slir/methods.py`). A `BuiltinMethod` callee of a family with no
 row is an internal error.
 

@@ -95,7 +95,7 @@ The trap path does not free the message or the other values in scope: the proces
 ## The implementation
 
 - **One code, [RE2026](../error-catalog.md#re2026).** The text in the registry is the printf
-  format `assertion failed at %.*s%.*s` (ruling R-U). An `assert` lowers to a `SwitchInt`
+  format `assertion failed at %.*s%.*s`. An `assert` lowers to a `SwitchInt`
   and a `Trap("RE2026", [position, message])` in SLIR (`ir.md` 8.8, 8.9). The position is
   a constant string, `file:line:col`, and it ends in `: ` when a message follows. A bare
   `assert` gives the empty string as its message. So both forms print the text that they
