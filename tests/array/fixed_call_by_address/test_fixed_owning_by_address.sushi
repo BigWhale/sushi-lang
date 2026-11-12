@@ -1,0 +1,34 @@
+# a fixed array of more than 64 bytes with an owning element crosses a call boundary by
+# address: a borrow, a `nom` parameter and a return. The callee of `nom` frees the
+# strings, the caller frees the borrowed one and the answer. The IR has no first-class
+# load, store, parameter or return of the whole array. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 32\nHarmless\nMostly\n"
+# EXPECT_IR_LACKS: look load [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: look [32 x { ptr, i32, i8 }] %
+# EXPECT_IR_LACKS: take load [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: take [32 x { ptr, i32, i8 }] %
+# EXPECT_IR_LACKS: words load [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: words [32 x { ptr, i32, i8 }] @
+# EXPECT_IR_LACKS: user_main load [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main store [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main call [32 x { ptr, i32, i8 }]
+fn look(string[32] w) i32:
+    return w.len()
+
+fn take(nom string[32] w) string:
+    return w[5].clone()
+
+fn words(string s) string[32]:
+    return [s.clone(); 32]
+
+fn main() i32:
+    let string[32] a = words("Mostly Harmless")
+    println("{a[31]} {look(a)}")
+    let string[32] b = words("Harmless")
+    println(take(nom b))
+    let string[32] c = words("Mostly")
+    println(c[0])
+    return 0

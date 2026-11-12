@@ -377,6 +377,7 @@ class LLVMCodegen:
             return
 
         def _declare_one(func_sig, name: str, unit: str | None):
+            from sushi_lang.backend.functions.signature import call_signature
             from sushi_lang.backend.generics.result_builder import declared_return_ll
 
             param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
@@ -388,7 +389,8 @@ class LLVMCodegen:
             symbol = emitted_symbol(name, None, getattr(func_sig, "link_symbol", None))
             llvm_fn = self.module.globals.get(symbol)
             if llvm_fn is None:
-                llvm_fn = ir.Function(self.module, ir.FunctionType(ll_ret, param_types),
+                llvm_fn = ir.Function(self.module,
+                                      call_signature(ll_ret, param_types).function_type,
                                       name=symbol)
                 llvm_fn.linkage = 'external'
                 for i, p in enumerate(func_sig.params):

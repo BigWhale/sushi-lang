@@ -122,6 +122,43 @@ two places of one fixed-array type cannot overlap in part.
 
 A fixed array of 64 bytes or less keeps the clone by value, one element at a time.
 
+**A fixed array above the bound crosses a call boundary by address** (#1285). One function
+decides the LLVM signature for the two ends of a call: `call_signature(answer, params)`
+(`backend/functions/signature.py`). Each declaration site and each call emitter calls it,
+and the gate `tests/unit/test_call_signature_is_one.py` refuses a second rule:
+
+- A parameter of each mode is a pointer. A `peek` or a `poke` parameter is a pointer
+  already. For a by-value parameter (the default borrow, and `nom`) the caller gives the
+  address of the place of the argument, and the callee copies the bytes into its own
+  entry-block slot at its entry (`emit_fixed_array_copy`, one `memcpy`). Thus a write to
+  the parameter in the callee does not change the place of the caller, as before. A
+  constant argument goes into a slot first (`operand_address`). The ownership does not
+  change: the SLIR drops of the caller and of the callee are the same as for a value.
+- The answer goes into a slot that the caller gives as the LAST parameter, and the
+  function answers `void`. The callee builds the answer in its own `_0` slot and copies it
+  into the slot of the caller at the `return`. So a slot of the caller that is also a
+  place that the callee reads (through a `poke` argument or a `var`) does not change
+  before the callee ends. The caller gives the address of the destination place of the
+  call.
+- The last position keeps the environment of a function value first:
+  `(env, <params>, <answer slot>)`. So the type of a function value, its lifted lambda and
+  the thunk of a named function agree, and a thunk forwards its parameters unchanged.
+- A binary or a hybrid `.slib` declares the functions of its manifest through the same
+  function, so the library and the consumer agree.
+- An indirect call outside SLIR (an iterator adapter, `map_err`) that has a value for a
+  by-address position puts the value into a slot first, and reads an answer that moves by
+  address from a slot (`emit_indirect_call`, `backend/runtime/closures.py`).
+
+The limits of this rule:
+
+- An `unsafe external` keeps its C signature. C has no fixed array by value.
+- `main` keeps its fixed signature.
+- A struct, a tuple and an enum that HOLD a large `T[N]` keep the by-value convention. A
+  `| E` function that answers a large `T[N]` gives it in the `Result` payload, so the
+  `Result` is one first-class value.
+- The out-of-line functions of a derived contract (`emit_value_eq`, `emit_value_to_str`)
+  take a value of their type. They are not functions of the program.
+
 ## A run-time length, and the cursor
 
 An array literal element may fill more than one slot: `value; count` repeats one value, and

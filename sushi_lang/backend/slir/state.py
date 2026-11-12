@@ -20,7 +20,8 @@ class FunctionState:
     """One function while the emitter fills it: the codegen, the LLVM function and its
     builder, the storage of each local (an entry-block slot, or the incoming address of a
     `peek` or a `poke` parameter), the slot that holds the address of each address local,
-    the LLVM block of each SLIR block, and the span of the statement or the terminator that
+    the LLVM block of each SLIR block, the slot of the caller for an answer that moves by
+    address, and the span of the statement or the terminator that
     the emitter is on. Every function of the emitter after the stage entry takes the state,
     and reads the codegen here."""
     codegen: LLVMCodegen
@@ -32,6 +33,7 @@ class FunctionState:
     storage: dict[LocalId, ir.Value] = field(default_factory=dict)
     addresses: dict[LocalId, ir.Value] = field(default_factory=dict)
     blocks: dict[BlockId, ir.Block] = field(default_factory=dict)
+    answer: Optional[ir.Value] = None
 
     def unhandled(self, shape: object) -> NoReturn:
         """CE0000 for a SLIR shape that the emitter does not handle. A string is the name of

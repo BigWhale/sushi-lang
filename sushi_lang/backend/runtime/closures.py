@@ -1,11 +1,13 @@
 """Runtime support for closure / function values (the 3-word fat pointer)."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from llvmlite import ir
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import FunctionType, StructType
+from sushi_lang.backend.functions.signature import CallSignature, call_signature
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
@@ -34,12 +36,13 @@ def build_closure_value(
     return v
 
 
-def _env_prepended_signature(codegen: "LLVMCodegen", fn_type: FunctionType) -> ir.FunctionType:
-    """The real callee signature: `R(i8* env, <params>)`, R the bare return or the channel Result."""
+def _env_prepended_signature(codegen: "LLVMCodegen", fn_type: FunctionType) -> CallSignature:
+    """The real callee signature: `R(i8* env, <params>)`, R the bare return or the channel
+    Result, through the one signature rule (`call_signature`)."""
     from sushi_lang.backend.generics.result_builder import fn_value_result_type
     result_ll = codegen.types.ll_type(fn_value_result_type(codegen, fn_type))
     param_ll = [codegen.types.ll_type(p) for p in fn_type.param_types]
-    return ir.FunctionType(result_ll, [codegen.types.str_ptr] + param_ll)
+    return call_signature(result_ll, [codegen.types.str_ptr] + param_ll)
 
 
 _THUNK_SUFFIX = ".__closure_thunk"
@@ -62,7 +65,10 @@ def synthesize_thunk(codegen: "LLVMCodegen", target: ir.Function) -> ir.Function
     b = ir.IRBuilder(block)
     forwarded = list(thunk.args[1:])  # drop the leading env
     result = b.call(target, forwarded)
-    b.ret(result)
+    if isinstance(target_ret, ir.VoidType):
+        b.ret_void()
+    else:
+        b.ret(result)
     return thunk
 
 
@@ -233,13 +239,51 @@ def emit_indirect_call(
     arg_values: List[ir.Value],
     to_i1: bool,
 ) -> ir.Value:
-    """Call through a function value, threading `env_ptr` as the hidden leading arg."""
-    callee_ty = _env_prepended_signature(codegen, fn_type)
+    """Call through a function value, threading `env_ptr` as the hidden leading arg. An
+    answer that moves by address is read from a new entry-block slot."""
+    signature = _env_prepended_signature(codegen, fn_type)
+    if signature.answer_by_address:
+        slot = entry_alloca(codegen.builder, signature.answer, "answer")
+        _emit_indirect(codegen, signature, fat_value, arg_values, slot)
+        return codegen.builder.load(slot)
+    result = _emit_indirect(codegen, signature, fat_value, arg_values, None)
+    return codegen.utils.as_i1(result) if to_i1 else result
+
+
+def emit_indirect_call_into(codegen: "LLVMCodegen", fat_value: ir.Value, fn_type: FunctionType,
+                            arg_values: List[ir.Value], dest: ir.Value) -> None:
+    """Call through a function value, and put the answer at the address `dest`: the callee
+    writes it there when it moves by address."""
+    signature = _env_prepended_signature(codegen, fn_type)
+    result = _emit_indirect(codegen, signature, fat_value, arg_values,
+                            dest if signature.answer_by_address else None)
+    if not signature.answer_by_address:
+        codegen.builder.store(result, dest)
+
+
+def _emit_indirect(codegen: "LLVMCodegen", signature: CallSignature, fat_value: ir.Value,
+                   arg_values: List[ir.Value], answer_slot: Optional[ir.Value]) -> ir.Value:
+    """The call instruction. An argument at a position that crosses by address is its
+    address, or a value that goes into a slot first. `answer_slot` is the last argument
+    when the answer moves by address."""
+    callee_ty = signature.function_type
     fn_ptr_i8 = codegen.builder.extract_value(fat_value, 0)
     env_ptr = codegen.builder.extract_value(fat_value, 1)
     callee = codegen.builder.bitcast(fn_ptr_i8, ir.PointerType(callee_ty))
 
-    param_ll = list(callee_ty.args)[1:]  # skip the env slot
-    casted = [codegen.utils.cast_for_param(v, pt) for v, pt in zip(arg_values, param_ll, strict=True)]
-    result = codegen.builder.call(callee, [env_ptr] + casted)
-    return codegen.utils.as_i1(result) if to_i1 else result
+    param_ll = list(callee_ty.args)[1:len(arg_values) + 1]  # skip the env slot
+    casted = [_by_address(codegen, v, pt) if moved else codegen.utils.cast_for_param(v, pt)
+              for v, pt, moved in zip(arg_values, param_ll, signature.by_address[1:],
+                                      strict=True)]
+    tail = [] if answer_slot is None else [answer_slot]
+    return codegen.builder.call(callee, [env_ptr] + casted + tail)
+
+
+def _by_address(codegen: "LLVMCodegen", value: ir.Value, param: ir.Type) -> ir.Value:
+    """The address that a by-address parameter takes: `value` itself when it is one, else a
+    new entry-block slot that holds it."""
+    if value.type == param:
+        return value
+    slot = entry_alloca(codegen.builder, value.type, "arg")
+    codegen.builder.store(value, slot)
+    return slot

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 
+from sushi_lang.backend.functions.signature import call_signature
 from sushi_lang.backend.runtime.closures import (
     emit_capturing_closure, emit_empty_closure, materialize_function_ref)
 from sushi_lang.backend.slir.state import FunctionState
@@ -46,6 +47,6 @@ def declare_lifted(codegen: LLVMCodegen, function: SlirFunction) -> None:
     for local, convention in function.params:
         ll = types.ll_type(function.locals[local.index].ty)
         params.append(ll.as_pointer() if convention.by_address else ll)
-    declared = ir.Function(codegen.module, ir.FunctionType(
-        types.ll_type(function.locals[0].ty), params), name=function.symbol)
+    declared = ir.Function(codegen.module, call_signature(
+        types.ll_type(function.locals[0].ty), params).function_type, name=function.symbol)
     declared.linkage = "internal"

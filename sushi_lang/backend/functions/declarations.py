@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 from sushi_lang.backend.generics.result_builder import declared_return_ll
+from sushi_lang.backend.functions.signature import call_signature
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -36,7 +37,7 @@ class FunctionDeclarations:
             return existing
 
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in fn.params]
-        fnty = ir.FunctionType(declared_return_ll(self.codegen, fn), ll_param_tys)
+        fnty = call_signature(declared_return_ll(self.codegen, fn), ll_param_tys).function_type
         llvm_fn = ir.Function(self.codegen.module, fnty, name=fn.symbol)
         for i, (pname, _) in enumerate(fn.params):
             llvm_fn.args[i].name = pname
@@ -99,7 +100,8 @@ class FunctionDeclarations:
             param_types.append(self.codegen.types.ll_type(ty))
             param_names.append(name)
 
-        func_type = ir.FunctionType(declared_return_ll(self.codegen, ext), param_types)
+        func_type = call_signature(declared_return_ll(self.codegen, ext),
+                                   param_types).function_type
         llvm_fn = ir.Function(self.codegen.module, func_type, name=ext.link_name)
 
         for i, name in enumerate(param_names):
