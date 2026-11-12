@@ -4,6 +4,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is
+  now `CE1003` at the `break` or the `continue`, as in a lambda with no loop around it. A
+  lambda body starts with no loop, as a function body does. Before, the compiler stopped
+  with an internal error (#1272).
+
 ## [0.17.0] - 2026-11-11
 
 The compiler has a new pipeline. The semantic passes and the backend now work on two
