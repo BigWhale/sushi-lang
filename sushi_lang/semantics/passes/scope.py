@@ -101,7 +101,7 @@ class ScopeAnalyzer:
         # The written `expand`-body `let`s that CW1002 has named in this body (#1022).
         self._shadows_told: Set[WrittenLet] = set()
         # Loop-nesting depth for the current function. break/continue are only
-        # legal when this is > 0 (CE1003); reset to 0 across nested functions.
+        # legal when this is > 0 (CE1003); reset to 0 for each function and lambda body.
         self._loop_depth: int = 0
         # The written type-pack names of the instance being checked; the typecheck pass
         # says CE0144 at a use of one (#1109).
@@ -167,6 +167,16 @@ class ScopeAnalyzer:
             self.bindings.append(self._out.finish())
         finally:
             self._out = outer
+
+    @contextmanager
+    def _fresh_loop_context(self) -> Iterator[None]:
+        """Check a function or lambda body with no enclosing loop (#1272)."""
+        saved = self._loop_depth
+        self._loop_depth = 0
+        try:
+            yield
+        finally:
+            self._loop_depth = saved
 
     def _push_scope(self) -> None:
         """Enter a new scope."""
@@ -502,10 +512,11 @@ class ScopeAnalyzer:
         for p in lam.params:
             self._declare_variable(p, p.name, p.name_span, written_binder(lam, p.name),
                                    kind="parameter")
-        if isinstance(lam.body, Block):
-            self._check_block(lam.body)
-        else:
-            self._check_expression(lam.body)
+        with self._fresh_loop_context():
+            if isinstance(lam.body, Block):
+                self._check_block(lam.body)
+            else:
+                self._check_expression(lam.body)
         self._pop_scope()
         self._capture_collectors.pop()
         self._out.captures(lam, tuple(collector['captures'].values()))
@@ -534,11 +545,6 @@ class ScopeAnalyzer:
         # `poke self` method must not make `self := v` legal here (#327).
         self._self_is_poke = False
 
-        # A (possibly nested) function starts a fresh loop context: a
-        # break/continue in its body must not see a loop in an enclosing function.
-        saved_loop_depth = self._loop_depth
-        self._loop_depth = 0
-
         for param in func.params:
             # Synthesized pack fan-out params carry user-invisible names, so they are
             # declared with no span and the implicit-variable exemption suppresses CW1001.
@@ -546,8 +552,8 @@ class ScopeAnalyzer:
             self._declare_variable(param, param.name, span, kind="parameter",
                                    told=True)
 
-        self._check_block(func.body)
-        self._loop_depth = saved_loop_depth
+        with self._fresh_loop_context():
+            self._check_block(func.body)
         self._pop_scope()
 
     def _check_extension_method(self, ext: ExtendDef) -> None:

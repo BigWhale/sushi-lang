@@ -1,0 +1,16 @@
+# A lambda body starts a fresh loop context, as a function body does (#1272).
+# A `continue` in a lambda that stands inside a loop does not see that loop.
+# EXPECT_ERROR_CODE: CE1003
+# EXPECT_ERROR_CODES_EXACT: CE1003
+
+fn main() i32:
+    let i32 n = 0
+    while (n < 3):
+        let fn(i32) -> i32 f = |i32 x|:
+            if (x > 0):
+                continue
+            return x
+        n := n + f(n)
+        n := n + 1
+    println("Mostly Harmless")
+    return 0

@@ -2,7 +2,8 @@
 
 A read of a local reports a use after a move (CE2405, CE2435), after a destroy (CE2406)
 and after a change of the owner of a `let`-borrow (CE2412). A literal, a constant and a
-`var` read nothing that the body owns. An operator reads its operands, an interpolated
+`var` read nothing that the body owns. An operator reads its operands (the right operand of
+`and` and `or` on some paths only), an interpolated
 string reads its holes, a field reads its base, and an element and a slice read their array and their
 index or bounds. Each field of a struct construction, each part of a tuple, each payload
 of an enum construction and each element of an array construction is a consuming use, and
@@ -27,13 +28,16 @@ from . import arms
 from .borrows import BY_ADDRESS, check_borrow as borrow_place
 from .consume import StatementTakes, consume, consume_once, decide, unwrap_place
 from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
-from .flow import record_exit
+from .flow import FlowFacts, record_exit, restore_flow, snapshot_flow
 from .iterators import lent_owners
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
 
     from . import BorrowChecker
+
+
+SHORT_CIRCUIT = frozenset({"and", "or"})
 
 
 def check_leaf(_checker: 'BorrowChecker',
@@ -77,8 +81,15 @@ def check_unary(checker: 'BorrowChecker', node: e.Unary) -> None:
 
 
 def check_binary(checker: 'BorrowChecker', node: e.Binary) -> None:
+    """The right operand of `and` and of `or` runs on some paths only: the path that
+    skips it and the path through it join, as the two blocks of an `if` do."""
     arms.check(checker, node.lhs)
+    if node.op not in SHORT_CIRCUIT:
+        arms.check(checker, node.rhs)
+        return
+    skips = snapshot_flow(checker)
     arms.check(checker, node.rhs)
+    restore_flow(checker, FlowFacts.join([skips, snapshot_flow(checker)]))
 
 
 def check_cast(checker: 'BorrowChecker', node: e.Cast) -> None:

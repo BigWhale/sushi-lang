@@ -44,8 +44,9 @@ operands, so a body gives the same ids on every run (ir.md 11.3).
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Sequence, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Iterator, Optional, Sequence, TypeAlias, TypeVar, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -123,6 +124,16 @@ class BodyLowerer:
     copies: ExpandCopies = field(default_factory=ExpandCopies, init=False)
     in_initializer: bool = field(default=False, init=False)
     loops: int = field(default=0, init=False)
+
+    @contextmanager
+    def loops_at(self, depth: int) -> Iterator[None]:
+        """Lower with `depth` loops around the walk: one more for a loop body, 0 for a
+        lambda body, which a `break` cannot leave (#1272)."""
+        saved, self.loops = self.loops, depth
+        try:
+            yield
+        finally:
+            self.loops = saved
 
     def stmt(self, node: Any) -> s.ShirStmt:
         row = LOWERING.get(type(node))
@@ -648,11 +659,8 @@ def _while(lw: BodyLowerer, node: a.While) -> s.Loop:
 
 def _loop_body(lw: BodyLowerer, body: a.Block) -> ShirBlock:
     """The body of a loop: a `break` and a `continue` in it leave the loop."""
-    lw.loops += 1
-    try:
+    with lw.loops_at(lw.loops + 1):
         return lw.block(body)
-    finally:
-        lw.loops -= 1
 
 
 def _foreach(lw: BodyLowerer, node: a.Foreach) -> s.Loop:
