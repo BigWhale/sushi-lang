@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Sequence, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.generics.iterators import item_parts
+from sushi_lang.semantics.generics.iterators import item_parts, lends_a_part
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import CURSOR_NEXT
@@ -283,7 +283,7 @@ def _value_walk(low: Lowering, stmt: s.Loop, source: s.Items,
             (p.Copy(iterator), method.receiver),)
     else:
         ty = cast(IteratorType, deref_type(low.type_of(source.iterable)))
-        item, peeks = ty.element_type, bool(ty.peeks)
+        item, peeks = ty.element_type, lends_a_part(ty)
         target, args = st.Indirect(p.Copy(iterator)), ()
         owned_parts = _owned_parts(low, ty)
     answer, some = _maybe_of(low, item, span)

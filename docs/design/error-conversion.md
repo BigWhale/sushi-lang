@@ -552,16 +552,15 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
 - **`typecheck`.** `check_try` and `check_cast` ask the seam. Each arm writes its answer
   as the conversion row of its node in `TypeckResults` (docs/design/ir.md 7.3):
   `NoConversion` for a `??` of the same error type, for a numeric cast and for an identity
-  cast. A `??` or a cast that a declared conversion joins is not typed on SHIR yet, and
-  stops the walk of its body until the group D2. In a generic function the question is
+  cast. A `??` or a cast that a declared conversion joins writes the `Conversion` callee of
+  that conversion. In a generic function the question is
   asked per instance.
 - **SLIR.** A `Try` lowers to `Discriminant` + `SwitchInt` + `Downcast` (docs/design/ir.md
   8.9). On the propagate path the error is a `Move` out of the payload into a `Direct` call
   of the conversion, the `Err` is built from the converted value, the drops of the scopes
   that the path leaves come next, and the block returns. The conversion runs before those
   drops, and the moved error is not dropped again, so it is freed once. `r??` on a named
-  wrapper (#548) hands the error over in the same way. The error conversions group D2
-  builds the conversion half.
+  wrapper (#548) hands the error over in the same way.
 - **Libraries.** A binary or hybrid manifest gets a `conversions` row (source, target,
   link symbol). `--lib-info` and `slib-info` print it.
 - **`effects`.** The destroy summary reads the `poke` parameters of free functions. A
@@ -581,7 +580,7 @@ receiver is spent; and the backend emitter reads the stamped return type.
 
 ### 8.4 The IR
 
-`ir.md` S5 moves every `typecheck` stamp into `TypeckResults`. The conversion is one more
+`ir.md` 7.3 puts every answer of `typecheck` into `TypeckResults`. The conversion is one more
 stamp, and in SHIR one more `Callee` (`ir.md` 7.6). The `error` flag is a property of the
 type and needs nothing from the IR.
 

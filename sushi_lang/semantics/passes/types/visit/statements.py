@@ -74,7 +74,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody
 from sushi_lang.semantics.shir.loop_kind import CountedRange, While
-from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock
 from sushi_lang.semantics.shir.typeck import MatchFacts
 from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -118,8 +118,9 @@ def check_expand(validator: TypeValidator, node: s.Expand) -> None:
 
 def check_assign(validator: TypeValidator, node: s.Assign) -> None:
     """A `let`, a rebind of a local or of a `var`, a field write or an element write. A
-    write into a constant is CE2096, a write into a byte of a string CE2113, and a write of
-    a C global CE5016; the value is then checked at no type."""
+    write into a constant is CE2096, a write into a byte of a string CE2113, a write of a C
+    global CE5016, and a target that is not a place CE2130; the value is then checked at no
+    type."""
     target = node.target
     if node.is_init and isinstance(target, e.LocalRef):
         _check_let(validator, node, target)
@@ -127,8 +128,11 @@ def check_assign(validator: TypeValidator, node: s.Assign) -> None:
     if not node.is_init and reject_extern_variable_write(validator, target):
         visit.check_expr(validator, node.value)
         return
-    if node.is_init or not isinstance(target, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
+    if node.is_init:
         visit.unhandled(validator, node)
+    if reject_non_place(validator, target):
+        visit.check_expr(validator, node.value)
+        return
     ty = visit.check_expr(validator, target)
     if reject_unwritable_place(validator, target, node.loc):
         visit.check_expr(validator, node.value)
@@ -136,6 +140,29 @@ def check_assign(validator: TypeValidator, node: s.Assign) -> None:
     got = visit.check_expr(validator, node.value, ty)
     if ty is not None:
         reject_mismatch(validator, got, ty, node.loc, None)
+
+
+def is_place(target: e.ShirExpr) -> bool:
+    """Whether `target` is a place that a rebind writes: a local, a `var`, a field or an
+    element. A C global is refused before this question."""
+    return isinstance(target, (e.LocalRef, e.StorageRef, e.Field, e.Index))
+
+
+def reject_non_place(validator: TypeValidator, target: e.ShirExpr) -> bool:
+    """CE2130 at a rebind target that is not a place. A bare name that is no local and no
+    `var` (a constant, a function) has the error of the `scope` pass, CE1002, and an error
+    hole is checked as a hole, which has its own error. Answers whether the target is
+    refused."""
+    if is_place(target):
+        return False
+    if isinstance(target, Hole):
+        visit.check_expr(validator, target)
+    elif (isinstance(target, (e.ConstRef, e.GlobalRef))
+          and validator.reporter.errors_offered.get("CE1002")):
+        validator.refused_before = True
+    else:
+        er.emit(validator.reporter, er.ERR.CE2130, target.loc)
+    return True
 
 
 def reject_unwritable_place(validator: TypeValidator, place: e.ShirExpr, loc: Span) -> bool:

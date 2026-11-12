@@ -1,0 +1,20 @@
+# A static on a GENERIC target with a method-level `@(U)`: `T` comes from the declared
+# type at the call site, and `U` comes from the argument. Each pair of the two is one copy.
+# EXPECT_STDOUT_EXACT: "1\nx\ns\n2\nt\ny\n4\n3\n"
+struct Box@(T):
+    T v
+
+extend Box@(T) static make@(U: Display)(nom T a, U seed) Box@(T):
+    println("{seed}")
+    return Box(a)
+
+fn main() i32:
+    let Box@(string) b = Box.make(nom "x", 1)
+    println(b.v)
+    let Box@(i32) c = Box.make(nom 2, "s")
+    println(c.v)
+    let Box@(string) d = Box.make(nom "y", "t")
+    println(d.v)
+    let Box@(i32) e = Box.make(nom 3, 4)
+    println(e.v)
+    return 0

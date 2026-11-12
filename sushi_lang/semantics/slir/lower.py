@@ -134,9 +134,7 @@ class SlirStage:
                                   name=name, unit=self.unit, tables=tables, drops=drops,
                                   label=display_filename(filename or "<input>"))
         for each in (function, *function.lifted):
-            self.verifier.verify(each, funcs=tables.funcs, extensions=tables.extensions,
-                                 externals=tables.externals, perk_impls=tables.perk_impls,
-                                 drops=drops, filename=filename)
+            self.verifier.verify(each, tables=tables, drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
 
 

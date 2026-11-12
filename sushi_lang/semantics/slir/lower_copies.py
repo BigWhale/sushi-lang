@@ -167,9 +167,9 @@ def source(low: Lowering, expr: e.ShirExpr) -> Source:
 
 
 def _wrapper(low: Lowering, recv: e.ShirExpr) -> _Placed:
-    """The source of a receiver, in a place (`views.wrapper`): a path spends a temporary
+    """The source of a receiver, in a place (`views.borrowed_wrapper`): a path spends a temporary
     that owns."""
-    place, held = views.wrapper(low, recv, every_place=True)
+    place, held = views.borrowed_wrapper(low, recv)
     return _Placed(p.Copy(place), held == "value" and low.owns(low.type_of(recv)))
 
 

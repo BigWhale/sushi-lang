@@ -1,0 +1,22 @@
+# Each place is a correct target of a rebind and of a tuple rebind (#1284).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 7 9 5 4 11 12\n"
+struct P:
+    i32 x
+
+var i32 count = 0
+
+fn main() i32:
+    let i32 y = 0
+    let P p = P(1)
+    let i32[] a = from([1, 2, 3])
+    let (i32, i32) t = (1, 2)
+    y := 3
+    count := 7
+    p.x := 9
+    a[0] := 5
+    t.0 := 4
+    (y) := 3
+    (count, p.x) := (11, 12)
+    println("{y} {count - 4} {a[0] + 4} {a[0]} {t.0} {count} {p.x}")
+    return 0

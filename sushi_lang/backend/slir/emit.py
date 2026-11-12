@@ -4,7 +4,9 @@ Every local is a slot in the entry block (`entry_alloca`, the one seam), except 
 or a `poke` parameter: its local IS the incoming address (docs/design/ir.md 8.3). An
 address local, which a `Ref` writes, has a slot of a pointer, and its storage is the
 address in that slot (8.2). A value parameter is stored into its slot at the entry. `_0` is the return slot, and `return`
-loads it. Each SLIR block is one LLVM block, in the order of the function. A statement
+loads it. The signature comes from `call_signature`: a value that moves by address crosses
+as a pointer, the callee copies a parameter into its slot, and `return` copies `_0` into
+the slot of the caller. Each SLIR block is one LLVM block, in the order of the function. A statement
 class or a terminator class that the emitter does not handle is an internal error. `StorageLive`, `StorageDead`, `BeginBorrow` and `EndBorrow` emit
 nothing. A drop goes through the
 one destroy seam of the backend.
@@ -18,12 +20,14 @@ from llvmlite import ir
 from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.runtime.closures import emit_indirect_call
+from sushi_lang.backend.functions.signature import CallSignature, call_signature
+from sushi_lang.backend.runtime.closures import emit_indirect_call_into
 from sushi_lang.backend.runtime.iterators import emit_next
 from sushi_lang.backend.slir.externs import emit_extern
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
 from sushi_lang.backend.slir.state import FunctionState
+from sushi_lang.backend.types.arrays.runs import emit_fixed_array_copy
 from sushi_lang.internals.errors import message_for, raise_internal_error
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.backend.slir.values import (
@@ -92,10 +96,17 @@ def _open(state: FunctionState) -> None:
     """The storage of each local, and the value parameters stored into their slots. The
     signature that the declaration made must agree with the locals and the conventions."""
     function, llvm_fn = state.function, state.llvm_fn
-    if (len(llvm_fn.args) != len(function.params)
-            or llvm_fn.function_type.return_type != _ll(state, function.locals[0])):
-        state.fault(f"the declaration {llvm_fn.function_type} does not agree with the "
-                    f"SLIR header")
+    signature = call_signature(_ll(state, function.locals[0]), [
+        _ll(state, function.locals[local.index]).as_pointer() if convention.by_address
+        else _ll(state, function.locals[local.index])
+        for local, convention in function.params])
+    declared = llvm_fn.function_type
+    if declared != signature.function_type:
+        state.fault(f"the declaration {declared} does not agree with the SLIR header "
+                    f"{signature.function_type} (answers {declared.return_type} and "
+                    f"{signature.function_type.return_type})")
+    if signature.answer_by_address:
+        state.answer = llvm_fn.args[-1]
     params = {local: (index, convention)
               for index, (local, convention) in enumerate(function.params)}
     addresses = address_locals(function)
@@ -110,14 +121,14 @@ def _open(state: FunctionState) -> None:
             state.storage[local.id] = entry_alloca(state.builder, ll, _name(local))
             continue
         arg = llvm_fn.args[param[0]]
-        by_address = param[1].by_address
-        if arg.type != (ll.as_pointer() if by_address else ll):
-            state.fault(f"the parameter _{local.id.index} is {arg.type} in the declaration")
-        if by_address:
+        if param[1].by_address:
             state.storage[local.id] = arg
             continue
         slot = entry_alloca(state.builder, ll, _name(local))
-        state.builder.store(arg, slot)
+        if signature.by_address[param[0]]:
+            emit_fixed_array_copy(state.codegen, slot, arg, ll)
+        else:
+            state.builder.store(arg, slot)
         state.storage[local.id] = slot
 
 
@@ -196,13 +207,17 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
     llvm_fn = state.codegen.module.globals.get(direct.symbol)
     if not isinstance(llvm_fn, ir.Function):
         state.fault(f"the module declares no function '{direct.symbol}'")
-    args = [_argument(state, operand, convention)
-            for operand, convention in statement.args]
+    signature = _signature(state, statement)
+    args = _arguments(state, statement, signature)
+    dest = place_address(state, statement.dest)
+    if signature.answer_by_address:
+        args.append(dest)
     if [arg.type for arg in args] != [param.type for param in llvm_fn.args]:
         state.fault(f"the call of '{direct.symbol}' does not agree with its "
                     f"declaration {llvm_fn.function_type}")
     value = state.call(llvm_fn, args)
-    state.builder.store(value, place_address(state, statement.dest))
+    if not signature.answer_by_address:
+        state.builder.store(value, dest)
 
 
 def _stdlib(state: FunctionState, statement: st.Call, direct: st.Direct) -> None:
@@ -252,9 +267,9 @@ def _indirect(state: FunctionState, statement: st.Call) -> None:
     if not isinstance(called, FunctionType):
         state.fault(f"an indirect call of a value of {called}")
     value = operand_value(state, callee.operand)
-    args = [_argument(state, operand, convention) for operand, convention in statement.args]
-    result = emit_indirect_call(state.codegen, value, called, args, to_i1=False)
-    state.builder.store(result, place_address(state, statement.dest))
+    args = _arguments(state, statement, _signature(state, statement))
+    emit_indirect_call_into(state.codegen, value, called, args,
+                            place_address(state, statement.dest))
 
 
 #: One row for each variant of `SlirCallee` (gate: `test_slir_call_dispatch_is_a_table.py`).
@@ -265,9 +280,31 @@ CALL_EMITTERS: dict[type, Callable[[FunctionState, st.Call], None]] = {
 }
 
 
-def _argument(state: FunctionState, operand: p.Operand, convention: Convention) -> ir.Value:
+def _signature(state: FunctionState, statement: st.Call) -> CallSignature:
+    """The signature of the callee at this call, from the types of the operands and of the
+    destination: the one rule that the declaration of the callee reads too."""
+    params = []
+    for operand, convention in statement.args:
+        ll = state.codegen.types.ll_type(type_of_operand(state, operand))
+        params.append(ll.as_pointer() if convention.by_address else ll)
+    return call_signature(state.codegen.types.ll_type(type_of_place(state, statement.dest)),
+                          params)
+
+
+def _arguments(state: FunctionState, statement: st.Call,
+               signature: CallSignature) -> list[ir.Value]:
+    """The LLVM arguments of a call, the answer slot not included. A value argument that
+    moves by address is the address of its place: the callee copies the bytes into its own
+    slot at its entry, so the place is read before anything changes it."""
+    return [_argument(state, operand, convention, by_address)
+            for (operand, convention), by_address
+            in zip(statement.args, signature.by_address, strict=True)]
+
+
+def _argument(state: FunctionState, operand: p.Operand, convention: Convention,
+              by_address: bool) -> ir.Value:
     if not convention.by_address:
-        return operand_value(state, operand)
+        return operand_address(state, operand) if by_address else operand_value(state, operand)
     if isinstance(operand, p.Move):
         state.fault(f"a {convention.value} argument is a move")
     return operand_address(state, operand)
@@ -282,13 +319,25 @@ def _terminator(state: FunctionState, terminator: tm.SlirTerminator) -> None:
     elif isinstance(terminator, tm.SwitchInt):
         _switch(state, terminator)
     elif isinstance(terminator, tm.Return):
-        builder.ret(builder.load(state.storage_of(RETURN_SLOT)))
+        _return(state)
     elif isinstance(terminator, tm.Unreachable):
         builder.unreachable()
     elif isinstance(terminator, tm.Trap):
         _trap(state, terminator)
     else:
         state.unhandled(terminator)
+
+
+def _return(state: FunctionState) -> None:
+    """`ret` of the value in `_0`. An answer that moves by address is copied from `_0` into
+    the slot of the caller, and the function answers `void`."""
+    builder = state.builder
+    if state.answer is None:
+        builder.ret(builder.load(state.storage_of(RETURN_SLOT)))
+        return
+    emit_fixed_array_copy(state.codegen, state.answer, state.storage_of(RETURN_SLOT),
+                          _ll(state, state.function.locals[0]))
+    builder.ret_void()
 
 
 def _trap(state: FunctionState, terminator: tm.Trap) -> None:

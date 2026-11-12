@@ -1,0 +1,64 @@
+# the deep clone of an owning fixed array of more than 64 bytes is a clone by address: the
+# IR has no first-class load or store of the whole array, in `main` and in the clone
+# function of a recursive element. The cases: an explicit `.clone()` of `string[512][4]`,
+# the repeat of an owning fixed-array element, a struct field of an owning `T[N]` type,
+# and a `List@(Tree)[9]` whose clone is an out-of-line function. The small `string[4]`
+# (64 bytes) is the twin: it keeps the clone by value. Each clone is independent of its
+# source. A struct and a `Tree` are built in a helper, because a struct value that holds a
+# large array is still one first-class value. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless y x 4\nb c 7\n1 2 3\na e\n"
+# EXPECT_IR_LACKS: user_main load [512 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main store [512 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main load [4 x [512 x { ptr, i32, i8 }]]
+# EXPECT_IR_LACKS: user_main store [4 x [512 x { ptr, i32, i8 }]]
+# EXPECT_IR_LACKS: user_main load [256 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main store [256 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main load [9 x { i32, i32, ptr }]
+# EXPECT_IR_LACKS: user_main store [9 x { i32, i32, ptr }]
+# EXPECT_IR_LACKS: __sushi_clone__A9_EList_LTree_G load [9 x { i32, i32, ptr }]
+# EXPECT_IR_LACKS: __sushi_clone__A9_EList_LTree_G store [9 x { i32, i32, ptr }]
+# EXPECT_IR_LACKS: __sushi_clone__A9_EList_LTree_G insertvalue [9 x { i32, i32, ptr }]
+# EXPECT_IR_HOLDS: user_main load [4 x { ptr, i32, i8 }]
+struct Shelf:
+    string[256] books
+    i32 count
+
+struct Tree:
+    i32 id
+    List@(Tree)[9] forest
+
+fn stocked() Shelf:
+    return Shelf(["b".clone(); 256], 7)
+
+fn plant(poke List@(Tree)[9] forest, i32 slot, i32 id) ~:
+    forest[slot].push(Tree(id, [List.new(); 9]))
+
+fn main() i32:
+    let string[512][4] g = [["x".clone(); 512]; 4]
+    g[3][511] := "Mostly Harmless".clone()
+    let string[512][4] h = g.clone()
+    g[3][511] := "y".clone()
+    println("{h[3][511]} {g[3][511]} {h[0][0]} {h.len()}")
+
+    let Shelf s = stocked()
+    let Shelf t = s.clone()
+    s.books[0] := "c".clone()
+    println("{t.books[0]} {s.books[0]} {t.count}")
+
+    let List@(Tree)[9] forest = [List.new(); 9]
+    plant(poke forest, 2, 1)
+    let List@(Tree)[9] grown = forest.clone()
+    plant(poke forest, 2, 2)
+    plant(poke grown, 8, 3)
+    plant(poke grown, 8, 4)
+    plant(poke grown, 8, 5)
+    println("{grown[2].len()} {forest[2].len()} {grown[8].len()}")
+
+    let string[4] small = ["a".clone(), "b".clone(), "c".clone(), "d".clone()]
+    let string[4] copy = small.clone()
+    small[0] := "e".clone()
+    println("{copy[0]} {small[0]}")
+    return 0

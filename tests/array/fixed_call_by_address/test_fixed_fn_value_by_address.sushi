@@ -1,0 +1,36 @@
+# a lambda, a function value and the thunk of a named function take a fixed array of more
+# than 64 bytes by address, and answer one in a slot of the caller. The IR has no
+# first-class load, store or parameter of the whole array in the lifted lambda, in the
+# thunk and in the caller. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7 3 4 2\n"
+# EXPECT_IR_LACKS: user_main.__lambda_0 load [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main.__lambda_0 [4 x [32 x i32]] %
+# EXPECT_IR_LACKS: user_main.__lambda_1 [4 x [32 x i32]] @
+# EXPECT_IR_LACKS: user_main.__lambda_1 ret [4 x [32 x i32]]
+# EXPECT_IR_LACKS: total.__closure_thunk [4 x [32 x i32]] %
+# EXPECT_IR_LACKS: make.__closure_thunk [4 x [32 x i32]] @
+# EXPECT_IR_LACKS: user_main load [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main store [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main ([4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main , [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main call [4 x [32 x i32]]
+fn total(i32[32][4] g) i32:
+    return g[3][31]
+
+fn make(i32 v) i32[32][4]:
+    return [[v; 32]; 4]
+
+fn main() i32:
+    let i32[32][4] g = [[1; 32]; 4]
+    g[3][31] := 7
+    g[1][2] := 2
+    let fn(i32[32][4]) -> i32 f = total
+    let fn(i32[32][4]) -> i32 h = |i32[32][4] a| a[1][2] + 1
+    let fn(i32) -> i32[32][4] m = make
+    let fn(i32) -> i32[32][4] n = |i32 v| [[v; 32]; 4]
+    let i32[32][4] four = m(4)
+    let i32[32][4] two = n(2)
+    println("{f(g)} {h(g)} {four[0][0]} {two[3][3]}")
+    return 0

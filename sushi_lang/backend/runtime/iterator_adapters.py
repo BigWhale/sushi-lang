@@ -193,7 +193,7 @@ def _lazy_drop(codegen: 'LLVMCodegen', kind: LazyKind, frees: bool) -> ir.Functi
 def _lazy_clone(codegen: 'LLVMCodegen', kind: LazyKind, types: Sequence['Type'],
                 context: tuple) -> ir.Function:
     """`clone_fn`: a heap state with a clone of each held field, at the same position."""
-    from sushi_lang.backend.ownership import copy_out
+    from sushi_lang.backend.ownership import copy_out_into
 
     def body(fn: ir.Function) -> None:
         b = codegen.builder
@@ -203,11 +203,14 @@ def _lazy_clone(codegen: 'LLVMCodegen', kind: LazyKind, types: Sequence['Type'],
         inner = emit_iterator_clone(codegen, b.load(_field(codegen, old, _INNER)))
         b.store(inner, _field(codegen, state, _INNER))
         if kind.second is not None:
-            second = b.load(_field(codegen, old, _SECOND))
-            if kind.second_is_held:
-                second = (emit_iterator_clone(codegen, second) if kind.name == "zip"
-                          else copy_out(codegen, second, context[0]))
-            b.store(second, _field(codegen, state, _SECOND))
+            dest, source = _field(codegen, state, _SECOND), _field(codegen, old, _SECOND)
+            if kind.second_is_held and kind.name != "zip":
+                copy_out_into(codegen, dest, source, context[0])
+            else:
+                second = b.load(source)
+                if kind.second_is_held:
+                    second = emit_iterator_clone(codegen, second)
+                b.store(second, dest)
         b.ret(iterator_value(codegen, _lazy_next(codegen, kind, types, context), raw,
                              _lazy_drop(codegen, kind, True), fn))
 

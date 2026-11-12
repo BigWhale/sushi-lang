@@ -1,0 +1,83 @@
+# a container that holds an owning fixed array of more than 64 bytes clones each element
+# by address: the clone of a `List`, a `T[]`, a `HashMap` value, an `Own` payload and the
+# capture of a closure has no first-class load or store of the whole `string[8]`, and the
+# bulk copy `.extend` copies each element by address too. Each clone is done in a helper,
+# so the directive reads the clone alone. Each clone is independent of its source.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 1\nb c\nd e\nf g\nh h\ni j 2\n"
+# EXPECT_IR_LACKS: dup_list load [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_list store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_array load [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_array store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_map load [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_map store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_own load [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_own store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: grow load [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: grow store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone load [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone load %"__closure_env
+# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone store %"__closure_env
+use <collections/hashmap>
+
+fn dup_list(List@(string[8]) xs) List@(string[8]):
+    return xs.clone()
+
+fn dup_array(string[8][] xs) string[8][]:
+    return xs.clone()
+
+fn dup_map(HashMap@(i32, string[8]) m) HashMap@(i32, string[8]):
+    return m.clone()
+
+fn dup_own(Own@(string[8]) o) Own@(string[8]):
+    return o.clone()
+
+fn grow(poke string[8][] dst, string[8][] src) ~:
+    dst.extend(src)
+
+fn main() i32:
+    let List@(string[8]) xs = List.new()
+    let string[8] seed = ["a".clone(); 8]
+    seed[7] := "Mostly Harmless".clone()
+    xs.push(seed)
+    let List@(string[8]) ys = dup_list(xs)
+    xs.clear()
+    xs.push(["a".clone(); 8])
+    foreach(row in ys.iter()):
+        println("{row[7]} {xs.len()}")
+
+    let string[8][] arr = from([["b".clone(); 8]])
+    let string[8][] arr2 = dup_array(arr)
+    arr[0][0] := "c".clone()
+    println("{arr2[0][0]} {arr[0][0]}")
+
+    let HashMap@(i32, string[8]) m = HashMap.new()
+    m.insert(1, ["d".clone(); 8])
+    let HashMap@(i32, string[8]) m2 = dup_map(m)
+    m.insert(1, ["e".clone(); 8])
+    let string[8] none = ["?".clone(); 8]
+    let string[8] old = m2.get(1).realise(none.clone())
+    let string[8] fresh = m.get(1).realise(none)
+    println("{old[3]} {fresh[3]}")
+    m.free()
+    m2.free()
+
+    let Own@(string[8]) o = Own.alloc(["f".clone(); 8])
+    let Own@(string[8]) o2 = dup_own(o)
+    let poke string[8] inner = o.get()
+    inner[5] := "g".clone()
+    println("{o2.get()[5]} {o.get()[5]}")
+
+    let string[8] cap = ["h".clone(); 8]
+    let fn() -> string f = |~| cap[6].clone()
+    let fn() -> string g = f.clone()
+    println("{g()} {f()}")
+
+    let string[8][] dst = from([["i".clone(); 8]])
+    let string[8][] src = from([["j".clone(); 8]])
+    grow(poke dst, src)
+    println("{dst[0][1]} {dst[1][1]} {dst.len()}")
+    return 0

@@ -1,0 +1,8 @@
+# A slice is a view and no place, so it cannot be rebound (#1284).
+# EXPECT_ERROR_CODES_EXACT: CE2130
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_slice.sushi:7:5: error [CE2130]: the left side of ':=' is not a place"
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32[] b = from([4])
+    a[0..1] := b
+    return 0

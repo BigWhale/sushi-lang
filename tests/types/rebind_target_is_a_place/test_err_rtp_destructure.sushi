@@ -1,0 +1,16 @@
+# Each target of a tuple rebind that is no place gives one error, at the target (#1284).
+# EXPECT_ERROR_CODES_EXACT: CE2130, CE2130, CE2130
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_destructure.sushi:12:6: error [CE2130]"
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_destructure.sushi:13:6: error [CE2130]"
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_destructure.sushi:14:6: error [CE2130]"
+fn g() i32:
+    return 1
+
+fn main() i32:
+    let i32 y = 0
+    let i32[] a = from([1, 2, 3])
+    (g(), y) := (1, 2)
+    ("s", y) := (1, 2)
+    (a[0..1], y) := (a, 2)
+    println(y)
+    return 0

@@ -3,7 +3,7 @@
 An `Aggregate(AggArray)` gives the parts of each run: a value of the element type, an
 `i32` count, and an `i32` first value of a sequence of `i32` slots. The value of a repeat
 run is a borrow, never a `Move`. The counts of a `T[N]` are constants that add up to `N`. A
-`Drop` of a field or an element is of an owning type, off a local that is no view. `Len` reads an array, a `List@(T)` or a string, and `Slice` reads an
+`Drop` of a field, an element or a payload is of an owning type, off a local that is no view. `Len` reads an array, a `List@(T)` or a string, and `Slice` reads an
 array with two `i32` bounds. Each check is a free function that takes the `Check` of
 `verify.py` first.
 """
@@ -91,14 +91,16 @@ def length_or_slice(check: Check, value: r.Len | r.Slice, span: Span) -> None:
 
 
 def part_drop(check: Check, stmt: st.Drop) -> None:
-    """The `Drop` of a field or an element: the old value at the write of an owning part
-    (ir.md 8.10, rule 6). Its root is a local that is no view, and its type owns. The
-    dataflow reads the root, which must hold a value, and does not change its state."""
-    root = check.place(stmt.place, stmt.span).root
-    if isinstance(root, p.Local) and root.id in check.views:
+    """The `Drop` of a field, an element or a payload: the old value at the write of an
+    owning part (ir.md 8.10, rule 6). Its root is a local that is no view, and its type owns;
+    a payload owns when one of its values owns. The dataflow reads the root, which must hold
+    a value, and does not change its state."""
+    typed = check.place(stmt.place, stmt.span)
+    if isinstance(typed.root, p.Local) and typed.root.id in check.views:
         check.fail(VIEW, f"{show(stmt.place)} is a part of a view, which owns nothing to drop",
                    stmt.span)
-    ty = check.operand_type(p.Copy(stmt.place), stmt.span)
-    if ty is None or not owns_resource(ty, check.drops):
-        check.fail(OWNING_DROP, f"{show(stmt.place)} has the type {display_type(ty)}, "
-                                f"which owns nothing", stmt.span)
+    held = check.held_types(typed.ty)
+    if not any(owns_resource(ty, check.drops) for ty in held):
+        shown = " and ".join(display_type(ty) for ty in held) or "no value"
+        check.fail(OWNING_DROP, f"{show(stmt.place)} has the type {shown}, which owns nothing",
+                   stmt.span)

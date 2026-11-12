@@ -51,15 +51,11 @@ def emit_range_copy(codegen: 'LLVMCodegen', dest_data: ir.Value, source_data: ir
         _emit_memcpy(codegen, dest_data, source_base, count, element_llvm_type)
         return
 
-    from sushi_lang.backend.ownership import copy_out
+    from sushi_lang.backend.ownership import copy_out_into
 
     def clone_one(slot: ir.Value, index: ir.Value) -> None:
-        source_slot = gep_utils.gep_array_element(codegen, source_base, index)
-        held = codegen.builder.load(source_slot, name=f"{prefix}_elem")
-        codegen.builder.store(
-            codegen.utils.cast_for_param(copy_out(codegen, held, element_type),
-                                         element_llvm_type),
-            slot)
+        copy_out_into(codegen, slot, gep_utils.gep_array_element(codegen, source_base, index),
+                      element_type)
 
     emit_container_walk(codegen, dest_data, count, clone_one, prefix=f"{prefix}_clone")
 

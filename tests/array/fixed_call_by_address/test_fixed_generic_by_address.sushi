@@ -1,0 +1,21 @@
+# a generic instance at a fixed array of more than 64 bytes takes it and answers it by
+# address. The IR has no first-class load, store, parameter or return of the whole array
+# in the instance and in the caller. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7 5\n"
+# EXPECT_IR_LACKS: id__i32_arr32_arr4 load [4 x [32 x i32]]
+# EXPECT_IR_LACKS: id__i32_arr32_arr4 [4 x [32 x i32]] %
+# EXPECT_IR_LACKS: id__i32_arr32_arr4 [4 x [32 x i32]] @
+# EXPECT_IR_LACKS: user_main load [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main store [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main call [4 x [32 x i32]]
+fn id@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let i32[32][4] g = [[5; 32]; 4]
+    g[3][3] := 7
+    let i32[32][4] k = id(nom g)
+    println("{k[3][3]} {id(nom 5)}")
+    return 0

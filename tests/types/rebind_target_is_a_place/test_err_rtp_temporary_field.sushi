@@ -1,0 +1,14 @@
+# A field of a temporary is a place, and the borrow pass refuses its write
+# with CE2429, not with the error of a target that is no place (#1284).
+# EXPECT_ERROR_CODES_EXACT: CE2429, CE2429
+struct P:
+    i32 x
+
+fn h() P:
+    return P(1)
+
+fn main() i32:
+    let Own@(P) o = Own.alloc(P(1))
+    h().x := 3
+    o.get().x := 2
+    return 0

@@ -579,6 +579,33 @@ LIST_I32 = StructType(name="List<i32>", fields=(("len", I32), ("capacity", I32),
 INOUT, IN_GUARANTEED = Convention.INOUT, Convention.IN_GUARANTEED
 
 
+def _list_of(element: Type) -> StructType:
+    return StructType(name=f"List<{element}>", fields=LIST_I32.fields, generic_base="List",
+                      generic_args=(element,))
+
+
+def _read_element(list_type: StructType, place: p.Place, span: Span = SPAN) -> SlirFunction:
+    """`_1 = copy <place>` over the List `_2`, a parameter that the function does not own."""
+    return _function([BLANK, I32, list_type],
+                     _block(0, _ret(), _set(1, r.Use(p.Copy(place)), span),
+                            _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((2, GUARANTEED),))
+
+
+def test_a_field_of_an_element_of_a_list_is_typed_from_its_type_argument():
+    _passes(_read_element(_list_of(PAIR), p.Field(p.Index(_local(2), FOUR), 1)))
+
+
+def test_a_field_of_an_element_of_a_list_of_i32_is_refused():
+    _refused(_read_element(_list_of(I32), p.Field(p.Index(_local(2), FOUR), 0), BAD),
+             "typed places")
+
+
+def test_an_index_of_a_list_with_no_type_argument_is_refused():
+    bare = StructType(name="List<?>", fields=LIST_I32.fields, generic_base="List")
+    _refused(_read_element(bare, p.Index(_local(2), FOUR), BAD), "typed places")
+
+
 def _list_method(name: str, *args: tuple[p.Operand, Convention]) -> SlirFunction:
     """`_1 = list.<name>(args)` over the List `_2`, which the function does not own."""
     call = st.Call(_local(1), st.Builtin(BuiltinMethod("list", name, nom_self=False), ()),
@@ -870,15 +897,7 @@ def test_a_terminator_with_no_span_is_refused():
     _refused(_function([BLANK], _block(0, tm.Return(None))), "spans", None)  # type: ignore[arg-type]
 
 
-# -- shapes that no lowering makes yet, which the verifier does not check ----------------
-
-
-def _not_checked(function: SlirFunction) -> None:
-    with pytest.raises(InternalCompilerError) as caught:
-        _passes(function)
-    assert caught.value.code == "CE0000"
-    assert "not checked yet" in caught.value.params["detail"]
-    assert caught.value.span == BAD
+# -- the projections of a global -------------------------------------------------------
 
 
 @pytest.mark.parametrize("projection", [
@@ -900,14 +919,6 @@ def test_a_projection_that_does_not_fit_the_type_of_the_global_is_refused(projec
              "typed places")
 
 
-def test_a_drop_of_a_place_that_is_no_local_is_not_checked_yet():
-    _not_checked(_function([BLANK, PAIR], _block(
-        0, _ret(), st.Drop(p.Downcast(_local(1), "Some"), BAD))))
-
-
-def test_a_drop_if_set_of_a_projection_is_not_checked_yet():
-    drop = st.DropIfSet(p.Field(_local(1), 0), LocalId(2), BAD)
-    _not_checked(_function([BLANK, PAIR, BOOL], _block(0, _ret(), _flag(2, True), drop)))
 
 
 # -- the readers that lowering and the verifier share ------------------------------------
@@ -1430,6 +1441,48 @@ def test_a_drop_of_a_field_of_a_view_is_refused():
         st.Drop(p.Field(_local(3), 0), BAD)))
     locals_ = tuple(replace(local, view=local.id == LocalId(3)) for local in function.locals)
     _refused(replace(function, locals=locals_), "a view local")
+
+
+# -- the drop of a payload, a drop through a reference, a flag of a part (ir.md 8.13) -----
+
+TEXT = EnumType(name="Text", variants=(
+    EnumVariantInfo(name="Some", associated_types=(STRING,)),
+    EnumVariantInfo(name="Count", associated_types=(I32,))))
+
+
+def _texts(index: int) -> list[st.SlirStatement]:
+    """`_index = Text.Some(<new string>)`, over the temporary `_index + 1`."""
+    return [_live(index + 1), _text(index + 1), _live(index),
+            _set(index, r.Aggregate(r.AggVariant(TEXT, "Some"), (_move(index + 1),))),
+            _dead(index + 1)]
+
+
+def test_a_drop_of_an_owning_payload_passes():
+    _passes(_function([BLANK, TEXT, STRING], _block(
+        0, _ret(), *_texts(1), st.Drop(p.Downcast(_local(1), "Some"), SPAN),
+        _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank()))))))
+
+
+def test_a_drop_of_a_payload_that_owns_nothing_is_refused():
+    _refused(_function([BLANK, TEXT, STRING], _block(
+        0, _ret(), *_texts(1), st.Drop(p.Downcast(_local(1), "Count"), BAD))),
+        "drop of an owning type")
+
+
+@pytest.mark.parametrize("place", [
+    p.Deref(_local(1)),
+    p.Field(p.Deref(_local(1)), 0),
+], ids=["the referenced value", "a field of it"])
+def test_a_drop_through_a_reference_is_refused(place: p.Place):
+    _refused(_function([BLANK, ReferenceType(NAMED, BorrowMode.POKE)], _block(
+        0, _ret(), st.Drop(place, BAD)), params=((1, GUARANTEED),)),
+        "drop of an owning type")
+
+
+def test_a_drop_if_set_of_a_field_is_refused():
+    drop = st.DropIfSet(p.Field(_local(1), 0), LocalId(3), BAD)
+    _refused(_function([BLANK, NAMED, STRING, BOOL], _block(
+        0, _ret(), *_named(1), _live(3), _flag(3, True), drop)), "bool drop flag")
 
 
 # -- the address local (ir.md 8.2, 8.13) ------------------------------------------------

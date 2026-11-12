@@ -399,6 +399,10 @@ x := 30     # OK
 # y := 5    # CE1002: assignment to undeclared variable 'y'
 ```
 
+The left side of `:=` is a **place**: a local, a unit variable, a C global, or a field or
+an element of a place. A literal, a call, a method call, an operator and a slice are not
+places, and each one is **[CE2130](error-catalog.md#ce2130)** at the target.
+
 A tuple rebinds more than one place at once: `(a, b) := (b, a)` evaluates the whole right
 side first and then assigns from left to right, so it is a swap. See
 [Destructuring Rebind](#destructuring-rebind).
@@ -1934,7 +1938,8 @@ fn main() i32:
   the rule of `x := v`, so it destroys the old value and gives its type to a literal
   element: `(small, big) := (200, 5000000000)` types `200` as the `u8` of `small`. A value
   of the wrong type is **[CE2002](error-catalog.md#ce2002)**, and a read-only target is the error of a plain `:=`
-  (for example **[CE2408](error-catalog.md#ce2408)** for a `peek` parameter).
+  (for example **[CE2408](error-catalog.md#ce2408)** for a `peek` parameter). A target that is not a place
+  (`(g(), y) := (1, 2)`) is **[CE2130](error-catalog.md#ce2130)** at that target.
 - Nested targets follow the destructure shape: `((a, b), c) := ((1, 2), 3)`.
 - The same place twice in the target, nested targets included, is **[CE6109](error-catalog.md#ce6109)**:
   `(a, a) := (1, 2)` would replace the first value with the second.

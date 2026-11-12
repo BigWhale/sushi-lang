@@ -14,6 +14,7 @@ from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.types.core.sizing import align_up
 from sushi_lang.backend.generics.container_walk import emit_container_walk
+from sushi_lang.backend import gep_utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -186,10 +187,8 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     # and both free at scope exit. `emit_value_clone` is a no-op for a non-owning element
     # and recursion-safe for a self-referential one.
     def copy_element(src_elem_ptr: ir.Value, idx: ir.Value) -> None:
-        elem = codegen.builder.load(src_elem_ptr)
-        elem = emit_value_clone(codegen, elem, element_type)
-        dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
-        codegen.builder.store(elem, dst_elem_ptr)
+        emit_value_clone_into(codegen, codegen.builder.gep(new_data_ptr, [idx]), src_elem_ptr,
+                              element_type)
 
     emit_container_walk(codegen, source_data_ptr, source_len, copy_element, prefix="copy")
     copy_exit = codegen.builder.block
@@ -241,10 +240,42 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
             return _clone_string_value(codegen, value)
         return value  # numerics, bool, I/O handles: nothing to clone
 
+    if clones_by_address(codegen, value_type):
+        b = codegen.builder
+        source = entry_alloca(b, value.type, name="clone_array_source")
+        b.store(value, source)
+        dest = entry_alloca(b, value.type, name="clone_array_dest")
+        _emit_composite_clone_into(codegen, dest, source, value_type)
+        return b.load(dest, name="cloned_array")
+
     if isinstance(value_type, (DynamicArrayType, ArrayType, StructType, EnumType)):
         return _emit_composite_clone(codegen, value, value_type)
 
     return value
+
+
+def clones_by_address(codegen: 'LLVMCodegen', value_type: Type) -> bool:
+    """True for a fixed array that moves by address: its clone reads a source address and
+    writes a destination slot, and it is never one first-class value."""
+    from sushi_lang.backend.types.arrays.runs import moves_by_address
+    return (isinstance(value_type, ArrayType)
+            and moves_by_address(codegen.types.ll_type(value_type)))
+
+
+def emit_value_clone_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                          value_type: Type) -> None:
+    """A deep copy of the value at `source` into the slot `dest`, which holds no value to
+    destroy. The two addresses are equal or do not overlap; an in-place clone of a value
+    that owns nothing emits nothing."""
+    from sushi_lang.backend.destructors import needs_cleanup
+    if dest is source and not needs_cleanup(codegen, value_type):
+        return
+    if clones_by_address(codegen, value_type):
+        _emit_composite_clone_into(codegen, dest, source, value_type)
+        return
+    b = codegen.builder
+    clone = emit_value_clone(codegen, b.load(source, name="clone_source"), value_type)
+    b.store(codegen.utils.cast_for_param(clone, dest.type.pointee), dest)
 
 
 def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
@@ -273,6 +304,25 @@ def _emit_composite_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: T
     stack.append(key)
     try:
         return lifecycle.inline_clone(codegen, value, value_type)
+    finally:
+        stack.pop()
+
+
+def _emit_composite_clone_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                               value_type: Type) -> None:
+    """`_emit_composite_clone` for a type that clones by address."""
+    from sushi_lang.backend import lifecycle
+    key = lifecycle.composite_type_key(value_type)
+    stack = codegen._clone_inprogress
+
+    if key in stack:
+        fn = lifecycle.get_or_emit_lifecycle_func(codegen, value_type, "clone")
+        codegen.builder.call(fn, [dest, source])
+        return
+
+    stack.append(key)
+    try:
+        lifecycle.inline_clone_into(codegen, dest, source, value_type)
     finally:
         stack.pop()
 
@@ -467,11 +517,9 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
 
     is_not_null = b.icmp_unsigned("!=", ptr, ir.Constant(ptr.type, None))
     with b.if_then(is_not_null):
-        pointee = b.load(ptr, name="own_pointee")
-        cloned_pointee = emit_value_clone(codegen, pointee, elem_ty)
         new_raw = emit_malloc(codegen, codegen.builder, codegen.types.get_type_size_constant(elem_ty))
         new_ptr = b.bitcast(new_raw, ir.PointerType(elem_llvm), name="own_new_ptr")
-        b.store(cloned_pointee, new_ptr)
+        emit_value_clone_into(codegen, new_ptr, ptr, elem_ty)
         b.store(b.insert_value(value, new_ptr, 0), slot)
 
     return b.load(slot, name="cloned_own")
@@ -509,9 +557,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
 
         if needs_cleanup(codegen, elem_ty):
             def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
-                loaded = codegen.builder.load(element_ptr, name="list_clone_elem")
-                cloned = emit_value_clone(codegen, loaded, elem_ty)
-                codegen.builder.store(cloned, element_ptr)
+                emit_value_clone_into(codegen, element_ptr, element_ptr, elem_ty)
 
             emit_container_walk(codegen, new_data, length, clone_element,
                                 prefix="list_clone")
@@ -560,10 +606,8 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
         def clone_entry(entry_ptr: ir.Value, _index: ir.Value) -> None:
             key_ptr = codegen.builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="hm_key_ptr")
             val_ptr = codegen.builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="hm_val_ptr")
-            k = codegen.builder.load(key_ptr, name="hm_key")
-            codegen.builder.store(emit_value_clone(codegen, k, key_type), key_ptr)
-            v = codegen.builder.load(val_ptr, name="hm_val")
-            codegen.builder.store(emit_value_clone(codegen, v, val_type), val_ptr)
+            emit_value_clone_into(codegen, key_ptr, key_ptr, key_type)
+            emit_value_clone_into(codegen, val_ptr, val_ptr, val_type)
 
         emit_container_walk(codegen, new_data, capacity, clone_entry,
                             should_visit=occupied, prefix="hm_clone")
@@ -576,10 +620,15 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
 
 
 def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
-                             value_type: 'ArrayType') -> ir.Value:
-    """Deep-copy a fixed array `T[N]` element by element."""
+                             value_type: 'ArrayType',
+                             dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
+    """Deep-copy a fixed array `T[N]` element by element. With `dest`, `value` is the
+    address of the source and the clone goes into `dest` (a type that clones by address)."""
     from sushi_lang.backend.destructors import needs_cleanup
 
+    if dest is not None:
+        _clone_fixed_array_into(codegen, dest, value, value_type)
+        return None
     if not needs_cleanup(codegen, value_type.base_type):
         return value
 
@@ -592,11 +641,38 @@ def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
     return new_array
 
 
+def _clone_fixed_array_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                            value_type: 'ArrayType') -> None:
+    """One `memcpy` for a plain element; a counted walk over the slots for an owning one,
+    each slot cloned into its destination slot. Never unrolled."""
+    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.types.arrays.runs import emit_fixed_array_copy
+
+    element = value_type.base_type
+    if not needs_cleanup(codegen, element):
+        emit_fixed_array_copy(codegen, dest, source, codegen.types.ll_type(value_type))
+        return
+    zero = ir.Constant(codegen.types.i32, 0)
+    dest_data = gep_utils.gep_fixed_array_element(codegen, dest, zero, "clone_dest_data")
+
+    def clone_slot(source_slot: ir.Value, index: ir.Value) -> None:
+        emit_value_clone_into(codegen, gep_utils.gep_array_element(codegen, dest_data, index),
+                              source_slot, element)
+
+    emit_container_walk(codegen,
+                        gep_utils.gep_fixed_array_element(codegen, source, zero,
+                                                          "clone_source_data"),
+                        ir.Constant(codegen.types.i32, value_type.size), clone_slot,
+                        prefix="fixed_clone")
+
+
 def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
     """Deep-copy a regular struct field-by-field, recursing through emit_value_clone."""
     from sushi_lang.backend.destructors import needs_cleanup
 
     b = codegen.builder
+    if any(clones_by_address(codegen, field_type) for _name, field_type in value_type.fields):
+        return _clone_struct_through_slots(codegen, value, value_type)
     new_struct = value
     for i, (_field_name, field_type) in enumerate(value_type.fields):
         if needs_cleanup(codegen, field_type):
@@ -604,6 +680,22 @@ def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Str
             cloned = emit_value_clone(codegen, field_val, field_type)
             new_struct = b.insert_value(new_struct, cloned, i, name=f"cloned_field_{i}")
     return new_struct
+
+
+def _clone_struct_through_slots(codegen: 'LLVMCodegen', value: ir.Value,
+                                value_type: StructType) -> ir.Value:
+    """A struct with a field that clones by address: the shallow copy goes into a slot, and
+    each owning field of the slot is cloned in place. No field is a first-class value."""
+    from sushi_lang.backend.destructors import needs_cleanup
+
+    b = codegen.builder
+    slot = entry_alloca(b, value.type, name="clone_struct_slot")
+    b.store(value, slot)
+    for i, (_field_name, field_type) in enumerate(value_type.fields):
+        if needs_cleanup(codegen, field_type):
+            field = gep_utils.gep_struct_field(codegen, slot, i, "clone_field")
+            emit_value_clone_into(codegen, field, field, field_type)
+    return b.load(slot, name="cloned_struct")
 
 
 def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir.Value:
@@ -649,8 +741,7 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
                 field_llvm = codegen.types.ll_type(assoc_type)
                 field_ptr = b.bitcast(field_i8_ptr, ir.PointerType(field_llvm),
                                       name="clone_enum_field_ptr")
-                orig = b.load(field_ptr, name="clone_enum_orig")
-                b.store(emit_value_clone(codegen, orig, assoc_type), field_ptr)
+                emit_value_clone_into(codegen, field_ptr, field_ptr, assoc_type)
 
         b.branch(end_bb)
 

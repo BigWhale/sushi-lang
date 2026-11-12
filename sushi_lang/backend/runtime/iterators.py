@@ -300,7 +300,7 @@ def _owned_drop(codegen: 'LLVMCodegen', source: CursorSource,
 def _owned_clone(codegen: 'LLVMCodegen', source: CursorSource,
                  container: OwnedContainer) -> ir.Function:
     """`clone_fn` of an owned cursor: a deep copy of the container, at the same position."""
-    from sushi_lang.backend.ownership import copy_out
+    from sushi_lang.backend.ownership import copy_out_into
 
     def body(fn: ir.Function) -> None:
         b = codegen.builder
@@ -309,7 +309,7 @@ def _owned_clone(codegen: 'LLVMCodegen', source: CursorSource,
         raw, state = _heap_state(codegen, state_type)
         old_held = gep_utils.gep_struct_field(codegen, old, _CONTAINER, "old_container")
         held = gep_utils.gep_struct_field(codegen, state, _CONTAINER, "iter_container")
-        b.store(copy_out(codegen, old_held, container.semantic_type), held)
+        copy_out_into(codegen, held, old_held, container.semantic_type)
         old_cursor = gep_utils.gep_struct_field(codegen, old, _CURSOR, "old_cursor")
         index = b.load(gep_utils.gep_struct_field(codegen, old_cursor, _INDEX, "old_index"),
                        name="index")
@@ -443,7 +443,7 @@ def _new_drop(codegen: 'LLVMCodegen', value_type: 'Type') -> ir.Function:
 def _new_clone(codegen: 'LLVMCodegen', value_type: 'Type', item_type: 'Type',
                next_method: ir.Function, by_pointer: bool) -> ir.Function:
     """`clone_fn` of `Iterator.new`: a deep copy of the value it walks."""
-    from sushi_lang.backend.ownership import copy_out
+    from sushi_lang.backend.ownership import copy_out_into
 
     def body(fn: ir.Function) -> None:
         b = codegen.builder
@@ -453,8 +453,7 @@ def _new_clone(codegen: 'LLVMCodegen', value_type: 'Type', item_type: 'Type',
             return
         ll = codegen.types.ll_type(value_type)
         raw, state = _heap_state(codegen, ll)
-        b.store(copy_out(codegen, b.bitcast(fn.args[0], ir.PointerType(ll)), value_type),
-                state)
+        copy_out_into(codegen, state, b.bitcast(fn.args[0], ir.PointerType(ll)), value_type)
         b.ret(iterator_value(codegen,
                              _new_next(codegen, value_type, item_type, next_method,
                                        by_pointer),

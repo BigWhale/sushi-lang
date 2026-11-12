@@ -1,8 +1,8 @@
 # SHIR reference
 
-SHIR is the Sushi High-level IR. This page is the reference for SHIR as the code builds it
-today. It tells you what each part is and where it lives. The reasons for the design, the
-rulings and the migration plan are in [the IR design](../design/ir.md). Read that document
+SHIR is the Sushi High-level IR. This page is the reference for SHIR as the code builds it.
+It tells you what each part is and where it lives. The reasons for the design and its
+rules are in [the IR design](../design/ir.md). Read that document
 for the "why". This page does not repeat it.
 
 All paths on this page are relative to the repository root. The SHIR package is
@@ -25,7 +25,7 @@ AST  --scope-->  Bindings  --lowering-->  ShirBody  --typecheck--> TypeckResults
 Three rules shape SHIR:
 
 - A SHIR node holds what the source says. It holds no computed fact. A pass writes each
-  answer into its own side table (ruling S5). So a node has no type field.
+  answer into its own side table ([the IR design](../design/ir.md), 7.3). So a node has no type field.
 - Every class is slotted (gate: `tests/unit/test_ir_nodes_are_slotted.py`).
 - Ids come from counters and are given in the order of the walk. The same program gives
   the same ids on every run (gate: `tests/unit/test_shir_ids_are_deterministic.py`).

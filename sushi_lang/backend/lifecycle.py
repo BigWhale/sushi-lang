@@ -50,7 +50,9 @@ _KINDS = ("dynamic_array", "fixed_array", "struct", "enum")
 
 # kind -> {"destroy": emitter, "clone": emitter}. destroy is
 # (codegen, value_ptr, value_type) -> None; clone is
-# (codegen, value, value_type) -> ir.Value.
+# (codegen, value, value_type) -> ir.Value. The fixed_array clone also takes `dest=`, for a
+# type that clones by address: then `value` is the source address, the clone goes into
+# `dest`, and the answer is None.
 _HANDLERS: Dict[str, Dict[str, Callable]] = {}
 
 
@@ -109,6 +111,12 @@ def inline_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> i
     return _handler(value_type, "clone")(codegen, value, value_type)
 
 
+def inline_clone_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                      value_type: Type) -> None:
+    """`inline_clone` for a type that clones by address: from `source` into `dest`."""
+    _handler(value_type, "clone")(codegen, source, value_type, dest=dest)
+
+
 def registered_halves() -> Dict[str, tuple]:
     """kind -> sorted halves present. For the totality test."""
     return {kind: tuple(sorted(entry)) for kind, entry in _HANDLERS.items()}
@@ -119,7 +127,9 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
     """Get (or lazily emit) the out-of-line lifecycle function for a recursive type.
 
     half == "destroy": `void __sushi_dtor_<mangled>(i8* value_ptr)`.
-    half == "clone":   `<T> __sushi_clone_<mangled>(<T> value)`.
+    half == "clone":   `<T> __sushi_clone_<mangled>(<T> value)`, or
+                       `void __sushi_clone_<mangled>(<T>* dest, <T>* source)` for a type
+                       that clones by address.
 
     The function is inserted into its cache BEFORE the body is emitted, so a
     self-referential position inside the body resolves to a call to this same
@@ -144,11 +154,15 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
     if key in caches:
         return caches[key]
 
+    from sushi_lang.backend.expressions.memory import clones_by_address
+    by_address = half == "clone" and clones_by_address(codegen, value_type)
+    lltype = codegen.types.ll_type(value_type)
     if half == "destroy":
         i8_ptr_ty = ir.PointerType(ir.IntType(INT8_BIT_WIDTH))
         fn_ty = ir.FunctionType(ir.VoidType(), [i8_ptr_ty])
+    elif by_address:
+        fn_ty = ir.FunctionType(ir.VoidType(), [ir.PointerType(lltype)] * 2)
     else:
-        lltype = codegen.types.ll_type(value_type)
         fn_ty = ir.FunctionType(lltype, [lltype])
 
     fn = ir.Function(codegen.module, fn_ty, name=symbol)
@@ -170,10 +184,13 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
         if half == "destroy":
             typed_ptr = fb.bitcast(
                 fn.args[0],
-                ir.PointerType(codegen.types.ll_type(value_type)),
+                ir.PointerType(lltype),
                 name="self_ptr",
             )
             inline_destroy(codegen, typed_ptr, value_type)
+        elif by_address:
+            inline_clone_into(codegen, fn.args[0], fn.args[1], value_type)
+            codegen.builder.ret_void()
         else:
             result = inline_clone(codegen, fn.args[0], value_type)
             codegen.builder.ret(result)

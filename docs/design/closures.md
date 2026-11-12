@@ -619,7 +619,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | Indirect call, non-`Name` callee routing | the `Indirect` callee of a SLIR `Call` (`CALL_EMITTERS`, `backend/slir/emit.py`) |
 | Generic higher-order unification (`typecheck` / `instantiate`) | `semantics/generics/unify.py:unify_types`; the leading type-argument solver `semantics/generics/pack_inference.py:solve_leading_type_args` |
 | `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `semantics/generics/extensions.py` |
-| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/` (List as generic struct); the `BuiltinMethod` callee of a SLIR `Call`, which the List group B2 connects to `LIST_EMITTERS` |
+| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/` (List as generic struct); the `BuiltinMethod` callee of a SLIR `Call`, which goes to `LIST_EMITTERS` |
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
 | `collections/iter` source module | `sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi` |
 | Source-stdlib-module registry + pipeline injection | `semantics/stdlib_registry.py:SOURCE_STDLIB_MODULES`; `compiler/pipeline.py` |

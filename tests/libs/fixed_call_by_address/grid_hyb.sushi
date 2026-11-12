@@ -1,0 +1,8 @@
+# A library with a public function that takes a large fixed array and one that answers one.
+public fn corner(i32[32][4] g) i32:
+    return g[3][31]
+
+public fn grid(i32 v) i32[32][4]:
+    let i32[32][4] g = [[v; 32]; 4]
+    g[3][31] := v + 1
+    return g

@@ -1,0 +1,18 @@
+# a fixed array of at most 64 bytes keeps the by-value convention at a call boundary: the
+# parameter and the return are first-class values. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 3\n"
+# EXPECT_IR_HOLDS: total ([16 x i32] %
+# EXPECT_IR_HOLDS: make ret [16 x i32]
+# EXPECT_IR_HOLDS: user_main call [16 x i32]
+fn total(i32[16] g) i32:
+    return g[15]
+
+fn make(i32 v) i32[16]:
+    return [v; 16]
+
+fn main() i32:
+    let i32[16] g = make(3)
+    println("{total(g)} {g[0]}")
+    return 0

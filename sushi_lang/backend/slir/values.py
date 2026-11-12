@@ -37,7 +37,7 @@ from sushi_lang.backend.slir.closures import emit_closure_value
 from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.generics.list.types import extract_element_type
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.ownership import copy_out
+from sushi_lang.backend.ownership import copy_out, copy_out_into
 from sushi_lang.backend.expressions.operators import (
     emit_arithmetic, emit_bitwise, emit_contract_relation, emit_number_comparison, emit_string_relation,
     emit_unary_value, emit_xor,
@@ -221,18 +221,24 @@ def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
 
 def assign(state: FunctionState, place: p.Place, rvalue: r.Rvalue) -> None:
     """The value of `rvalue` into `place`. A `T[N]` literal is built in the place, and a
-    `T[N]` that moves by address is copied from the address of its source (ir.md 8.7)."""
+    `T[N]` that moves by address is copied, or cloned, from the address of its source
+    (ir.md 8.7)."""
     if (isinstance(rvalue, r.Aggregate) and isinstance(rvalue.kind, r.AggArray)
             and isinstance(rvalue.kind.ty, ArrayType)):
         _fixed_array(state, place, rvalue.kind.runs, rvalue.kind.ty, rvalue.parts)
         return
-    if isinstance(rvalue, r.Use) and isinstance(rvalue.operand, (p.Copy, p.Move)):
+    if isinstance(rvalue, (r.Use, r.Clone)) and isinstance(rvalue.operand, (p.Copy, p.Move)):
         source = rvalue.operand.place
-        llvm_type = state.codegen.types.ll_type(type_of_place(state, source))
+        source_type = type_of_place(state, source)
+        llvm_type = state.codegen.types.ll_type(source_type)
         if moves_by_address(llvm_type) and not (
                 isinstance(source, p.Global) and extern_variable(state, source.symbol)):
-            emit_fixed_array_copy(state.codegen, place_address(state, place),
-                                  place_address(state, source), llvm_type)
+            if isinstance(rvalue, r.Clone):
+                copy_out_into(state.codegen, place_address(state, place),
+                              place_address(state, source), source_type)
+            else:
+                emit_fixed_array_copy(state.codegen, place_address(state, place),
+                                      place_address(state, source), llvm_type)
             return
     value = rvalue_value(state, rvalue)
     state.builder.store(value, place_address(state, place))

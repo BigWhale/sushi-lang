@@ -1,7 +1,8 @@
 """The deep copy of a value read out of a container, and the `Drop` set of the backend.
 
 `copy_out` is the one deep-clone entry outside the clone engine
-(`tests/unit/test_clone_entry_is_copy_out.py`). `drops_of` is the backend reader of the
+(`tests/unit/test_clone_entry_is_copy_out.py`); `copy_out_into` is its form for a
+destination slot. `drops_of` is the backend reader of the
 `Drop` set. See docs/design/ownership-conventions.md.
 """
 from __future__ import annotations
@@ -19,13 +20,25 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["copy_out", "drops_of", "resolver_for"]
+__all__ = ["copy_out", "copy_out_into", "drops_of", "resolver_for"]
 
 
 def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
              value_type: Optional[Type]) -> ir.Value:
     """Return an independent copy of a value read out of a container it still owns."""
     return _clone(codegen, value, value_type)
+
+
+def copy_out_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                  value_type: Type) -> None:
+    """`copy_out` of the value at the address `source`, into the slot `dest`.
+
+    A fixed array that moves by address is cloned from address to address and is never
+    one first-class value (docs/design/array-representation.md). `dest` holds no value to
+    destroy; the two addresses are equal or do not overlap.
+    """
+    from sushi_lang.backend.expressions.memory import emit_value_clone_into
+    emit_value_clone_into(codegen, dest, source, value_type)
 
 
 def drops_of(codegen: 'LLVMCodegen') -> frozenset:

@@ -1927,6 +1927,14 @@ The array reductions `.min()`, `.max()` and `.add_up()` read each element as a n
 
 `collect` and `partition` keep each item in a `List@(T)`. An item of `Iterator@(peek T)` is a borrow of a value that the source keeps, and there is no `List@(peek T)`: a list of borrows has no owner for its elements ([CE2419](#ce2419)). The compiler inserts no deep copy. So `collect` and `partition` over a `peek` item of an owning type (a `string`, a `List`, a struct that holds one) are this error. An item whose tuple element is a `peek` of an owning type (`Iterator@((i32, peek string))`) is this error too. Clone each item first: `.clone_each().collect()` gives `Iterator@(T)`, with owned items and one `.clone()` for each item. Over a plain item (an `i32`, a struct of numbers) the two modes are one type, and `collect` is legal. In a generic body a type parameter can own, so `collect` over `Iterator@(peek T)` is this error where the template is written; write `.clone_each()` with `T: Clone`.
 
+### CE2130 {#ce2130}
+
+**Error** · type
+
+**Message:** `the left side of ':=' is not a place`
+
+The target of a rebind (`x := v`), and each target of a tuple rebind (`(a, b) := v`) that is not a new binder, is a place: a local, a unit-level `var`, a C global, or a field or an element of a place (`p.x`, `a[0]`, `t.0`, `a[i].x`). A rebind writes a value into the storage of its target. Any other expression has no storage to write: a literal, the result of a function call or of a method call (`a.len()`, `m.realise(0)`, `o.get()`), the value of an operator (`y + 1`) and a slice. A slice (`a[0..1]`) is a borrowed view of its array, not a place of its own: write each element (`a[0] := v`), or rebind the whole array (`a := b`). A field of a temporary (`h().x := 3`) is a place, and the borrow pass refuses its write with [CE2429](#ce2429). The caret is at the target.
+
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
 The borrow checker gives these errors. They are about ownership, moves and borrows.

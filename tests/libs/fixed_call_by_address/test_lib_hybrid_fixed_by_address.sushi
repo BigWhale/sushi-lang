@@ -1,0 +1,18 @@
+# a hybrid library and its consumer agree on the signature of a function with a fixed
+# array of more than 64 bytes: the parameter is a pointer, and the answer goes into a
+# slot of the caller. The consumer has no first-class load, store, argument or call
+# result of the whole array. The IR is read before any pass.
+# BUILD_LIB_HYBRID: grid_hyb.sushi
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6 5\n"
+# EXPECT_IR_LACKS: user_main load [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main store [4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main ([4 x [32 x i32]]
+# EXPECT_IR_LACKS: user_main call [4 x [32 x i32]]
+use <lib/grid_hyb>
+
+fn main() i32:
+    let i32[32][4] g = grid(5)
+    println("{corner(g)} {g[0][0]}")
+    return 0

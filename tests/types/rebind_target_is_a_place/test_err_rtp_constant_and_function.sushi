@@ -1,0 +1,14 @@
+# A constant and a function are names that no rebind reaches: the scope pass
+# refuses each one with CE1002, and the rebind gives no second error (#1284).
+# EXPECT_ERROR_CODES_EXACT: CE1002, CE1002, CE1002
+const i32 C = 1
+
+fn g() i32:
+    return 1
+
+fn main() i32:
+    let i32 y = 0
+    C := 2
+    g := 3
+    (C, y) := (1, 2)
+    return 0

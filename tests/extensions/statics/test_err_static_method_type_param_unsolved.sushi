@@ -1,0 +1,13 @@
+# A method-level type parameter of a static on a generic target that no argument
+# solves is a user error, not an internal error.
+# EXPECT_ERROR_CODES_EXACT: CE2063
+struct Box@(T):
+    T v
+
+extend Box@(T) static make@(U)(nom T a) Box@(T):
+    return Box(a)
+
+fn main() i32:
+    let Box@(i32) b = Box.make(nom 2)
+    println(b.v)
+    return 0

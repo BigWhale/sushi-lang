@@ -6,7 +6,7 @@ checked as the type of a `let` is checked, a `Place` the type of its place, and 
 binder and a `_` no type. A `Nested` target wants what its targets want. A place is a
 local, a `var`, a field or an element, checked as the target of a rebind, of a field write
 or of an element write: a field or an element of a constant is CE2096 at the place, a byte of a
-string is CE2113, and any other place is not typed yet. Then the value is
+string is CE2113, a C global is CE5016, and a target that is not a place is CE2130. Then the value is
 checked at the wants, so a literal part takes the type of its binder or of its place
 (`fields.check_tuple_at`). A `Result` value is CE2505.
 
@@ -28,7 +28,10 @@ from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.compatibility import reject_mismatch
-from sushi_lang.semantics.passes.types.visit.statements import reject_unwritable_place
+from sushi_lang.semantics.passes.types.visit.extern_calls import reject_extern_variable_write
+from sushi_lang.semantics.passes.types.visit.statements import (
+    reject_non_place, reject_unwritable_place,
+)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import validate_type_name
 from sushi_lang.semantics.passes.types.visit.fields import Want, check_tuple_at
@@ -56,7 +59,7 @@ def _want(validator: TypeValidator, node: s.Destructure, target: s.DestructureTa
     if isinstance(target, s.Nested):
         return [_want(validator, node, inner) for inner in target.targets]
     if isinstance(target, s.Place):
-        return _place_type(validator, node, target.target)
+        return _place_type(validator, target.target)
     if isinstance(target, s.Discard):
         return None
     return _written_type(validator, target)
@@ -75,11 +78,11 @@ def _written_type(validator: TypeValidator, binder: LocalId) -> Optional[Type]:
     return None if refused else ty
 
 
-def _place_type(validator: TypeValidator, node: s.Destructure,
-                place: e.ShirExpr) -> Optional[Type]:
-    """The type of a place with no `peek` or `poke`; None after an error of the place."""
-    if not isinstance(place, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
-        visit.unhandled(validator, node)
+def _place_type(validator: TypeValidator, place: e.ShirExpr) -> Optional[Type]:
+    """The type of a place with no `peek` or `poke`; None after an error of the place: a C
+    global is CE5016, and a target that is not a place CE2130."""
+    if reject_extern_variable_write(validator, place) or reject_non_place(validator, place):
+        return None
     ty = visit.check_expr(validator, place)
     if reject_unwritable_place(validator, place, place.loc):
         return None
