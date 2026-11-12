@@ -208,9 +208,6 @@ def negate_constant(operand: ScalarConstant,
     if not is_integer_constant(operand):
         return ScalarConstant(-operand.value, operand.semantic_type)
     negated = integer_ops.negate(int(operand.value), operand.semantic_type)
-    if leaf and negated.overflows:
-        return ScalarConstant(integer_ops.cast(negated.value, operand.semantic_type),
-                              operand.semantic_type)
     if leaf or not negated.overflows:
         return ScalarConstant(negated.value, operand.semantic_type)
     return negated
@@ -672,6 +669,9 @@ class ConstantEvaluator:
                 return None
             if isinstance(negated, integer_ops.Folded):
                 return self._checked('-', negated, operand.semantic_type, span)
+            if isinstance(expr.expr, IntLit) and expr.expr.radix != 10 and negated is not None:
+                return ScalarConstant(integer_ops.cast(int(negated.value), negated.semantic_type),
+                                      negated.semantic_type)
             return negated
 
         elif expr.op == '~':

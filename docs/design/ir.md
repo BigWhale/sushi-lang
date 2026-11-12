@@ -3553,7 +3553,7 @@ value that its type cannot hold". Only a fault of the
 constant evaluator reaches it, for example a value that the evaluator gives to an
 initializer with a range error. A signed constant whose radix literal fills its bit pattern
 (`const i8 K = 0xff`) does not reach it: the evaluator wraps the literal at its type
-(#1274, `_evaluate_int_lit`, `const_eval.py`), and a negated one wraps after the negation
+(#1274, `_evaluate_int_lit`, `const_eval.py`), and a negated one wraps again after the negation
 (`-0x80` as an `i8` holds -128).
 
 ### 8.6 Statements
