@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 # Below this many slots a run costs less as plain stores than as a counted loop.
 UNROLL_LIMIT = 8
 
-# A fixed array of more bytes than this moves by address, never as one first-class value.
+# An aggregate of more bytes than this moves by address, never as one first-class value.
 AGGREGATE_VALUE_LIMIT = 64
 
 
@@ -70,16 +70,17 @@ class EmittedRun:
 
 
 def moves_by_address(llvm_type: ir.Type) -> bool:
-    """True for a fixed array of more than `AGGREGATE_VALUE_LIMIT` bytes."""
+    """True for an aggregate of more than `AGGREGATE_VALUE_LIMIT` bytes: a fixed array, a
+    struct, a tuple or an enum (a `Result` and a `Maybe` included)."""
     from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
 
-    return (isinstance(llvm_type, ir.ArrayType)
+    return (isinstance(llvm_type, (ir.ArrayType, ir.BaseStructType))
             and calculate_llvm_type_size(llvm_type) > AGGREGATE_VALUE_LIMIT)
 
 
-def emit_fixed_array_copy(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+def emit_aggregate_copy(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
                           llvm_type: ir.Type) -> None:
-    """The bytes of the fixed array at `source` into `dest`: one `memcpy` when it moves by
+    """The bytes of the value at `source` into `dest`: one `memcpy` when it moves by
     address, else one load and one store. The two addresses are equal or do not overlap."""
     from sushi_lang.backend.expressions.memory import (
         calculate_llvm_type_size, emit_memcpy_bytes)
@@ -89,6 +90,16 @@ def emit_fixed_array_copy(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Val
         return
     emit_memcpy_bytes(codegen, dest, source,
                       ir.Constant(codegen.types.i64, calculate_llvm_type_size(llvm_type)))
+
+
+def emit_part_into(codegen: 'LLVMCodegen', part: ir.Value, dest: ir.Value) -> None:
+    """`part` into the slot `dest`. A part of a type that moves by address is the address of
+    its value, and its bytes are copied; each other part is a value, and it is stored."""
+    llvm_type = dest.type.pointee
+    if moves_by_address(llvm_type) and part.type == dest.type:
+        emit_aggregate_copy(codegen, dest, part, llvm_type)
+    else:
+        codegen.builder.store(part, dest)
 
 
 def emit_array_value(codegen: 'LLVMCodegen', ty: DynamicArrayType,
@@ -264,7 +275,7 @@ def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
             copy_out_into(codegen, slot, source, owning)
             return
         if source is not None:
-            emit_fixed_array_copy(codegen, slot, source, element_llvm_type)
+            emit_aggregate_copy(codegen, slot, source, element_llvm_type)
             return
         held = value if owning is None else codegen.utils.cast_for_param(
             copy_out(codegen, raw, owning), element_llvm_type)

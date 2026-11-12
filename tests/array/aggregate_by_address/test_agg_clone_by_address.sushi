@@ -1,0 +1,30 @@
+# the clone of a struct and of an enum whose LLVM type is more than 64 bytes reads a source
+# address and writes a destination slot. The IR of `main` has no first-class load or store
+# of the whole struct or enum, and each clone is independent of its source. The IR is read
+# before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x y\nx\n"
+# EXPECT_IR_LACKS: user_main load %Box
+# EXPECT_IR_LACKS: user_main store %Box
+# EXPECT_IR_LACKS: user_main load { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main store { i32, [4096 x i64] }
+struct Box:
+    string[512][4] g
+
+enum Holder:
+    Full(string[512][4])
+    Empty
+
+fn main() i32:
+    let Box b = Box([["x".clone(); 512]; 4])
+    let Box c = b.clone()
+    b.g[0][0] := "y".clone()
+    println("{c.g[0][0]} {b.g[0][0]}")
+    let Holder h = Holder.Full([["x".clone(); 512]; 4])
+    let Holder k = h.clone()
+    match k:
+        Holder.Full(g) -> println("{g[3][511]}")
+        Holder.Empty -> println("empty")
+    return 0

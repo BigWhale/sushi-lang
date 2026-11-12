@@ -20,7 +20,8 @@ from sushi_lang.semantics.typesys import BuiltinType, StructType
 
 class ContainerMethod(NamedTuple):
     """One row of a container's emitter table: the emitter, whether it answers a `bool`,
-    and whether it is a static (`List.new`), which builds a value and has no receiver.
+    whether it is a static (`List.new`), which builds a value and has no receiver, and
+    whether an argument that moves by address comes as the address of its value.
 
     A row takes `(codegen, receiver_address, receiver_type, argument_values)`; the receiver
     address of a static is None. A `bool` answer is an `i8` after the call.
@@ -29,6 +30,7 @@ class ContainerMethod(NamedTuple):
     emit: Callable[[Any, Any, Any, Any], ir.Value]
     answers_bool: bool = False
     static: bool = False
+    by_address: bool = False
 
 
 def blank(codegen: Any) -> ir.Value:

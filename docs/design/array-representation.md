@@ -89,13 +89,31 @@ A borrowed `T[N]` ARGUMENT (the source of a bulk copy) arrives as its value.
 `as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`), the fixed twin of
 `as_array_address`, keeps an address and spills a value into an entry-block slot.
 
-## A large fixed array moves and clones by address
+## A large aggregate moves and clones by address
 
 LLVM is slow on one first-class value of a large aggregate: the time for one `load` or
-`store` of it grows faster than its size. Thus a `T[N]` of more than `AGGREGATE_VALUE_LIMIT`
-(64) bytes never travels as one value (`moves_by_address`, `backend/types/arrays/runs.py`).
-A move or a copy of it is one `memcpy` (`emit_fixed_array_copy`), and a literal fills its
-slot.
+`store` of it grows faster than its size, and SROA splits it into one scalar for each
+slot. Thus an aggregate of more than `AGGREGATE_VALUE_LIMIT` (64) bytes never travels as
+one value (`moves_by_address`, `backend/types/arrays/runs.py`). The rule is the size of
+the LLVM type, and it is the same for each aggregate kind: a fixed array `T[N]`, a struct,
+a tuple and an enum (a `Result` and a `Maybe` included). A move or a copy of it is one
+`memcpy` (`emit_aggregate_copy`), and a literal fills its slot.
+
+**A struct, a tuple and an enum above the bound are built in their place** (#1287). The
+SLIR `assign` of such an aggregate writes each field, or the tag and each payload field,
+through its address (`emit_struct_into`, `backend/types/structs.py`;
+`emit_enum_variant_into`, `backend/expressions/enums.py`). A part that moves by address is
+copied from its address. When a part moves by address, the value is built in a fresh slot
+and then copied into the place, because a reference can make any place an alias of the
+destination. The tag of an enum in a place is read through its address
+(`enum_utils.get_tag_ptr`), never from a loaded value.
+
+**A position that stores a part takes its address.** A part of a type that moves by
+address is the address of its value, and `emit_part_into` (`runs.py`) copies its bytes:
+
+- The element of `List.push`. The row of `push` in `LIST_EMITTERS` is `by_address`, and
+  the SLIR container row gives the address of such an argument.
+- A capture of a closure. The environment slot of the capture gets the bytes.
 
 **A fixed array above the bound is CLONED by address** (#1279). The deep copy reads a
 source address and writes a destination slot that the caller gives:
@@ -110,8 +128,10 @@ source address and writes a destination slot that the caller gives:
   `<T> __sushi_clone_<T>(<T> value)`.
 - The SLIR emitter gives `assign` of a `Clone` the address of the source place and of the
   destination place (`backend/slir/values.py`). It does not load the operand.
-- A struct with a field above the bound is cloned in a slot: each owning field is cloned in
-  place, so no field is one value. An enum payload is cloned in place too.
+- A struct, a tuple and an enum above the bound clone by address too (`clones_by_address`):
+  the bytes go into the destination, and then each owning field, or the owning payload of
+  the active variant, is cloned in place. A smaller struct that holds a field above the
+  bound is cloned in a slot in the same way, so no field is one value.
 - A repeated element above the bound that owns a resource (`[["x".clone(); 512]; 4]`)
   takes `copy_out_into` from the address of the value for each slot.
 - A caller that has only a value (for example a constant) spills it into a slot and loads
@@ -122,7 +142,7 @@ two places of one fixed-array type cannot overlap in part.
 
 A fixed array of 64 bytes or less keeps the clone by value, one element at a time.
 
-**A fixed array above the bound crosses a call boundary by address** (#1285). One function
+**An aggregate above the bound crosses a call boundary by address** (#1285, #1287). One function
 decides the LLVM signature for the two ends of a call: `call_signature(answer, params)`
 (`backend/functions/signature.py`). Each declaration site and each call emitter calls it,
 and the gate `tests/unit/test_call_signature_is_one.py` refuses a second rule:
@@ -130,7 +150,7 @@ and the gate `tests/unit/test_call_signature_is_one.py` refuses a second rule:
 - A parameter of each mode is a pointer. A `peek` or a `poke` parameter is a pointer
   already. For a by-value parameter (the default borrow, and `nom`) the caller gives the
   address of the place of the argument, and the callee copies the bytes into its own
-  entry-block slot at its entry (`emit_fixed_array_copy`, one `memcpy`). Thus a write to
+  entry-block slot at its entry (`emit_aggregate_copy`, one `memcpy`). Thus a write to
   the parameter in the callee does not change the place of the caller, as before. A
   constant argument goes into a slot first (`operand_address`). The ownership does not
   change: the SLIR drops of the caller and of the callee are the same as for a value.
@@ -149,15 +169,29 @@ and the gate `tests/unit/test_call_signature_is_one.py` refuses a second rule:
   by-address position puts the value into a slot first, and reads an answer that moves by
   address from a slot (`emit_indirect_call`, `backend/runtime/closures.py`).
 
+- A `| E` function whose `Result` is above the bound gives the `Result` in the slot of
+  the caller, as each other answer above the bound.
+- The `next` of an iterator (`_next_type`, `backend/runtime/iterators.py`) and the step of
+  a HashMap cursor (`backend/generics/hashmap/cursor.py`) take their signature from
+  `call_signature` too. A `Maybe@(T)` above the bound goes into the slot of the caller
+  (`emit_return`), and a `foreach` gives the address of its destination place
+  (`emit_call_answer`, `backend/functions/signature.py`). `Iterator.new` passes that slot
+  on to the `next()` of the value.
+- The out-of-line functions of a derived contract take an aggregate above the bound by
+  address: `__sushi_eq_<T>(<T>*, <T>*)`, `__sushi_cmp_<T>(<T>*, <T>*)` and
+  `__sushi_fmt_<T>(<T>*, buffer*)` (`takes_address`, `backend/types/contracts.py`). The
+  seams `emit_value_eq`, `emit_value_compare`, `emit_value_fmt` and `emit_value_to_str`
+  take a value or the address of such a value, and a field or an element above the bound
+  is read by its address (`held_operand`).
+
 The limits of this rule:
 
 - An `unsafe external` keeps its C signature. C has no fixed array by value.
 - `main` keeps its fixed signature.
-- A struct, a tuple and an enum that HOLD a large `T[N]` keep the by-value convention. A
-  `| E` function that answers a large `T[N]` gives it in the `Result` payload, so the
-  `Result` is one first-class value.
-- The out-of-line functions of a derived contract (`emit_value_eq`, `emit_value_to_str`)
-  take a value of their type. They are not functions of the program.
+- A stdlib row (`backend/expressions/calls/stdlib/signatures.py`) keeps the signature of
+  its generator. No row takes or answers a type above the bound; a unit test holds it.
+- A container method that answers a `Maybe@(T)` (`List.get`, `pop`, `first`, `last`)
+  builds the `Maybe` as one value. The hash of a value (`emit_value_hash`) reads a value.
 
 ## A run-time length, and the cursor
 

@@ -98,3 +98,21 @@ def emit_struct_value(codegen: Any, struct_type: StructType,
     for index, field_value in enumerate(values):
         value = builder.insert_value(value, field_value, index)
     return value
+
+
+def emit_struct_into(codegen: Any, struct_type: StructType, parts: Sequence[ir.Value],
+                     dest: ir.Value) -> None:
+    """A value of `struct_type` built in the slot `dest`, one field at a time. The part of a
+    field that moves by address is the address of its value; each other part is a value."""
+    from sushi_lang.backend.gep_utils import gep_struct_field
+    from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy, moves_by_address
+
+    builder = require_builder(codegen)
+    for index, ((_name, field_type), part) in enumerate(
+            zip(struct_type.fields, parts, strict=True)):
+        field = gep_struct_field(codegen, dest, index, builder=builder)
+        llvm_type = codegen.types.ll_type(field_type)
+        if moves_by_address(llvm_type):
+            emit_aggregate_copy(codegen, field, part, llvm_type)
+        else:
+            builder.store(part, field)

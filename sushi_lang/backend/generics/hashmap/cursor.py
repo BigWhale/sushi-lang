@@ -14,6 +14,8 @@ from typing import Any
 import llvmlite.ir as ir
 
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES
+from sushi_lang.backend.functions.signature import (
+    call_signature, emit_call_answer, emit_return)
 from sushi_lang.backend.generics.container_walk import emit_container_walk
 from sushi_lang.backend.generics.hashmap.types import ENTRY_OCCUPIED, get_hashmap_field_ptrs
 from sushi_lang.backend.generics.hashmap.utils import emit_entry_state_check
@@ -24,10 +26,11 @@ from sushi_lang.semantics.typesys import EnumType, PointerType, StructType, Type
 
 
 def emit_hashmap_cursor_next(codegen: Any, view: str, address: ir.Value, cursor: ir.Value,
-                             map_type: StructType, answer: EnumType) -> ir.Value:
-    """The call of the step of `view` over the map at `address` and the cursor at `cursor`."""
-    return codegen.builder.call(_step_function(codegen, view, map_type, answer),
-                                [address, cursor], name="cursor_next")
+                             map_type: StructType, answer: EnumType, dest: ir.Value) -> None:
+    """The call of the step of `view` over the map at `address` and the cursor at `cursor`;
+    the answer goes into the slot `dest`."""
+    emit_call_answer(codegen, _step_function(codegen, view, map_type, answer),
+                     [address, cursor], codegen.types.ll_type(answer), dest)
 
 
 def _step_function(codegen: Any, view: str, map_type: StructType,
@@ -38,9 +41,9 @@ def _step_function(codegen: Any, view: str, map_type: StructType,
     found = codegen.module.globals.get(symbol)
     if isinstance(found, ir.Function):
         return found
-    signature = ir.FunctionType(codegen.types.ll_type(answer), [
+    signature = call_signature(codegen.types.ll_type(answer), [
         codegen.types.ll_type(map_type).as_pointer(), codegen.types.i32.as_pointer()])
-    fn = ir.Function(codegen.module, signature, name=symbol)
+    fn = ir.Function(codegen.module, signature.function_type, name=symbol)
     fn.linkage = "linkonce_odr"
     saved_builder, saved_func = codegen.builder, codegen.func
     codegen.builder = ir.IRBuilder(fn.append_basic_block(name="entry"))
@@ -63,7 +66,7 @@ def _emit_step(codegen: Any, fn: ir.Function, view: str, payload: Type) -> None:
     """The walk of the slots from the cursor to the capacity. The first slot that holds an
     entry returns."""
     builder = codegen.builder
-    owner, cursor = fn.args
+    owner, cursor = fn.args[0], fn.args[1]
     fields = get_hashmap_field_ptrs(codegen, owner)
     first = builder.load(cursor, name="first")
     data = builder.gep(builder.load(fields.buckets_data, name="buckets"), [first], name="rest")
@@ -75,10 +78,11 @@ def _emit_step(codegen: Any, fn: ir.Function, view: str, payload: Type) -> None:
             after = builder.add(builder.add(first, index), ir.Constant(codegen.types.i32, 1),
                                 name="after")
             builder.store(after, cursor)
-            builder.ret(emit_maybe_some(codegen, payload, _item(codegen, entry, view, payload)))
+            emit_return(codegen, fn,
+                        emit_maybe_some(codegen, payload, _item(codegen, entry, view, payload)))
 
     emit_container_walk(codegen, data, count, on_slot, prefix="slot")
-    builder.ret(emit_maybe_none(codegen, payload))
+    emit_return(codegen, fn, emit_maybe_none(codegen, payload))
 
 
 def _item(codegen: Any, entry: ir.Value, view: str, payload: Type) -> ir.Value:

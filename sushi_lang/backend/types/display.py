@@ -28,7 +28,8 @@ from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_l
 from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.runtime import string_builder as sb
-from sushi_lang.backend.types.contracts import contract_override
+from sushi_lang.backend.types.contracts import (
+    as_operand, contract_override, held_operand, takes_address)
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.contracts import DISPLAY
 from sushi_lang.semantics.generics.tuples import is_tuple_type
@@ -50,11 +51,12 @@ _NUMBER_SLOT = 64
 
 
 def emit_value_to_str(codegen: 'LLVMCodegen', value: ir.Value, ty: Type) -> ir.Value:
-    """The string form of a value that is not a primitive, as a fresh owned string."""
+    """The string form of a value that is not a primitive, as a fresh owned string. A value
+    of a type that moves by address may be its address."""
     override = contract_override(codegen, ty, DISPLAY)
     if override is not None:
         from sushi_lang.backend.types.contracts import call_override
-        return call_override(codegen, override, [value])
+        return call_override(codegen, override, [as_operand(codegen, value, ty)])
     buffer = sb.emit_new(codegen)
     emit_value_fmt(codegen, value, ty, buffer)
     return sb.emit_finish(codegen, buffer)
@@ -78,7 +80,9 @@ def emit_interpolation(codegen: 'LLVMCodegen',
 
 def emit_value_fmt(codegen: 'LLVMCodegen', value: ir.Value, ty: Type,
                    buffer: ir.Value) -> None:
-    """Append the string form of a HELD value to the buffer."""
+    """Append the string form of a HELD value to the buffer. A value of a type that moves by
+    address may be its address."""
+    value = as_operand(codegen, value, ty)
     override = contract_override(codegen, ty, DISPLAY)
     if override is not None:
         from sushi_lang.backend.destructors import emit_string_destructor_from_value
@@ -133,7 +137,8 @@ def _display_name(ty: Type) -> str:
 
 
 def _fmt_func(codegen: 'LLVMCodegen', ty: Type) -> ir.Function:
-    """Get (or lazily emit) `void __sushi_fmt_<k>(T value, buffer*)` for one type.
+    """Get (or lazily emit) `void __sushi_fmt_<k>(T value, buffer*)` for one type, or
+    `void __sushi_fmt_<k>(T* value, buffer*)` for a type that moves by address.
 
     Cached before the body is emitted, as `contracts._contract_func` is, so a nested
     value of the same type is a call of this function.
@@ -144,6 +149,8 @@ def _fmt_func(codegen: 'LLVMCodegen', ty: Type) -> ir.Function:
         return cached
 
     llvm_type = codegen.types.ll_type(ty)
+    if takes_address(codegen, ty):
+        llvm_type = llvm_type.as_pointer()
     fn = ir.Function(codegen.module, ir.FunctionType(
         ir.VoidType(), [llvm_type, ir.PointerType(sb.buffer_type(codegen))]), name=symbol)
     fn.linkage = "linkonce_odr"
@@ -163,9 +170,12 @@ def _fmt_func(codegen: 'LLVMCodegen', ty: Type) -> ir.Function:
 
 def _emit_fmt_body(codegen: 'LLVMCodegen', value: ir.Value, ty: Type,
                    buffer: ir.Value) -> None:
+    """The form of `value`, or, for a type that moves by address, of the value at the
+    address `value`."""
     builder = codegen.builder
+    by_address = takes_address(codegen, ty)
     if isinstance(ty, EnumType):
-        _enum_fmt(codegen, value, ty, buffer)
+        _enum_fmt(codegen, value, ty, buffer, by_address)
     elif isinstance(ty, StructType) and is_instance_of(ty, "Own"):
         zero = ir.Constant(codegen.types.i32, 0)
         slot = entry_alloca(builder, value.type, name="own_view")
@@ -187,15 +197,20 @@ def _emit_fmt_body(codegen: 'LLVMCodegen', value: ir.Value, ty: Type,
         for index, (name, field_type) in enumerate(ty.fields):
             prefix = ", " if index else ""
             sb.emit_push_text(codegen, buffer, prefix if tuple_form else f"{prefix}{name}: ")
-            emit_value_fmt(codegen, builder.extract_value(value, index), field_type, buffer)
+            field = (held_operand(codegen, builder.gep(value, [_i32(codegen, 0),
+                                                                _i32(codegen, index)]),
+                                  field_type, "field")
+                     if by_address else builder.extract_value(value, index))
+            emit_value_fmt(codegen, field, field_type, buffer)
         sb.emit_push_text(codegen, buffer, ")")
     elif isinstance(ty, DynamicArrayType):
         _sequence_fmt(codegen, ty.base_type, builder.extract_value(value, 2),
                       builder.extract_value(value, 0), buffer)
     elif isinstance(ty, ArrayType):
         zero = ir.Constant(codegen.types.i32, 0)
-        slot = entry_alloca(builder, value.type, name="array_view")
-        builder.store(value, slot)
+        slot = value if by_address else entry_alloca(builder, value.type, name="array_view")
+        if not by_address:
+            builder.store(value, slot)
         _sequence_fmt(codegen, ty.base_type, builder.gep(slot, [zero, zero]),
                       ir.Constant(codegen.types.i32, ty.size), buffer)
     else:
@@ -212,8 +227,8 @@ def _sequence_fmt(codegen: 'LLVMCodegen', element_type: Type, data: ir.Value,
         not_first = builder.icmp_signed(">", index, ir.Constant(index.type, 0))
         with builder.if_then(not_first):
             sb.emit_push_text(codegen, buffer, ", ")
-        emit_value_fmt(codegen, builder.load(element_ptr, name="element"), element_type,
-                       buffer)
+        emit_value_fmt(codegen, held_operand(codegen, element_ptr, element_type, "element"),
+                       element_type, buffer)
 
     emit_container_walk(codegen, data, count, on_element, null_guard=True,
                         prefix="display_walk")
@@ -221,14 +236,20 @@ def _sequence_fmt(codegen: 'LLVMCodegen', element_type: Type, data: ir.Value,
 
 
 def _enum_fmt(codegen: 'LLVMCodegen', value: ir.Value, ty: EnumType,
-              buffer: ir.Value) -> None:
-    """`Enum.Variant`, and the payload by position in parentheses."""
+              buffer: ir.Value, by_address: bool) -> None:
+    """`Enum.Variant`, and the payload by position in parentheses. With `by_address`,
+    `value` is the address of the enum."""
     builder = codegen.builder
-    tag = enum_utils.extract_enum_tag(codegen, value, name="display_tag")
+    if by_address:
+        tag = builder.load(enum_utils.get_tag_ptr(codegen, value), name="display_tag")
+    else:
+        tag = enum_utils.extract_enum_tag(codegen, value, name="display_tag")
     data = None
     if any(variant.associated_types for variant in ty.variants):
-        slot = entry_alloca(builder, value.type, name="display_enum")
-        builder.store(value, slot)
+        slot = value
+        if not by_address:
+            slot = entry_alloca(builder, value.type, name="display_enum")
+            builder.store(value, slot)
         data = enum_utils.get_data_ptr(codegen, slot, "display_data")
     done = builder.append_basic_block(name="display_done")
     switch = builder.switch(tag, done)
@@ -239,8 +260,8 @@ def _enum_fmt(codegen: 'LLVMCodegen', value: ir.Value, ty: EnumType,
         sb.emit_push_text(codegen, buffer, f"{_display_name(ty)}.{variant.name}")
         if variant.associated_types:
             sb.emit_push_text(codegen, buffer, "(")
-            fields = enum_utils.unpack_all_variant_fields(
-                codegen, data, variant.associated_types, f"display_{variant.name}")
+            fields = _payload(codegen, data, variant.associated_types,
+                              f"display_{variant.name}")
             for position, (field, field_type) in enumerate(
                     zip(fields, variant.associated_types, strict=True)):
                 if position:
@@ -249,3 +270,16 @@ def _enum_fmt(codegen: 'LLVMCodegen', value: ir.Value, ty: EnumType,
             sb.emit_push_text(codegen, buffer, ")")
         builder.branch(done)
     builder.position_at_end(done)
+
+
+def _i32(codegen: 'LLVMCodegen', value: int) -> ir.Constant:
+    return ir.Constant(codegen.types.i32, value)
+
+
+def _payload(codegen: 'LLVMCodegen', data: ir.Value, types: Sequence[Type], name: str) -> list:
+    """Each payload field of one variant, as `emit_value_fmt` takes it (`held_operand`)."""
+    offsets = codegen.types.payload_field_offsets(list(types))
+    return [held_operand(codegen, enum_utils.variant_field_address(codegen, data, ty, offset,
+                                                                   name=f"{name}_{i}"),
+                         ty, f"{name}_{i}")
+            for i, (ty, offset) in enumerate(zip(types, offsets, strict=True))]

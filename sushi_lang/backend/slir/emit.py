@@ -27,7 +27,7 @@ from sushi_lang.backend.slir.externs import emit_extern
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
 from sushi_lang.backend.slir.state import FunctionState
-from sushi_lang.backend.types.arrays.runs import emit_fixed_array_copy
+from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy
 from sushi_lang.internals.errors import message_for, raise_internal_error
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.backend.slir.values import (
@@ -126,7 +126,7 @@ def _open(state: FunctionState) -> None:
             continue
         slot = entry_alloca(state.builder, ll, _name(local))
         if signature.by_address[param[0]]:
-            emit_fixed_array_copy(state.codegen, slot, arg, ll)
+            emit_aggregate_copy(state.codegen, slot, arg, ll)
         else:
             state.builder.store(arg, slot)
         state.storage[local.id] = slot
@@ -242,7 +242,8 @@ def _builtin(state: FunctionState, statement: st.Call) -> None:
         state.fault(f"the row of a builtin call got a {type(builtin).__name__} callee")
     if isinstance(builtin.method, BuiltinMethod):
         value = emit_method(state, builtin.method, statement)
-        state.builder.store(value, place_address(state, statement.dest))
+        if value is not None:
+            state.builder.store(value, place_address(state, statement.dest))
         return
     if not isinstance(builtin.method, Intrinsic):
         state.unhandled(builtin.method)
@@ -260,9 +261,8 @@ def _indirect(state: FunctionState, statement: st.Call) -> None:
         state.fault(f"the row of an indirect call got a {type(callee).__name__} callee")
     called = deref_type(type_of_operand(state, callee.operand))
     if isinstance(called, IteratorType):
-        answer = emit_next(state.codegen, operand_value(state, callee.operand),
-                           called.element_type)
-        state.builder.store(answer, place_address(state, statement.dest))
+        emit_next(state.codegen, operand_value(state, callee.operand), called.element_type,
+                  place_address(state, statement.dest))
         return
     if not isinstance(called, FunctionType):
         state.fault(f"an indirect call of a value of {called}")
@@ -335,7 +335,7 @@ def _return(state: FunctionState) -> None:
     if state.answer is None:
         builder.ret(builder.load(state.storage_of(RETURN_SLOT)))
         return
-    emit_fixed_array_copy(state.codegen, state.answer, state.storage_of(RETURN_SLOT),
+    emit_aggregate_copy(state.codegen, state.answer, state.storage_of(RETURN_SLOT),
                           _ll(state, state.function.locals[0]))
     builder.ret_void()
 

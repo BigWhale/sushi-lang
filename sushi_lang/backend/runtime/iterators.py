@@ -29,7 +29,10 @@ from sushi_lang.backend import gep_utils
 from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.memory.heap import emit_free, emit_malloc
+from sushi_lang.backend.functions.signature import (
+    call_signature, emit_call_answer, emit_return)
 from sushi_lang.backend.runtime.closures import build_closure_value
+from sushi_lang.backend.types.arrays.runs import moves_by_address
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -65,8 +68,11 @@ def iterator_value(codegen: 'LLVMCodegen', next_fn: ir.Function, state: ir.Value
 
 
 def _next_type(codegen: 'LLVMCodegen', item_type: 'Type') -> ir.FunctionType:
+    """`next_fn(state)`, which answers a `Maybe@(T)`: into a slot of the caller when the
+    `Maybe` moves by address (`call_signature`)."""
     from sushi_lang.backend.generics.maybe import get_maybe_enum_type
-    return ir.FunctionType(get_maybe_enum_type(codegen, item_type), [codegen.types.str_ptr])
+    return call_signature(get_maybe_enum_type(codegen, item_type),
+                          [codegen.types.str_ptr]).function_type
 
 
 def _drop_type(codegen: 'LLVMCodegen') -> ir.FunctionType:
@@ -115,14 +121,17 @@ def _free_state(codegen: 'LLVMCodegen') -> ir.Function:
 # Walking a value
 
 
-def emit_next(codegen: 'LLVMCodegen', value: ir.Value, item_type: 'Type') -> ir.Value:
-    """Call `next_fn(state)` of an iterator value; answers its `Maybe@(T)`."""
+def emit_next(codegen: 'LLVMCodegen', value: ir.Value, item_type: 'Type',
+              dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
+    """Call `next_fn(state)` of an iterator value; answers its `Maybe@(T)`, or, with `dest`,
+    writes it into that slot and answers None."""
+    from sushi_lang.backend.generics.maybe import get_maybe_enum_type
     b = codegen.builder
     fn_type = _next_type(codegen, item_type)
     next_ptr = b.bitcast(b.extract_value(value, 0), ir.PointerType(fn_type),
                          name=NEXT_FN_NAME)
-    return b.call(next_ptr, [b.extract_value(value, 1, name="iter_state")],
-                  name="iter_answer")
+    return emit_call_answer(codegen, next_ptr, [b.extract_value(value, 1, name="iter_state")],
+                            get_maybe_enum_type(codegen, item_type), dest)
 
 
 def emit_iterator_clone(codegen: 'LLVMCodegen', value: ir.Value) -> ir.Value:
@@ -225,10 +234,11 @@ def _cursor_next(codegen: 'LLVMCodegen', source: CursorSource) -> ir.Function:
             b.cbranch(source.live(codegen, data, index), found, step)
 
         b.position_at_end(found)
-        b.ret(emit_maybe_some(codegen, source.item_type, source.item(codegen, data, index)))
+        emit_return(codegen, fn, emit_maybe_some(codegen, source.item_type,
+                                                 source.item(codegen, data, index)))
 
         b.position_at_end(done)
-        b.ret(emit_maybe_none(codegen, source.item_type))
+        emit_return(codegen, fn, emit_maybe_none(codegen, source.item_type))
 
     return _function(codegen, f"__sushi_iter_next_{source.key}",
                      _next_type(codegen, source.item_type), body)
@@ -381,10 +391,10 @@ def _range_next(codegen: 'LLVMCodegen') -> ir.Function:
         b.store(b.add(k, ir.Constant(codegen.types.i32, 1)), k_ptr)
         item = b.add(b.load(field(_RANGE_FIRST), name="first"),
                      b.mul(b.load(field(_RANGE_STEP), name="step"), k), name="item")
-        b.ret(emit_maybe_some(codegen, BuiltinType.I32, item))
+        emit_return(codegen, fn, emit_maybe_some(codegen, BuiltinType.I32, item))
 
         b.position_at_end(done)
-        b.ret(emit_maybe_none(codegen, BuiltinType.I32))
+        emit_return(codegen, fn, emit_maybe_none(codegen, BuiltinType.I32))
 
     return _function(codegen, "__sushi_iter_next_range",
                      _next_type(codegen, BuiltinType.I32), body)
@@ -415,12 +425,22 @@ def emit_new_iterator(codegen: 'LLVMCodegen', value: ir.Value, value_type: 'Type
 
 def _new_next(codegen: 'LLVMCodegen', value_type: 'Type', item_type: 'Type',
               next_method: ir.Function, by_pointer: bool) -> ir.Function:
+    """`next_fn` of `Iterator.new`: the `next()` of the value. Both functions have the
+    signature of `call_signature`, so an answer that moves by address goes straight into
+    the slot of the caller."""
+    from sushi_lang.backend.generics.maybe import get_maybe_enum_type
+
     def body(fn: ir.Function) -> None:
         b = codegen.builder
         state = b.bitcast(fn.args[0], ir.PointerType(codegen.types.ll_type(value_type)))
         receiver = state if by_pointer else b.load(state, name="value")
         receiver = codegen.utils.cast_for_param(receiver, next_method.args[0].type)
-        b.ret(b.call(next_method, [receiver], name="answer"))
+        answer = get_maybe_enum_type(codegen, item_type)
+        if moves_by_address(answer):
+            emit_call_answer(codegen, next_method, [receiver], answer, fn.args[-1])
+            b.ret_void()
+        else:
+            b.ret(emit_call_answer(codegen, next_method, [receiver], answer))
 
     return _function(codegen, lifecycle_symbol("__sushi_iter_next_new_", value_type),
                      _next_type(codegen, item_type), body)

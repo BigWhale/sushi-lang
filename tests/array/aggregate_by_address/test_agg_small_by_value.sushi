@@ -1,0 +1,32 @@
+# a struct, a tuple and an enum of 64 bytes or less keep the by-value form: a first-class
+# return and a call result. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 7 3\n"
+# EXPECT_IR_HOLDS: make_box ret %Small
+# EXPECT_IR_HOLDS: user_main call %Small
+# EXPECT_IR_HOLDS: make_pair ret %"$Tuple<i32[4], i32>
+# EXPECT_IR_HOLDS: make_tag ret { i32, [
+struct Small:
+    i32[16] g
+
+enum Tag:
+    Some(i32[4])
+    None
+
+fn make_box() Small:
+    return Small([4; 16])
+
+fn make_pair() (i32[4], i32):
+    return ([1; 4], 7)
+
+fn make_tag() Tag:
+    return Tag.Some([3; 4])
+
+fn main() i32:
+    let Small s = make_box()
+    let (i32[4], i32) t = make_pair()
+    match make_tag():
+        Tag.Some(a) -> println("{s.g[15]} {t.1} {a[3]}")
+        Tag.None -> println("none")
+    return 0

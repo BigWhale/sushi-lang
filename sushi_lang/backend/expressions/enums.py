@@ -59,3 +59,34 @@ def emit_enum_variant_value(
         codegen, enum_value, packed_data,
         name=f"{enum_type.name}_{variant.name}_data"
     )
+
+
+def emit_enum_variant_into(
+    codegen: 'LLVMCodegen',
+    enum_type: 'EnumType',
+    variant: 'EnumVariantInfo',
+    parts: Sequence[ir.Value],
+    dest: ir.Value,
+) -> None:
+    """An enum value of the variant `variant` of `enum_type`, built in the slot `dest`: the
+    tag, then each payload part at its offset. The part of a payload type that moves by
+    address is the address of its value; each other part is a value."""
+    from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy, moves_by_address
+
+    builder = codegen.builder
+    builder.store(ir.Constant(codegen.types.i32, enum_type.get_variant_index(variant.name)),
+                  enum_utils.get_tag_ptr(codegen, dest, name="variant_tag"))
+    if not parts:
+        return
+    data_ptr = enum_utils.get_data_ptr(codegen, dest)
+    field_types = variant.associated_types
+    field_offsets = codegen.types.payload_field_offsets(field_types)
+    for i, (part, field_type, offset) in enumerate(
+            zip(parts, field_types, field_offsets, strict=True)):
+        address = enum_utils.variant_field_address(codegen, data_ptr, field_type, offset,
+                                                   name=f"arg{i}")
+        llvm_type = codegen.types.ll_type(field_type)
+        if moves_by_address(llvm_type):
+            emit_aggregate_copy(codegen, address, part, llvm_type)
+        else:
+            builder.store(part, address)

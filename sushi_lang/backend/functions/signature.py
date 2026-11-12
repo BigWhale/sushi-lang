@@ -38,3 +38,33 @@ def call_signature(answer: ir.Type, params: Sequence[ir.Type]) -> CallSignature:
         return CallSignature(ir.FunctionType(ir.VoidType(), ll_params + [answer.as_pointer()]),
                              by_address, True, answer)
     return CallSignature(ir.FunctionType(answer, ll_params), by_address, False, answer)
+
+
+def emit_return(codegen, fn: ir.Function, value: ir.Value) -> None:
+    """The `ret` of `value` from `fn`, a function whose signature `call_signature` made. An
+    answer that moves by address goes into the slot of the caller, the last parameter."""
+    if moves_by_address(value.type):
+        codegen.builder.store(value, fn.args[-1])
+        codegen.builder.ret_void()
+        return
+    codegen.builder.ret(value)
+
+
+def emit_call_answer(codegen, callee: ir.Value, args: Sequence[ir.Value], answer: ir.Type,
+                     dest: ir.Value | None = None) -> ir.Value | None:
+    """The call of `callee`, a function whose signature `call_signature` made, which
+    answers `answer`. With `dest`, the answer goes into that slot and the call answers
+    None. Without it, an answer that moves by address goes into a fresh slot, and the call
+    answers the loaded value."""
+    from sushi_lang.backend.memory.allocas import entry_alloca
+
+    builder = codegen.builder
+    if not moves_by_address(answer):
+        value = builder.call(callee, list(args))
+        if dest is None:
+            return value
+        builder.store(value, dest)
+        return None
+    slot = dest if dest is not None else entry_alloca(builder, answer, "answer")
+    builder.call(callee, list(args) + [slot])
+    return None if dest is not None else builder.load(slot)

@@ -143,6 +143,12 @@ def unpack_all_variant_fields(
     ]
 
 
+def get_tag_ptr(codegen: 'LLVMCodegen', enum_ptr: ir.Value, name: str = "tag_ptr") -> ir.Value:
+    """Get pointer to the tag of an enum stored in memory."""
+    zero = ir.Constant(codegen.types.i32, 0)
+    return codegen.builder.gep(enum_ptr, [zero, zero], inbounds=True, name=name)
+
+
 def get_data_ptr(
     codegen: 'LLVMCodegen',
     enum_ptr: ir.Value,

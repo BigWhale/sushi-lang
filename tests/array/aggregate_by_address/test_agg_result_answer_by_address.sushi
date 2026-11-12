@@ -1,0 +1,30 @@
+# a function with `| E` whose `Result` is more than 64 bytes writes the `Result` into a
+# slot that the caller gives. The IR has no first-class load, store, insertvalue, return
+# or call result of the whole `Result`. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x\nerr\n"
+# EXPECT_IR_LACKS: make insertvalue { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make store { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make load { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make ret { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main call { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main store { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main load { i32, [4096 x i64] }
+struct Box:
+    string[512][4] g
+
+fn make(i32 n) Box | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(Box([["x".clone(); 512]; 4]))
+
+fn main() i32:
+    match make(1):
+        Result.Ok(b) -> println("{b.g[3][511]}")
+        Result.Err(_) -> println("err")
+    match make(-1):
+        Result.Ok(b) -> println("{b.g[3][511]}")
+        Result.Err(_) -> println("err")
+    return 0

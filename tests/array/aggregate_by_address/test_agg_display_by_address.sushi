@@ -1,0 +1,16 @@
+# the format function of a struct whose LLVM type is more than 64 bytes takes the value by
+# address. The IR has no format function that takes the whole struct, and `main` has no
+# first-class load of the struct. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "P(n: 9, g: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])\n"
+# EXPECT_IR_LACKS: __sushi_fmt_P (%P
+# EXPECT_IR_LACKS: user_main load %P
+struct P:
+    i32 n
+    i32[17] g
+
+fn main() i32:
+    let P p = P(9, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+    println("{p}")
+    return 0
