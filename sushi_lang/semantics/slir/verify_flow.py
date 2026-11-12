@@ -143,7 +143,8 @@ class Flow:
             for operand, _ in stmt.args:
                 self.operand(configs, operand, span)
             self.write(configs, stmt.dest, span, None)
-        elif isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index, p.Global)):
+        elif isinstance(stmt, st.Drop) and isinstance(stmt.place,
+                                                 (p.Field, p.Index, p.Downcast, p.Global)):
             self.read(configs, stmt.place, span)
             root = p.root_of(stmt.place)
             if isinstance(root, p.Local):

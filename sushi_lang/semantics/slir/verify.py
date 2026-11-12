@@ -31,21 +31,23 @@ owns nothing, so the rule of the drops does not read it. The checks of a call ar
 `verify_calls.py`, the checks of an array value, a length and a slice in `verify_arrays.py`,
 the drop of a `Global` in `verify_globals.py`, and the names of the rules in `verify_rules.py`.
 
-The verifier refuses a shape that no lowering makes yet, and that it does not check, with
-the internal error CE0000: a `Drop` of a place that is no local, no element and no `Global`,
-and a `DropIfSet` of a place that is no local and no `Global`. A projection of a `Global` is typed from the type that the
-`Global` carries.
+A `Drop` of a field, an element or a payload is the drop of a part: its root is a local that
+is no view, and its type owns. A `Drop` through a `Deref` is refused, because a reference owns
+nothing. A `DropIfSet` is of a local alone, because its flag guards a local. An element of a
+`List@(T)` has the type `T`, which the verifier reads from the symbol tables. A projection of
+a `Global` is typed from the type that the `Global` carries.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Callable, NoReturn, Optional, Sequence, get_args
+from typing import TYPE_CHECKING, Callable, Mapping, NoReturn, Optional, Sequence, get_args
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.list import instance_type_arguments
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
 from sushi_lang.semantics.param_modes import Convention
@@ -82,9 +84,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES, is_instance_of
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.collect.externals import ExternalTable
-    from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
-    from sushi_lang.semantics.passes.collect.perks import PerkImplementationTable
+    from sushi_lang.semantics.tables import SymbolTables
 
 
 _TERMINATORS = get_args(tm.SlirTerminator)
@@ -104,24 +104,27 @@ class SlirVerifier:
     """The pipeline entry of the verifier: the SLIR stage of a unit gives it each function
     that the lowering finished. The declared parameters come from the function table, the
     extension table, the perk implementation table and the external table, at each call, so a generic instance that a
-    later body declares is found too."""
+    later body declares is found too. The struct and enum tables resolve the type argument
+    of a `List@(T)`."""
 
-    def verify(self, function: SlirFunction, *, funcs: FunctionTable,
-               extensions: ExtensionTable, externals: ExternalTable,
-               perk_impls: PerkImplementationTable,
+    def verify(self, function: SlirFunction, *, tables: SymbolTables,
                drops: frozenset[str], filename: Optional[str]) -> None:
+        funcs, extensions = tables.funcs, tables.extensions
         verify_function(function, drops=drops,
                         declared=partial(declared_params, funcs, extensions,
-                                         externals=externals, perk_impls=perk_impls),
+                                         externals=tables.externals,
+                                         perk_impls=tables.perk_impls),
                         filename=filename,
-                        public=is_public_function(funcs, extensions, function))
+                        public=is_public_function(funcs, extensions, function),
+                        tables=tables)
 
 
 def verify_function(function: SlirFunction, *, drops: frozenset[str],
                     declared: DeclaredLookup, filename: Optional[str] = None,
-                    public: bool = False) -> None:
-    """CE0158 at the first rule of ir.md 8.13 that `function` breaks."""
-    check = Check(function, drops, declared, filename)
+                    public: bool = False, tables: Optional[SymbolTables] = None) -> None:
+    """CE0158 at the first rule of ir.md 8.13 that `function` breaks. With no `tables`, the
+    type argument of a `List@(T)` is read with no table to resolve it."""
+    check = Check(function, drops, declared, filename, _TypeTables.of(tables))
     check.structure()
     if public:
         check_ptr_quarantine(function, check.fail)
@@ -132,6 +135,24 @@ def verify_function(function: SlirFunction, *, drops: frozenset[str],
 
 
 @dataclass(frozen=True, slots=True)
+class _Table:
+    by_name: Mapping[str, Type]
+
+
+@dataclass(frozen=True, slots=True)
+class _TypeTables:
+    """The struct and enum tables in the shape that `instance_type_arguments` reads."""
+    struct_table: _Table
+    enum_table: _Table
+
+    @staticmethod
+    def of(tables: Optional[SymbolTables]) -> _TypeTables:
+        if tables is None:
+            return _TypeTables(_Table({}), _Table({}))
+        return _TypeTables(_Table(tables.structs.by_name), _Table(tables.enums.by_name))
+
+
+@dataclass(frozen=True, slots=True)
 class _Payload:
     """What a `Downcast` place holds: the payload of one variant, read through a `Field`."""
     types: tuple[Type, ...]
@@ -139,10 +160,18 @@ class _Payload:
 
 @dataclass(frozen=True, slots=True)
 class _Typed:
-    """The root of a place, its type, and the operand of each `Index` in it."""
+    """The root of a place, its type, the operand of each `Index` in it, and whether it is
+    read through a `Deref`."""
     root: p.Local | p.Global
     ty: Type | _Payload
     indexes: tuple[p.Operand, ...] = ()
+    through_reference: bool = False
+
+    def part(self, ty: Type | _Payload, *, index: Optional[p.Operand] = None,
+             deref: bool = False) -> _Typed:
+        """A projection of this place, of the type `ty`."""
+        indexes = self.indexes if index is None else (*self.indexes, index)
+        return _Typed(self.root, ty, indexes, self.through_reference or deref)
 
 
 @dataclass(slots=True)
@@ -152,6 +181,7 @@ class Check:
     drops: frozenset[str]
     declared: DeclaredLookup
     filename: Optional[str]
+    types: _TypeTables
     blocks: dict[BlockId, SlirBlock] = field(default_factory=dict)
     conventions: dict[LocalId, Convention] = field(default_factory=dict)
     owning: set[LocalId] = field(default_factory=set)
@@ -162,17 +192,17 @@ class Check:
         er.raise_internal_error(er.ERR.CE0158.code, span=span, filename=self.filename,
                                 function=self.function.name, rule=rule, detail=detail)
 
-    def not_checked(self, what: str, span: Optional[Span]) -> NoReturn:
-        """A shape that no lowering makes yet, and that the verifier does not check."""
-        er.raise_internal_error("CE0000", span=span, filename=self.filename,
-                                detail=f"{what} is not checked yet by the SLIR verifier, "
-                                       f"because no lowering makes one")
-
     def has_local(self, local: LocalId) -> bool:
         return 0 <= local.index < len(self.function.locals)
 
     def type_of(self, local: LocalId) -> Type:
         return self.function.locals[local.index].ty
+
+    @staticmethod
+    def held_types(ty: Type | _Payload) -> tuple[Type, ...]:
+        """The values that a place of the type `ty` holds: each value of a payload, or the
+        one value."""
+        return ty.types if isinstance(ty, _Payload) else (ty,)
 
     # -- structure -----------------------------------------------------------------------
 
@@ -466,16 +496,21 @@ class Check:
             self.fail(VIEW, f"{show(place)} is a view, and only a slice writes it", span)
 
     def dropped(self, stmt: st.Drop | st.DropIfSet) -> LocalId:
-        """The local that a drop targets: a drop of any other place is not checked yet."""
+        """The local that a drop of a whole local targets. A `DropIfSet` of any other place
+        breaks the rule of the flag, which guards a local."""
         if not isinstance(stmt.place, p.Local):
-            self.not_checked(f"a drop of {show(stmt.place)}, which is no local", stmt.span)
+            self.fail(BOOL_FLAG, f"{show(stmt.place)} is no local, and a flag guards only a "
+                                 f"local", stmt.span)
         self.local_place(stmt.place, stmt.span)
         return stmt.place.id
 
     def drop(self, stmt: st.Drop | st.DropIfSet) -> None:
         if drops_a_global(stmt):
             return
-        if isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index)):
+        if isinstance(stmt, st.Drop) and not isinstance(stmt.place, p.Local):
+            if self.place(stmt.place, stmt.span).through_reference:
+                self.fail(OWNING_DROP, f"{show(stmt.place)} is read through a reference, "
+                                       f"which owns nothing to drop", stmt.span)
             part_drop(self, stmt)
             return
         if self.dropped(stmt) in self.views:
@@ -530,40 +565,43 @@ class Check:
         if not 0 <= place.index < len(parts):
             self.fail(TYPED_PLACES, f"{show(place)} reads field {place.index}, and the value "
                                     f"has {len(parts)}", span)
-        return _Typed(base.root, parts[place.index], base.indexes)
+        return base.part(parts[place.index])
 
     def index_place(self, place: p.Index, span: Span) -> _Typed:
-        """An element of an array, or a byte of a string, at an `i32` index. An element of a
-        `List@(T)` too: the verifier holds no table that resolves its argument, so its type
-        is not checked."""
+        """An element of an array or of a `List@(T)`, or a byte of a string, at an `i32`
+        index. The element type of a `List@(T)` is its type argument, which the tables
+        resolve."""
         base, ty = self.base(place, span)
         self.operand(place.index, span)
         if self.operand_type(place.index, span) not in (BuiltinType.I32, None):
             self.fail(TYPED_PLACES, f"{show(place)} has an index that is no i32", span)
         if ty == BuiltinType.STRING:
-            return _Typed(base.root, BuiltinType.U8, (*base.indexes, place.index))
+            return base.part(BuiltinType.U8, index=place.index)
         if is_instance_of(ty, "List"):
-            return _Typed(base.root, _Payload(()), (*base.indexes, place.index))
+            args = instance_type_arguments(ty, "List", self.types)
+            if args is None or len(args) != 1:
+                self.fail(TYPED_PLACES, f"{show(place)} indexes the List "
+                                        f"{display_type(ty)}, which has no element type", span)
+            return base.part(args[0], index=place.index)
         if not isinstance(ty, (ArrayType, DynamicArrayType)):
             self.fail(TYPED_PLACES, f"{show(place)} indexes a value that is no array", span)
-        return _Typed(base.root, ty.base_type, (*base.indexes, place.index))
+        return base.part(ty.base_type, index=place.index)
 
     def downcast_place(self, place: p.Downcast, span: Span) -> _Typed:
         base, ty = self.base(place, span)
         if isinstance(ty, EnumType):
             for variant in ty.variants:
                 if variant.name == place.variant:
-                    return _Typed(base.root, _Payload(variant.associated_types),
-                                  base.indexes)
+                    return base.part(_Payload(variant.associated_types))
         self.fail(TYPED_PLACES, f"{show(place)} names no variant of the type of its place",
                   span)
 
     def deref_place(self, place: p.Deref, span: Span) -> _Typed:
         base, ty = self.base(place, span)
         if isinstance(ty, ReferenceType):
-            return _Typed(base.root, ty.referenced_type, base.indexes)
+            return base.part(ty.referenced_type, deref=True)
         if isinstance(ty, PointerType):
-            return _Typed(base.root, ty.pointee_type, base.indexes)
+            return base.part(ty.pointee_type, deref=True)
         self.fail(TYPED_PLACES, f"{show(place)} reads through a value that is no pointer",
                   span)
 

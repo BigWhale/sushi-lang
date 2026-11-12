@@ -1251,15 +1251,19 @@ fit is CE2002 at the statement. A write into a field of a constant, at any depth
 [CE2096](../error-catalog.md#ce2096) at the statement, and the value is then checked at no
 type. The rules of a write through a borrow and of a read-only place are rules of
 `borrow`. An `Assign` of an `Index` is an element write (see "An array" below), and an
-`Assign` of a `StorageRef` is a rebind of a `var` (see "A `var`" below). An `Assign` of any
-other place that is not a `LocalRef`, a `Field` or an `Index` is not typed yet.
+`Assign` of a `StorageRef` is a rebind of a `var` (see "A `var`" below). The target of a
+rebind is a place: a `LocalRef`, a `StorageRef`, a `GlobalRef` of a C global (CE5016), a
+`Field` or an `Index`. Any other target (a literal, a call, a method call, an operator, a
+`Slice`) is [CE2130](../error-catalog.md#ce2130) at the target, and the value is then
+checked at no type.
 
 **A destructure.** A `Destructure` first finds what each target wants (ruling R-D). A
 binder with a written type wants that type, and the written type is checked as the type of
 a `let` is checked ([CE2001](../error-catalog.md#ce2001)). A `Place` wants the type of its
 place. The place is a `LocalRef`, a `StorageRef` or a `Field`, and it is checked as the
 target of a rebind or of a field write, and an `Index` as an element write: a field or an element of
-a constant is CE2096 at the place. A `Place` of any other place is not typed yet. A bare
+a constant is CE2096 at the place. A `Place` of a C global is CE5016, and a `Place` of any
+other expression is CE2130 at the place; that target then wants no type. A bare
 binder and a `_` want no type, and a `Nested` target wants
 what its targets want. Then the value is checked. A `TupleInit` with one part for each
 target checks each part at what its target wants, also at a nested level, so a literal takes
@@ -4083,7 +4087,7 @@ backstop of the checker, as on the AST backend.
 | `Cast(e)` | a numeric cast and a cast to the type of `e` are the `Cast` rvalue; a cast with a `Conversion` row is the call `Direct(<conversion symbol>, "<source>.as")` of the body of the conversion, with `e` as its one `Owned` operand. The body of a conversion is a function with `_1` owned (`nom self`), and its symbol is `extension_decl_symbol`: the symbol of `as` on the source with the target after it, with no unit |
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
-| `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. The `Maybe` place is read first (`wrapper`: a get-out receiver goes into a view temporary), then `e`, before the switch; a named `e` and a field take go into a temporary of the statement, so the `None` path moves the temporary and the `Some` path drops it at the top of its block, the point where the call of `or_err` drops it on `main`. When the `Maybe` is a get-out of a temporary container, the `let` of the payload keeps the container in a hidden owner local of the block: the walk to it crosses each `??`, each get-out and each read-through `or_err`. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
+| `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. The `Maybe` place is read first (`taken_wrapper`: a get-out receiver goes into a view temporary), then `e`, before the switch; a named `e` and a field take go into a temporary of the statement, so the `None` path moves the temporary and the `Some` path drops it at the top of its block, the point where the call of `or_err` drops it on `main`. When the `Maybe` is a get-out of a temporary container, the `let` of the payload keeps the container in a hidden owner local of the block: the walk to it crosses each `??`, each get-out and each read-through `or_err`. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
 | a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the root of the place with the same mode, to the last uses of its region row (7.9). A constant is first copied into a hidden local of the block that drops nothing, and the `Ref` reads that local |
 | a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`; for the pointee of an `Own(...)`, `Deref(Field(place, 0))`), in a region over the root of that place, with the mode of the `Ref`, to the last uses of its region row (7.9) |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
@@ -4546,11 +4550,14 @@ CE0158. It checks:
 - no read and no `Move` of a local that holds no value on a path: before its first write,
   or after its `StorageLive` or its `StorageDead`
 - no `Move` of a place that holds an `Index`: an element never moves (8.4)
-- a `Drop` of a part (a place whose outer projection is a `Field` or an `Index`): its root
-  is a local that is no view and that holds a value on every path, and the type of the part
-  owns. It does not change the state of the root. A `Drop` of any other place that is no
-  local and no `Global`, and a `DropIfSet` of a place that is no local and no `Global`, are
-  not checked yet (CE0000)
+- a `Drop` of a part (a place whose outer projection is a `Field`, an `Index` or a
+  `Downcast`): its root is a local that is no view and that holds a value on every path, and
+  the type of the part owns; a payload owns when one of its values owns. It does not change
+  the state of the root
+- no `Drop` of a `Deref`, or of a place under one: a reference owns nothing, so nothing
+  drops through it
+- a `DropIfSet` is of a `Local` alone: its flag guards a local. A `DropIfSet` of any other
+  place breaks the rule of the flag
 - a `Drop` of a `Global` (8.4, S21): only directly before an `Assign` into the same
   `Global`, and a `Drop` of a part of a `Global` only directly before an `Assign` into the
   same part, and the type of the place owns. No `DropIfSet` of a `Global`. The dataflow does
@@ -4639,10 +4646,11 @@ CE0158. It checks:
   element type
 - a length and a slice: `Len` reads a `T[N]`, a `T[]`, a `List@(T)` or a `string`, and
   `Slice` reads a `T[N]` or a `T[]` with two `i32` bounds
-- an index: the index of an `Index` place is an `i32`. The element of a `List@(T)` has no
-  checked type: the verifier holds no table that resolves the type argument of the
-  instance, so it does not check the type of an `Index` of a `List` or of a place under it.
-  This is a known gap of the verifier
+- an index: the index of an `Index` place is an `i32`. The element of a `List@(T)` has the
+  type `T`: the verifier reads the type argument of the instance with
+  `instance_type_arguments`, over the struct and enum tables that `SlirStage.lower_body`
+  gives it, and checks the place as an element of a `T[]` is checked. A `List` with no
+  readable type argument breaks the rule of the typed places
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
@@ -4768,11 +4776,10 @@ of a binary or a hybrid library finds its row in the function table or in the ex
 table that the `libraries` step fills from the manifest (8.6, S26). An instance of a
 template of a binary library has no unit: the flat view of the function table holds its
 row, and its symbol has no unit prefix. Each row has one symbol: its `link_symbol` when the
-`libraries` step gives it one, else the symbol of its name in its unit (`function_of`). The verifier
-does not check a shape that no lowering makes yet,
-and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
-place that is no local, no element of a local and no `Global`, and a `DropIfSet` of a place
-that is no local and no `Global`. A projection of a `Global` is checked against the type
+`libraries` step gives it one, else the symbol of its name in its unit (`function_of`). A `Drop` of a
+field, an element or a payload is the drop of a part, a `Drop` through a `Deref` is refused,
+and a `DropIfSet` of a place that is no `Local` is refused, so no drop is a shape that the
+verifier does not check. A projection of a `Global` is checked against the type
 that the `Global` carries. The negative case of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`,
 `tests/unit/test_slir_verify_regions.py` for the views and the regions,
