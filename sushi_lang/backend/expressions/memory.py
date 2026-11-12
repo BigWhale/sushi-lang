@@ -265,7 +265,11 @@ def clones_by_address(codegen: 'LLVMCodegen', value_type: Type) -> bool:
 def emit_value_clone_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
                           value_type: Type) -> None:
     """A deep copy of the value at `source` into the slot `dest`, which holds no value to
-    destroy. The two addresses are equal or do not overlap."""
+    destroy. The two addresses are equal or do not overlap; an in-place clone of a value
+    that owns nothing emits nothing."""
+    from sushi_lang.backend.destructors import needs_cleanup
+    if dest is source and not needs_cleanup(codegen, value_type):
+        return
     if clones_by_address(codegen, value_type):
         _emit_composite_clone_into(codegen, dest, source, value_type)
         return
