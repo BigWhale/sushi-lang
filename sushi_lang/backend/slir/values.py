@@ -21,6 +21,7 @@ reads too.
 """
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable
 
 from llvmlite import ir
@@ -275,12 +276,12 @@ def _aggregate_into(state: FunctionState, place: p.Place, rvalue: r.Aggregate) -
     if isinstance(kind, r.AggVariant):
         enum_type, info = checked_variant(kind.ty, kind.variant, types, state.fault)
         payload = list(info.associated_types)
-        build = lambda parts, dest: emit_enum_variant_into(codegen, enum_type, info, parts, dest)
+        build = partial(emit_enum_variant_into, codegen, enum_type, info)
         llvm_type = codegen.types.ll_type(enum_type)
     else:
         struct_type = checked_struct(kind.ty, types, state.fault)
         payload = [field_ty for _name, field_ty in struct_type.fields]
-        build = lambda parts, dest: emit_struct_into(codegen, struct_type, parts, dest)
+        build = partial(emit_struct_into, codegen, struct_type)
         llvm_type = codegen.types.ll_type(struct_type)
     by_address = [moves_by_address(codegen.types.ll_type(ty)) for ty in payload]
     parts = [operand_address(state, part) if moved else _part(state, part, ty)
