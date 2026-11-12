@@ -16,6 +16,18 @@ _FunctionPass = Callable[[llvm.FunctionPassManager], None]
 _ModulePass = Callable[[llvm.ModulePassManager], None]
 
 
+# The code generation level of the target machine for each `--opt` mode.
+_CODEGEN_LEVEL: dict[str, int] = {"none": 0, "o0": 0, "mem2reg": 2, "o1": 1, "o2": 2, "o3": 3}
+
+
+def codegen_level(mode: str | None) -> int:
+    """The code generation level of the target machine for the `--opt` mode `mode`."""
+    level = _CODEGEN_LEVEL.get((mode or "none").lower())
+    if level is None:
+        raise_internal_error("CE0000", detail=f"no code generation level for mode '{mode}'")
+    return level
+
+
 class _Pipeline(NamedTuple):
     speed_level: int
     function_passes: tuple[_FunctionPass, ...]
@@ -76,7 +88,7 @@ class LLVMOptimizer:
         """Initialize optimizer with reference to main codegen instance."""
         self.codegen = codegen
         self._llvm_init = False
-        self._tm_cache: Dict[str, llvm.TargetMachine] = {}
+        self._tm_cache: Dict[tuple[str, int], llvm.TargetMachine] = {}
 
     def optimize(self, llmod: llvm.ModuleRef, mode: str = "mem2reg") -> None:
         """Apply optimization passes to LLVM module."""
@@ -144,8 +156,10 @@ class LLVMOptimizer:
         llvm.initialize_native_asmprinter()
         self._llvm_init = True
 
-    def _create_target_machine_with_reloc(self, target_triple: str | None = None) -> llvm.TargetMachine:
-        """Create target machine with appropriate relocation model for the platform."""
+    def _create_target_machine_with_reloc(self, target_triple: str | None = None,
+                                          level: int = 2) -> llvm.TargetMachine:
+        """Create target machine with appropriate relocation model for the platform, at the
+        code generation level `level`."""
         self.ensure_llvm()
         triple = target_triple or llvm.get_default_triple()
         target = llvm.Target.from_triple(triple)
@@ -154,18 +168,21 @@ class LLVMOptimizer:
         if "linux" in triple.lower():
             reloc = "pic"
 
-        return target.create_target_machine(reloc=reloc)
+        return target.create_target_machine(opt=level, reloc=reloc)
 
-    def ensure_target(self, mod: Optional[Any] = None, target_triple: str | None = None) -> llvm.TargetMachine:
-        """Ensure module has target triple and data layout, return TargetMachine."""
+    def ensure_target(self, mod: Optional[Any] = None, opt: str = "mem2reg",
+                      target_triple: str | None = None) -> llvm.TargetMachine:
+        """Ensure module has target triple and data layout, return the TargetMachine of the
+        code generation level of the `--opt` mode `opt`."""
         self.ensure_llvm()
 
         triple = target_triple or llvm.get_default_triple()
 
-        tm = self._tm_cache.get(triple)
+        key = (triple, codegen_level(opt))
+        tm = self._tm_cache.get(key)
         if tm is None:
-            tm = self._create_target_machine_with_reloc(triple)
-            self._tm_cache[triple] = tm
+            tm = self._create_target_machine_with_reloc(triple, key[1])
+            self._tm_cache[key] = tm
 
         if mod is not None:
             mod.triple = triple

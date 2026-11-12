@@ -7,16 +7,16 @@ address of their receiver. Every operand is evaluated before the family emits an
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from llvmlite import ir
 
 from sushi_lang.backend.expressions.calls.stdlib.strings import (
     emit_stdlib_string_call, emit_string_append)
-from sushi_lang.backend.generics.container_table import blank
+from sushi_lang.backend.generics.container_table import ContainerMethod, blank
 from sushi_lang.backend.generics.hashmap import emit_hashmap_method
 from sushi_lang.backend.generics.hashmap.cursor import emit_hashmap_cursor_next
-from sushi_lang.backend.generics.list import emit_list_method
+from sushi_lang.backend.generics.list import LIST_EMITTERS, emit_list_method
 from sushi_lang.backend.generics.maybe import (
     emit_builtin_maybe_method, emit_maybe_signature_method)
 from sushi_lang.backend.generics.own import emit_own_method
@@ -26,8 +26,9 @@ from sushi_lang.backend.slir.foreign import emit_foreign_ptr_method
 from sushi_lang.backend.slir.iterators import emit_consumer
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import (
-    operand_address, operand_value, type_of_operand, type_of_place)
+    operand_address, operand_value, place_address, type_of_operand, type_of_place)
 from sushi_lang.backend.types.arrays import emit_array_method
+from sushi_lang.backend.types.arrays.runs import moves_by_address
 from sushi_lang.semantics.method_effects import (
     ARRAY_FAMILY, CONCAT_IN_PLACE, CURSOR_NEXT, FOREIGN_PTR_FAMILY, HASHMAP_FAMILY,
     ITERATOR_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY, steps_a_cursor,
@@ -116,11 +117,13 @@ _ContainerEmitter = Callable[[Any, str, ir.Value, StructType, list[ir.Value]], i
 _MethodRow = Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]
 
 
-def _container(base: str, emit: _ContainerEmitter) -> _MethodRow:
+def _container(base: str, emit: _ContainerEmitter,
+               table: Mapping[str, ContainerMethod] | None = None) -> _MethodRow:
     """The row of a built-in container family (`List@(T)`, `HashMap@(K, V)`, `Own@(T)`):
     the ADDRESS of the receiver, an `Inout` receiver and a `Guaranteed` one alike, then
-    the value of each argument. The family reads the state of the container when it runs,
-    after the last argument (docs/design/ir.md 8.6)."""
+    the value of each argument. A method whose row of `table` is `by_address` takes the
+    address of an argument that moves by address. The family reads the state of the
+    container when it runs, after the last argument (docs/design/ir.md 8.6)."""
     def row(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
         if not statement.args:
             state.fault(f"the call of '{method.name}' has no receiver")
@@ -130,7 +133,12 @@ def _container(base: str, emit: _ContainerEmitter) -> _MethodRow:
                                                                      StructType):
             state.fault(f"the receiver of '{method.name}' has the type {receiver_type}")
         address = operand_address(state, receiver)
-        args = [operand_value(state, operand) for operand, _ in statement.args[1:]]
+        row_of = table.get(method.name) if table is not None else None
+        by_address = row_of is not None and row_of.by_address
+        args = [operand_address(state, operand)
+                if by_address and moves_by_address(
+                    state.codegen.types.ll_type(type_of_operand(state, operand)))
+                else operand_value(state, operand) for operand, _ in statement.args[1:]]
         return emit(state.codegen, method.name, address, receiver_type, args)
     return row
 
@@ -138,9 +146,10 @@ def _container(base: str, emit: _ContainerEmitter) -> _MethodRow:
 _hashmap_method = _container("HashMap", emit_hashmap_method)
 
 
-def _hashmap(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
-    """A method of a `HashMap@(K, V)`. A `cursor_next` row answers the item of its view, in
-    the form of the type of the destination (docs/design/ir.md 8.6)."""
+def _hashmap(state: FunctionState, method: BuiltinMethod,
+             statement: st.Call) -> ir.Value | None:
+    """A method of a `HashMap@(K, V)`. A `cursor_next` row writes the item of its view into
+    the destination, in the form of its type, and answers None (docs/design/ir.md 8.6)."""
     if not steps_a_cursor(method):
         return _hashmap_method(state, method, statement)
     if len(statement.args) != 2:
@@ -149,9 +158,10 @@ def _hashmap(state: FunctionState, method: BuiltinMethod, statement: st.Call) ->
     map_type, answer = type_of_operand(state, owner), type_of_place(state, statement.dest)
     if not isinstance(map_type, StructType) or not isinstance(answer, EnumType):
         state.fault(f"the call of '{method.name}' has the types {map_type} and {answer}")
-    return emit_hashmap_cursor_next(state.codegen, method.name.removeprefix(CURSOR_NEXT),
-                                    operand_address(state, owner),
-                                    operand_address(state, cursor), map_type, answer)
+    emit_hashmap_cursor_next(state.codegen, method.name.removeprefix(CURSOR_NEXT),
+                             operand_address(state, owner), operand_address(state, cursor),
+                             map_type, answer, place_address(state, statement.dest))
+    return None
 
 
 #: The emitter of a method of the `result` or the `maybe` family that reads its receiver:
@@ -197,7 +207,7 @@ def _wrapper(emit: _WrapperEmitter, emit_signature: _SignatureEmitter) -> _Metho
 #: One row for each family that the emitter handles, by the name of the family.
 METHOD_FAMILIES: dict[str, _MethodRow] = {
     ARRAY_FAMILY: _array,
-    LIST_FAMILY: _container("List", emit_list_method),
+    LIST_FAMILY: _container("List", emit_list_method, LIST_EMITTERS),
     HASHMAP_FAMILY: _hashmap,
     OWN_FAMILY: _container("Own", emit_own_method),
     PRIMITIVE_FAMILY: _primitive,
@@ -210,8 +220,9 @@ METHOD_FAMILIES: dict[str, _MethodRow] = {
 
 
 def emit_method(state: FunctionState, method: BuiltinMethod,
-                statement: st.Call) -> ir.Value:
-    """The value of a method call. A family with no row is an internal error."""
+                statement: st.Call) -> ir.Value | None:
+    """The value of a method call, or None when the row wrote the destination itself. A
+    family with no row is an internal error."""
     row = METHOD_FAMILIES.get(method.family)
     if row is None:
         state.unhandled(f"{method.family} method")

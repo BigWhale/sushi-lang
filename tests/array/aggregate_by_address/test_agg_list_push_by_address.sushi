@@ -1,0 +1,19 @@
+# a fixed array of more than 64 bytes goes into a `List@(T)` by address: `push` copies the
+# bytes into the element slot. The IR of `main` has no first-class load or store of the
+# whole array. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 x y\n"
+# EXPECT_IR_LACKS: user_main load [4 x [512 x
+# EXPECT_IR_LACKS: user_main store [4 x [512 x
+fn main() i32:
+    let List@(string[512][4]) xs = List.new()
+    xs.push([["x".clone(); 512]; 4])
+    let string[512][4] g = [["y".clone(); 512]; 4]
+    xs.push(g)
+    print("{xs.len()}")
+    foreach(a in xs.iter()):
+        print(" {a[3][511]}")
+    println("")
+    return 0

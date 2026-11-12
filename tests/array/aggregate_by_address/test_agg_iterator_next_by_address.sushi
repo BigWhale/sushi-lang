@@ -1,0 +1,35 @@
+# the `next` of an iterator and the step of a HashMap cursor whose `Maybe@(T)` is more than
+# 64 bytes write the `Maybe` into a slot that the caller gives. The cases: a `next()` of a
+# user type through `Iterator.new`, a `map` adapter over it, and `HashMap.values()`. The
+# IR has no `next` function or step function that returns the whole `Maybe`, and `main`
+# has no call result of it. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 2\n1 1\n20\n10\n7\n"
+# EXPECT_IR_LACKS: user_main call { i32, [16 x i64] }
+# EXPECT_IR_LACKS: user_main store { i32, [16 x i64] }
+# EXPECT_IR_LACKS: Row_next ret { i32, [16 x i64] }
+use <collections/iter>
+use <collections/hashmap>
+
+struct Row:
+    i32 left
+
+extend Row next(poke self) Maybe@(i32[32]):
+    if (self.left == 0):
+        return Maybe.None
+    let i32[32] g = [self.left; 32]
+    self.left := self.left - 1
+    return Maybe.Some(g)
+
+fn main() i32:
+    foreach(g in Iterator.new(nom Row(2))):
+        println("{g[0]} {g[31]}")
+    foreach(n in Iterator.new(nom Row(2)).map(nom |i32[32] g| g[5] * 10)):
+        println(n)
+    let HashMap@(i32, i32[32]) table = HashMap.new()
+    table.insert(1, [7; 32])
+    foreach(g in table.values()):
+        println(g[31])
+    return 0

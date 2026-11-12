@@ -11,6 +11,10 @@ A composite type gets ONE out-of-line `linkonce_odr` function per contract, cach
 before its body is emitted, so a type that reaches itself through `Own@(T)` or
 `List@(T)` compares by a call of the function it is in.
 
+A value of a type that moves by address (`moves_by_address`) is never one first-class
+value here: the seam takes its address, its function takes two addresses, and a field or
+an element reads its own address.
+
 A float HELD in a type compares by a TOTAL rule, so that `compare == 0` is exactly
 `eq`: `-0.0 == 0.0`, every NaN equals every other NaN, and a NaN orders after every
 number. A bare `==` on two floats is IEEE and never reaches here.
@@ -44,7 +48,9 @@ _FLOATS = frozenset({BuiltinType.F32, BuiltinType.F64})
 # --- the seams ---------------------------------------------------------------------
 
 def emit_value_eq(codegen: 'LLVMCodegen', a: ir.Value, b: ir.Value, ty: Type) -> ir.Value:
-    """The i1 answer to "does `a` equal `b`", two loaded values of `ty`."""
+    """The i1 answer to "does `a` equal `b`", two values of `ty`. A value of a type that
+    moves by address may be its address."""
+    a, b = _operands(codegen, a, b, ty)
     override = contract_override(codegen, ty, EQ)
     if override is not None:
         return codegen.utils.as_i1(call_override(codegen, override, [a, b]))
@@ -55,13 +61,41 @@ def emit_value_eq(codegen: 'LLVMCodegen', a: ir.Value, b: ir.Value, ty: Type) ->
 
 def emit_value_compare(codegen: 'LLVMCodegen', a: ir.Value, b: ir.Value,
                        ty: Type) -> ir.Value:
-    """The i32 order of `a` against `b`: negative, zero or positive."""
+    """The i32 order of `a` against `b`: negative, zero or positive. A value of a type that
+    moves by address may be its address."""
+    a, b = _operands(codegen, a, b, ty)
     override = contract_override(codegen, ty, ORD)
     if override is not None:
         return call_override(codegen, override, [a, b])
     if isinstance(ty, BuiltinType):
         return _primitive_compare(codegen, a, b, ty)
     return codegen.builder.call(_contract_func(codegen, ty, ORD), [a, b])
+
+
+def takes_address(codegen: 'LLVMCodegen', ty: Type) -> bool:
+    """True for a type that moves by address: a function of a contract takes its address."""
+    from sushi_lang.backend.types.arrays.runs import moves_by_address
+    return not isinstance(ty, BuiltinType) and moves_by_address(codegen.types.ll_type(ty))
+
+
+def as_operand(codegen: 'LLVMCodegen', value: ir.Value, ty: Type) -> ir.Value:
+    """`value` as a function of a contract takes it: the address of a value of a type that
+    moves by address (a value is spilled), else the value."""
+    if not takes_address(codegen, ty) or value.type == codegen.types.ll_type(ty).as_pointer():
+        return value
+    return _spill(codegen, value, "contract_operand")
+
+
+def _operands(codegen: 'LLVMCodegen', a: ir.Value, b: ir.Value, ty: Type) -> tuple:
+    return as_operand(codegen, a, ty), as_operand(codegen, b, ty)
+
+
+def held_operand(codegen: 'LLVMCodegen', address: ir.Value, ty: Type, name: str) -> ir.Value:
+    """A held value at `address` as the seam takes it: the address when its type moves by
+    address, else the loaded value."""
+    if takes_address(codegen, ty):
+        return address
+    return codegen.builder.load(address, name=name)
 
 
 def contract_override(codegen: 'LLVMCodegen', ty: Type, contract: str) -> Optional[ir.Function]:
@@ -175,6 +209,8 @@ def _contract_func(codegen: 'LLVMCodegen', ty: Type, contract: str) -> ir.Functi
         return cached
 
     llvm_type = codegen.types.ll_type(ty)
+    if takes_address(codegen, ty):
+        llvm_type = llvm_type.as_pointer()
     result_type = ir.IntType(1) if contract == EQ else codegen.types.i32
     fn = ir.Function(codegen.module, ir.FunctionType(result_type, [llvm_type, llvm_type]),
                      name=symbol)
@@ -237,10 +273,19 @@ class _Steps:
 
 
 def _emit_body(codegen: 'LLVMCodegen', fn: ir.Function, ty: Type, contract: str) -> None:
+    """The body of the function of `contract` on `ty`. The two parameters are values, or,
+    for a type that moves by address, addresses."""
     a, b = fn.args
     steps = _Steps(codegen, contract)
+    by_address = takes_address(codegen, ty)
     if isinstance(ty, EnumType):
-        _enum_body(codegen, steps, a, b, ty)
+        _enum_body(codegen, steps, a, b, ty, by_address)
+    elif isinstance(ty, StructType) and by_address:
+        for index, (_name, field_type) in enumerate(ty.fields):
+            steps.step(held_operand(codegen, codegen.builder.gep(a, [_i32(codegen, 0), _i32(codegen, index)]),
+                             field_type, "left_field"),
+                       held_operand(codegen, codegen.builder.gep(b, [_i32(codegen, 0), _i32(codegen, index)]),
+                             field_type, "right_field"), field_type)
     elif isinstance(ty, StructType) and is_instance_of(ty, "Own"):
         _own_body(codegen, steps, a, b, ty)
     elif isinstance(ty, StructType) and is_instance_of(ty, "List"):
@@ -256,11 +301,15 @@ def _emit_body(codegen: 'LLVMCodegen', fn: ir.Function, ty: Type, contract: str)
                        (builder.extract_value(a, 2), builder.extract_value(a, 0)),
                        (builder.extract_value(b, 2), builder.extract_value(b, 0)))
     elif isinstance(ty, ArrayType):
-        _sequence_body(codegen, steps, ty.base_type, _fixed_view(codegen, a, ty),
-                       _fixed_view(codegen, b, ty))
+        _sequence_body(codegen, steps, ty.base_type, _fixed_view(codegen, a, ty, by_address),
+                       _fixed_view(codegen, b, ty, by_address))
     else:
         raise_internal_error("CE0052", type=display_type(ty))
     steps.finish()
+
+
+def _i32(codegen: 'LLVMCodegen', value: int) -> ir.Constant:
+    return ir.Constant(codegen.types.i32, value)
 
 
 def _spill(codegen: 'LLVMCodegen', value: ir.Value, name: str) -> ir.Value:
@@ -277,10 +326,12 @@ def _list_view(codegen: 'LLVMCodegen', value: ir.Value) -> tuple:
             builder.load(get_list_len_ptr(builder, slot), name="list_len"))
 
 
-def _fixed_view(codegen: 'LLVMCodegen', value: ir.Value, ty: ArrayType) -> tuple:
-    """(data pointer, length) of a fixed array value."""
+def _fixed_view(codegen: 'LLVMCodegen', value: ir.Value, ty: ArrayType,
+                by_address: bool) -> tuple:
+    """(data pointer, length) of a fixed array value, or of the fixed array at the address
+    `value`."""
     zero = ir.Constant(codegen.types.i32, 0)
-    slot = _spill(codegen, value, "array_view")
+    slot = value if by_address else _spill(codegen, value, "array_view")
     data = codegen.builder.gep(slot, [zero, zero], name="array_data")
     return data, ir.Constant(codegen.types.i32, ty.size)
 
@@ -306,9 +357,9 @@ def _sequence_body(codegen: 'LLVMCodegen', steps: _Steps, element_type: Type,
         order_slot = entry_alloca(builder, codegen.types.i32, name="element_order")
 
     def differs(element_ptr: ir.Value, index: ir.Value) -> ir.Value:
-        x = codegen.builder.load(element_ptr, name="left_element")
+        x = held_operand(codegen, element_ptr, element_type, "left_element")
         y_ptr = codegen.builder.gep(b_data, [index], name="right_element_ptr")
-        y = codegen.builder.load(y_ptr, name="right_element")
+        y = held_operand(codegen, y_ptr, element_type, "right_element")
         if steps.contract == EQ:
             return codegen.builder.not_(emit_value_eq(codegen, x, y, element_type))
         order = emit_value_compare(codegen, x, y, element_type)
@@ -345,11 +396,16 @@ def _own_body(codegen: 'LLVMCodegen', steps: _Steps, a: ir.Value, b: ir.Value,
 
 
 def _enum_body(codegen: 'LLVMCodegen', steps: _Steps, a: ir.Value, b: ir.Value,
-               ty: EnumType) -> None:
-    """The variant first, in declaration order; then the payload, left to right."""
+               ty: EnumType, by_address: bool) -> None:
+    """The variant first, in declaration order; then the payload, left to right. With
+    `by_address`, `a` and `b` are the addresses of the two enums."""
     builder = codegen.builder
-    a_tag = enum_utils.extract_enum_tag(codegen, a, name="left_tag")
-    b_tag = enum_utils.extract_enum_tag(codegen, b, name="right_tag")
+    if by_address:
+        a_tag = builder.load(enum_utils.get_tag_ptr(codegen, a), name="left_tag")
+        b_tag = builder.load(enum_utils.get_tag_ptr(codegen, b), name="right_tag")
+    else:
+        a_tag = enum_utils.extract_enum_tag(codegen, a, name="left_tag")
+        b_tag = enum_utils.extract_enum_tag(codegen, b, name="right_tag")
     steps.step(a_tag, b_tag, BuiltinType.I32)
 
     carrying = [(index, variant) for index, variant in enumerate(ty.variants)
@@ -357,19 +413,28 @@ def _enum_body(codegen: 'LLVMCodegen', steps: _Steps, a: ir.Value, b: ir.Value,
     if not carrying:
         return
 
-    a_data = enum_utils.get_data_ptr(codegen, _spill(codegen, a, "left_enum"), "left_data")
-    b_data = enum_utils.get_data_ptr(codegen, _spill(codegen, b, "right_enum"), "right_data")
+    a_slot = a if by_address else _spill(codegen, a, "left_enum")
+    b_slot = b if by_address else _spill(codegen, b, "right_enum")
+    a_data = enum_utils.get_data_ptr(codegen, a_slot, "left_data")
+    b_data = enum_utils.get_data_ptr(codegen, b_slot, "right_data")
     done = builder.append_basic_block(name="payload_done")
     switch = builder.switch(a_tag, done)
     for index, variant in carrying:
         case = builder.append_basic_block(name=f"payload_{variant.name}")
         switch.add_case(ir.Constant(a_tag.type, index), case)
         builder.position_at_end(case)
-        lefts = enum_utils.unpack_all_variant_fields(
-            codegen, a_data, variant.associated_types, f"left_{variant.name}")
-        rights = enum_utils.unpack_all_variant_fields(
-            codegen, b_data, variant.associated_types, f"right_{variant.name}")
+        lefts = _payload(codegen, a_data, variant.associated_types, f"left_{variant.name}")
+        rights = _payload(codegen, b_data, variant.associated_types, f"right_{variant.name}")
         for x, y, field_type in zip(lefts, rights, variant.associated_types, strict=True):
             steps.step(x, y, field_type)
         builder.branch(done)
     builder.position_at_end(done)
+
+
+def _payload(codegen: 'LLVMCodegen', data: ir.Value, types: list, name: str) -> list:
+    """Each payload field of one variant as the seam takes it (`_held`)."""
+    offsets = codegen.types.payload_field_offsets(types)
+    return [held_operand(codegen, enum_utils.variant_field_address(codegen, data, ty, offset,
+                                                             name=f"{name}_{i}"),
+                  ty, f"{name}_{i}")
+            for i, (ty, offset) in enumerate(zip(types, offsets, strict=True))]

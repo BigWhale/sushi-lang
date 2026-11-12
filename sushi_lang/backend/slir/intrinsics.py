@@ -21,7 +21,8 @@ from sushi_lang.backend.generics.list import emit_list_static
 from sushi_lang.backend.generics.own import emit_own_static
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.slir.state import FunctionState
-from sushi_lang.backend.slir.values import constant_value, operand_value, type_of_place
+from sushi_lang.backend.slir.values import (
+    by_address_or_value, constant_value, operand_value, type_of_place)
 from sushi_lang.backend.types.arrays.addressing import as_array_address
 from sushi_lang.backend.types.arrays.indexing import array_data, array_length
 from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
@@ -42,20 +43,22 @@ if TYPE_CHECKING:
 _PRINTS_AS_IT_IS = frozenset({BuiltinType.STRING, BuiltinType.BOOL, BuiltinType.BLANK})
 
 
-def operands(state: FunctionState, statement: st.Call) -> list[tuple[ir.Value, Type]]:
+def operands(state: FunctionState, statement: st.Call,
+             by_address: bool = False) -> list[tuple[ir.Value, Type]]:
     """The value of each argument of an intrinsic call, with the type that the callee gives
-    it, in order."""
+    it, in order. With `by_address`, an argument that moves by address is its address."""
     callee = statement.callee
     if not isinstance(callee, st.Builtin) or len(callee.types) != len(statement.args):
         state.fault(f"an intrinsic call with {len(statement.args)} arguments and the "
                     f"callee {callee}")
-    values = [operand_value(state, operand) for operand, _ in statement.args]
+    values = [by_address_or_value(state, operand) if by_address
+              else operand_value(state, operand) for operand, _ in statement.args]
     return list(zip(values, callee.types, strict=True))
 
 
 def _interp(state: FunctionState, statement: st.Call) -> ir.Value:
     """A fresh owned string, from the string builder."""
-    return emit_interpolation(state.codegen, operands(state, statement))
+    return emit_interpolation(state.codegen, operands(state, statement, by_address=True))
 
 
 def _errno(state: FunctionState, statement: st.Call) -> ir.Value:
@@ -79,7 +82,7 @@ def _write(state: FunctionState, statement: st.Call, *, is_line: bool) -> ir.Val
     """One value to the console, through the print emitter. A value that prints by its
     `Display` form writes that form, a fresh string that the print frees. The call answers
     `~`."""
-    parts = operands(state, statement)
+    parts = operands(state, statement, by_address=True)
     if len(parts) != 1:
         state.fault(f"a print of {len(parts)} values")
     (value, ty), = parts
@@ -98,7 +101,7 @@ def _write(state: FunctionState, statement: st.Call, *, is_line: bool) -> ir.Val
 
 def _two_values(state: FunctionState, statement: st.Call) -> tuple[ir.Value, ir.Value, Type]:
     """The two operands of an `eq` or a `compare`, and their one type."""
-    parts = operands(state, statement)
+    parts = operands(state, statement, by_address=True)
     if len(parts) != 2 or parts[0][1] != parts[1][1]:
         state.fault(f"a contract call of {len(parts)} values of the types "
                     f"{[ty for _, ty in parts]}")
@@ -120,9 +123,10 @@ def _compare(state: FunctionState, statement: st.Call) -> ir.Value:
     return emit_value_compare(state.codegen, left, right, ty)
 
 
-def _one_value(state: FunctionState, statement: st.Call) -> tuple[ir.Value, Type]:
+def _one_value(state: FunctionState, statement: st.Call,
+               by_address: bool = False) -> tuple[ir.Value, Type]:
     """The one operand of a `hash` or a `to_str`, and its type."""
-    parts = operands(state, statement)
+    parts = operands(state, statement, by_address)
     if len(parts) != 1:
         state.fault(f"a contract call of {len(parts)} values")
     return parts[0]
@@ -136,7 +140,7 @@ def _hash(state: FunctionState, statement: st.Call) -> ir.Value:
 
 def _to_str(state: FunctionState, statement: st.Call) -> ir.Value:
     """The string form of a value, through the `Display` seam: a fresh string."""
-    value, ty = _one_value(state, statement)
+    value, ty = _one_value(state, statement, by_address=True)
     return emit_value_to_str(state.codegen, value, ty)
 
 

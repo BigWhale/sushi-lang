@@ -207,7 +207,9 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
 def emit_capturing_closure(codegen: "LLVMCodegen", target: ir.Function, env_struct: StructType,
                            parts: List[ir.Value]) -> ir.Value:
     """A closure that captures: ONE heap block for its environment, with each part stored in
-    slot order, and the glue of its layout. The environment owns what the parts hold."""
+    slot order, and the glue of its layout. A part of a type that moves by address is the
+    address of its value. The environment owns what the parts hold."""
+    from sushi_lang.backend.types.arrays.runs import emit_part_into
     builder = codegen.builder
     size = codegen.types.get_type_size_bytes(env_struct)
     raw = emit_malloc(codegen, builder, ir.Constant(codegen.types.i64, size))
@@ -216,7 +218,8 @@ def emit_capturing_closure(codegen: "LLVMCodegen", target: ir.Function, env_stru
     i32 = codegen.types.i32
     zero = ir.Constant(i32, 0)
     for index, part in enumerate(parts):
-        builder.store(part, builder.gep(env_ptr, [zero, ir.Constant(i32, index)], inbounds=True))
+        emit_part_into(codegen, part,
+                       builder.gep(env_ptr, [zero, ir.Constant(i32, index)], inbounds=True))
     str_ptr = codegen.types.str_ptr
     return build_closure_value(codegen, builder.bitcast(target, str_ptr), raw,
                                builder.bitcast(get_or_create_env_drop(codegen, env_struct), str_ptr),

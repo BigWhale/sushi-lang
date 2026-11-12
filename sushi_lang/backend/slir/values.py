@@ -21,6 +21,7 @@ reads too.
 """
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable
 
 from llvmlite import ir
@@ -31,7 +32,7 @@ from sushi_lang.backend.constants.enum_initializers import (
     semantic_type_of, variant_of,
 )
 from sushi_lang.backend.expressions.casts import emit_value_cast
-from sushi_lang.backend.expressions.enums import emit_enum_variant_value
+from sushi_lang.backend.expressions.enums import emit_enum_variant_into, emit_enum_variant_value
 from sushi_lang.backend.runtime.closures import closure_constant
 from sushi_lang.backend.slir.closures import emit_closure_value
 from sushi_lang.backend.gep_utils import gep_struct_field
@@ -46,8 +47,8 @@ from sushi_lang.backend.slir.foreign import extern_variable, read_extern_variabl
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.types.arrays.indexing import array_length, element_address, slice_value
 from sushi_lang.backend.types.arrays.runs import (
-    emit_array_value, emit_fixed_array_copy, emit_fixed_array_into, moves_by_address)
-from sushi_lang.backend.types.structs import emit_struct_value
+    emit_array_value, emit_aggregate_copy, emit_fixed_array_into, moves_by_address)
+from sushi_lang.backend.types.structs import emit_struct_into, emit_struct_value
 from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -227,6 +228,11 @@ def assign(state: FunctionState, place: p.Place, rvalue: r.Rvalue) -> None:
             and isinstance(rvalue.kind.ty, ArrayType)):
         _fixed_array(state, place, rvalue.kind.runs, rvalue.kind.ty, rvalue.parts)
         return
+    if (isinstance(rvalue, r.Aggregate)
+            and isinstance(rvalue.kind, (r.AggVariant, r.AggStruct, r.AggTuple))
+            and moves_by_address(state.codegen.types.ll_type(type_of_place(state, place)))):
+        _aggregate_into(state, place, rvalue)
+        return
     if isinstance(rvalue, (r.Use, r.Clone)) and isinstance(rvalue.operand, (p.Copy, p.Move)):
         source = rvalue.operand.place
         source_type = type_of_place(state, source)
@@ -237,7 +243,7 @@ def assign(state: FunctionState, place: p.Place, rvalue: r.Rvalue) -> None:
                 copy_out_into(state.codegen, place_address(state, place),
                               place_address(state, source), source_type)
             else:
-                emit_fixed_array_copy(state.codegen, place_address(state, place),
+                emit_aggregate_copy(state.codegen, place_address(state, place),
                                       place_address(state, source), llvm_type)
             return
     value = rvalue_value(state, rvalue)
@@ -256,7 +262,36 @@ def _fixed_array(state: FunctionState, place: p.Place, runs: tuple[r.ArrayRun, .
         return
     slot = entry_alloca(state.builder, llvm_type, "array_literal")
     emit_fixed_array_into(state.codegen, ty, runs, parts, slot)
-    emit_fixed_array_copy(state.codegen, place_address(state, place), slot, llvm_type)
+    emit_aggregate_copy(state.codegen, place_address(state, place), slot, llvm_type)
+
+
+def _aggregate_into(state: FunctionState, place: p.Place, rvalue: r.Aggregate) -> None:
+    """A struct, a tuple or a variant that moves by address, built field by field. A part
+    that moves by address is read while the fields fill, and a reference can make any place
+    an alias of `place`. So the value is built in `place` only when no part moves by
+    address; else it is built in a fresh slot and then copied into `place`."""
+    codegen = state.codegen
+    kind = rvalue.kind
+    types = [type_of_operand(state, part) for part in rvalue.parts]
+    if isinstance(kind, r.AggVariant):
+        enum_type, info = checked_variant(kind.ty, kind.variant, types, state.fault)
+        payload = list(info.associated_types)
+        build = partial(emit_enum_variant_into, codegen, enum_type, info)
+        llvm_type = codegen.types.ll_type(enum_type)
+    else:
+        struct_type = checked_struct(kind.ty, types, state.fault)
+        payload = [field_ty for _name, field_ty in struct_type.fields]
+        build = partial(emit_struct_into, codegen, struct_type)
+        llvm_type = codegen.types.ll_type(struct_type)
+    by_address = [moves_by_address(codegen.types.ll_type(ty)) for ty in payload]
+    parts = [operand_address(state, part) if moved else _part(state, part, ty)
+             for part, ty, moved in zip(rvalue.parts, payload, by_address, strict=True)]
+    if not any(by_address):
+        build(parts, place_address(state, place))
+        return
+    slot = entry_alloca(state.builder, llvm_type, "aggregate_literal")
+    build(parts, slot)
+    emit_aggregate_copy(codegen, place_address(state, place), slot, llvm_type)
 
 
 def _array_parts(state: FunctionState, ty: ArrayType | DynamicArrayType,
@@ -288,8 +323,9 @@ def _binary(state: FunctionState, rvalue: r.Binary) -> ir.Value:
                                       operand_value(state, rvalue.right))
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
     if _is_contract_relation(state, rvalue):
-        answer = emit_contract_relation(codegen, rvalue.op, operand_value(state, rvalue.left),
-                                        operand_value(state, rvalue.right),
+        answer = emit_contract_relation(codegen, rvalue.op,
+                                        by_address_or_value(state, rvalue.left),
+                                        by_address_or_value(state, rvalue.right),
                                         type_of_operand(state, rvalue.left))
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
     ty = _scalar_type(state, rvalue, type_of_operand(state, rvalue.left))
@@ -358,7 +394,8 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
                                 _array_parts(state, kind.ty, rvalue.parts))
     if isinstance(kind, r.AggClosure):
         return emit_closure_value(state, rvalue,
-                                  [operand_value(state, part) for part in rvalue.parts[1:]])
+                                  [by_address_or_value(state, part)
+                                   for part in rvalue.parts[1:]])
     if isinstance(kind, r.AggIterator):
         from sushi_lang.backend.slir.iterators import emit_iterator_value
         return emit_iterator_value(state, rvalue, kind)
@@ -375,6 +412,13 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
     return emit_struct_value(state.codegen, struct_type,
                              [_part(state, part, field_ty)
                               for part, field_ty in zip(rvalue.parts, fields, strict=True)])
+
+
+def by_address_or_value(state: FunctionState, part: p.Operand) -> ir.Value:
+    """The address of a part that moves by address, else its value."""
+    if moves_by_address(state.codegen.types.ll_type(type_of_operand(state, part))):
+        return operand_address(state, part)
+    return operand_value(state, part)
 
 
 def _part(state: FunctionState, part: p.Operand, ty: Type) -> ir.Value:
@@ -396,8 +440,9 @@ def _clone(state: FunctionState, rvalue: r.Clone) -> ir.Value:
 def _discriminant(state: FunctionState, rvalue: r.Discriminant) -> ir.Value:
     """The tag of the enum in a place, as an `i32`."""
     enum_of(type_of_place(state, rvalue.place), state.fault)
-    value = state.builder.load(place_address(state, rvalue.place))
-    return enum_utils.extract_enum_tag(state.codegen, value)
+    return state.builder.load(enum_utils.get_tag_ptr(state.codegen,
+                                                     place_address(state, rvalue.place)),
+                              name="tag")
 
 
 def _len(state: FunctionState, rvalue: r.Len) -> ir.Value:

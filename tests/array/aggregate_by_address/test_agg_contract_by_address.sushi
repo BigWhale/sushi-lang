@@ -1,0 +1,23 @@
+# the `eq` and `compare` functions of a struct whose LLVM type is more than 64 bytes take
+# the two values by address. The IR has no function of a contract that takes the whole
+# struct or the whole array, and `main` has no first-class load of the struct. The IR is
+# read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "same\nless\n"
+# EXPECT_IR_LACKS: __sushi_eq__A4_E_A32_EI32 ([4 x [32 x i32]] %
+# EXPECT_IR_LACKS: __sushi_eq_P (%P
+# EXPECT_IR_LACKS: __sushi_cmp_P (%P
+# EXPECT_IR_LACKS: user_main load %P
+struct P:
+    i32[32][4] g
+
+fn main() i32:
+    let P p = P([[1; 32]; 4])
+    let P q = P([[1; 32]; 4])
+    let P r = P([[2; 32]; 4])
+    if (p == q):
+        println("same")
+    if (p < r):
+        println("less")
+    return 0

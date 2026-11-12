@@ -68,7 +68,7 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "len": ContainerMethod(lambda c, v, _t, _a: emit_list_len(c, v)),
     "capacity": ContainerMethod(lambda c, v, _t, _a: emit_list_capacity(c, v)),
     "is_empty": ContainerMethod(lambda c, v, _t, _a: emit_list_is_empty(c, v), answers_bool=True),
-    "push": ContainerMethod(emit_list_push),
+    "push": ContainerMethod(emit_list_push, by_address=True),
     "pop": ContainerMethod(lambda c, v, t, _a: emit_list_pop(c, v, t)),
     "get": ContainerMethod(emit_list_get),
     "first": ContainerMethod(lambda c, v, t, _a: emit_list_end(c, v, t, last=False)),

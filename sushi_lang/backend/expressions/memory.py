@@ -255,10 +255,11 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
 
 
 def clones_by_address(codegen: 'LLVMCodegen', value_type: Type) -> bool:
-    """True for a fixed array that moves by address: its clone reads a source address and
-    writes a destination slot, and it is never one first-class value."""
+    """True for a fixed array, a struct, a tuple or an enum that moves by address: its clone
+    reads a source address and writes a destination slot, and it is never one first-class
+    value."""
     from sushi_lang.backend.types.arrays.runs import moves_by_address
-    return (isinstance(value_type, ArrayType)
+    return (isinstance(value_type, (ArrayType, StructType, EnumType))
             and moves_by_address(codegen.types.ll_type(value_type)))
 
 
@@ -279,9 +280,17 @@ def emit_value_clone_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Val
 
 
 def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
-                                 value_type: Type) -> ir.Value:
-    """The struct kind's clone handler: containers first, then the field-walk clone."""
+                                 value_type: Type,
+                                 dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
+    """The struct kind's clone handler: containers first, then the field-walk clone. With
+    `dest`, `value` is the address of the source and the clone goes into `dest` (a type that
+    clones by address; a container never does)."""
     from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+    if dest is not None:
+        from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy
+        emit_aggregate_copy(codegen, dest, value, codegen.types.ll_type(value_type))
+        _clone_struct_fields_in_place(codegen, dest, value_type)
+        return None
     if is_instance_of(value_type, *CONTAINER_BASES):
         if is_instance_of(value_type, "Own"):
             return _clone_own_value(codegen, value, value_type)
@@ -646,11 +655,11 @@ def _clone_fixed_array_into(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.V
     """One `memcpy` for a plain element; a counted walk over the slots for an owning one,
     each slot cloned into its destination slot. Never unrolled."""
     from sushi_lang.backend.destructors import needs_cleanup
-    from sushi_lang.backend.types.arrays.runs import emit_fixed_array_copy
+    from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy
 
     element = value_type.base_type
     if not needs_cleanup(codegen, element):
-        emit_fixed_array_copy(codegen, dest, source, codegen.types.ll_type(value_type))
+        emit_aggregate_copy(codegen, dest, source, codegen.types.ll_type(value_type))
         return
     zero = ir.Constant(codegen.types.i32, 0)
     dest_data = gep_utils.gep_fixed_array_element(codegen, dest, zero, "clone_dest_data")
@@ -686,38 +695,66 @@ def _clone_struct_through_slots(codegen: 'LLVMCodegen', value: ir.Value,
                                 value_type: StructType) -> ir.Value:
     """A struct with a field that clones by address: the shallow copy goes into a slot, and
     each owning field of the slot is cloned in place. No field is a first-class value."""
-    from sushi_lang.backend.destructors import needs_cleanup
-
     b = codegen.builder
     slot = entry_alloca(b, value.type, name="clone_struct_slot")
     b.store(value, slot)
+    _clone_struct_fields_in_place(codegen, slot, value_type)
+    return b.load(slot, name="cloned_struct")
+
+
+def _clone_struct_fields_in_place(codegen: 'LLVMCodegen', slot: ir.Value,
+                                  value_type: StructType) -> None:
+    """Each owning field of the shallow copy in `slot`, cloned in place."""
+    from sushi_lang.backend.destructors import needs_cleanup
+
     for i, (_field_name, field_type) in enumerate(value_type.fields):
         if needs_cleanup(codegen, field_type):
             field = gep_utils.gep_struct_field(codegen, slot, i, "clone_field")
             emit_value_clone_into(codegen, field, field, field_type)
-    return b.load(slot, name="cloned_struct")
 
 
-def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir.Value:
-    """Deep-copy an enum by cloning the active variant's owning associated data."""
+def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type,
+                      dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
+    """Deep-copy an enum by cloning the active variant's owning associated data. With
+    `dest`, `value` is the address of the source and the clone goes into `dest` (a type that
+    clones by address)."""
+    if dest is not None:
+        from sushi_lang.backend.types.arrays.runs import emit_aggregate_copy
+        emit_aggregate_copy(codegen, dest, value, codegen.types.ll_type(value_type))
+        _clone_enum_payload_in_place(codegen, dest, value_type)
+        return None
+    if not _owning_variants(codegen, value_type):
+        return value  # no owning payload in any variant -> nothing to clone
+    slot = entry_alloca(codegen.builder, value.type, name="clone_enum_slot")
+    codegen.builder.store(value, slot)
+    _clone_enum_payload_in_place(codegen, slot, value_type)
+    return codegen.builder.load(slot, name="cloned_enum")
+
+
+def _owning_variants(codegen: 'LLVMCodegen', value_type) -> list:
+    """(tag, variant) of each variant with an owning payload."""
     from sushi_lang.backend.destructors import needs_cleanup
-    from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
-    b = codegen.builder
     # Resolve the payload type before gating, exactly as `_emit_enum_destructor` does. An
     # `Own<IntList>` payload arrives as an unresolved name, and an unresolved name answers
     # "owns nothing" -- so the destructor (which resolves) would free it while the clone
     # (which did not) handed out a shallow copy sharing the same pointer: double free (#183).
-    variants_nc = [
+    return [
         (i, v) for i, v in enumerate(value_type.variants)
         if v.associated_types and any(needs_cleanup(codegen, t) for t in v.associated_types)
     ]
+
+
+def _clone_enum_payload_in_place(codegen: 'LLVMCodegen', slot: ir.Value, value_type) -> None:
+    """The owning payload of the active variant of the shallow copy in `slot`, cloned in
+    place."""
+    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
+
+    variants_nc = _owning_variants(codegen, value_type)
     if not variants_nc:
-        return value  # no owning payload in any variant -> nothing to clone
-
-    slot = entry_alloca(b, value.type, name="clone_enum_slot")
-    b.store(value, slot)
-
+        return
+    b = codegen.builder
     tag_ptr = b.gep(slot, [ZERO_I32, ZERO_I32], name="clone_enum_tag_ptr")
     tag = b.load(tag_ptr, name="clone_enum_tag")
     data_ptr = b.gep(slot, [ZERO_I32, ONE_I32], name="clone_enum_data_ptr")
@@ -746,7 +783,6 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
         b.branch(end_bb)
 
     b.position_at_end(end_bb)
-    return b.load(slot, name="cloned_enum")
 
 
 # The CLONE half of every composite kind's handler; the DESTROY half registers in

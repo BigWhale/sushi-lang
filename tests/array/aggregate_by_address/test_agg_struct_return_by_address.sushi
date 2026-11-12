@@ -1,0 +1,28 @@
+# a struct whose LLVM type is more than 64 bytes moves by address: the construction is
+# built in its place, and the function writes its answer into a slot that the caller
+# gives. The IR has no first-class load, store, insertvalue, return or call result of the
+# whole struct. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless x 4\n"
+# EXPECT_IR_LACKS: make insertvalue %Box
+# EXPECT_IR_LACKS: make load %Box
+# EXPECT_IR_LACKS: make store %Box
+# EXPECT_IR_LACKS: make ret %Box
+# EXPECT_IR_LACKS: make load [4 x [512 x
+# EXPECT_IR_LACKS: user_main call %Box
+# EXPECT_IR_LACKS: user_main load %Box
+# EXPECT_IR_LACKS: user_main store %Box
+struct Box:
+    string[512][4] g
+
+fn make() Box:
+    let Box b = Box([["x".clone(); 512]; 4])
+    b.g[3][511] := "Mostly Harmless".clone()
+    return b
+
+fn main() i32:
+    let Box b = make()
+    println("{b.g[3][511]} {b.g[0][0]} {b.g.len()}")
+    return 0

@@ -31,6 +31,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.iterators import item_parts
 from sushi_lang.semantics.typesys import FunctionType, IteratorType, StructType
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.functions.signature import emit_return
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -243,9 +244,9 @@ def _map_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
     value = item()
     mapped = _call(codegen, b.load(_field(codegen, state, _SECOND)), fn_type, [value])
     destroy_owned_parts(codegen, value, source)
-    b.ret(emit_maybe_some(codegen, result.element_type, mapped))
+    emit_return(codegen, fn, emit_maybe_some(codegen, result.element_type, mapped))
     b.position_at_end(done)
-    b.ret(emit_maybe_none(codegen, result.element_type))
+    emit_return(codegen, fn, emit_maybe_none(codegen, result.element_type))
 
 
 def _filter_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
@@ -265,12 +266,12 @@ def _filter_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
     answer = _call(codegen, b.load(_field(codegen, state, _SECOND)), fn_type, [value])
     b.cbranch(codegen.utils.as_i1(answer), keep, drop)
     b.position_at_end(keep)
-    b.ret(emit_maybe_some(codegen, result.element_type, value))
+    emit_return(codegen, fn, emit_maybe_some(codegen, result.element_type, value))
     b.position_at_end(drop)
     destroy_owned_parts(codegen, value, source)
     b.branch(step)
     b.position_at_end(done)
-    b.ret(emit_maybe_none(codegen, result.element_type))
+    emit_return(codegen, fn, emit_maybe_none(codegen, result.element_type))
 
 
 def _enumerate_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
@@ -286,9 +287,9 @@ def _enumerate_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
     count = b.load(count_ptr, name="count")
     b.store(b.add(count, ir.Constant(codegen.types.i32, 1)), count_ptr)
     pair = _tuple(codegen, result.element_type, (count, item()))
-    b.ret(emit_maybe_some(codegen, result.element_type, pair))
+    emit_return(codegen, fn, emit_maybe_some(codegen, result.element_type, pair))
     b.position_at_end(done)
-    b.ret(emit_maybe_none(codegen, result.element_type))
+    emit_return(codegen, fn, emit_maybe_none(codegen, result.element_type))
 
 
 def _zip_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
@@ -310,9 +311,9 @@ def _zip_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
     b.branch(done)
     b.position_at_end(both)
     pair = _tuple(codegen, result.element_type, (first, right_item()))
-    b.ret(emit_maybe_some(codegen, result.element_type, pair))
+    emit_return(codegen, fn, emit_maybe_some(codegen, result.element_type, pair))
     b.position_at_end(done)
-    b.ret(emit_maybe_none(codegen, result.element_type))
+    emit_return(codegen, fn, emit_maybe_none(codegen, result.element_type))
 
 
 def _clone_each_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
@@ -334,9 +335,9 @@ def _clone_each_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
             if lent:
                 copy = copy_out(codegen, b.extract_value(value, index), part)
                 value = b.insert_value(value, copy, index)
-    b.ret(emit_maybe_some(codegen, result.element_type, value))
+    emit_return(codegen, fn, emit_maybe_some(codegen, result.element_type, value))
     b.position_at_end(done)
-    b.ret(emit_maybe_none(codegen, result.element_type))
+    emit_return(codegen, fn, emit_maybe_none(codegen, result.element_type))
 
 
 def _closure_field(codegen: 'LLVMCodegen') -> ir.Type:

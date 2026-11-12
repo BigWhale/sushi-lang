@@ -171,13 +171,13 @@ class LLVMDriver:
         else:
             cg.stdlib.link_stdlib_modules(llmod, cg.declaration_table())
 
-        cg.optimizer.ensure_target(llmod)
+        tm = cg.optimizer.ensure_target(llmod, opt)
         self._verify_and_optimize(llmod, opt, verify)
 
         cg.module = llvm.parse_assembly(str(llmod))
 
         out_path = out or Path("a.out")
-        return self.link_executable(llmod, out_path, cc, debug, keep_object=keep_object)
+        return self.link_executable(llmod, out_path, cc, debug, tm=tm, keep_object=keep_object)
 
     def compile_to_bitcode(
         self,
@@ -228,7 +228,7 @@ class LLVMDriver:
         weaken_linked_symbols(llmod, cg.stdlib.link_stdlib_modules(
             llmod, cg.declaration_table()))
 
-        cg.optimizer.ensure_target(llmod)
+        cg.optimizer.ensure_target(llmod, opt)
         self._verify_and_optimize(llmod, opt, verify)
 
         cg.module = llvm.parse_assembly(str(llmod))
@@ -272,7 +272,7 @@ class LLVMDriver:
         (bytes)."""
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        tm = self.codegen.optimizer.ensure_target(llmod)
+        tm = self.codegen.optimizer.ensure_target(llmod, opt)
         self._verify_and_optimize(llmod, opt, verify, f" ({unit_name})")
         return tm.emit_object(llmod)
 
@@ -304,7 +304,7 @@ class LLVMDriver:
 
     def _emit_object(self, llmod: llvm.ModuleRef, opt: str) -> bytes:
         """Optimize a module that needs no verification, and emit its object."""
-        tm = self.codegen.optimizer.ensure_target(llmod)
+        tm = self.codegen.optimizer.ensure_target(llmod, opt)
         if opt != "none":
             self.codegen.optimizer.optimize(llmod, opt)
         return tm.emit_object(llmod)

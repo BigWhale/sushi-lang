@@ -1,0 +1,29 @@
+# a `Maybe@(T)` whose LLVM type is more than 64 bytes moves by address: `Maybe.Some` is
+# built in its place, and the answer goes into a slot that the caller gives. The IR has no
+# first-class load, store, insertvalue, return or call result of the whole `Maybe`. The IR
+# is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x\nnone\n"
+# EXPECT_IR_LACKS: make insertvalue { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make store { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make load { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make ret { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make load [4 x [512 x
+# EXPECT_IR_LACKS: user_main call { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main store { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main load { i32, [4096 x i64] }
+fn make(bool some) Maybe@(string[512][4]):
+    if (some):
+        return Maybe.Some([["x".clone(); 512]; 4])
+    return Maybe.None()
+
+fn main() i32:
+    match make(true):
+        Maybe.Some(g) -> println("{g[3][511]}")
+        Maybe.None -> println("none")
+    match make(false):
+        Maybe.Some(g) -> println("{g[3][511]}")
+        Maybe.None -> println("none")
+    return 0

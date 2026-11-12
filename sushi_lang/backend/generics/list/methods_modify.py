@@ -19,11 +19,13 @@ def emit_list_push(codegen: Any, list_ptr: ir.Value, _list_type: StructType,
 
 def emit_list_append(codegen: Any, list_ptr: ir.Value, element_value: ir.Value) -> None:
     """Grow the list at `list_ptr` to fit one more element, then store `element_value` last.
+    An element that moves by address is the address of its value, and its bytes are copied.
 
     The list owns the element from here: the caller has settled its ownership.
     """
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
+    from sushi_lang.backend.types.arrays.runs import emit_part_into
 
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
     len_ptr = get_list_len_ptr(codegen.builder, list_ptr)
@@ -40,7 +42,7 @@ def emit_list_append(codegen: Any, list_ptr: ir.Value, element_value: ir.Value) 
         policy=memory.GrowPolicy.DOUBLE)
 
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, current_len, "element_ptr")
-    codegen.builder.store(element_value, element_ptr)
+    emit_part_into(codegen, element_value, element_ptr)
 
     new_len = codegen.builder.add(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
     codegen.builder.store(new_len, len_ptr)

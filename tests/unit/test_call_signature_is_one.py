@@ -1,15 +1,16 @@
-"""The LLVM signature of a function of the program comes from ONE function (#1285).
+"""The LLVM signature of a function of the program comes from ONE function (#1285, #1287).
 
 `call_signature` (`backend/functions/signature.py`) decides how each parameter and the
-answer cross a call boundary: a fixed array of more than 64 bytes crosses by address. The
+answer cross a call boundary: an aggregate of more than 64 bytes crosses by address. The
 declaration of a function of this program, of a library function from its manifest, of a
-lifted lambda, the type of a function value and the SLIR call and return emitters must
-agree, or a call passes a value where the callee reads an address.
+lifted lambda, the type of a function value, the `next` of an iterator, the step of a
+HashMap cursor and the SLIR call and return emitters must agree, or a call passes a value
+where the callee reads an address.
 
-So in each module that declares or calls such a function, an `ir.FunctionType(` may stand
-only in a function named below with its reason, and each site below calls
-`call_signature`. A new `ir.FunctionType(` built from the `ll_type` of the parameters is a
-second rule, and the scan refuses it.
+So in each module of the backend, an `ir.FunctionType(` may stand only in a function
+named below with its reason, and each site below calls `call_signature`. A new
+`ir.FunctionType(` built from the `ll_type` of the parameters is a second rule, and the
+scan refuses it.
 """
 from __future__ import annotations
 
@@ -18,13 +19,7 @@ from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[2] / "sushi_lang" / "backend"
 
-SCANNED = (
-    "functions/declarations.py",
-    "codegen_llvm.py",
-    "runtime/closures.py",
-    "slir/closures.py",
-    "slir/emit.py",
-)
+SCANNED = tuple(sorted(str(path.relative_to(BACKEND)) for path in BACKEND.rglob("*.py")))
 
 # (module, enclosing function) -> why it may build an LLVM function type itself.
 ALLOWED = {
@@ -34,6 +29,38 @@ ALLOWED = {
                                                  "by its address only",
     ("runtime/closures.py", "get_or_create_env_drop"): "the glue takes the environment only",
     ("runtime/closures.py", "get_or_create_env_clone"): "the glue takes the environment only",
+    ("functions/signature.py", "call_signature"): "the seam itself",
+    ("destructors.py", "emit_function_value_destructor_from_value"): "the drop glue of a "
+                                                                    "function value takes "
+                                                                    "the environment only",
+    ("expressions/memory.py", "_clone_function_value"): "the clone glue of a function value "
+                                                        "takes the environment only",
+    ("lifecycle.py", "get_or_emit_lifecycle_func"): "destroy takes an address, and a type "
+                                                    "that clones by address takes two "
+                                                    "(clones_by_address)",
+    ("types/contracts.py", "_contract_func"): "a type that moves by address takes two "
+                                              "addresses (takes_address)",
+    ("types/display.py", "_fmt_func"): "a type that moves by address takes its address "
+                                       "(takes_address)",
+    ("runtime/iterators.py", "_drop_type"): "the drop glue takes the state only",
+    ("runtime/iterators.py", "_clone_type"): "the clone glue takes the state and answers "
+                                             "the iterator value, which is small",
+    ("expressions/calls/stdlib/signatures.py", "llvm_function_type"): "a row keeps the "
+                                                                      "signature of its "
+                                                                      "generator; no row "
+                                                                      "crosses the bound",
+    ("expressions/calls/stdlib/strings.py", "string_method_function_type"): "a string "
+                                                                            "method takes "
+                                                                            "strings and "
+                                                                            "scalars",
+    ("functions/helpers.py", "declare_stdlib_function"): "the declaration of a stdlib "
+                                                         "extern, with its fixed C types",
+    ("runtime/string_builder.py", "_push_func"): "the push takes a pointer and scalars",
+    ("runtime/strings.py", "_declare_and_define_utf8_char_count"): "takes a pointer",
+    ("types/arrays/methods/utf8_validate.py", "get_or_emit_utf8_validate"): "takes a pointer "
+                                                                           "and a length",
+    ("types/primitives/to_str.py", "generate_module_ir"): "a primitive is never above the "
+                                                          "bound",
 }
 
 # (module, function) that must call `call_signature`.
@@ -45,6 +72,8 @@ REQUIRED = (
     ("slir/closures.py", "declare_lifted"),
     ("slir/emit.py", "_open"),
     ("slir/emit.py", "_signature"),
+    ("runtime/iterators.py", "_next_type"),
+    ("generics/hashmap/cursor.py", "_step_function"),
 )
 
 SEAM = "call_signature"
@@ -137,3 +166,33 @@ def test_every_site_calls_the_seam():
         function = _functions(ast.parse(_source(module))).get(name)
         assert function is not None, f"{module}: no function {name}"
         assert _calls_seam(function), f"{module}:{name} does not call {SEAM}"
+
+
+def test_no_stdlib_row_crosses_the_bound():
+    """A stdlib row keeps the signature of its generator, so no row may take or answer an
+    aggregate that moves by address."""
+    import importlib
+    import pkgutil
+
+    import sushi_lang.sushi_stdlib.src as src
+    from sushi_lang.backend.expressions.calls.stdlib.signatures import (
+        llvm_param_type, llvm_return_type)
+    from sushi_lang.backend.types.arrays.runs import moves_by_address
+    from sushi_lang.sushi_stdlib.src.signatures import Signature
+
+    crossing = []
+    rows = 0
+    for info in pkgutil.walk_packages(src.__path__, f"{src.__name__}."):
+        module = importlib.import_module(info.name)
+        for table in vars(module).values():
+            if not isinstance(table, dict):
+                continue
+            for name, sig in table.items():
+                if not isinstance(sig, Signature):
+                    continue
+                rows += 1
+                types = [llvm_return_type(sig)] + [llvm_param_type(p) for p in sig.params]
+                if any(t is not None and moves_by_address(t) for t in types):
+                    crossing.append(f"{info.name}:{name}")
+    assert rows, "the scan found no stdlib row"
+    assert not crossing, f"a stdlib row crosses the bound: {crossing}"

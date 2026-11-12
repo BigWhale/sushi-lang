@@ -1,0 +1,34 @@
+# an enum whose LLVM type is more than 64 bytes moves by address: a variant is built in
+# its place, and the function writes its answer into a slot that the caller gives. The IR
+# has no first-class load, store, insertvalue, return or call result of the whole enum,
+# and no load of the payload array. The IR is read before any pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x\nempty\n"
+# EXPECT_IR_LACKS: make insertvalue { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make store { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make load { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make ret { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: make load [4 x [512 x
+# EXPECT_IR_LACKS: user_main call { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main store { i32, [4096 x i64] }
+# EXPECT_IR_LACKS: user_main load { i32, [4096 x i64] }
+enum Holder:
+    Full(string[512][4])
+    Empty
+
+fn make(bool full) Holder:
+    if (full):
+        return Holder.Full([["x".clone(); 512]; 4])
+    return Holder.Empty
+
+fn show(Holder h) ~:
+    match h:
+        Holder.Full(g) -> println("{g[3][511]}")
+        Holder.Empty -> println("empty")
+
+fn main() i32:
+    show(make(true))
+    show(make(false))
+    return 0
