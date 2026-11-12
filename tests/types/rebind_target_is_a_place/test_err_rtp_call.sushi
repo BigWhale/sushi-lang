@@ -1,0 +1,9 @@
+# The result of a call is no place, so it cannot be rebound (#1284).
+# EXPECT_ERROR_CODES_EXACT: CE2130
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_call.sushi:8:5: error [CE2130]: the left side of ':=' is not a place"
+fn g() i32:
+    return 1
+
+fn main() i32:
+    g() := 3
+    return 0

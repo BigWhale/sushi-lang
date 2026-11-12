@@ -1,0 +1,10 @@
+# A literal is no place, so it cannot be rebound (#1284).
+# EXPECT_ERROR_CODES_EXACT: CE2130, CE2130, CE2130
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_literals.sushi:7:5: error [CE2130]"
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_literals.sushi:8:5: error [CE2130]"
+# EXPECT_STDERR_CONTAINS: "test_err_rtp_literals.sushi:9:5: error [CE2130]"
+fn main() i32:
+    5 := 3
+    "s" := "t"
+    [1, 2] := [3, 4]
+    return 0
