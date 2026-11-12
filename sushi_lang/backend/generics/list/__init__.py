@@ -7,7 +7,7 @@ when it runs.
 """
 
 from types import MappingProxyType
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import llvmlite.ir as ir
 
@@ -69,10 +69,15 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "capacity": ContainerMethod(lambda c, v, _t, _a: emit_list_capacity(c, v)),
     "is_empty": ContainerMethod(lambda c, v, _t, _a: emit_list_is_empty(c, v), answers_bool=True),
     "push": ContainerMethod(emit_list_push, by_address=True),
-    "pop": ContainerMethod(lambda c, v, t, _a: emit_list_pop(c, v, t)),
-    "get": ContainerMethod(emit_list_get),
-    "first": ContainerMethod(lambda c, v, t, _a: emit_list_end(c, v, t, last=False)),
-    "last": ContainerMethod(lambda c, v, t, _a: emit_list_end(c, v, t, last=True)),
+    "pop": ContainerMethod(lambda c, v, t, _a, d=None: emit_list_pop(c, v, t, d),
+                           into_place=True),
+    "get": ContainerMethod(emit_list_get, into_place=True),
+    "first": ContainerMethod(
+        lambda c, v, t, _a, d=None: emit_list_end(c, v, t, last=False, dest=d),
+        into_place=True),
+    "last": ContainerMethod(
+        lambda c, v, t, _a, d=None: emit_list_end(c, v, t, last=True, dest=d),
+        into_place=True),
     "clear": ContainerMethod(lambda c, v, t, _a: emit_list_clear(c, v, t)),
     "insert": ContainerMethod(emit_list_insert),
     "remove": ContainerMethod(emit_list_remove),
@@ -90,11 +95,12 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
 
 
 def emit_list_method(codegen: Any, name: str, address: ir.Value, list_type: StructType,
-                     args: Sequence[ir.Value]) -> ir.Value:
+                     args: Sequence[ir.Value],
+                     dest: Optional[ir.Value] = None) -> Optional[ir.Value]:
     """The value of the method `name` on the List at `address`, with the values of its
-    arguments."""
+    arguments. With `dest`, an `into_place` row writes its answer there and answers None."""
     return emit_with_operands(LIST_EMITTERS, "CE0083", codegen, name, address, list_type,
-                              args)
+                              args, dest)
 
 
 def emit_list_static(codegen: Any, name: str, list_type: StructType,

@@ -1,0 +1,20 @@
+# a `Maybe@(T)` of 64 bytes or less that `List.get`, `first`, `last` and `pop` answer keeps
+# the by-value form: one first-class `Maybe`, joined with a `phi`. The IR is read before any
+# pass.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 4 7 7 none\n"
+# EXPECT_IR_HOLDS: user_main insertvalue { i32, [1 x i64] }
+# EXPECT_IR_HOLDS: user_main phi { i32, [1 x i64] }
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(4)
+    xs.push(7)
+    let i32 a = xs.get(0).realise(0)
+    let i32 b = xs.first().realise(0)
+    let i32 c = xs.last().realise(0)
+    let i32 d = xs.pop().realise(0)
+    match xs.get(3):
+        Maybe.Some(e) -> println("{a} {b} {c} {d} {e}")
+        Maybe.None -> println("{a} {b} {c} {d} none")
+    return 0
