@@ -1,0 +1,41 @@
+# A receiver of a method that takes `peek self` or `poke self` is evaluated one time, as a
+# plain `self` is: a field of a call result and an element whose index is a call each run
+# their call one time. The by-address receiver reads the place of the value that the one
+# evaluation made.
+# EXPECT_STDOUT_EXACT: "make\n7\npick\n2\nmake\n8\npick\n21\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct Box:
+    i32 n
+    string tag
+
+struct Pair:
+    Box a
+    Box b
+
+extend Box size(peek self) i32:
+    return self.n
+
+extend Box plain() i32:
+    return self.n
+
+extend Box bump(poke self) ~:
+    self.n := self.n + 20
+
+fn make(i32 n) Pair:
+    println("make")
+    return Pair(Box(n, "a".concat("b")), Box(n + 1, "c".concat("d")))
+
+fn pick(i32 i) i32:
+    println("pick")
+    return i
+
+fn main() i32:
+    let Box[] boxes = from([Box(1, "x".concat("y")), Box(2, "z".concat("w"))])
+    println(make(7).a.size())
+    println(boxes[pick(1)].size())
+    println(make(8).a.plain())
+    boxes[pick(0)].bump()
+    println(boxes[0].n)
+    return 0

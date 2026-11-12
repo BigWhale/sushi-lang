@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "50\n"
+# EXPECT_DUMP_SHIR: test_shir_stmt_while.shir
+#
+# the SHIR dump of `while`, `break` and `continue`: a `while` is a `Loop` with a `Cond`
+# source, and its body is a block. A loop in the body of a loop is a `Loop` in that
+# block. `break` and `continue` are statements with no field, in the block of their `if`.
+
+fn main() i32:
+    let i32 i = 0
+    let i32 total = 0
+    while (i < 10):
+        i := i + 1
+        if (i % 2 == 0):
+            continue
+        if (i > 7):
+            break
+        let i32 j = 0
+        while (j < i):
+            j := j + 1
+            total := total + j
+    println(total)
+    return 0

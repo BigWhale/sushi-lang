@@ -1,0 +1,30 @@
+# `let HashMap@(K, V) m = make(n)??` unwraps a map payload with owning entries. On the Ok
+# path the map moves into the local and is destroyed once at scope exit. On the Err path
+# the `??` returns early and destroys the owning local that came before it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got value 1 for run 1\nfailed\n"
+use <collections/hashmap>
+
+fn make(i32 n) HashMap@(string, string) | StdError:
+    if (n == 0):
+        return Result.Err(StdError.Error)
+    let HashMap@(string, string) m = HashMap.new()
+    m.insert("key", "value {n}")
+    return Result.Ok(m)
+
+fn run(i32 n) i32 | StdError:
+    let string label = "run {n}"
+    let HashMap@(string, string) m = make(n)??
+    let string v = m.get("key").realise("none")
+    println("got {v} for {label}")
+    return Result.Ok(n)
+
+fn main() i32:
+    match run(1):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    match run(0):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    return 0

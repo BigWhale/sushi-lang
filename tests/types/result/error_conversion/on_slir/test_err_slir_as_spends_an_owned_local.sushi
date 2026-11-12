@@ -1,0 +1,19 @@
+# `e as B` takes its operand by position (`nom self`). An owned local that owns a string
+# is spent by the cast, so a later use of it is the use after a move.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: cannot borrow moved variable 'e'
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn main() i32:
+    let TokenError e = TokenError.Bad("token")
+    let AppError a = e as AppError
+    println(a)
+    println(e)
+    return 0

@@ -1,7 +1,6 @@
 """HashMap<K, V> core method implementations."""
 
-from typing import Any
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from ..types import get_entry_type
@@ -15,7 +14,7 @@ from sushi_lang.backend.constants import (
 )
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 from ..utils import emit_init_buckets_empty
-from ..probe import emit_find_key, emit_lookup_key, emit_lookup_maybe
+from ..probe import emit_find_key, emit_lookup_maybe, lookup_key
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
 
@@ -78,15 +77,15 @@ def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Va
 
 def emit_hashmap_get(
     codegen: Any,
-    expr: MethodCall,
     hashmap_value: ir.Value,
-    hashmap_type: StructType
+    hashmap_type: StructType,
+    args: Sequence[ir.Value],
 ) -> ir.Value:
     """Emit HashMap<K, V>.get(K key) -> Maybe<V>"""
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
-    key_value = emit_lookup_key(codegen, expr, key_type, "get")
+    key_value = lookup_key(args, "get")
     capacity, buckets_data = _load_capacity_and_buckets(builder, hashmap_value)
 
     lookup = emit_find_key(codegen, buckets_data, capacity, key_type, key_value, "get")
@@ -96,24 +95,22 @@ def emit_hashmap_get(
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # `.get()` READS. It does not detach (#242): the entry stays OCCUPIED and `map.free()`
-    # still destroys it, so the returned `Maybe.Some(V)` carries a BORROW. The borrow pass
-    # classifies it BORROWED, a `let` of it binds without owning, and a position that
-    # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
-    # that used to happen here was the compiler inserting one the user did not ask for.
+    # still destroys it, so the returned `Maybe.Some(V)` is a VIEW of the entry
+    # (`answers_view`): the destination is a view local, and no copy is made here.
     return emit_lookup_maybe(codegen, lookup, value_type, entry_value, "get_result")
 
 
 def emit_hashmap_contains_key(
     codegen: Any,
-    expr: MethodCall,
     hashmap_value: ir.Value,
-    hashmap_type: StructType
+    hashmap_type: StructType,
+    args: Sequence[ir.Value],
 ) -> ir.Value:
     """Emit HashMap<K, V>.contains_key(K key) -> bool"""
     builder = codegen.builder
 
     key_type, _ = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
-    key_value = emit_lookup_key(codegen, expr, key_type, "contains_key")
+    key_value = lookup_key(args, "contains_key")
     capacity, buckets_data = _load_capacity_and_buckets(builder, hashmap_value)
 
     lookup = emit_find_key(codegen, buckets_data, capacity, key_type, key_value, "contains")

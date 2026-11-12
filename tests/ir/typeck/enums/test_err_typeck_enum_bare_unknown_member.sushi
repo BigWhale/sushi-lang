@@ -1,0 +1,37 @@
+# EXPECT_ERROR_CODES_EXACT: CE2045, CE2045, CE2045, CE2045
+# EXPECT_STDERR_CONTAINS: "enum variant 'Nope' not found in enum 'Shape'"
+# EXPECT_STDERR_CONTAINS: "enum variant 'Nope' not found in enum 'Maybe@(i32)'"
+# EXPECT_STDERR_CONTAINS: "enum variant 'South' not found in enum 'Heading'"
+# EXPECT_STDERR_CONTAINS: "enum variant 'build' not found in enum 'Shape'"
+# EXPECT_STDERR_CONTAINS: "  |     keep(Shape.Nope)\n  `               --+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_enum_bare_unknown_member.shir
+#
+# A bare member of an enum that is no variant is an error hole that keeps the written type,
+# the member and its span. The typecheck pass reports CE2045 from it at the member: on a
+# plain enum, on `Maybe` (the parameter gives the instance `Maybe@(i32)`), behind an alias,
+# and for a static, which is a value only in a call.
+
+use "units/compass" as cp
+
+enum Shape:
+    Circle(i32)
+    Empty
+
+extend Shape static build() Shape:
+    return Shape.Empty
+
+fn keep(Shape s) Shape:
+    return s
+
+fn hold(Maybe@(i32) m) Maybe@(i32):
+    return m
+
+fn point(cp.Heading h) cp.Heading:
+    return h
+
+fn main() i32:
+    keep(Shape.Nope)
+    hold(Maybe.Nope)
+    point(cp.Heading.South)
+    keep(Shape.build)
+    return 0

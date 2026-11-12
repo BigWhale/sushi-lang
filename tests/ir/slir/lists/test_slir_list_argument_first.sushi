@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 30 false\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_list_argument_first.slir
+#
+# A method of a List is ONE `Builtin` call (ir.md 8.6): the receiver first, then each
+# argument. A call in an argument comes in a statement before the call, so the method
+# reads the List after it. A method whose row mutates takes the receiver `Inout`, and each
+# other method reads it. The element of `push` is `Owned`; a needle is `Guaranteed`.
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(3)
+    xs.push(xs.pop().realise(0) * 10)
+    let bool found = xs.contains(xs.len() + 1)
+    println("{xs.len() + 1} {xs.last().realise(-1)} {found}")
+    return 0

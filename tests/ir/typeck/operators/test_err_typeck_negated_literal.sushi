@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal -1 out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_negated_literal.shir
+#
+# A negated literal is one value: its sign is part of the range check. So -128 fits an
+# `i8` where 128 does not, -2147483648 is an `i32` in a position with no type, and a
+# negated literal beside a typed operand takes the type of that operand. The last `let`
+# gives -1 to a `u8`, which is CE2073.
+
+fn main() i32:
+    let i8 low = -128
+    let i64 wide = -4294967303
+    let f32 cold = -1.5
+    let i32 small = 5
+    let bool edge = -2147483648 < 0
+    let i32 less = small + -1
+    let i8 higher = low + 1
+    let i64 lower = wide - 1
+    let f32 colder = cold * 2.0
+    let u8 bad = -1
+    higher := higher + 1
+    lower := lower + 1
+    colder := colder + 1.0
+    bad := 0
+    edge := not edge
+    return less

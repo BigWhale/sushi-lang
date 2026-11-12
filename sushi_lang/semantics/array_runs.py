@@ -4,7 +4,9 @@ Two elements do: `value; count` repeats one value, and `a..b` yields a sequence.
 ELEMENT forms -- they mix with plain elements in one literal, so a run's absolute position is
 the sum of the counts before it. Three callers need that expansion -- the typecheck pass for
 CE2011 and the element rules, the constant evaluator, and the back end -- and they must
-agree, so they all read it here.
+agree, so they all read it here. `plan_runs` is the one reader: it takes each element as an
+`Element`, so an AST literal (`read_runs`) and a SHIR `ArrayInit` (the typecheck pass) give
+one answer.
 
 A range is a run whose value CHANGES with the slot. That is the smallest generalization, and
 it is why CE2011's note ("run 2 fills 3..7 (5 elements)") stays correct for a range at no
@@ -23,7 +25,7 @@ module free of an import cycle with `semantics/const_eval.py`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
@@ -36,22 +38,32 @@ if TYPE_CHECKING:
 # Reads an expression the compiler must know the value of, or None when it cannot.
 ReadInt = Callable[[Expr], Optional[int]]
 
+# Reads a count, or the plan of a range, of an element; None when it cannot.
+ReadCount = Callable[[Any], Optional[int]]
+ReadPlan = Callable[[Any], Optional["RangePlan"]]
+
+
+@dataclass(frozen=True)
+class Element:
+    """One element as the reader sees it, from an AST literal and a SHIR `ArrayInit` alike:
+    the value (a range for a range element), the written count or None, and the span of
+    the whole element."""
+    value: Any
+    count: Any
+    is_range: bool
+    loc: Optional[Span]
+
 
 @dataclass(frozen=True)
 class Run:
     """One element and how many slots it fills, with the first slot it fills."""
-    value: Expr
+    value: Any
     count: Optional[int]        # None: the count is only known at run time
     start: Optional[int]        # None: a run-time count sits before this run
     loc: Optional[Span]
-    plan: Optional["RangePlan"] = None   # set when `value` is a readable RangeExpr
-    count_expr: Optional[Expr] = None    # set when `count` is None: the count to emit
+    plan: Optional["RangePlan"] = None   # set when `value` is a readable range
     is_repeat: bool = False              # written `value; count`, so the value BORROWS
-
-    @property
-    def is_range(self) -> bool:
-        """True when this run yields a SEQUENCE rather than one value repeated."""
-        return isinstance(self.value, RangeExpr)
+    is_range: bool = False               # a range: a SEQUENCE, not one value repeated
 
     @property
     def end(self) -> int:
@@ -63,28 +75,40 @@ class Run:
 
 def read_runs(elements: Sequence[ArrayElement], read_int: ReadInt,
               reporter: Reporter) -> Optional[List[Run]]:
+    """The runs of an AST literal (`plan_runs`)."""
+    from sushi_lang.semantics.ranges import read_range
+
+    written = [Element(element.value, element.count, is_range_element(element), element.loc)
+               for element in elements]
+    return plan_runs(written, read_int, lambda rng: read_range(rng, read_int, reporter),
+                     reporter)
+
+
+def plan_runs(elements: Sequence[Element], read_count: ReadCount, read_plan: ReadPlan,
+              reporter: Reporter) -> Optional[List[Run]]:
     """Every element as a run, or None when an element cannot fill slots at all.
 
     A plain element is a run of one, so a caller never asks whether an element repeats. A
     count the compiler cannot read is recorded as None and is NOT an error here -- see
     `require_readable_length`. A count it CAN read is checked at once, because Ruling 2 says
-    a count you can see that spells nothing is a typo in every position.
+    a count you can see that spells nothing is a typo in every position. The typecheck pass
+    over SHIR and the AST readers read through this one function.
     """
-    from sushi_lang.semantics.ranges import read_range, reject_a_range_that_goes_down
+    from sushi_lang.semantics.ranges import reject_a_range_that_goes_down
 
     runs: List[Run] = []
     start: Optional[int] = 0
     failed = False
 
     for element in elements:
-        if isinstance(element.value, RangeExpr):
+        if element.is_range:
             # Ruling 5: `value; count` repeats ONE value, and a range is not one value.
             if element.count is not None:
                 er.emit(reporter, er.ERR.CE2020, element.count.loc)
                 failed = True
                 continue
 
-            plan = read_range(element.value, read_int, reporter)
+            plan = read_plan(element.value)
             if reject_a_range_that_goes_down(plan, reporter):
                 failed = True
                 continue
@@ -97,13 +121,13 @@ def read_runs(elements: Sequence[ArrayElement], read_int: ReadInt,
 
             count = plan.count if plan is not None else None
             runs.append(Run(value=element.value, count=count, start=start,
-                            loc=element.loc, plan=plan))
+                            loc=element.loc, plan=plan, is_range=True))
             start = None if count is None or start is None else start + count
             continue
 
         count = 1
         if element.count is not None:
-            read = read_int(element.count)
+            read = read_count(element.count)
             if read is not None and read < 1:
                 er.emit(reporter, er.ERR.CE2017, element.count.loc,
                         reason=f"the count must be 1 or more, and this one is {read}")
@@ -112,7 +136,6 @@ def read_runs(elements: Sequence[ArrayElement], read_int: ReadInt,
             count = read
 
         runs.append(Run(value=element.value, count=count, start=start, loc=element.loc,
-                        count_expr=element.count if count is None else None,
                         is_repeat=element.count is not None))
         start = None if count is None or start is None else start + count
 
@@ -179,13 +202,17 @@ def expanded_length(runs: Sequence[Run]) -> Optional[int]:
     return total
 
 
-def has_run(elements: Sequence[ArrayElement]) -> bool:
-    """True when any element fills more than one slot -- a repeat or a range.
+def is_range_element(element: ArrayElement) -> bool:
+    """True when the element is a range, `a..b`: a run whose value changes with the slot."""
+    return isinstance(element.value, RangeExpr)
+
+
+def has_run(runs: Sequence[Run]) -> bool:
+    """True when any run fills more than one slot -- a repeat or a range.
 
     A literal of plain elements keeps its old rendering.
     """
-    return any(element.count is not None or isinstance(element.value, RangeExpr)
-               for element in elements)
+    return any(run.is_repeat or run.is_range for run in runs)
 
 
 def values(elements: Sequence[ArrayElement]) -> List[Expr]:
@@ -199,16 +226,10 @@ def values(elements: Sequence[ArrayElement]) -> List[Expr]:
     see `range_bounds`.
 
     A REPEATED value BORROWS. `[towel; 3]` copies three times and leaves `towel` usable,
-    the same answer `.fill()` gives for the same reason (#479). See `repeated_values`.
+    the same answer `.fill()` gives for the same reason (#479).
     """
     return [element.value for element in elements
-            if not isinstance(element.value, RangeExpr) and element.count is None]
-
-
-def repeated_values(elements: Sequence[ArrayElement]) -> List[Expr]:
-    """The values of `value; count` elements, which BORROW rather than consume (Ruling 7)."""
-    return [element.value for element in elements
-            if element.count is not None and not isinstance(element.value, RangeExpr)]
+            if not is_range_element(element) and element.count is None]
 
 
 def range_bounds(elements: Sequence[ArrayElement]) -> List[Expr]:

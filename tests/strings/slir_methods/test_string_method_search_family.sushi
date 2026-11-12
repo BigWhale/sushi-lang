@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "true true 3 Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+#
+# String methods with an argument, a bool answer, an integer answer and a clone.
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let string c = s.clone()
+    let bool a = s.starts_with("Most")
+    let bool b = s.contains("less")
+    let i32 n = s.count("s")
+    println("{a} {b} {n} {c}")
+    return 0

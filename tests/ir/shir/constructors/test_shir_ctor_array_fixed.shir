@@ -1,0 +1,26 @@
+unit test_shir_ctor_array_fixed
+
+ShirBody LEN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(4))
+
+ShirBody main
+  params : []
+  locals : [_0 "plain": i32[3], _1 "zeros": i32[4], _2 "counted": i32[4], _3 "mixed": i32[7], _4 "sized": i32[4], _5 "down": i32[3]]
+  block  :
+    Assign(LocalRef(_0), adopt ArrayInit(Fixed, [Single(adopt Lit(1)), Single(adopt Lit(2)), Single(adopt Lit(3))]), is_init: true)
+    Assign(LocalRef(_1), adopt ArrayInit(Fixed, [Repeat(Lit(0), Lit(4))]), is_init: true)
+    Assign(LocalRef(_2), adopt ArrayInit(Fixed, [RangeRun(Range(Lit(0), Lit(3), inclusive: true, reverse: false))]), is_init: true)
+    Assign(LocalRef(_3), adopt ArrayInit(Fixed, [Single(adopt Lit(9)), Repeat(Lit(0), Lit(2)), RangeRun(Range(Lit(1), Lit(3), inclusive: true, reverse: false)), Single(adopt Lit(5))]), is_init: true)
+    Assign(LocalRef(_4), adopt ArrayInit(Fixed, [Repeat(Lit(7), ConstRef(@LEN))]), is_init: true)
+    Assign(LocalRef(_5), adopt ArrayInit(Fixed, [RangeRun(Range(Lit(0), Lit(3), inclusive: false, reverse: true))]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_1), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_2), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_3), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_4), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_5), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

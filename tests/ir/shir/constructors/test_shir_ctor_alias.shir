@@ -1,0 +1,25 @@
+unit helpers/shir_shapes
+
+unit test_shir_ctor_alias
+
+ShirBody area
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : [_1 "out": i32, _2 "r": i32, _3 "a": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@sh.Shape, "Circle", [(_2, Bare)]), [Assign(LocalRef(_1), adopt Binary(*, Binary(*, Lit(3), LocalRef(_2)), LocalRef(_2)), is_init: false)]), Arm(Variant(@sh.Shape, "Square", [(_3, Bare)]), [Assign(LocalRef(_1), adopt Binary(*, LocalRef(_3), LocalRef(_3)), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": Point, _1 "b": Point, _2 "s": Sign]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@sh.Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), adopt StructInit(@sh.Point, [adopt Lit(3), adopt Lit(4)], written_order: [1, 0], named: true), is_init: true)
+    Assign(LocalRef(_2), adopt EnumInit(@sh.Sign, "Plus", []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "x"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_1), "y"), Guaranteed)]))
+    Match(LocalRef(_2), [Arm(Variant(@sh.Sign, "Plus", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("plus"), Guaranteed)]))]), Arm(Variant(@sh.Sign, "Minus", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("minus"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@sh.Shape, "Circle", [adopt Lit(2)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

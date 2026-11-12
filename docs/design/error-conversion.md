@@ -543,22 +543,25 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
 - **The seam.** One table, `SymbolTables.conversions`, keyed `(source, target)` and
   filled by `collect`. One function answers "which conversion turns `E_in` into `E_out`".
   The `??` check (`_error_arms_agree`, `passes/types/expressions.py`) and the cast check
-  (`is_valid_cast`, `passes/types/compatibility.py`) both call it, and nothing else reads
+  (`check_cast`, the same module) both call it, and nothing else reads
   the table. A gate refuses a second reader.
 - **What `??` takes.** `_unwrapped_arms` (`passes/types/expressions.py`) asks whether
   the operand IS a `Result` instance (`is_instance_of`, `semantics/type_predicates.py`),
   and no longer reads variant names. The Maybe branch is removed, and so is the
   `error_type=None` path into the backend.
-- **`typecheck`.** `validate_try_expression` and `validate_cast_expression` ask the seam
-  and stamp the answer on the node (`TryExpr.inferred_conversion`,
-  `CastExpr.inferred_conversion`). In a generic function the question is asked per
-  instance.
-- **Backend.** The propagate block of `emit_try_expr` (`backend/expressions/try_expr.py`)
-  extracts the error, calls the stamped conversion with it as a consuming argument, runs
-  the scope cleanup, builds the `Err` from the converted value, and returns. The
-  conversion runs before the cleanup, and the extracted error is not registered for
-  cleanup, so it is freed once. `r??` on a named wrapper (`ownership.unwrap`, #548)
-  hands the error over in the same way.
+- **`typecheck`.** `check_try` and `check_cast` ask the seam. Each arm writes its answer
+  as the conversion row of its node in `TypeckResults` (docs/design/ir.md 7.3):
+  `NoConversion` for a `??` of the same error type, for a numeric cast and for an identity
+  cast. A `??` or a cast that a declared conversion joins is not typed on SHIR yet, and
+  stops the walk of its body until the group D2. In a generic function the question is
+  asked per instance.
+- **SLIR.** A `Try` lowers to `Discriminant` + `SwitchInt` + `Downcast` (docs/design/ir.md
+  8.9). On the propagate path the error is a `Move` out of the payload into a `Direct` call
+  of the conversion, the `Err` is built from the converted value, the drops of the scopes
+  that the path leaves come next, and the block returns. The conversion runs before those
+  drops, and the moved error is not dropped again, so it is freed once. `r??` on a named
+  wrapper (#548) hands the error over in the same way. The error conversions group D2
+  builds the conversion half.
 - **Libraries.** A binary or hybrid manifest gets a `conversions` row (source, target,
   link symbol). `--lib-info` and `slib-info` print it.
 - **`effects`.** The destroy summary reads the `poke` parameters of free functions. A

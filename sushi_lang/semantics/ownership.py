@@ -12,36 +12,12 @@ from typing import AbstractSet, Callable, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
-    ArrayType,
-    DynamicArrayType,
     GenericTypeRef,
     ReferenceType,
     Type,
     UnknownType,
     owns_resource,
 )
-
-
-class ConsumingUse(Enum):
-    """Every position that takes ownership of a value. A CLOSED set."""
-
-    CALL_ARG = "call_arg"                # f(x), constructor calls, indirect calls, bloom
-    LET = "let"                          # let T x = <source>, and a `next()` foreach slot
-    REBIND = "rebind"                    # x := <source>
-    FIELD_ASSIGN = "field_assign"        # obj.field := <source>
-    STRUCT_FIELD = "struct_field"        # S(field: <source>)
-    ENUM_PAYLOAD = "enum_payload"        # E.Variant(<source>), incl. Result.Ok / Maybe.Some
-    ARRAY_ELEMENT = "array_element"      # from([<source>, ...]) and [<source>, ...]
-    ELEMENT_ASSIGN = "element_assign"    # arr[i] := <source>
-    CONTAINER_INSERT = "container_insert"  # List.push/.insert, HashMap.insert (key AND value)
-    RETURN = "return"                    # return Result.Ok(<source>)
-    CAPTURE = "capture"                  # a lambda's captured environment slot
-    OWN_ALLOC = "own_alloc"              # Own.alloc(<source>)
-    MATCH_SCRUTINEE = "match_scrutinee"  # match nom <source>: -- ruling R11
-    RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25,
-                                         # and the operand of `e as T` (a conversion takes
-                                         # it as `nom self`, an identity cast moves it)
-    TRY = "try"                          # r?? -- the unwrap spends a wrapper the writer owns (#548)
 
 
 class Provenance(Enum):
@@ -144,22 +120,3 @@ def is_own_type(ty: Optional[Type]) -> bool:
         return ty.base_name == "Own"
     return is_instance_of(ty, "Own")
 
-
-# Containers whose `.get()` reads out of storage the receiver keeps, by base name.
-# Spelled ONCE in semantics/generics/cloning.py and aliased here.
-from sushi_lang.semantics.generics.cloning import (  # noqa: E402
-    CONTAINER_BASES as _GET_OUT_BASES,
-)
-
-
-def is_get_out_container(ty: Optional[Type]) -> bool:
-    """Does `.get()` on a receiver of this type return a VIEW of what the receiver owns?"""
-    if ty is None:
-        return False
-    if isinstance(ty, ReferenceType):
-        ty = ty.referenced_type
-    if isinstance(ty, (ArrayType, DynamicArrayType)):
-        return True
-    if isinstance(ty, GenericTypeRef):
-        return ty.base_name in _GET_OUT_BASES
-    return is_instance_of(ty, *_GET_OUT_BASES)

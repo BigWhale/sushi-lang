@@ -1,0 +1,9 @@
+public struct Tag@(T):
+    T v
+
+extend Tag@(T) who() string:
+    return "a"
+
+public fn who_a(Tag@(i32) t) string:
+    return t.who()
+

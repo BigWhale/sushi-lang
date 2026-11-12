@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "false\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_call_namespace_type_args.shir
+#
+# the SHIR dump of the written type arguments of a call through a namespace. The alias
+# folds into the name of the function, so the target is `Named` of the `GlobalRef` with
+# the qualified name, and the type arguments stand on it, as on a direct call. The
+# templates and the copies of the two generic functions are bodies of the unit that
+# declares them: the templates first, then the copies in the order of their names.
+
+use "helpers/shir_generic_fns" as gf
+
+fn main() i32:
+    let Maybe@(i32) m = gf.nothing@(i32)()
+    println(m.is_some())
+    println(gf.identity@(string)(nom "Mostly Harmless"))
+    return 0

@@ -16,12 +16,15 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import CONVERSION_METHOD
 from sushi_lang.semantics.typesys import EnumType, ReferenceType, UnknownType
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.typesys import Type
+
+# The method name of a conversion, `extend Source as Target:` (docs/design/error-conversion.md
+# section 8.2). `as` is a reserved word, so no written method has this name.
+CONVERSION_METHOD = "as"
 
 
 @dataclass(frozen=True)

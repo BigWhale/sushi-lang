@@ -1,0 +1,36 @@
+# `print` and `println` of a value with a `Display` form write that form: a struct, an enum,
+# a tuple, a fixed array, a dynamic array, a List and an Own.
+# EXPECT_STDOUT_EXACT: "Point(x: 1, s: "a")\nPoint(x: 2, s: "b")\nShape.Dot\nShape.Named("n")\n(1, "t", true)\n[1, 2, 3]\n["a", "b"]\n["a", "b"]\n[4]\n5\n[[1], [2, 3]]\n[2, 3]\n1\n"
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    string s
+
+enum Shape:
+    Dot
+    Named(string)
+
+fn main() i32:
+    println(Point(1, "a"))
+    print(Point(2, "b"))
+    println("")
+    println(Shape.Dot)
+    println(Shape.Named("n"))
+    println((1, "t", true))
+    let i32[3] fixed = [1, 2, 3]
+    println(fixed)
+    let string[] names = from(["a", "b"])
+    println(names)
+    print(names)
+    println("")
+    let List@(i32) l = List.new()
+    l.push(4)
+    println(l)
+    let Own@(i32) o = Own.alloc(5)
+    println(o)
+    let i32[][] nested = from([from([1]), from([2, 3])])
+    println(nested)
+    println(nested[1])
+    println(fixed[0])
+    return 0

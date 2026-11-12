@@ -1,0 +1,14 @@
+# The unit that `test_shir_field_alias` binds behind an alias: a struct, a constant of a
+# plain value and one of a struct, a unit `var` and a function.
+public struct Vec:
+    i32 x
+    i32 y
+
+public const i32 LIMIT = 4
+
+public const Vec ORIGIN = Vec(0, 7)
+
+public var i32 hits = 0
+
+public fn twice(i32 x) i32:
+    return x * 2

@@ -1,0 +1,16 @@
+# A bool read through a `poke` parameter prints the words, in a hole and in `println`.
+# The write through the reference shows the new value.
+# EXPECT_STDOUT_EXACT: "poke false\nfalse\npoke true\ntrue\nafter true\n"
+
+fn flip(poke bool b) ~:
+    println("poke {b}")
+    println(b)
+    b := not b
+    println("poke {b}")
+    println(b)
+
+fn main() i32:
+    let bool x = false
+    flip(poke x)
+    println("after {x}")
+    return 0

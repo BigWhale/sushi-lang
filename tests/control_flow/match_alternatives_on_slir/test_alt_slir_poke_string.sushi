@@ -1,0 +1,36 @@
+# A `poke` binder of a string payload in each alternative of an arm writes the payload of
+# the scrutinee. The owner shows the new value after the match, whatever alternative
+# matched.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "mostly!\nharmless!\ngone\n"
+
+enum Word:
+    A(string)
+    B(string)
+    Gone
+
+fn shout(poke Word w) ~:
+    match w:
+        Word.A(poke s) | Word.B(poke s) -> s := "{s}!"
+        Word.Gone -> println("gone")
+
+fn show(peek Word w) ~:
+    match w:
+        Word.A(s) | Word.B(s) -> println(s)
+        Word.Gone -> println("gone")
+
+fn main() i32:
+    let string most = "most"
+    let Word a = Word.A("{most}ly")
+    match a:
+        Word.A(poke s) | Word.B(poke s) -> s := "{s}!"
+        Word.Gone -> println("gone")
+    show(peek a)
+    let string harm = "harm"
+    let Word b = Word.B("{harm}less")
+    shout(poke b)
+    show(peek b)
+    let Word c = Word.Gone
+    shout(poke c)
+    return 0

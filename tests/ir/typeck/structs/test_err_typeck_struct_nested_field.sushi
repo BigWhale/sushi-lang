@@ -1,0 +1,32 @@
+# EXPECT_ERROR_CODES_EXACT: CE2028
+# EXPECT_STDERR_CONTAINS: "field 'y' expects type 'i32', got 'bool'"
+# EXPECT_STDERR_CONTAINS: "  |     keep_line(Line(Point(1, 2), Point(3, true)))\n  `                                          --+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_nested_field.shir
+#
+# A construction in a field is checked at the type of that field. A struct with an owning
+# field (`string`) and a field that holds a `Maybe` are typed: the field gives the
+# instance of the `Maybe`. A value that does not fit a field of the inner construction is
+# CE2028 at the value.
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Line:
+    Point start
+    Point end
+
+struct Label:
+    string text
+    Maybe@(Point) at
+
+fn keep_line(Line l) Line:
+    return l
+
+fn keep_label(nom Label l) Label:
+    return l
+
+fn main() i32:
+    keep_label(nom Label("Mostly Harmless", Maybe.Some(Point(1, 2))))
+    keep_line(Line(Point(1, 2), Point(3, true)))
+    return 0

@@ -1,0 +1,25 @@
+unit test_shir_match_arm_bodies
+
+ShirBody show
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt LocalRef(_0))
+
+ShirBody pick
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : [_1 "total": i32, _2 "x": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [(_2, Bare)]), [Assign(LocalRef(_1), adopt LocalRef(_2), is_init: false), ExprStmt(Call(Free(@show), [(LocalRef(_2), Guaranteed)]))]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Binary(+, Call(Free(@show), [(Lit(1), Guaranteed)]), Call(Free(@show), [(Lit(2), Guaranteed)])))])], consumes: false)
+    Return(adopt LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@pick), [(EnumInit(@Maybe, "Some", [adopt Lit(4)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@pick), [(EnumInit(@Maybe, "None", []), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,33 @@
+unit test_borrow_view_regions
+
+ShirBody measure
+  params : [(_0 "s": string, Guaranteed)]
+  locals : [_1 "v": string]
+  regions : [_1: {_0} until #4]
+  block  :
+    Assign(LocalRef(_1), reject LocalRef(_0), is_init: true)
+    Return(adopt Call(Builtin(LocalRef(_1), "len"), []))
+
+ShirBody pick
+  params : [(_0 "first": bool, Guaranteed)]
+  locals : [_1 "xs": List@(string), _2 "m": Maybe@(string), _3 "l": Maybe@(string), _4 "i": i32]
+  regions : [_2: {_1} until #17, _3: {_1} until #34]
+  block  :
+    Assign(LocalRef(_1), adopt Call(BuiltinStatic(List@(string), "new"), []), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_1), "push"), [(adopt Interp(["a", Lit(1), ""]), Owned)]))
+    Assign(LocalRef(_2), reject Call(Builtin(LocalRef(_1), "get"), [(Lit(0), Guaranteed)]), is_init: true)
+    If(LocalRef(_0), then: [ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_2), "is_some"), []), Guaranteed)]))], otherwise: [ExprStmt(Call(Builtin(LocalRef(_1), "push"), [(adopt Interp(["b", Lit(2), ""]), Owned)]))])
+    Assign(LocalRef(_3), reject Call(Builtin(LocalRef(_1), "last"), []), is_init: true)
+    Assign(LocalRef(_4), adopt Lit(0), is_init: true)
+    Loop(Cond(Binary(<, LocalRef(_4), Lit(2))), [ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_3), "is_some"), []), Guaranteed)])), Assign(LocalRef(_4), adopt Binary(+, LocalRef(_4), Lit(1)), is_init: false)])
+    ExprStmt(Call(Builtin(LocalRef(_1), "clear"), []))
+    Return(adopt Call(Builtin(LocalRef(_1), "len"), []))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@measure), [(Interp(["Mostly ", Lit(42), ""]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@pick), [(Lit(true), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@pick), [(Lit(false), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

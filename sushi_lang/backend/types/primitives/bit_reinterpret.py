@@ -1,7 +1,6 @@
 """Built-in bit-reinterpret methods for float primitive types."""
 
-from typing import Any
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
@@ -14,11 +13,11 @@ def _emit_to_bits(prim_type: BuiltinType) -> Any:
     """Create a to_bits() emitter for the given float primitive type."""
     int_width = INT32_BIT_WIDTH if prim_type == BuiltinType.F32 else INT64_BIT_WIDTH
 
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+                receiver_type: ir.Type) -> ir.Value:
         """to_bits() emitter created by factory."""
-        if len(call.args) != 0:
-            raise_internal_error("CE0078", got=len(call.args))
+        if args:
+            raise_internal_error("CE0078", got=len(args))
         builder = require_builder(codegen)
         return builder.bitcast(receiver_value, ir.IntType(int_width), name="to_bits")
 

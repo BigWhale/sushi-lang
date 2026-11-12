@@ -168,6 +168,8 @@ nav:
   - Internals:
       - Architecture: internals/architecture.md
       - Semantic Passes: internals/semantic-passes.md
+      - "SHIR (reference)": internals/shir.md
+      - "SLIR (reference)": internals/slir.md
       - Backend: internals/backend.md
       - Stdlib Build: internals/stdlib-build.md
       - "Variadics (design)": design/variadics.md

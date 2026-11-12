@@ -94,24 +94,23 @@ The trap path does not free the message or the other values in scope: the proces
 
 ## The implementation
 
-- **One code, [RE2026](../error-catalog.md#re2026).** The text in the registry is `assertion failed at {where}`.
-  `{where}` is `file:line:col`, and the backend formats it at COMPILE time, as [RE2023](../error-catalog.md#re2023)
-  formats `{pattern}`.
+- **One code, [RE2026](../error-catalog.md#re2026).** The text in the registry is the printf
+  format `assertion failed at %.*s%.*s` (ruling R-U). An `assert` lowers to a `SwitchInt`
+  and a `Trap("RE2026", [position, message])` in SLIR (`ir.md` 8.8, 8.9). The position is
+  a constant string, `file:line:col`, and it ends in `: ` when a message follows. A bare
+  `assert` gives the empty string as its message. So both forms print the text that they
+  printed before SLIR, and the file name never goes into the format string.
 - **The message is a run-time value.** A Sushi string is `{i8* data, i32 size, i8 owned}`
-  and has no NUL terminator, so the backend prints it with `%.*s` from its size and its
-  data. This is `emit_runtime_error_with_message` in `RuntimeErrors`
-  (`backend/runtime/errors.py`): it prints the compile-time text, then `: ` and the
-  message, then the newline. The statement is `emit_assert`
-  (`backend/statements/control_flow.py`).
-- **The message is a temporary of the fail block.** It is built in a scope of its own,
-  and that scope is popped after the trap, when the block is terminated, so no cleanup of
-  a value made there reaches the passing path.
-- **The file name is stamped on the node.** The AST builder writes
-  `Assert.source_label` when it builds the node, so a monomorphized copy and an `expand`
-  copy carry it with no extra step. The name is `display_filename`
-  (`internals/report.py`), the one function a diagnostic prints its file through. A parse
-  that has no reporter (a bundled stdlib module, a source library, a library template)
-  passes `source_label` to `parse_to_ast`, the same label its diagnostics use.
+  and has no NUL terminator, so the trap emitter prints each `%.*s` operand from its size
+  and its data, then the newline.
+- **The message is a value of the fail block.** It is built in that block, and the `Trap`
+  ends the block, so no drop of a value made there reaches the passing path.
+- **The file name is the file of the body.** SLIR lowering reads the name one time for
+  each body, through `display_filename` (`internals/report.py`), the one function a
+  diagnostic prints its file through, and the trap of each `assert` and each `expect` in
+  the body takes it. The node holds no file name, so a monomorphized copy and an `expand`
+  copy need no extra step. The body of a library template has the label of its slice as
+  its file (`<template:lib:name>`), the same label its diagnostics use.
 - **The label is in the unit's cache key.** It is relative to the working directory of the
   build, so the unit fingerprint (`compiler/fingerprint.py`) hashes it beside the source.
   Without it, a build from another directory with one `--cache-dir` reused an object that

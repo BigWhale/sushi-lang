@@ -1,0 +1,40 @@
+# EXPECT_ERROR_CODES_EXACT: CE2411, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot consume 'word': another owner keeps this value."
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'w'"
+# EXPECT_DUMP_SHIR: test_err_borrow_match_nom_scrutinee.shir
+#
+# `match nom r:` takes the scrutinee over, a consuming use, as `f(nom r)` does.
+# - `hand_over` takes a local string: the scrutinee is a move, with no error.
+# - `code` takes a plain `i32` parameter: a plain value is copied, so it is no error.
+# - `take` takes a parameter that borrows the value of the caller: CE2411.
+# - `later` reads the local after the match took it: CE2405.
+
+fn hand_over() i32:
+    let string w = "{1} towels"
+    match nom w:
+        "1 towels" -> return 1
+        _ -> return 2
+
+fn code(i32 n) i32:
+    match nom n:
+        0 -> return 1
+        _ -> return 2
+
+fn take(string word) i32:
+    match nom word:
+        "get" -> return 1
+        _ -> return 2
+
+fn later() i32:
+    let string w = "{2} towels"
+    match nom w:
+        "x" -> println("x")
+        _ -> println("y")
+    println(w)
+    return 0
+
+fn main() i32:
+    println(hand_over())
+    println(code(0))
+    println(take("get"))
+    return later()

@@ -1,0 +1,40 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "12\n1\n9\n0\n6\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_nested.shir
+#
+# the SHIR dump of nested patterns: an enum pattern in the payload of an enum pattern, and
+# `|` alternatives of literals in a nested position. A nested literal stays a `Literal`
+# pattern, and a nested `|` is an `Or` that holds them. Two alternatives that bind one name
+# bind one local.
+
+enum Shape:
+    Circle(i32)
+    Square(i32)
+
+enum Slot:
+    Has(Shape)
+    Nothing
+
+fn area(Slot s) i32:
+    let i32 out = 0
+    match s:
+        Slot.Has(Shape.Circle(r)) -> out := 3 * r * r
+        Slot.Has(Shape.Square(1 | 2)) -> out := 1
+        Slot.Has(Shape.Square(side)) -> out := side * side
+        Slot.Nothing -> out := 0
+    return out
+
+fn size(Shape sh) i32:
+    let i32 out = 0
+    match sh:
+        Shape.Circle(n) | Shape.Square(n) -> out := n
+    return out
+
+fn main() i32:
+    println(area(Slot.Has(Shape.Circle(2))))
+    println(area(Slot.Has(Shape.Square(2))))
+    println(area(Slot.Has(Shape.Square(3))))
+    println(area(Slot.Nothing))
+    println(size(Shape.Square(6)))
+    println("Mostly Harmless")
+    return 0

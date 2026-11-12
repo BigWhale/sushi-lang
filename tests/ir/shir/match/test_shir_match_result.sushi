@@ -1,0 +1,26 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\nodd\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_result.shir
+#
+# the SHIR dump of a match on a `Result`. The scrutinee is a call, a temporary: whether the
+# match owns it is an answer of the `borrow` pass, so lowering records what is written and
+# `consumes` is false. `Result` is the written name of the enum of each `Variant`, and an
+# error enum in a payload is a nested `Variant`.
+
+error Bad:
+    Odd
+
+fn half(i32 n) i32 | Bad:
+    if (n % 2 == 1):
+        return Result.Err(Bad.Odd)
+    return Result.Ok(n / 2)
+
+fn main() i32:
+    match half(8):
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println("odd")
+    match half(3):
+        Result.Ok(v) -> println(v)
+        Result.Err(Bad.Odd) -> println("odd")
+    println("Mostly Harmless")
+    return 0

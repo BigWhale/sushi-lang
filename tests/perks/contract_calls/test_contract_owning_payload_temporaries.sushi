@@ -1,0 +1,27 @@
+# A temporary that owns is only read by a contract call and a print, and the statement frees
+# it. The string answer of `to_str` is freed at its owner's end, or at the end of its statement.
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\nNamed(name: "a")\nNamed(name: "b")\nNamed(name: "c")\n16\nnoisy\nnoisy\ntrue\n"
+# EXPECT_NO_LEAKS
+
+struct Named:
+    string name
+
+fn make(string s) Named:
+    return Named(s.clone())
+
+fn noisy(Named n) Named:
+    println("noisy")
+    return n.clone()
+
+fn main() i32:
+    println(make("a").hash() == make("a").hash())
+    println(make("a").eq(make("a")))
+    println(make("a").compare(make("b")) < 0)
+    println(make("a").to_str())
+    println(make("b"))
+    print(make("c"))
+    println("")
+    println(make("a").to_str().len())
+    let Named n = make("n")
+    println(noisy(n).eq(noisy(n)))
+    return 0

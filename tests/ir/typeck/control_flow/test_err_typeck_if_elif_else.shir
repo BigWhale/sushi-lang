@@ -1,0 +1,17 @@
+unit test_err_typeck_if_elif_else
+
+ShirBody grade
+  params : [(_0 "score": i32, Guaranteed), (_1 "r": Result@(i32, StdError), Guaranteed)]
+  locals : [_2 "points": i32]
+  block  :
+    Assign(LocalRef(_2), Lit(0), is_init: true)
+    If(Binary(>, LocalRef(_0), Lit(90)), then: [Assign(LocalRef(_2), Lit(3), is_init: false)], otherwise: [If(Binary(>, LocalRef(_0), Lit(50)), then: [If(Binary(==, LocalRef(_0), Lit(51)), then: [Assign(LocalRef(_2), Lit(1), is_init: false)], otherwise: [Assign(LocalRef(_2), Lit(2), is_init: false)])], otherwise: [If(Binary(or, Binary(<, LocalRef(_0), Lit(0)), Binary(>, LocalRef(_0), Lit(100))), then: [Assign(LocalRef(_2), Unary(neg, Lit(1)), is_init: false)], otherwise: [Assign(LocalRef(_2), Lit(0), is_init: false)])])])
+    If(Binary(and, Binary(!=, LocalRef(_2), Lit(0)), Unary(not, Binary(==, LocalRef(_2), Unary(neg, Lit(1))))), then: [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)])
+    If(LocalRef(_1), then: [Return(Lit(0))])
+    Return(LocalRef(_2))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

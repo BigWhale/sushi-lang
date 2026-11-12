@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 256 out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_literal_context.shir
+#
+# The typecheck pass types a literal at the type of its position: here the written type
+# of each `let`. Each literal fits its type, and the `locals` line shows the type that the
+# pass answers for each local. The last `let` holds an integer that a `u8` cannot hold,
+# which is CE2073 at the literal.
+
+fn main() i32:
+    let i32 answer = 42
+    let u8 byte = 200
+    let i64 wide = 0xFF_FFFF_FFFF
+    let u8 letter = a'x'
+    let f32 ratio = 0.5
+    let bool flag = true
+    let string text = "Mostly Harmless"
+    byte
+    wide
+    letter
+    ratio
+    flag
+    text
+    let u8 too_big = 256
+    too_big
+    return answer

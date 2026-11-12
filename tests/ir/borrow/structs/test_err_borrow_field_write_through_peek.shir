@@ -1,0 +1,22 @@
+unit test_err_borrow_field_write_through_peek
+
+ShirBody length
+  params : [(_0 "s": Seg, InGuaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(-, Field(Field(LocalRef(_0), "b"), "x"), Field(Field(LocalRef(_0), "a"), "x")))
+
+ShirBody set
+  params : [(_0 "s": Seg, InGuaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Field(Field(LocalRef(_0), "a"), "y"), Guaranteed)]))
+    Assign(Field(Field(LocalRef(_0), "a"), "x"), adopt Lit(3), is_init: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "s": Seg]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@Seg, [adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]), adopt StructInit(@Point, [adopt Lit(3), adopt Lit(4)], written_order: [0, 1])], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Free(@set), [(LocalRef(_0), InGuaranteed)]))
+    Return(adopt Call(Free(@length), [(LocalRef(_0), InGuaranteed)]))

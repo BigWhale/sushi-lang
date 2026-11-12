@@ -3,9 +3,11 @@
 "Unify the parameters, read the leading type arguments off the map, resolve each" was
 written five times, and the copies did not agree: the monomorphize copy had no pack
 handling and no lambda path, so a variadic or lambda call inside a generic body was
-solved by one pass and not instantiated by the next. The gate reads the source: the
-five call sites reach `solve_leading_type_args` (directly or through
-`infer_flat_type_args`), and no module on the call path unifies for itself.
+solved by one pass and not instantiated by the next. The gate reads the source: each
+call site reaches `solve_leading_type_args`, and no module on the call path unifies for
+itself. The early passes solve no call from its arguments any more (ruling E4): the
+instantiate pass solves a generic function value from the type of its position, and
+the typecheck pass solves the rest.
 
 A generic static's target and the method-level type parameters of an extension ran the
 same loop with a partial contract (#809): an unknown argument solves nothing, a miss is
@@ -19,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "sushi_lang" / "semantics"
 
-SOLVER_NAMES = {"solve_leading_type_args", "infer_flat_type_args"}
+SOLVER_NAMES = {"solve_leading_type_args"}
 UNIFY_NAMES = {"unify_types", "_unify_types_for_inference"}
 
 MODULES = (
@@ -29,15 +31,12 @@ MODULES = (
 )
 
 SITES = (
-    ("generics/instantiate/expressions.py", "_infer_type_args_from_call"),
     ("generics/instantiate/expressions.py", "_record_fn_reference"),
-    ("generics/monomorphize/functions.py", "_call_type_args"),
-    ("passes/types/calls/generics.py", "resolve_generic_fn_reference"),
-    ("passes/types/calls/generics.py", "_infer_type_args_from_call_site"),
-    # The PARTIAL callers (#809): a generic static's target, and the method-level type
-    # parameters of an extension. Each keeps its own contract (the stamp fill, CE2063).
+    ("passes/types/calls/generics.py", "solved_value_type_args"),
+    # The PARTIAL callers (#809): a generic static's target, and the arguments of a SHIR
+    # call, which solve a method-level type parameter of an extension too (CE2063).
     ("statics.py", "solve_target_type_args"),
-    ("passes/types/calls/methods.py", "resolve_method_generic_extension"),
+    ("passes/types/visit/constructions.py", "unify_arguments"),
     # The method-level type parameter of a built-in method (`or_err`, design 8.3).
     ("generics/builtin_signatures.py", "solve_builtin_signature"),
 )

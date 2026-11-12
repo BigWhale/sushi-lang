@@ -39,6 +39,50 @@ class ParamMode(Enum):
             raise ValueError(f"the {self.value} mode is not a borrow by pointer")
         return BorrowMode(self.value)
 
+    @property
+    def convention(self) -> "Convention":
+        """The convention of SHIR and SLIR that the declared mode gives (ir.md 8.3)."""
+        return _CONVENTIONS[self]
+
+
+class Convention(Enum):
+    """How ONE value crosses a call boundary in SHIR and SLIR (docs/design/ir.md 8.3)."""
+
+    OWNED = "owned"                  # `nom`   -- the callee frees
+    GUARANTEED = "guaranteed"        # unmarked -- the caller owns, the callee borrows by value
+    IN_GUARANTEED = "in_guaranteed"  # `peek`  -- by address, read only, many at once
+    INOUT = "inout"                  # `poke`  -- by address, read and write, exclusive
+
+    @property
+    def consumes(self) -> bool:
+        """True when the callee takes the value over: it drops it or moves it."""
+        return self is Convention.OWNED
+
+    @property
+    def read_only(self) -> bool:
+        """True when the callee borrows the value and never writes it: the default and `peek`."""
+        return self in (Convention.GUARANTEED, Convention.IN_GUARANTEED)
+
+    @property
+    def by_address(self) -> bool:
+        """True when the value crosses as the address of the caller's place: `peek` and `poke`."""
+        return self in (Convention.IN_GUARANTEED, Convention.INOUT)
+
+
+def bloom_moves(convention: Optional[Convention]) -> bool:
+    """Whether a bloom `arr...` moves its array: its row takes it over (`Owned`), or its row
+    has no convention. A bloom with a `Guaranteed` row (the tail of `run`) borrows its source
+    (docs/design/ir.md 7.4)."""
+    return convention is None or convention.consumes
+
+
+_CONVENTIONS: Mapping[ParamMode, Convention] = MappingProxyType({
+    ParamMode.BORROW: Convention.GUARANTEED,
+    ParamMode.NOM: Convention.OWNED,
+    ParamMode.PEEK: Convention.IN_GUARANTEED,
+    ParamMode.POKE: Convention.INOUT,
+})
+
 
 class ReturnMode(Enum):
     """How a callable gives its answer (#1229, docs/design/borrow-model.md S10h)."""
@@ -157,18 +201,22 @@ class BuiltinModes:
     parameter declares a mode; a method with no row borrows each argument. A container
     SLOT (`push`, `insert`, `Own.alloc`) is not a declared parameter: it takes ownership
     by position, as a struct field does, so it has no mode to read. A method with a
-    signature row (`or_err`, `map_err`) reads its modes from that row.
+    signature row (`or_err`, `map_err`) reads its modes from that row. `nom_self` names
+    each method whose signature row declares `nom self`: the method takes its receiver.
     """
     rows: Mapping[str, Tuple[ParamMode, ...]] = field(
         default_factory=lambda: MappingProxyType({}))
     slots: frozenset[str] = frozenset()
+    nom_self: frozenset[str] = frozenset()
 
     @classmethod
     def from_signatures(cls, signatures: Mapping[str, object]) -> 'BuiltinModes':
         """The table of a family whose rows are its signature rows (`or_err`, `map_err`)."""
         return cls(rows=MappingProxyType(
             {name: declared_modes(getattr(sig, "params", ()))
-             for name, sig in signatures.items()}))
+             for name, sig in signatures.items()}),
+            nom_self=frozenset(name for name, sig in signatures.items()
+                               if getattr(sig, "self_mode", None) == "nom"))
 
     def of(self, method: str, count: int) -> Optional[Tuple[ParamMode, ...]]:
         """The modes of a call with `count` arguments, or None for a container slot."""
@@ -178,82 +226,3 @@ class BuiltinModes:
         if row is not None:
             return row
         return (ParamMode.BORROW,) * count
-
-
-def variadic_index(sig) -> Optional[int]:
-    """Where the trailing arguments of a call to `sig` collect into a `...T` array.
-
-    A declared function marks its last parameter; a registry stdlib function marks
-    the whole signature. None when the callee is not variadic.
-    """
-    if sig is None:
-        return None
-    params = getattr(sig, "params", None) or ()
-    if params and getattr(params[-1], "is_variadic", False):
-        return len(params) - 1
-    if getattr(sig, "is_variadic", False):
-        return max(len(params) - 1, 0)
-    return None
-
-
-class CalleeModes:
-    """THE resolver: "what are the modes of the callee named here?"."""
-
-    def __init__(self, *, func_sigs=None, struct_names=None, stdlib_sigs=None):
-        self._func_sigs = func_sigs or {}
-        self._struct_names = struct_names if struct_names is not None else frozenset()
-        self._stdlib_sigs = stdlib_sigs or {}
-
-    def with_struct_names(self, struct_names) -> 'CalleeModes':
-        """The same resolver over other struct names: the overlay of a template check
-        holds the instances over an opaque parameter that a check copy constructs."""
-        return CalleeModes(func_sigs=self._func_sigs, struct_names=struct_names,
-                           stdlib_sigs=self._stdlib_sigs)
-
-    def kind_of(self, name: str, local_type: Optional[Type] = None) -> CalleeKind:
-        """Which kind of callee `name` denotes at a call site."""
-        from sushi_lang.semantics.typesys import FunctionType
-        if isinstance(local_type, FunctionType):
-            return CalleeKind.INDIRECT
-        if name in self._struct_names:
-            return CalleeKind.CONSTRUCTOR
-        if name in self._func_sigs:
-            return CalleeKind.FUNCTION
-        if name in self._stdlib_sigs:
-            return CalleeKind.STDLIB
-        # A built-in (`open`) or a name this table does not carry. FUNCTION is the
-        # conservative answer: it is what the compiler applied to every call before the
-        # mode existed.
-        return CalleeKind.FUNCTION
-
-    def signature_of(self, name: str):
-        """The declared signature of `name`, from whichever table carries it."""
-        return self._func_sigs.get(name) or self._stdlib_sigs.get(name)
-
-    def variadic_from(self, name: str) -> Optional[int]:
-        """The index at which trailing arguments collect into a `...T` array, or None."""
-        found = variadic_index(self._func_sigs.get(name))
-        if found is not None:
-            return found
-        return variadic_index(self._stdlib_sigs.get(name))
-
-    def variadic_callee_owns(self, name: str) -> bool:
-        """Does the CALLEE free the collected `...T` array, or does the caller keep it?"""
-        return name not in self._stdlib_sigs
-
-    def for_name(self, name: str, local_type: Optional[Type] = None
-                 ) -> Tuple[CalleeKind, Tuple[ParamMode, ...]]:
-        """The callee's kind and the effective mode of each declared parameter."""
-        from sushi_lang.semantics.typesys import FunctionType
-        kind = self.kind_of(name, local_type)
-        if kind is CalleeKind.INDIRECT and isinstance(local_type, FunctionType):
-            return kind, effective_modes(local_type.modes, kind)
-        sig = self._func_sigs.get(name)
-        return kind, modes_for(getattr(sig, "params", None) if sig else None, kind)
-
-    def mode_at(self, modes: Sequence[ParamMode], index: int,
-                kind: CalleeKind) -> ParamMode:
-        """The mode of argument `index`, for a callee whose arity may not be known."""
-        if index < len(modes):
-            return modes[index]
-        return effective_modes((ParamMode.BORROW,), kind)[0]

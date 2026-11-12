@@ -1,6 +1,6 @@
 """The linear-probe loop, and the key lookup over it, once."""
 
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional, Sequence
 
 import llvmlite.ir as ir
 
@@ -9,7 +9,6 @@ from sushi_lang.semantics.typesys import Type
 from .types import ENTRY_EMPTY, ENTRY_OCCUPIED, emit_key_hash_i32
 from sushi_lang.backend.types.contracts import emit_value_eq
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -165,11 +164,12 @@ def emit_find_key(
                      matched["entry_ptr"], matched["entry_key_ptr"])
 
 
-def emit_lookup_key(codegen: Any, expr: Any, key_type: Type, method: str) -> ir.Value:
-    """The one key argument of a lookup, borrowed: a lookup reads the key and keeps nothing."""
-    if len(expr.args) != 1:
-        raise_internal_error("CE0023", method=method, expected=1, got=len(expr.args))
-    return emit_borrowed_arg(codegen, expr.args[0], key_type)
+def lookup_key(args: Sequence[ir.Value], method: str) -> ir.Value:
+    """The value of the one key operand of a lookup: a lookup reads the key and keeps
+    nothing."""
+    if len(args) != 1:
+        raise_internal_error("CE0023", method=method, expected=1, got=len(args))
+    return args[0]
 
 
 def emit_lookup_maybe(

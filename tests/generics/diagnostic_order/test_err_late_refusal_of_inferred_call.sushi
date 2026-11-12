@@ -1,0 +1,14 @@
+# An inferred generic call whose argument does not satisfy a constraint of the callee
+# gets one refusal, at the call. The early passes do not infer the call: the typecheck
+# pass asks for the instance late, and the late path refuses it (ruling R-BC).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "test_err_late_refusal_of_inferred_call.sushi:13:5: error [CE4006]"
+perk Named:
+    fn name() string
+
+fn one@(T: Named)(T x) ~:
+    println(x.name())
+
+fn main() i32:
+    one(true)
+    return 0

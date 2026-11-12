@@ -1,7 +1,7 @@
 """The gate on #478's Phase 1: the Python formula and the IR formula must not drift.
 
-`semantics/ranges.py` states the range formula over Python integers, and `backend/ranges.py`
-states it as IR. A range always goes up: the count is never below zero, and `.rev()` only
+`semantics/ranges.py` states the range formula over Python integers, and SLIR lowering states
+it over operands (`range_operands`). A range always goes up: the count is never below zero, and `.rev()` only
 changes where the walk starts and which way it steps. Two statements of one rule is a decision, not an accident -- a readable
 range must never pay for the run-time mechanism, because llvmlite does not fold. This file
 pins the Python half against a table, and `tests/array/range_element/` pins the IR half

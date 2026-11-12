@@ -1,6 +1,6 @@
 """LLVM utility functions for casting, helpers, and general-purpose operations."""
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
@@ -200,50 +200,3 @@ class LLVMUtils:
             raise_internal_error("CE0009")
         zero32 = ir.Constant(self.codegen.i32, 0)
         return self.codegen.builder.gep(gv, [zero32, zero32], inbounds=True)
-
-    def ensure_open_block(self) -> None:
-        """Ensure the current basic block is not terminated."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        blk = self.codegen.builder.block
-        if blk is None or blk.terminator is not None:
-            raise_internal_error("CE0059")
-
-    def after_terminator_unreachable(self) -> None:
-        """Create unreachable block after a terminator instruction."""
-        fn = self.codegen.builder.function
-        nxt = fn.append_basic_block(name="unreachable")
-        self.codegen.builder.position_at_end(nxt)
-
-    def block_statements(self, blk) -> List:
-        """Extract statement list from a block node."""
-        stmts = getattr(blk, "statements", None)
-        if isinstance(stmts, list):
-            return stmts
-        raise_internal_error("CE0061")
-
-    def get_zero_value(self, llvm_type: ir.Type) -> ir.Value:
-        """Create a zero/default value for a given LLVM type."""
-        if isinstance(llvm_type, ir.IntType):
-            return ir.Constant(llvm_type, 0)
-
-        if isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
-            return ir.Constant(llvm_type, 0.0)
-
-        if isinstance(llvm_type, ir.PointerType):
-            return ir.Constant(llvm_type, None)
-
-        if isinstance(llvm_type, ir.ArrayType):
-            element_zero = self.get_zero_value(llvm_type.element)
-            return ir.Constant(llvm_type, [element_zero] * llvm_type.count)
-
-        # Struct types -> {0, 0, ...}
-        # BaseStructType covers both the anonymous fat pointers and a user struct's
-        # *identified* type (`%Tree`, #257), which is a sibling of LiteralStructType, not a
-        # subclass. Narrower, this fell through to the ir.Undefined below and every user
-        # struct was zero-initialised with undef -- garbage, and silent.
-        if isinstance(llvm_type, ir.types.BaseStructType):
-            field_zeros = [self.get_zero_value(field_type) for field_type in llvm_type.elements]
-            return ir.Constant(llvm_type, field_zeros)
-
-        return ir.Undefined(llvm_type)

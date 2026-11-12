@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+#
+# A statement of `main` has an error of typecheck. The borrow pass still walks the body:
+# each statement and each expression with an answer has its arm. So the use of `s` after
+# the move gives CE2405 beside the CE2002 of the other statement.
+
+fn take(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let string s = "Mostly Harmless {42}"
+    let i32 n = "forty-two"
+    take(nom s)
+    println(s)
+    return n

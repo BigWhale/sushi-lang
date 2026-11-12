@@ -1,0 +1,13 @@
+# A declared instance gives the payload its type: a payload that does not fit is CE2049.
+# EXPECT_ERROR_CODES_EXACT: CE2049
+
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn main() i32:
+    let Slot@(i32) s = Slot.Full("x")
+    match s:
+        Slot.Full(v) -> println(v)
+        Slot.Empty -> println(0)
+    return 0

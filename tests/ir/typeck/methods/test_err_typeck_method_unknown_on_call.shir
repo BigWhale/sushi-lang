@@ -1,0 +1,14 @@
+unit test_err_typeck_method_unknown_on_call
+
+ShirBody twice
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(*, LocalRef(_0), Lit(2)))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Dotted(Call(Free(@twice), [(Lit(21), Guaranteed)]), "nowhere"), []), is_init: true)
+    Return(LocalRef(_0))

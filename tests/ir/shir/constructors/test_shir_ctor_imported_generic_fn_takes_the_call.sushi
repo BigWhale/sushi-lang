@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_DUMP_SHIR: test_shir_ctor_imported_generic_fn_takes_the_call.shir
+#
+# A flat import brings a generic function `Crate`, and the unit declares the struct
+# `Crate`. A generic function of the name takes the bare call, also from another unit:
+# lowering keeps a `Call`. Only a concrete function of another unit loses the call to the
+# struct (#1076).
+
+use "helpers/gen_crate"
+
+struct Crate:
+    i32 weight
+
+fn main() i32:
+    let i32 b = Crate(nom 4)
+    println(b)
+    return 0

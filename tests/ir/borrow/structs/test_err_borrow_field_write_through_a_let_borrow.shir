@@ -1,0 +1,11 @@
+unit test_err_borrow_field_write_through_a_let_borrow
+
+ShirBody main
+  params : []
+  locals : [_0 "q": Pair, _1 "b": Box]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@Pair, [adopt StructInit(@Box, [adopt Lit("Mostly Harmless"), adopt Lit(1)], written_order: [0, 1]), adopt Lit(2)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), reject Field(LocalRef(_0), "a"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_1), "n"), Guaranteed)]))
+    Assign(Field(LocalRef(_1), "n"), adopt Lit(5), is_init: false)
+    Return(adopt Field(LocalRef(_0), "k"))

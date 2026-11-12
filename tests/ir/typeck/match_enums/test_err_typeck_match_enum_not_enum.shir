@@ -1,0 +1,13 @@
+unit test_err_typeck_match_enum_not_enum
+
+ShirBody open
+  params : [(_0 "b": Box, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Box, "Held", [Variant(@Other, "Alpha", [])]), [Return(Lit(1))]), Arm(Variant(@Box, "Empty", []), [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@open), [(EnumInit(@Box, "Held", [adopt Lit(3)]), Guaranteed)]))

@@ -1,0 +1,137 @@
+unit test_slir_hashmap_methods
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: HashMap@(string, string)       // m
+    let _2: string
+    let _3: string
+    let _4: ~
+    let _5: string
+    let _6: string
+    let _7: ~
+    let _8: Maybe@(string) view            // got
+    let _9: string
+    let _10: i32
+    let _11: string                        // text
+    let _12: bool                          // has
+    let _13: string
+    let _14: string
+    let _15: ~
+    let _16: Maybe@(string)
+    let _17: string
+    let _18: string
+    let _19: i32
+    let _20: string                        // old
+    let _21: i32
+    let _22: i32
+    let _23: bool
+    let _24: i32
+    let _25: string
+    let _26: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin HashMap.new()
+    StorageLive(_2)
+    _2 = clone(const "a")
+    StorageLive(_3)
+    _3 = clone(const "alpha")
+    StorageLive(_4)
+    _4 = call builtin hashmap.insert(copy _1 @inout, move _2 @owned, move _3 @owned)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageLive(_5)
+    _5 = clone(const "b")
+    StorageLive(_6)
+    _6 = clone(const "beta")
+    StorageLive(_7)
+    _7 = call builtin hashmap.insert(copy _1 @inout, move _5 @owned, move _6 @owned)
+    StorageDead(_7)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_8)
+    BeginBorrow(b0, _1, peek, for _8)
+    _8 = call builtin hashmap.get(copy _1 @guaranteed, const "a" @guaranteed)
+    StorageLive(_9)
+    _10 = discriminant(_8)
+    switchInt(copy _10) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    _9 = clone(copy ((_8 as Some).0))
+    goto -> bb3
+
+  bb2:
+    _9 = const "none"
+    goto -> bb3
+
+  bb3:
+    StorageLive(_11)
+    _11 = move _9
+    EndBorrow(b0)
+    StorageDead(_9)
+    StorageLive(_12)
+    _12 = call builtin hashmap.contains_key(copy _1 @guaranteed, const "b" @guaranteed)
+    StorageLive(_13)
+    _13 = clone(const "b")
+    StorageLive(_14)
+    _14 = clone(const "gamma")
+    StorageLive(_15)
+    _15 = call builtin hashmap.insert(copy _1 @inout, move _13 @owned, move _14 @owned)
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageLive(_16)
+    _16 = call builtin hashmap.remove(copy _1 @inout, const "b" @guaranteed)
+    StorageLive(_17)
+    _17 = clone(const "none")
+    StorageLive(_18)
+    _19 = discriminant(_16)
+    switchInt(copy _19) -> [0: bb4, otherwise: bb5]
+
+  bb4:
+    _18 = move ((_16 as Some).0)
+    Drop(_17)
+    goto -> bb6
+
+  bb5:
+    _18 = move _17
+    Drop(_16)
+    goto -> bb6
+
+  bb6:
+    StorageLive(_20)
+    _20 = move _18
+    StorageDead(_18)
+    StorageDead(_17)
+    StorageDead(_16)
+    StorageLive(_21)
+    _21 = call builtin hashmap.len(copy _1 @guaranteed)
+    StorageLive(_22)
+    _22 = copy _21 + const 1_i32
+    StorageLive(_23)
+    _23 = copy _12
+    StorageLive(_24)
+    _24 = call builtin hashmap.len(copy _1 @guaranteed)
+    StorageLive(_25)
+    _25 = call builtin interp@(i32, string, string, string, bool, string, string, string, i32)(copy _22 @guaranteed, const " " @guaranteed, copy _11 @guaranteed, const " " @guaranteed, copy _23 @guaranteed, const " " @guaranteed, copy _20 @guaranteed, const " " @guaranteed, copy _24 @guaranteed)
+    StorageLive(_26)
+    _26 = call builtin println@(string)(copy _25 @guaranteed)
+    StorageDead(_26)
+    Drop(_25)
+    StorageDead(_25)
+    StorageDead(_24)
+    StorageDead(_23)
+    StorageDead(_22)
+    StorageDead(_21)
+    _0 = const 0_i32
+    Drop(_20)
+    StorageDead(_20)
+    StorageDead(_12)
+    Drop(_11)
+    StorageDead(_11)
+    StorageDead(_8)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

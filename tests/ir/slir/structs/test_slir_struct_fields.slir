@@ -1,0 +1,154 @@
+unit test_slir_struct_fields
+
+fn make() -> Point {
+    let _0: Point
+
+  bb0:
+    _0 = Point(const 5_i32, const 6_i32)
+    return
+}
+
+fn sum(_1: Point @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy (_1.0) + copy (_1.1)
+    return
+}
+
+fn moved(_1: Point @inout) -> ~ {
+    let _0: ~
+
+  bb0:
+    (_1.0) = copy (_1.0) + const 10_i32
+    (_1.1) = const 13_i32
+    _0 = const ~
+    return
+}
+
+fn show(_1: Seg @in_guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy ((_1.1).0)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Point                          // p
+    let _2: ~
+    let _3: Point
+    let _4: Seg                            // s
+    let _5: ~
+    let _6: ~
+    let _7: Point
+    let _8: ~
+    let _9: Point
+    let _10: i32                           // y
+    let _11: ~
+    let _12: Point
+    let _13: ~
+    let _14: ~
+    let _15: Point
+    let _16: i32
+    let _17: ~
+    let _18: Flags                         // f
+    let _19: bool
+    let _20: bool
+    let _21: ~
+    let _22: Point                         // q
+    let _23: ~
+    let _24: string
+    let _25: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = Point(const 1_i32, const 2_i32)
+    StorageLive(_2)
+    _2 = call builtin println@(i32)(copy (_1.0) @guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = Point(const 3_i32, const 4_i32)
+    StorageLive(_4)
+    _4 = Seg(copy _1, move _3)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = call builtin println@(i32)(copy ((_4.1).1) @guaranteed)
+    StorageDead(_5)
+    StorageLive(_6)
+    _6 = call builtin println@(i32)(copy ((_4.1).0) @guaranteed)
+    StorageDead(_6)
+    StorageLive(_7)
+    _7 = call @make()
+    StorageLive(_8)
+    _8 = call builtin println@(i32)(copy (_7.0) @guaranteed)
+    StorageDead(_8)
+    StorageDead(_7)
+    StorageLive(_9)
+    _9 = call @make()
+    StorageLive(_10)
+    _10 = copy (_9.1)
+    StorageDead(_9)
+    StorageLive(_11)
+    _11 = call builtin println@(i32)(copy _10 @guaranteed)
+    StorageDead(_11)
+    StorageLive(_12)
+    _12 = Point(const 9_i32, const 2_i32)
+    StorageLive(_13)
+    _13 = call builtin println@(i32)(copy (_12.1) @guaranteed)
+    StorageDead(_13)
+    StorageDead(_12)
+    ((_4.0).0) = const 7_i32
+    StorageLive(_14)
+    _14 = call builtin println@(i32)(copy ((_4.0).0) @guaranteed)
+    StorageDead(_14)
+    StorageLive(_15)
+    _15 = Point(const 3_i32, const 5_i32)
+    ((_4.1).0) = call @sum(copy _15 @guaranteed)
+    StorageDead(_15)
+    StorageLive(_16)
+    _16 = call @show(copy _4 @in_guaranteed)
+    StorageLive(_17)
+    _17 = call builtin println@(i32)(copy _16 @guaranteed)
+    StorageDead(_17)
+    StorageDead(_16)
+    StorageLive(_18)
+    _18 = Flags(const true, const 0_i32)
+    StorageLive(_19)
+    _19 = copy (_18.1) > const 0_i32
+    StorageLive(_20)
+    _20 = copy _19
+    switchInt(copy _20) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    _20 = copy (_18.0)
+    goto -> bb2
+
+  bb2:
+    (_18.0) = copy _20
+    StorageDead(_20)
+    StorageDead(_19)
+    StorageLive(_21)
+    _21 = call builtin println@(bool)(copy (_18.0) @guaranteed)
+    StorageDead(_21)
+    StorageLive(_22)
+    _22 = Point(const 2_i32, const 3_i32)
+    StorageLive(_23)
+    _23 = call @moved(copy _22 @inout)
+    StorageDead(_23)
+    StorageLive(_24)
+    _24 = call builtin interp@(i32, string, i32)(copy (_22.0) @guaranteed, const " " @guaranteed, copy (_22.1) @guaranteed)
+    StorageLive(_25)
+    _25 = call builtin println@(string)(copy _24 @guaranteed)
+    StorageDead(_25)
+    Drop(_24)
+    StorageDead(_24)
+    _0 = const 0_i32
+    StorageDead(_22)
+    StorageDead(_18)
+    StorageDead(_10)
+    StorageDead(_4)
+    StorageDead(_1)
+    return
+}

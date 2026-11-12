@@ -98,13 +98,15 @@ The same shape holds for `T[]`, `List@(T)`, `HashMap@(K, V)`, `Own@(T)` and a cl
 value. Only `T[N]` and a large plain struct copy real content, which is where borrow by
 pointer earns its keep.
 
-The ABI of a borrow and of a `nom` is therefore identical. Three things differ, and all
-three are bookkeeping:
+The ABI of a borrow and of a `nom` is therefore identical, bit for bit: a borrowed
+`string` keeps the `owned` bit of the caller's value (`docs/design/ir.md` 8.3). Two things
+differ, and both are bookkeeping:
 
-1. A borrow clears the `owned` bit in the callee's copy, so the callee's destructor is a
-   runtime no-op. A `nom` keeps the bit, because the callee is the one owner.
-2. A borrow is not registered for cleanup in `begin_function`. A `nom` is.
-3. A borrow does not mark the caller's binding moved. A `nom` does.
+1. The callee never drops a borrow. SLIR gives no `Drop` to a `Guaranteed`, an
+   `InGuaranteed` or an `Inout` parameter, and an `Owned` (`nom`) parameter drops in the
+   callee, because the callee is the one owner (`ir.md` 8.10, rule 5).
+2. A borrow does not mark the caller's binding moved. A `nom` does: the borrow pass writes
+   the `move` row, and SLIR lowering writes the `Move` operand (`ir.md` 8.10, rule 3).
 
 **This is why the bug class is invisible.** Both descriptors look valid whichever side
 frees. The damage appears later, and somewhere else.
@@ -168,7 +170,7 @@ round-trips a type with non-default metadata, and no construction under `semanti
 leave `param_modes` unstated.
 
 One resolver answers "what are the modes of this callee?" for every kind in the section 5
-table. It is modelled on the closed `ConsumingUse` enum: `CalleeKind` is a closed set, and
+table. It is modelled on the closed set of consuming positions: `CalleeKind` is a closed set, and
 a member with no row fails a unit test statically. The borrow pass and the backend call the same
 resolver, which stops the two halves drifting apart.
 
@@ -295,7 +297,7 @@ has no declaration side to agree with.
 - **Whether the mode is legal is a property of the SCRUTINEE.** A `nom` binding needs the
   match to own what it matches. A temporary is owned by construction; a place expression is
   not, and `match nom r:` is how the local is handed over -- one more consuming position,
-  `ConsumingUse.MATCH_SCRUTINEE`, so `r` afterwards is [CE2405](../error-catalog.md#ce2405) exactly as after `f(nom r)`.
+  `MATCH_SCRUTINEE`, so `r` afterwards is [CE2405](../error-catalog.md#ce2405) exactly as after `f(nom r)`.
   A `nom` binding under a plain `match r:` is [CE2432](../error-catalog.md#ce2432).
 
 An arm takes the variant WHOLE ([CE2433](../error-catalog.md#ce2433)): what suppresses the match's free is the whole
@@ -366,7 +368,7 @@ agree with, so [CE2427](../error-catalog.md#ce2427)'s both-ends rule has no fiel
 ## 10d. The fourth boundary: `??` over a place
 
 The unwrap moves the payload out of its wrapper, so `??` is a
-consuming position too -- `ConsumingUse.TRY`. Over a call the Result is a temporary,
+consuming position too -- `TRY`. Over a call the Result is a temporary,
 nothing else frees it, and the payload lands in the position that takes it. Over a NAMED
 wrapper, `let string got = r??` gives `got` the buffer, so `r` must not free it too.
 
@@ -382,10 +384,12 @@ was unwrapped from.
 **The class is the wrapper's, not the payload's.** A `Result@(i32, Fail)` whose `Fail`
 carries a string owns heap in its Err arm, and that arm travels: on the propagation path
 the error is returned to the caller while the scope cleanup runs, so a local left
-registered would free what the caller is about to read. A wrapper that owns nothing in
-either arm is copied out of and stays usable, like any plain value. The move is marked
-BEFORE the propagation path's cleanup is emitted; the seam is `backend/ownership.py`'s
-`unwrap`, and the borrow pass's twin is `unwrap_place`.
+live would free what the caller is about to read. A wrapper that owns nothing in
+either arm is copied out of and stays usable, like any plain value. The borrow pass
+decides the move in `unwrap_place` and writes the `move` row of `r`. SLIR lowering moves `r`
+into the temporary of the `??` before the switch on its tag, so the drops of the propagation
+path do not see `r` live, and the error leaves only in the returned `Err` (`ir.md` 8.9,
+8.10, rule 3).
 
 **A borrowed wrapper is read through, not refused.** `let string s = r??` over a
 parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and consuming the
@@ -470,10 +474,12 @@ another value keeps (#1259). It is two things at one time, and the two are kept 
   in-place `foreach`), a rebind is refused as for every let-borrow, and the scope exit
   DESTROYS the iterator.
 
-The borrow pass stamps the producer `LENT` (`MethodCall.iterator_state`) and marks the
-`let` `BorrowState.is_lent_iterator`. In the backend, `ownership.bind` keeps the decision
-about the source (REJECT, the binding owns no source) and answers that the binding owns
-its value when the initializer is stamped `LENT`. The clone of a lent iterator is lent too:
+The borrow pass writes LENT for the producer (`OwnershipResults`) and marks the
+`let` `BorrowState.is_lent_iterator`. These are two answers, and the borrow pass keeps them
+apart: the binding owns no source (REJECT), and the binding owns its value. In SLIR the local
+of the `let` is an owning local, so drop placement drops it at each exit, and the `drop_fn`
+of a lent iterator frees only what its state owns (`ir.md` 8.10, rule 7). The iterators
+group (C3) lowers it. The clone of a lent iterator is lent too:
 it borrows the same owners, and a borrow of a lent `let` (a `foreach` item, for example)
 freezes those owners and not the `let`.
 
@@ -550,8 +556,8 @@ borrowed wrapper (§10d). `longer(a, b)` freezes `a` and `b` even when the funct
 only from `a`: to avoid that, the caller gives `b` with `nom`, or the function takes a plain
 value. A plain answer (an `i32` from a template at `T = i32`) is a copy, and it still freezes
 the owners, because the source set is the same at every type argument. The typecheck pass
-stamps where the sources stand on the call (`callee_borrows`), and the borrow pass reads the
-owners there.
+writes where the sources stand in the call (the source row of `TypeckResults`,
+`docs/design/ir.md` 7.3), and the borrow pass reads the owners there.
 
 **A temporary source.** When an argument in the source set is a temporary (a call result, a
 `from([...])`), the answer is legal inside that one statement: an argument, the iterable of a
@@ -563,8 +569,9 @@ program keeps.
 (§10g). The answer borrows the owners of the sources and owns its state, so the caller
 destroys it and may adapt it. The state of a lent iterator is on the stack of its function,
 so a lent iterator that leaves through a `peek` return moves its state to the HEAP: the borrow
-pass stamps each link of the chain (`iterator_leaves`), through each `let` that it was bound
-to, and `state_on_heap` is the one answer that the backend reads. `peek Iterator@(T) | E` is
+pass puts each link of the chain on the heap (`lend_to_the_caller`), through each `let` that
+it was bound to, and the `heap` field of `AggIterator` is the one answer that the backend
+reads. `peek Iterator@(T) | E` is
 legal: the `Result` owns the iterator in its `Ok`, and `??` gives the iterator to its holder.
 
 **Libraries.** A binary or hybrid `.slib` records `return_mode: "peek"` on the record of the

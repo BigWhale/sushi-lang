@@ -112,7 +112,7 @@ is still cheap to take.
 
 ## 3. The manifest — an index, not the authority
 
-`LibraryManifestGenerator.generate()` in `sushi_lang/backend/library_manifest.py`
+`LibraryManifestGenerator.generate()` in `sushi_lang/compiler/library_manifest.py`
 builds a plain dict. `docs/library-format.md` carries the full schema.
 
 **The rule: everything in the library must be knowable from the manifest alone.**
@@ -519,7 +519,7 @@ ships or a predefined perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`), ships a
 `perk_impls` record: `type`, `perk`,
 `source` (the whole `extend` block, for signatures), `methods: [{name, symbol}]`. The
 method symbol name is computed by `impl_method_symbol()` — mirrors
-`backend/functions/helpers.py:get_extension_method_name`'s mangling (`<` → `__`, `>`
+`semantics/generics/name_mangling.py:extension_decl_symbol`'s mangling (`<` → `__`, `>`
 dropped, `", "` → `_`) — deliberately duplicated into the manifest rather than
 re-derived at the consumer, so producer and consumer never drift.
 
@@ -531,8 +531,9 @@ nothing inside the library module itself calls it (an unreferenced `linkonce_odr
 definition can be dropped as dead code; `weak_odr` cannot). At the consumer,
 `LibraryRegistration._register_perk_impls` rebuilds an `ExtendWithDef` via `deserialize_perk_impl`
 and registers it in the perk-impl table for constraint checking ([CE4006](../error-catalog.md#ce4006)) and dispatch;
-codegen's `_declare_library_perk_impl_methods` declares (never defines) the method —
-the definition resolves from the library object/bitcode at link time.
+the declaration table holds each method (`DeclTable.shipped_perks`,
+`semantics/decl_table.py`), and the declaration round of the codegen declares (never
+defines) it — the definition resolves from the library object/bitcode at link time.
 
 Precedence, all silent (mirrors every other library-registration helper):
 
@@ -875,16 +876,16 @@ Rules marked **binary** apply only when `kind != "source"`.
 | File | Responsibility |
 |---|---|
 | `sushi_lang/backend/library_format.py` | The `.slib` byte container: magic/version/flags/kind/length framing, msgpack (de)serialization. No LLVM, no linking, no path resolution. |
-| `sushi_lang/backend/library_manifest.py` | `LibraryManifestGenerator` — the **producer**. Builds every manifest section; `_extract_templates` / `_compute_export_closure` are the binary path's export-closure walk. |
+| `sushi_lang/compiler/library_manifest.py` | `LibraryManifestGenerator` — the **producer**. Builds every manifest section; `_extract_templates` / `_compute_export_closure` are the binary path's export-closure walk. |
 | `sushi_lang/backend/library_errors.py` | `LibraryError(SushiError)` — the one exception type every `.slib` read/resolve/link failure raises, rendered through the normal reporter. |
 | `sushi_lang/backend/library_paths.py` | `LibraryResolver` — filesystem discovery only (`SUSHI_LIB_PATH`, project deps, Nori bento, cwd) and manifest caching (`loaded_libraries`). Deliberately *not* a linker. |
 | `semver` (under `sushi_lang/internals/`) | `Version` + constraint matching. Shared by the library-load path and the Nori resolver (§6.3). |
 | `sushi_lang/compiler/pipeline.py` | Library resolution and the gates: `_check_library_platform` (binary only), `_check_library_compiler_version`, and the shared source-unit injector that both the bundled source stdlib and source libraries use. Also chooses monolithic vs incremental and drives per-unit caching. |
 | `sushi_lang/semantics/library_registry.py` | `LibraryRegistry` — **binary path only**. Pre-parses a raw manifest dict into typed `FuncSig`/`StructType`/`EnumType` objects once, shared by the semantic analyzer and codegen. |
-| `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_/deserialize_perk_impl`, `serialize_extension`, `serialize_generic_/deserialize_extension` (the consumer re-parses every other record through `LibraryRegistration._collect_snippet`), `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `backend/functions/helpers.py`). |
+| `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_/deserialize_perk_impl`, `serialize_extension`, `serialize_generic_/deserialize_extension` (the consumer re-parses every other record through `LibraryRegistration._collect_snippet`), `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `extension_decl_symbol`). |
 | `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_reject_foreign_drops`, `_register_extensions`, `_register_generic_extensions`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where [CE5007](../error-catalog.md#ce5007) fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
 | `sushi_lang/backend/driver.py` | `LLVMDriver.compile_to_bitcode` (producer: sets `weak_odr` on perk impls, promotes export-closure private fns to `external`), `compile_multi_unit` (drives `TwoPhaseLinker` when libraries are present), `compile_library_to_object` (incremental path: one `.o` per library). |
-| `sushi_lang/backend/codegen_llvm.py` | `_declare_library_functions`, `_declare_library_perk_impl_methods`, `library_extensions` (consumer: declares, never defines, library symbols). |
+| `sushi_lang/backend/codegen_llvm.py` | `_declare_library_functions`, and the declaration round over `DeclTable.shipped_perks` and `DeclTable.shipped_methods` (consumer: declares, never defines, library symbols). |
 | `sushi_lang/backend/module_linker.py` | `TwoPhaseLinker` — the monolithic-path in-memory IR merge (reachability + priority-ordered symbol resolution). Not library-specific — the main module and stdlib bitcode go through it too. |
 | `sushi_lang/backend/symbol_resolver.py` | `SymbolResolver._choose_definition` — the `MAIN > LIBRARY > STDLIB > RUNTIME` priority table used only by `TwoPhaseLinker`. |
 | `sushi_lang/compiler/fingerprint.py` | `compute_lib_fingerprint` — content hash of a `.slib`, used to cache its compiled object and to invalidate consumers. |
@@ -920,7 +921,7 @@ the failure conditional compilation is supposed to describe. Leaving [CE5006](..
 the honest answer ("this cannot be portable yet") until there is a way to say so.
 
 **A rejected library build writes nothing.** The three rejection sites in
-`sushi_lang/backend/library_manifest.py` emit their diagnostic into the reporter and
+`sushi_lang/compiler/library_manifest.py` emit their diagnostic into the reporter and
 return, and control flow belongs to `pipeline.py`, which gates on `reporter.has_errors`
 the way it does before codegen. There are two gates, and the placement is the contract:
 the first sits after the export closure and BEFORE the bitcode compilation, so a [CE5006](../error-catalog.md#ce5006)

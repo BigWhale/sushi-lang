@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_STDERR_CONTAINS: "'sleep' expects 1, got 2"
+# EXPECT_DUMP_SHIR: test_err_typeck_stdlib_alias_miscount.shir
+#
+# A function of a registry stdlib module behind an alias is the same `Stdlib` callee as
+# the bare call. A wrong count is CE2009 at the name, and the call still yields the type
+# of its row, a `Result@(i32, StdError)`, so `realise` reads its payload.
+use <time> as t
+
+fn main() i32:
+    let i32 slept = t.sleep(1 as i64, 2 as i64).realise(1)
+    let i64 now = t.now()
+    println("{slept} {now > 0}")
+    return 0

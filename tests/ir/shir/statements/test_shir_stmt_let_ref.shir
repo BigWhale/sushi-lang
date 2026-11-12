@@ -1,0 +1,14 @@
+unit test_shir_stmt_let_ref
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32, _2 "slot": i32, _3 "view": i32]
+  regions : [_2: {_0} until #11, _3: {_1} until #20]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(5), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(7), is_init: true)
+    Assign(LocalRef(_2), Borrow(LocalRef(_0), Poke), is_init: true)
+    Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)
+    Assign(LocalRef(_3), Borrow(LocalRef(_1), Peek), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, LocalRef(_0), LocalRef(_3)), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,22 @@
+unit test_err_typeck_negated_literal
+
+ShirBody main
+  params : []
+  locals : [_0 "low": i8, _1 "wide": i64, _2 "cold": f32, _3 "small": i32, _4 "edge": bool, _5 "less": i32, _6 "higher": i8, _7 "lower": i64, _8 "colder": f32, _9 "bad": u8]
+  block  :
+    Assign(LocalRef(_0), Unary(neg, Lit(128)), is_init: true)
+    Assign(LocalRef(_1), Unary(neg, Lit(4294967303)), is_init: true)
+    Assign(LocalRef(_2), Unary(neg, Lit(1.5)), is_init: true)
+    Assign(LocalRef(_3), Lit(5), is_init: true)
+    Assign(LocalRef(_4), Binary(<, Unary(neg, Lit(2147483648)), Lit(0)), is_init: true)
+    Assign(LocalRef(_5), Binary(+, LocalRef(_3), Unary(neg, Lit(1))), is_init: true)
+    Assign(LocalRef(_6), Binary(+, LocalRef(_0), Lit(1)), is_init: true)
+    Assign(LocalRef(_7), Binary(-, LocalRef(_1), Lit(1)), is_init: true)
+    Assign(LocalRef(_8), Binary(*, LocalRef(_2), Lit(2.0)), is_init: true)
+    Assign(LocalRef(_9), Unary(neg, Lit(1)), is_init: true)
+    Assign(LocalRef(_6), Binary(+, LocalRef(_6), Lit(1)), is_init: false)
+    Assign(LocalRef(_7), Binary(+, LocalRef(_7), Lit(1)), is_init: false)
+    Assign(LocalRef(_8), Binary(+, LocalRef(_8), Lit(1.0)), is_init: false)
+    Assign(LocalRef(_9), Lit(0), is_init: false)
+    Assign(LocalRef(_4), Unary(not, LocalRef(_4)), is_init: false)
+    Return(LocalRef(_5))

@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE5016
+# EXPECT_DUMP_SHIR: test_err_shir_name_extern_variable_write.shir
+#
+# the SHIR dump of a write to a C global behind the namespace of its `unsafe external`
+# block. A C global is read-only from Sushi, and the typecheck pass refuses the write
+# (CE5016). Lowering records what the source writes: the target of the `Assign` is the
+# `GlobalRef` of `libc.optind`, not a hole, so strict mode does not stop on it, and CE5016
+# stays the diagnostic of the program.
+
+unsafe external "C" as libc because "the SHIR dump of a write to a C global":
+    var i32 optind = "optind"
+
+fn main() i32:
+    libc.optind := 1
+    return 0

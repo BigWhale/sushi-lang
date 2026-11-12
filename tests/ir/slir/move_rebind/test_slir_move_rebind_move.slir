@@ -1,0 +1,35 @@
+unit test_slir_move_rebind_move
+
+fn eat(_1: string @owned) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    Drop(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string                         // word
+    let _2: ~
+    let _3: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin interp@(i32)(const 1_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = call @eat(move _1 @owned)
+    StorageDead(_2)
+    _1 = call builtin interp@(i32)(const 2_i32 @guaranteed)
+    StorageLive(_3)
+    _3 = call @eat(move _1 @owned)
+    StorageDead(_3)
+    _0 = const 0_i32
+    StorageDead(_1)
+    return
+}

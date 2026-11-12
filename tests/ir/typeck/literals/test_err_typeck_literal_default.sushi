@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2070
+# EXPECT_STDERR_CONTAINS: "decimal literal 4294967296 overflows i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_literal_default.shir
+#
+# A literal in a position with no type takes its default: an integer is an `i32`, a byte
+# literal a `u8`, a float an `f64`. A statement of one literal is such a position. The
+# same integer in a position with a written type takes that type: 4294967296 fits the
+# `i64` of `wide`. The last statement holds it with no type, and an `i32` cannot hold
+# it, which is CE2070.
+
+fn main() i32:
+    42
+    0xFFFF_FFFF
+    a'x'
+    4.2
+    true
+    "Mostly Harmless"
+    ~
+    let i64 wide = 4294967296
+    wide
+    4294967296
+    return 0

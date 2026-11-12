@@ -1,4 +1,12 @@
-"""The peek / poke borrow counters and the `peek x` / `poke x` expression."""
+"""The peek / poke borrow counters, and the borrow of a place for one statement.
+
+A `peek x` or a `poke x` argument (an `InGuaranteed` or an `Inout` argument,
+docs/design/ir.md 8.3) and a `Borrow` node borrow their place for the statement
+(`check_borrow`). An unmarked argument of an owning local is the shared borrow it now is
+(`register_implicit_borrow`). A borrow of a place in a `var` is counted on the state of
+the `var` (`storage_state`). The counters clear at the end of each statement
+(`clear_borrows`).
+"""
 
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
@@ -6,87 +14,117 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Borrow, Expr, IndexAccess, Name
+from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import TypeClass
-from sushi_lang.semantics.param_modes import borrow_mode
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.passes.collect import ConstSig
 from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
-from .diagnostics import emit_use_after_move, expr_to_string
-from .reads import borrow_owner, captured_variable, read_type
+from . import arms
+from .diagnostics import emit_use_after_move, temporary_spelled
+from .reads import borrow_owner, read_type, storage_state
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
 if TYPE_CHECKING:
     from . import BorrowChecker
 
+#: The mode of the borrow that a value passed by address takes (docs/design/ir.md 8.3).
+BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
 
-def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
-    """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
-    is_poke = borrow_mode(borrow.mutability) is BorrowMode.POKE
-    if isinstance(borrow.expr, IndexAccess) and borrow.expr.is_slice:
-        _check_slice_borrow(checker, borrow, is_poke)
+def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
+                 span: Optional[Span]) -> None:
+    """Borrow `place` for the statement: `peek x`, `poke x`, `peek x.f`, `poke x.f.g`.
+
+    A borrow of a field is counted on the ROOT of the place: the pass tracks whole locals,
+    not the places in them. A constant is read-only storage that the program keeps, so it
+    has an address and no borrow state: a `peek` of it or of its field reads it, and a
+    `poke` is CE2400 at the name of the constant, bare or behind an alias. A stdlib
+    constant has no record and no storage, so both modes are CE2400
+    (`reject_borrow_of_constant`). A `var` is storage with an address: a borrow of it or
+    of its field is counted on its state (`storage_state`), and a `poke` of it changes it
+    for each `let`-borrow of it. A call result, a literal and a
+    construction are temporaries and have no address, and nor does a field of one: CE2404.
+    An element has no stable address either, because a growth of its array can move it:
+    CE2404. A slice is a view of its array (`_borrow_slice`). The scope pass refuses a borrow
+    of the bare name of a function (CE2400).
+    """
+    is_poke = mode is BorrowMode.POKE
+    if isinstance(place, e.Slice):
+        _borrow_slice(checker, place, span, is_poke=is_poke)
         return
-    # A field borrow is tracked against the BASE variable: this pass tracks whole
-    # variables, not sub-places, so the two spellings differ in exactly one thing --
-    # where the name comes from. A captured variable is a whole variable (#1129).
-    walked = walk_place(borrow.expr, Step.MEMBER, stop=captured_variable)
-
-    if walked.stop is not None:
-        name = walked.stop
-    elif isinstance(walked.node, Name):
-        name = walked.node.id
-    else:
-        # A call result, a literal, a member chain off one -- nothing with an address.
-        checker.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_to_string(borrow.expr))
+    if borrow_of_constant(checker, place, mode):
+        return
+    root = walk_place(place, Step.MEMBER).node
+    if isinstance(root, e.GlobalRef) and "." not in checker.decl_name(root.decl):
+        return
+    if isinstance(root, e.StorageRef):
+        state = storage_state(checker, root)
+        if is_poke:
+            check_owner_not_borrowed(checker, state.local, span, "take `poke`", place=place)
+        acquire_borrow(checker, state, span, is_poke=is_poke)
+        return
+    if not isinstance(root, e.LocalRef):
+        checker.err.emit(er.ERR.CE2404, span, expr=temporary_spelled(checker, place))
         return
 
-    # An unfindable name was ALREADY reported by the scope pass, which owns names
-    # (CE1001 or CE2400). Asking again here gave one token two diagnostics, and the wrong
-    # one, because `borrow_state` cannot tell the two cases apart.
-    state = checker.borrow_state.get(name)
+    state = checker.borrow_state.get(root.local)
     if state is None:
         return
 
     if state.is_moved:
-        emit_use_after_move(checker, name, borrow.loc, state)
+        emit_use_after_move(checker, state.name, span, state)
         return
 
     if state.is_lent_iterator:
-        # A borrow of a lent iterator reads its owners' storage: a use (#1259).
+        # A borrow of a lent iterator reads the storage of its owners: a use (#1259).
         from .expressions import reject_a_use_after_the_change
-        if reject_a_use_after_the_change(checker, name, borrow.loc):
+        if reject_a_use_after_the_change(checker, root.local, span):
             return
 
     if is_poke:
         # A `poke` of a read-only receiver hands the write to a callee, which upgrades
         # the borrow (CE2408 / CE2414 / CE2421). A `peek` stays legal.
-        if reject_readonly_write(checker, name, borrow.loc, "take a `poke` borrow"):
+        if reject_readonly_write(checker, root.local, span, "take a `poke` borrow"):
             return
         # A `poke` may mutate or free, so it conflicts with a live `let`-borrow like a
         # mutating method (#242). CE2412 not CE2407: the user wrote no `peek`.
-        check_owner_not_borrowed(checker, name, borrow.loc, "take `poke`",
-                                 place=borrow.expr)
+        check_owner_not_borrowed(checker, root.local, span, "take `poke`", place=place)
 
-    acquire_borrow(checker, state, borrow.loc, is_poke=is_poke)
+    acquire_borrow(checker, state, span, is_poke=is_poke)
 
 
-def _check_slice_borrow(checker: 'BorrowChecker', borrow: Borrow, is_poke: bool) -> None:
+def _borrow_slice(checker: 'BorrowChecker', place: e.Slice, span: Optional[Span], *,
+                  is_poke: bool) -> None:
     """`peek data[a..b]`: a pointer to the slice descriptor (docs/design/slices.md).
 
-    A `peek` reads the array: it is a shared borrow of the array's owner, so a `poke` of
-    the same owner in one call is CE2407. A `poke` is refused (S4): a callee could grow
+    A `peek` reads the array: it is a shared borrow of the owner of the array, so a `poke`
+    of the same owner in one call is CE2407. A `poke` is refused (S4): a callee could grow
     the view and move storage that the array keeps.
     """
-    from .expressions import check_expr
-    check_expr(checker, borrow.expr)
-    owner = borrow_owner(borrow.expr)
+    arms.check(checker, place)
+    owner = borrow_owner(checker, place)
     if is_poke:
-        reject_readonly_write(checker, owner, borrow.loc, "take a `poke` borrow",
-                              receiver=borrow.expr)
+        reject_readonly_write(checker, owner, span, "take a `poke` borrow", receiver=place)
         return
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None:
-        acquire_borrow(checker, state, borrow.loc, is_poke=False)
+        acquire_borrow(checker, state, span, is_poke=False)
+
+
+def borrow_of_constant(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode) -> bool:
+    """Is the root of `place` a constant? A `peek` of it reads it, and a `poke` is CE2400
+    at the name of the constant (`reject_borrow_of_constant`). True when the root is one."""
+    root = walk_place(place, Step.MEMBER).node
+    if not isinstance(root, e.ConstRef):
+        return False
+    name = checker.decl_name(root.const_id).rpartition(".")[2]
+    record = checker.constant_record(root)
+    sig = record if isinstance(record, ConstSig) else None
+    reject_borrow_of_constant(checker.err, name, sig, root.loc, mode=mode.value,
+                              no_frame_slot=sig is None)
+    return True
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],
@@ -112,7 +150,8 @@ def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[
             state.first_borrow_span = span
         state.peek_borrow_count += 1
 
-    checker.active_borrows.add(state.name)
+    if state.local is not None:
+        checker.active_borrows.add(state.local)
     return True
 
 
@@ -126,42 +165,35 @@ def _conflict(checker: 'BorrowChecker', code: ErrorMessage, state: BorrowState,
     return False
 
 
-def register_implicit_borrow(checker: 'BorrowChecker', arg: Expr) -> None:
-    """Count an unmarked argument as the shared borrow it now is.
+def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
+    """Count an unmarked argument of an owning local as the shared borrow it now is.
 
-    A slice is a shared borrow of its array's owner, so a `poke` of that owner in the
-    same call is CE2407: the callee could grow the array under the view. A field or an
-    element read whose value owns a resource is a shared borrow of its ROOT owner by the
-    same rule: the callee's copy reads storage that a `poke` of the owner can move.
+    A field read, an element read and a slice whose value owns a resource are a shared
+    borrow of their ROOT owner by the same rule: the callee reads storage that a `poke` of
+    the owner can move. A plain field and a plain element are a copy. A `var` that owns is
+    counted on its state (`storage_state`).
     """
-    if (isinstance(arg, IndexAccess) and arg.is_slice) or _owning_read(checker, arg):
-        owner = borrow_owner(arg)
-        owner_state = checker.borrow_state.get(owner) if owner is not None else None
-        if owner_state is not None and not owner_state.is_moved:
-            acquire_borrow(checker, owner_state, arg.loc, is_poke=False)
+    walked = walk_place(arg, Step.MEMBER | Step.INDEX)
+    if isinstance(walked.node, e.StorageRef):
+        if checker.answers().global_of(walked.node.shir_id) is None:
+            return
+        state: Optional[BorrowState] = storage_state(checker, walked.node)
+    elif walked.local is None:
         return
-    if not isinstance(arg, Name):
-        return
-    state = checker.borrow_state.get(arg.id)
+    else:
+        state = checker.borrow_state.get(walked.local)
     if state is None or state.is_moved:
         return
-    if checker.types.type_class_of_source(state, state.var_type) is not TypeClass.MOVE:
+    owns = (checker.types.type_class(read_type(checker, arg)) if walked.path
+            else checker.types.type_class_of_source(state, state.var_type))
+    if owns is not TypeClass.MOVE:
         return
     acquire_borrow(checker, state, arg.loc, is_poke=False)
 
 
-def _owning_read(checker: 'BorrowChecker', arg: Expr) -> bool:
-    """Is `arg` a field or element read off a local, and does its value own a resource?"""
-    walked = walk_place(arg, Step.MEMBER | Step.INDEX, stop=captured_variable)
-    if walked.stop is None and (walked.name is None or not walked.path):
-        return False
-    return checker.types.type_class(read_type(checker, arg)) is TypeClass.MOVE
-
-
 def clear_borrows(checker: 'BorrowChecker') -> None:
-    """Clear all active borrows (called after expression evaluation)."""
-    for var_name in checker.active_borrows:
-        state = checker.borrow_state.get(var_name)
+    """Clear all active borrows (called at the end of each statement)."""
+    for state in [checker.borrow_state.get(owner) for owner in checker.active_borrows]:
         if state is not None:
             state.poke_borrow_count = 0
             state.peek_borrow_count = 0

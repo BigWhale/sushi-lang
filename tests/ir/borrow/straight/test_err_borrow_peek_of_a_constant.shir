@@ -1,0 +1,41 @@
+unit test_err_borrow_peek_of_a_constant
+
+ShirBody LIMIT (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(3))
+
+ShirBody GREETING (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit("Mostly Harmless"))
+
+ShirBody show
+  params : [(_0 "n": i32, InGuaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody shout
+  params : [(_0 "text": string, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "copied": i32]
+  block  :
+    ExprStmt(Call(Free(@show), [(ConstRef(@LIMIT), InGuaranteed)]))
+    ExprStmt(Call(Free(@shout), [(ConstRef(@GREETING), Guaranteed)]))
+    Assign(LocalRef(_0), adopt ConstRef(@LIMIT), is_init: true)
+    ExprStmt(Call(Free(@eat), [(move ConstRef(@GREETING), Owned)]))
+    Return(adopt LocalRef(_0))

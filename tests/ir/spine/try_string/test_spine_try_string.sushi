@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nkept\nlost\n"
+# EXPECT_NO_LEAKS
+#
+# a spine program: `??` over a `Result` of a `string` on its two paths. `keep` moves
+# its `nom` parameter on the `Ok` path only, and drops it on the `Err` path. On the `Ok`
+# path `relay` lends the string to a `peek` parameter. On the `Err` path `??` returns
+# from `relay` before `got` exists.
+
+fn show(peek string word) ~:
+    println(word)
+
+fn keep(nom string word, bool ok) string | StdError:
+    if (ok):
+        return Result.Ok(word)
+    return Result.Err(StdError.Error)
+
+fn relay(nom string word, bool ok) ~ | StdError:
+    let string got = keep(nom word, ok)??
+    show(peek got)
+    return Result.Ok(~)
+
+fn main() i32:
+    relay(nom "Mostly Harmless", true)
+    println("kept")
+    relay(nom "So long", false)
+    println("lost")
+    return 0

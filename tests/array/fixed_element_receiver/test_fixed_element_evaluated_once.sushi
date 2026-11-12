@@ -1,0 +1,22 @@
+# A T[N] receiver that is an element, and a T[N] source argument that is an element, are
+# each evaluated one time.
+# EXPECT_STDOUT_EXACT: "pick\ntrue\npick\npick\nfalse\n4\npick\ntrue\npick\n3\n"
+# EXPECT_NO_LEAKS
+
+fn pick() i32:
+    println("pick")
+    return 1
+
+fn main() i32:
+    let i32[3][2] rows = [[1, 2, 3], [4, 5, 6]]
+    println(rows[pick()].contains(5))
+    let i32[] xs = from([0])
+    xs.extend(rows[pick()])
+    println(xs.starts_with(rows[pick() - 1]))
+    println(xs.len())
+    let string[2][2] names = [["a".s(0, 1), "b".s(0, 1)], ["c".s(0, 1), "d".s(0, 1)]]
+    println(names[pick()].contains("d"))
+    let string[] ys = from(["e".s(0, 1)])
+    ys.extend(names[pick()])
+    println(ys.len())
+    return 0

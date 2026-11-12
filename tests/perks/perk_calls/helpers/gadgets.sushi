@@ -1,0 +1,12 @@
+public perk Labelled:
+    fn label() string
+    fn size() i32
+
+public struct Gadget:
+    i32 n
+
+extend Gadget with Labelled:
+    fn label() string:
+        return "gadget {self.n}"
+    fn size() i32:
+        return self.n

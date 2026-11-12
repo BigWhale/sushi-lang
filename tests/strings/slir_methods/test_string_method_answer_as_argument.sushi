@@ -1,0 +1,11 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nMOSTLY HARMLESS\n"
+# EXPECT_NO_LEAKS
+#
+# The answer of a string method goes straight into another call. The temporary is freed
+# once.
+
+fn main() i32:
+    let string s = "  Mostly Harmless  "
+    println(s.trim())
+    println(s.upper().trim())
+    return 0

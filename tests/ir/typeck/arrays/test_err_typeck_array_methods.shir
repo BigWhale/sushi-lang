@@ -1,0 +1,21 @@
+unit test_err_typeck_array_methods
+
+ShirBody main
+  params : []
+  locals : [_0 "bytes": u8[], _1 "fixed": i32[3], _2 "put": bool, _3 "popped": u8, _4 "removed": u8, _5 "at": i32, _6 "part": u8[], _7 "tail": i32[], _8 "found": bool, _9 "text": string]
+  block  :
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Cast(Lit(1), u8)), Single(Cast(Lit(2), u8))]), is_init: true)
+    Assign(LocalRef(_1), ArrayInit(Fixed, [Single(Lit(4)), Single(Lit(5)), Single(Lit(6))]), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(Lit(3), Owned)]))
+    ExprStmt(Call(Builtin(LocalRef(_0), "extend"), [(ArrayInit(Dynamic, [Single(Lit(4)), Single(Lit(5))]), Guaranteed)]))
+    Assign(LocalRef(_2), Call(Builtin(Call(Builtin(LocalRef(_0), "insert"), [(Lit(0), Guaranteed), (Lit(9), Owned)]), "is_ok"), []), is_init: true)
+    Assign(LocalRef(_3), Call(Builtin(Call(Builtin(LocalRef(_0), "pop"), []), "realise"), [(Lit(0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_4), Call(Builtin(Call(Builtin(LocalRef(_0), "remove"), [(Lit(1), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_5), Call(Builtin(Call(Builtin(LocalRef(_1), "index_of"), [(Lit(5), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_6), Call(Builtin(LocalRef(_0), "s"), [(Lit(0), Guaranteed), (Lit(2), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_7), Call(Builtin(LocalRef(_1), "ss"), [(Lit(1), Guaranteed), (Lit(2), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_8), Binary(and, Call(Builtin(LocalRef(_1), "contains"), [(Lit(6), Guaranteed)]), Call(Builtin(LocalRef(_0), "starts_with"), [(LocalRef(_6), Guaranteed)])), is_init: true)
+    Assign(LocalRef(_9), Call(Builtin(LocalRef(_0), "to_string"), []), is_init: true)
+    If(Binary(and, LocalRef(_2), LocalRef(_8)), then: [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_9), Guaranteed)]))])
+    ExprStmt(Call(Builtin(LocalRef(_1), "push"), [Lit(7)]))
+    Return(Binary(+, Binary(+, Binary(+, LocalRef(_5), Call(Builtin(LocalRef(_7), "len"), [])), Cast(LocalRef(_3), i32)), Cast(LocalRef(_4), i32)))

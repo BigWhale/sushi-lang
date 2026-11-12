@@ -1,0 +1,12 @@
+public struct Crate@(T):
+    T held
+
+public extend Crate@(T: Display) shown() string:
+    return "{self.held}"
+
+public extend Crate@(T) static of(nom T value) Crate@(T):
+    return Crate(value)
+
+public fn crate_text(Crate@(i32) c) string:
+    return c.shown()
+

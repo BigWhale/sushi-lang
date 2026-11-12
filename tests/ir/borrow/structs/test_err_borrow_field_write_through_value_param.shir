@@ -1,0 +1,22 @@
+unit test_err_borrow_field_write_through_value_param
+
+ShirBody moved
+  params : [(_0 "p": Point, Guaranteed)]
+  locals : [_1 "q": Point]
+  block  :
+    Assign(LocalRef(_1), adopt LocalRef(_0), is_init: true)
+    Assign(Field(LocalRef(_1), "x"), adopt Binary(+, Field(LocalRef(_1), "x"), Lit(1)), is_init: false)
+    Return(adopt Field(LocalRef(_1), "x"))
+
+ShirBody set
+  params : [(_0 "p": Point, Guaranteed)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_0), "x"), adopt Lit(1), is_init: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@set), [(StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]), Guaranteed)]))
+    Return(adopt Call(Free(@moved), [(StructInit(@Point, [adopt Lit(3), adopt Lit(4)], written_order: [0, 1]), Guaranteed)]))

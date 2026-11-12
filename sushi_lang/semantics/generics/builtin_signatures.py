@@ -82,21 +82,6 @@ def builtin_signature_for_base(base: Optional[str],
     return None
 
 
-def read_through_receiver_of(expr: Any) -> Optional[Any]:
-    """The receiver of a built-in call that reads a borrowed receiver through, or None.
-
-    `m.or_err(nom e)` is such a call (`reads_borrow_through`). The question is about the
-    call's shape and its stamped receiver type, not about who owns the receiver.
-    """
-    from sushi_lang.semantics.ast import DotCall, MethodCall
-    if not isinstance(expr, (MethodCall, DotCall)):
-        return None
-    signature = builtin_signature_of(expr.resolved_enum_type, expr.method)
-    if signature is None or not signature.reads_borrow_through:
-        return None
-    return expr.receiver
-
-
 def receiver_type_arguments(receiver_type: Any) -> Optional[tuple[Type, ...]]:
     """The type arguments of an interned instance or of a written generic reference."""
     if isinstance(receiver_type, (EnumType, StructType)):
@@ -148,11 +133,3 @@ def solve_builtin_signature(
     return BuiltinInstance(signature=signature, substitution=substitution, params=params,
                            ret_type=substitute_type_params(signature.ret_type,
                                                            substitution)), ()
-
-
-def refuses_an_error_argument(instance: BuiltinInstance, structs: Any, enums: Any) -> bool:
-    """Whether a type argument in an `E` position of the instance is not an error type (E3)."""
-    from sushi_lang.semantics.error_types import non_error_type
-    return any(non_error_type(instance.substitution[name], structs or {}, enums or {})
-               is not None
-               for name in instance.signature.error_parameters)

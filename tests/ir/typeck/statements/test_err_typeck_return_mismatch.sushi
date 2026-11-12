@@ -1,0 +1,25 @@
+# EXPECT_ERROR_CODES_EXACT: CE2003
+# EXPECT_STDERR_CONTAINS: "return type mismatch: got i32, expected bool"
+# EXPECT_DUMP_SHIR: test_err_typeck_return_mismatch.shir
+#
+# A `return` of a bare body checks its value at the declared return type: a literal and
+# a parameter of that type, and the blank value of a `~` body. The last function returns
+# an integer from a `bool` function, which is CE2003.
+
+fn answer() i32:
+    return 42
+
+fn echo(i64 value) i64:
+    return value
+
+fn title() string:
+    return "Mostly Harmless"
+
+fn nothing() ~:
+    return ~
+
+fn wrong() bool:
+    return 42
+
+fn main() i32:
+    return 0

@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2034
+# A written type of the binder that the item does not fit.
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    foreach(string s in xs.iter()):
+        println(s)
+    return 0

@@ -1,0 +1,24 @@
+unit test_err_borrow_owning_field_beside_a_poke_of_its_root
+
+ShirBody both
+  params : [(_0 "s": string, Guaranteed), (_1 "b": Box, Inout)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_1), "n"), adopt Call(Builtin(LocalRef(_0), "len"), []), is_init: false)
+
+ShirBody count
+  params : [(_0 "n": i32, Guaranteed), (_1 "b": Box, Inout)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_1), "n"), adopt LocalRef(_0), is_init: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "a": Box, _1 "b": Box]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@Box, [adopt Lit("Mostly Harmless"), adopt Lit(1)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), adopt StructInit(@Box, [adopt Lit("towel"), adopt Lit(2)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Free(@count), [(Field(LocalRef(_1), "n"), Guaranteed), (LocalRef(_1), Inout)]))
+    ExprStmt(Call(Free(@both), [(Field(LocalRef(_0), "name"), Guaranteed), (LocalRef(_1), Inout)]))
+    ExprStmt(Call(Free(@both), [(Field(LocalRef(_1), "name"), Guaranteed), (LocalRef(_1), Inout)]))
+    Return(adopt Field(LocalRef(_1), "n"))

@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_call_markers.shir
+#
+# the SHIR dump of a call of a free function, with each written mode at the call site:
+# no marker, `nom`, `peek` and `poke`. The target of each call is `Named`, and each
+# argument is an `Arg` with the convention of its marker. A call in the position of an
+# argument is the value of that argument, and the arguments are in the written order.
+
+var i32 count = 0
+
+fn size(string s) i32:
+    return s.len()
+
+fn look(peek string s) i32:
+    return s.len()
+
+fn take(nom string s) i32:
+    return s.len()
+
+fn bump(poke i32 n) i32:
+    return n + 1
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn markers(nom string s) i32:
+    bump(poke count)
+    add(size(s), look(peek s))
+    return take(nom s)
+
+fn main() i32:
+    return 0

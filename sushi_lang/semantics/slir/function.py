@@ -1,0 +1,85 @@
+"""The SLIR unit: one function, its locals and its blocks, and the program (docs/design/ir.md 8.2).
+
+`SlirProgram` keeps the `SlirFunction` of each SHIR body that the SLIR lowering lowered,
+keyed by the `DeclId` of the body. The dump reads it in the order of the SHIR units and bodies. The SLIR
+stage (`lower.py`) is the one writer.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.shir.ids import DeclId
+from sushi_lang.semantics.slir.ids import BlockId, LocalId
+from sushi_lang.semantics.slir.places import Local
+from sushi_lang.semantics.slir.rvalues import Ref
+from sushi_lang.semantics.slir.statements import Assign, SlirStatement
+from sushi_lang.semantics.slir.terminators import SlirTerminator
+from sushi_lang.semantics.typesys import Type
+
+#: The name of this stage in an internal error.
+STAGE = "slir"
+
+
+@dataclass(frozen=True, slots=True)
+class SlirLocal:
+    """`name` is the source name of the local, for a diagnostic; None for a temporary.
+    `view` marks a borrowed view: a `Copy` writes it, and it never drops or moves (ir.md
+    8.2)."""
+    id: LocalId
+    ty: Type
+    name: Optional[str]
+    loc: Optional[Span]
+    view: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SlirBlock:
+    id: BlockId
+    statements: tuple[SlirStatement, ...]
+    terminator: SlirTerminator
+
+
+@dataclass(frozen=True, slots=True)
+class SlirFunction:
+    """`symbol` is the name in the module (monomorphic, ruling Q1), `name` the source name
+    that the printer writes, and `unit` the declaring unit, whose module holds it.
+    `locals[0]` is the return slot, and `params` names each parameter local with its
+    convention. `environment` is the local of the environment of a function that lowering cut
+    from a lambda. `lifted` holds each function that lowering cut from the lambdas of the
+    body, a lambda in a lambda too, in the order of its symbol."""
+    symbol: str
+    name: str
+    unit: str
+    params: tuple[tuple[LocalId, Convention], ...]
+    locals: tuple[SlirLocal, ...]
+    blocks: tuple[SlirBlock, ...]
+    entry: BlockId
+    environment: Optional[LocalId] = None
+    lifted: tuple[SlirFunction, ...] = ()
+
+
+def address_locals(function: SlirFunction) -> frozenset[LocalId]:
+    """The address locals of `function` (ir.md 8.2): each local that a `Ref` writes. Its
+    storage is the place of another value, so it owns nothing."""
+    return frozenset(stmt.place.id for block in function.blocks for stmt in block.statements
+                     if isinstance(stmt, Assign) and isinstance(stmt.rvalue, Ref)
+                     and isinstance(stmt.place, Local))
+
+
+@dataclass(slots=True)
+class SlirProgram:
+    """The `SlirFunction` of each SHIR body that `borrow` finished."""
+    _outcomes: dict[DeclId, SlirFunction] = field(default_factory=dict)
+
+    def record(self, body: DeclId, outcome: SlirFunction) -> None:
+        if body in self._outcomes:
+            er.raise_internal_error("CE0000", detail="SLIR lowering lowered one body two times")
+        self._outcomes[body] = outcome
+
+    def outcome_of(self, body: DeclId) -> Optional[SlirFunction]:
+        """The function of the body `body`, or None when the body did not reach SLIR."""
+        return self._outcomes.get(body)

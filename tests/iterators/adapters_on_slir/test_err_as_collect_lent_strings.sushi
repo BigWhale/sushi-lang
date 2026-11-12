@@ -1,0 +1,10 @@
+# `collect` over the `peek` items of an owning type is an error: the list would hold views
+# of the strings of the array. `clone_each()` before `collect` is the escape.
+# EXPECT_ERROR_CODES_EXACT: CE2129
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["a", "bb"])
+    let List@(string) all = names.iter().filter(nom |string s| s.len() > 0).collect()
+    println(all.len())
+    return 0

@@ -1,0 +1,30 @@
+unit test_slir_const_string
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: ~
+    let _2: ~
+    let _3: string
+    let _4: ~
+    let _5: i32
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin println@(string)(const "Mostly Harmless" @guaranteed)
+    StorageDead(_1)
+    StorageLive(_2)
+    _2 = call builtin println@(string)(const "Mostly Harmless" @guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call builtin interp@(string, string)(const "Mostly Harmless" @guaranteed, const "!" @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin println@(string)(copy _3 @guaranteed)
+    StorageDead(_4)
+    Drop(_3)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = call builtin string.len(const "Mostly Harmless" @guaranteed)
+    _0 = copy _5 - const 15_i32
+    StorageDead(_5)
+    return
+}

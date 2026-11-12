@@ -5,8 +5,8 @@ An integer literal that no position types is an `i32`, and a byte literal (`a'x'
 When a second place answers `i32` by itself, the typecheck pass, the generic inference
 and the backend can give three different types to one byte literal.
 
-The scan refuses four shapes in `semantics/` and `backend/`:
-- `<x>.resolved_type or BuiltinType.I32`;
+The scan refuses three shapes in `semantics/` and `backend/`, for the AST literal (`IntLit`)
+and for the SHIR literal (`IntConst`) alike:
 - a dict entry `IntLit: BuiltinType.I32`;
 - a `return` that names `BuiltinType.I32` in a function that takes an `IntLit` parameter;
 - a `return` that names `BuiltinType.I32` in the body of an `isinstance(<x>, IntLit)` test.
@@ -31,13 +31,16 @@ def _names_i32(node: ast.AST) -> bool:
     return any(_is_i32(n) for n in ast.walk(node))
 
 
+INTEGER_LITERALS = ("IntLit", "IntConst")
+
+
 def _is_intlit(node: ast.AST) -> bool:
     if isinstance(node, ast.Name):
-        return node.id == "IntLit"
+        return node.id in INTEGER_LITERALS
     if isinstance(node, ast.Attribute):
-        return node.attr == "IntLit"
+        return node.attr in INTEGER_LITERALS
     if isinstance(node, ast.Constant):
-        return node.value == "IntLit"
+        return node.value in INTEGER_LITERALS
     return False
 
 
@@ -69,13 +72,7 @@ def default_readers(source: str, skip_function: str | None = None) -> list[int]:
     for node in ast.walk(tree):
         if id(node) in skipped:
             continue
-        if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
-            values = node.values
-            if (_is_i32(values[-1]) and any(
-                    isinstance(v, ast.Attribute) and v.attr == "resolved_type"
-                    for v in values[:-1])):
-                hits.add(node.lineno)
-        elif isinstance(node, ast.Dict):
+        if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values, strict=True):
                 if key is not None and _is_intlit(key) and _is_i32(value):
                     hits.add(key.lineno)
@@ -111,22 +108,31 @@ def test_int_literal_default_is_one():
 def test_the_seam_exists():
     from sushi_lang.semantics.ast import IntLit
     from sushi_lang.semantics.passes.types.inference import int_literal_default
+    from sushi_lang.semantics.shir.exprs import IntConst
     from sushi_lang.semantics.typesys import BuiltinType
 
     assert int_literal_default(IntLit(value=47, loc=None)) == BuiltinType.I32
     assert int_literal_default(IntLit(value=47, loc=None, byte_spelling="a'/'")) == BuiltinType.U8
+    assert int_literal_default(IntConst(47, 10)) == BuiltinType.I32
+    assert int_literal_default(IntConst(47, 10, "a'/'")) == BuiltinType.U8
 
 
 def test_the_scan_sees_each_shape():
     probes = {
-        "or": "def f(e):\n    return e.resolved_type or BuiltinType.I32\n",
         "dict": "T = {IntLit: BuiltinType.I32}\n",
         "param": "def f(expr: IntLit):\n    return Scalar(expr.value, BuiltinType.I32)\n",
         "isinstance": ("def f(e):\n    if isinstance(e, IntLit):\n"
                        "        return BuiltinType.I32\n"),
+        "dict of the SHIR literal": "T = {IntConst: BuiltinType.I32}\n",
+        "param of the SHIR literal": ("def f(const: IntConst):\n"
+                                      "    return Scalar(const.value, BuiltinType.I32)\n"),
+        "isinstance of the SHIR literal": ("def f(e):\n    if isinstance(e, IntConst):\n"
+                                           "        return BuiltinType.I32\n"),
     }
     for shape, source in probes.items():
         assert default_readers(source), shape
     seam = ("def int_literal_default(lit):\n"
-            "    return lit.resolved_type or BuiltinType.I32\n")
+            "    if isinstance(lit, IntConst):\n"
+            "        return BuiltinType.I32\n")
+    assert default_readers(seam)
     assert default_readers(seam, "int_literal_default") == []

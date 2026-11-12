@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "13\n"
+# EXPECT_DUMP_SHIR: test_shir_stmt_let_ref.shir
+#
+# the SHIR dump of a reference binding: `let poke T x = place` and `let peek T x = place`
+# are each an `Assign` with `is_init: true` whose value is a `Borrow` of the place, with
+# the mode as written. The local has the reference type as written. A rebind of a `poke`
+# binding is an `Assign` with `is_init: false`: the typecheck pass knows that it writes
+# through the binding.
+
+fn main() i32:
+    let i32 a = 5
+    let i32 b = 7
+    let poke i32 slot = a
+    slot := slot + 1
+    let peek i32 view = b
+    println(a + view)
+    return 0

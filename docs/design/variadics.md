@@ -46,14 +46,13 @@ fn main() i32:
   (`total(a, b)`) and a bloom of an `i32[][]` variable (`total(rows...)`) — see "Spread /
   forwarding (bloom)" below.
 - **Zero trailing arguments** is valid; the native callee receives an empty `T[]`.
-- **Native ownership.** The call site synthesizes a `T[]`, which is moved into the callee; the
-  callee owns and destroys it via the normal dynamic-array RAII path. The LLVM function itself stays
-  non-variadic — the variadic parameter lowers to one extra `T[]` struct parameter.
-  This is the one place the collected array's owner still depends on the callee's implementation, so
-  it is stated in exactly one place (`CalleeModes.variadic_callee_owns`): a Sushi `...T` body
-  registers the array, and a STDLIB variadic (`run`) is generated IR that frees nothing, so there the
-  CALLER keeps it. A
-  consuming variadic spelling (`nom ...T`) is deferred — see `docs/design/borrow-model.md` S7.
+- **Native ownership.** The call site synthesizes a `T[]` in a temporary of the call. Each
+  trailing argument moves into it, the callee borrows it, and the caller destroys it at the end of
+  the statement, for a Sushi `...T` body and a STDLIB variadic (`run`) alike. In the callee the
+  variadic parameter is a borrow, as any parameter with no mode: a consuming use of it is
+  CE2411. The LLVM function itself stays non-variadic — the variadic parameter lowers to one extra
+  `T[]` struct parameter (`docs/design/ir.md` 7.4). A consuming variadic spelling (`nom ...T`) is
+  deferred — see `docs/design/borrow-model.md` S7.
 - **Extern lowering.** The extern declaration lowers to an LLVM `var_arg=True` declaration. Trailing
   arguments undergo C default-argument promotion: `i8`/`i16`/`bool` → `i32`, `f32` → `f64`; `string`
   is marshalled to a `char*` and freed at scope exit on every path; `ptr` is passed as-is. An extern
@@ -102,9 +101,9 @@ fn main() i32:
 
 Semantics:
 
-- **Move, not copy.** The bloomed array is moved into the callee's synthesized `T[]` — the same
-  ownership transfer as a native variadic's own array construction, just skipping the copy. The
-  caller must not use the source array after the call. At a STDLIB variadic the array stays the
+- **Move, not copy.** The bloomed array is moved into the synthesized `T[]` of the call — the
+  same ownership transfer as a native variadic's own array construction, just skipping the copy.
+  The caller must not use the source array after the call (CE2405). At a STDLIB variadic the array stays the
   caller's instead (see "Native ownership" above), so `run("cmd", argv...)` leaves `argv` readable.
 - **Source must be a bare variable.** `arr...` requires `arr` to be a `Name` referring to an
   array-typed local/parameter; blooming an arbitrary expression (a call result, a field access, a

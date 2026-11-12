@@ -7,11 +7,12 @@ lines that re-imported a name the module header already held. A copy is a place 
 the next reader forgets a table, and a third table would have had to be added ten
 times.
 
-The idiom lives in `_resolve` now and the three arm-body reads live in
-`_walk_arm_body`. #755 moved the seam UNDER it one step further: `_resolve` reads
-`utils.resolve_declared_type`, the pass's one answer to what a written type names, so
-this file names neither table any more. The rows are the same rows -- one resolver,
-reached from one function -- and each counts the spelling the seam wears today.
+The idiom lives in `_resolve` now. #755 moved the seam UNDER it one step further:
+`_resolve` reads `utils.resolve_declared_type`, the pass's one answer to what a written
+type names, so this file names neither table any more. The rows are the same rows -- one
+resolver, reached from one function -- and each counts the spelling the seam wears today.
+The body of an arm is walked in the SHIR match arm (`visit/statements.py`), and this file
+reads no arm body.
 """
 from __future__ import annotations
 
@@ -74,8 +75,7 @@ def test_the_resolver_is_called_inside_the_seam():
 
 
 def test_the_seam_functions_exist():
-    for name in ("_resolve", "_walk_arm_body"):
-        assert hasattr(matching, name), name
+    assert hasattr(matching, "_resolve")
 
 
 def test_no_import_hides_inside_a_function_body():
@@ -83,22 +83,21 @@ def test_no_import_hides_inside_a_function_body():
 
     Seven of them re-imported `UnknownType`, which the module header already held.
     One re-imported `BorrowMode` and `ReferenceType` twice, and one re-imported
-    `RefBinding`. The two that stay are the ones that would close an import cycle.
+    `RefBinding`. `int_literal_fits` and `reject_qualified_name` are imported at the top
+    since the SHIR match arm made this module live: no cycle closes.
     """
     hidden = [alias.name
               for node in _TREE.body if isinstance(node, ast.FunctionDef)
               for inner in ast.walk(node)
               if isinstance(inner, (ast.Import, ast.ImportFrom))
               for alias in inner.names]
-    assert sorted(hidden) == ["int_literal_fits", "reject_qualified_name"], hidden
+    assert hidden == [], hidden
 
 
-def test_the_arm_body_is_walked_from_one_place():
-    walker = _function("_walk_arm_body")
+def test_no_arm_body_is_walked_here():
+    """The SHIR match arm (`visit/statements.py`) walks the body of each arm. This module
+    checks the patterns alone, so it reads no arm body."""
     shapes = [node for node in ast.walk(_TREE)
-              if isinstance(node, ast.Attribute) and node.attr == "body"
-              and isinstance(node.value, ast.Name) and node.value.id == "arm"]
-    inside = {id(node) for node in ast.walk(walker)}
-    assert shapes, "no arm body is read at all"
-    assert all(id(node) in inside for node in shapes), len(shapes)
-    assert len(_calls("_walk_arm_body")) == 3, len(_calls("_walk_arm_body"))
+              if isinstance(node, ast.Attribute) and node.attr == "body"]
+    assert shapes == [], len(shapes)
+    assert not hasattr(matching, "_walk_arm_body")

@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2075
+# EXPECT_STDERR_CONTAINS: "value 'a' is already matched by arm ''a''"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_written_quotes.shir
+#
+# `'a'` and `"a"` are one value, so the second arm repeats the first: CE2075. The
+# diagnostic quotes the first arm as it is written, in single quotes.
+
+fn f(string s) string:
+    match s:
+        'a' -> return "first"
+        "a" -> return "again"
+        _ -> return "other"
+
+fn main() i32:
+    println(f("a"))
+    return 0

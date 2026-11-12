@@ -28,18 +28,18 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str,
     return METHOD_TYPE_REGISTRY.answers(receiver_type, method_name, derived_methods)
 
 
-def reject_builtin_miscount(reporter: Any, call: Any, callee: str,
+def reject_builtin_miscount(reporter: Any, loc: Any, method: str, given: int, callee: str,
                             arity: Mapping[str, int]) -> bool:
     """CE2009: a built-in method or static took the wrong number of arguments.
 
     `arity` is the family's table (`MethodFamily.arity`); a name it does not hold is
-    measured elsewhere. `callee` is the name the text shows. Answers whether it reported.
+    measured elsewhere. `callee` is the name the text shows; `given` is the written count.
+    Answers whether it reported.
     """
-    expected = arity.get(call.method)
-    if expected is None or len(call.args) == expected:
+    expected = arity.get(method)
+    if expected is None or given == expected:
         return False
-    er.emit(reporter, er.ERR.CE2009, call.loc,
-            name=callee, expected=expected, got=len(call.args))
+    er.emit(reporter, er.ERR.CE2009, loc, name=callee, expected=expected, got=given)
     return True
 
 
@@ -52,11 +52,11 @@ def derived_method(target_type: Type, *, name: str, kind: str, return_type: Type
     A missing factory is the internal error `ice`. The count is the derived family's row
     (`MethodFamily.arity`), so the method carries no validator.
     """
-    def emit(codegen, call, receiver_value, receiver_type, to_i1):
+    def emit(codegen, args, receiver_value, receiver_type):
         factory = factory_getter(kind)
         if factory is None:
             raise_internal_error(ice.code, kind=kind)
-        return factory(target_type)(codegen, call, receiver_value, receiver_type, to_i1)
+        return factory(target_type)(codegen, args, receiver_value, receiver_type)
 
     from sushi_lang.sushi_stdlib.src.common import BuiltinMethod
     return BuiltinMethod(

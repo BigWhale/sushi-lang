@@ -1,0 +1,58 @@
+unit test_slir_contract_calls
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Point                          // a
+    let _2: u64
+    let _3: u64
+    let _4: bool
+    let _5: ~
+    let _6: bool
+    let _7: ~
+    let _8: i32
+    let _9: ~
+    let _10: string
+    let _11: ~
+    let _12: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = Point(const 1_i32)
+    StorageLive(_2)
+    _2 = call builtin hash@(Point)(copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin hash@(Point)(copy _1 @guaranteed)
+    StorageLive(_4)
+    _4 = copy _2 == copy _3
+    StorageLive(_5)
+    _5 = call builtin println@(bool)(copy _4 @guaranteed)
+    StorageDead(_5)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageLive(_6)
+    _6 = call builtin eq@(Point, Point)(copy _1 @guaranteed, copy _1 @guaranteed)
+    StorageLive(_7)
+    _7 = call builtin println@(bool)(copy _6 @guaranteed)
+    StorageDead(_7)
+    StorageDead(_6)
+    StorageLive(_8)
+    _8 = call builtin compare@(Point, Point)(copy _1 @guaranteed, copy _1 @guaranteed)
+    StorageLive(_9)
+    _9 = call builtin println@(i32)(copy _8 @guaranteed)
+    StorageDead(_9)
+    StorageDead(_8)
+    StorageLive(_10)
+    _10 = call builtin to_str@(Point)(copy _1 @guaranteed)
+    StorageLive(_11)
+    _11 = call builtin println@(string)(copy _10 @guaranteed)
+    StorageDead(_11)
+    Drop(_10)
+    StorageDead(_10)
+    StorageLive(_12)
+    _12 = call builtin println@(Point)(copy _1 @guaranteed)
+    StorageDead(_12)
+    _0 = const 0_i32
+    StorageDead(_1)
+    return
+}

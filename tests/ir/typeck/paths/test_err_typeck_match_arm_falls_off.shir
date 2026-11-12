@@ -1,0 +1,13 @@
+unit test_err_typeck_match_arm_falls_off
+
+ShirBody sign
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(0), [Return(Lit(0))]), Arm(Wildcard, [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@sign), [(Lit(4), Guaranteed)]))

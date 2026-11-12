@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.types import Type
+    from sushi_lang.semantics.ast import ExtendDef
+    from sushi_lang.semantics.typesys import Type
 
 
 # Reserved pack-marker token. A ".pack{N}" segment is appended for pack
 # instantiations. The "." separator is what makes invariant (D) STRUCTURAL
-# rather than probabilistic, and `tests/unit/test_pack_mangling.py` is where
+# rather than probabilistic, and `tests/unit/test_monomorphize_pack.py` is where
 # invariant (D) is stated and gated.
 _PACK_MARKER = "pack"
 
@@ -62,6 +63,26 @@ def extension_symbol(receiver_display: str, method: str,
     if method_type_args:
         base = f"{base}__{_join_sanitized(tuple(method_type_args))}"
     return mangle_unit_symbol(unit, base)
+
+
+def extension_decl_symbol(ext: 'ExtendDef', unit_name: Optional[str]) -> str:
+    """The symbol of the body of an extension declaration: the ONE derivation for the
+    declaration round of the back end and for SLIR lowering (docs/design/ir.md 8.2).
+
+    `unit_name` is the unit whose AST holds a written extension. A copy and a method that
+    a library ships carry their declaring unit, and a conversion has none.
+    """
+    unit = None if ext.is_conversion else (
+        ext.declaring_unit if ext.declaring_unit is not None else unit_name)
+    return method_symbol(ext.target_type, ext.name, unit, ext.method_type_args or ())
+
+
+def method_symbol(owner: Optional['Type'], method: str, unit: Optional[str],
+                  method_type_args: Tuple['Type', ...] = ()) -> str:
+    """The symbol of the method `method` of the type `owner` that `unit` declares: the
+    declaration, the `Direct` callee of a call and the SLIR verifier read it."""
+    return extension_symbol(extension_receiver_name(owner), method, method_type_args,
+                            unit=unit)
 
 
 def extension_receiver_name(target_type: Optional['Type']) -> str:

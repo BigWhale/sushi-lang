@@ -1,0 +1,11 @@
+unit test_shir_destructure_rebind
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(1), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(2), is_init: true)
+    Destructure([Place(LocalRef(_0)), Place(LocalRef(_1))], adopt TupleInit([adopt LocalRef(_1), adopt LocalRef(_0)]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_0), " ", LocalRef(_1), ""]), Guaranteed)]))
+    Return(adopt Lit(0))

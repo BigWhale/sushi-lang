@@ -1,0 +1,13 @@
+unit test_err_typeck_match_enum_binding_count
+
+ShirBody code
+  params : [(_0 "s": Status, Guaranteed)]
+  locals : [_1 "a", _2 "b", _3 "n": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Status, "Success", [(_1, Bare), (_2, Bare)]), [Return(Binary(+, LocalRef(_1), LocalRef(_2)))]), Arm(Variant(@Status, "Failure", [(_3, Bare), Wildcard]), [Return(LocalRef(_3))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@code), [(EnumInit(@Status, "Success", [adopt Lit(42)]), Guaranteed)]))

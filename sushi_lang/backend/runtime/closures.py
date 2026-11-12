@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
 
-from sushi_lang.semantics.typesys import FunctionType
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.typesys import FunctionType, StructType
 from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
@@ -41,13 +42,16 @@ def _env_prepended_signature(codegen: "LLVMCodegen", fn_type: FunctionType) -> i
     return ir.FunctionType(result_ll, [codegen.types.str_ptr] + param_ll)
 
 
+_THUNK_SUFFIX = ".__closure_thunk"
+
+
 def synthesize_thunk(codegen: "LLVMCodegen", target: ir.Function) -> ir.Function:
     """Return (creating once, cached) the adapter thunk for a bare top-level fn."""
     target_ret = target.function_type.return_type
     target_params = list(target.function_type.args)
     thunk_ty = ir.FunctionType(target_ret, [codegen.types.str_ptr] + target_params)
 
-    thunk_name = f"{target.name}.__closure_thunk"
+    thunk_name = target.name + _THUNK_SUFFIX
     existing = codegen.module.globals.get(thunk_name)
     if isinstance(existing, ir.Function) and existing.function_type == thunk_ty:
         return existing
@@ -72,6 +76,29 @@ def materialize_function_ref(
     return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
 
 
+def closure_constant(codegen: "LLVMCodegen", symbol: str) -> ir.Constant:
+    """The constant `{thunk, null, null, null}` of a function-typed constant.
+
+    The function can be private to its unit, and a constant of its unit goes into the module
+    of every unit. So the module that holds the private function exports its thunk, and every
+    other module declares the thunk. A constant takes only the address of the thunk, so the
+    declaration does not repeat its signature.
+    """
+    target = codegen.module.globals.get(symbol)
+    if isinstance(target, ir.Function):
+        thunk = synthesize_thunk(codegen, target)
+        if target.linkage == "internal":
+            thunk.linkage = "external"
+    else:
+        thunk = codegen.module.globals.get(symbol + _THUNK_SUFFIX)
+        if thunk is None:
+            thunk = ir.Function(codegen.module, ir.FunctionType(ir.VoidType(), []),
+                                name=symbol + _THUNK_SUFFIX)
+    nul = null_ptr(codegen)
+    return ir.Constant(codegen.types.closure_struct,
+                       [thunk.bitcast(codegen.types.str_ptr), nul, nul, nul])
+
+
 def env_owns_field(codegen: "LLVMCodegen", field_type) -> bool:
     """Does the heap environment own this captured field?"""
     from sushi_lang.backend.ownership import drops_of, resolver_for
@@ -92,7 +119,7 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
         return existing
 
     fn = ir.Function(codegen.module, drop_ty, name=drop_name)
-    fn.linkage = "internal"
+    fn.linkage = "linkonce_odr"
     b = ir.IRBuilder(fn.append_basic_block("entry"))
     env_i8 = fn.args[0]
     env_ll = codegen.types.ll_type(env_struct)
@@ -111,8 +138,7 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
             zero = ir.Constant(i32, 0)
             for idx, fty in owned:
                 field_ptr = b.gep(env_ptr, [zero, ir.Constant(i32, idx)], inbounds=True, name="cap_field")
-                da = codegen.dynamic_arrays
-                if da is not None and da.is_list_type(fty):
+                if isinstance(fty, StructType) and is_instance_of(fty, "List"):
                     from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
                     emit_list_destroy(codegen, field_ptr, fty)
                 else:
@@ -137,7 +163,7 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
         return existing
 
     fn = ir.Function(codegen.module, clone_ty, name=clone_name)
-    fn.linkage = "internal"
+    fn.linkage = "linkonce_odr"
     b = ir.IRBuilder(fn.append_basic_block("entry"))
     env_i8 = fn.args[0]
     env_ll = codegen.types.ll_type(env_struct)
@@ -173,50 +199,31 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     return fn
 
 
-def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
-    """Materialize a lambda literal as a function value at its use site."""
-    from sushi_lang.internals.errors import raise_internal_error
-    from sushi_lang.semantics.ast import Name as _Name
-    from sushi_lang.backend.ownership import ConsumingUse, consume
-
-    lifted = codegen.funcs.get(getattr(lam, "lifted_name", None))
-    if lifted is None:
-        raise_internal_error("CE0055", name=str(getattr(lam, "lifted_name", "<lambda>")))
-
-    fn_ptr_i8 = codegen.builder.bitcast(lifted, codegen.types.str_ptr)
-    captures = lam.captures or []
-    if not captures:
-        # No environment: pass a null env; the lifted body never reads it.
-        nul = null_ptr(codegen)
-        return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
-
-    env_struct = lam.env_struct
-    env_ll = codegen.types.ll_type(env_struct)
+def emit_capturing_closure(codegen: "LLVMCodegen", target: ir.Function, env_struct: StructType,
+                           parts: List[ir.Value]) -> ir.Value:
+    """A closure that captures: ONE heap block for its environment, with each part stored in
+    slot order, and the glue of its layout. The environment owns what the parts hold."""
+    builder = codegen.builder
     size = codegen.types.get_type_size_bytes(env_struct)
-    raw = emit_malloc(codegen, codegen.builder, ir.Constant(codegen.types.i64, size))
-    env_ptr = codegen.builder.bitcast(raw, ir.PointerType(env_ll), name="closure_env_typed")
-
+    raw = emit_malloc(codegen, builder, ir.Constant(codegen.types.i64, size))
+    env_ptr = builder.bitcast(raw, ir.PointerType(codegen.types.ll_type(env_struct)),
+                              name="closure_env_typed")
     i32 = codegen.types.i32
     zero = ir.Constant(i32, 0)
-    for idx, cap in enumerate(captures):
-        source = cap.capture_source
-        if source is None:
-            source = _Name(id=cap.name, loc=lam.loc)
-            source.ownership_provenance = getattr(cap, "ownership_provenance", None)
-        value = codegen.expressions.emit_expr(source)
-        # The environment takes ownership of the captured value and outlives the scope
-        # that built it. That makes this the CAPTURE consuming use, with no decision of
-        # its own -- `env_owns_field` then destroys exactly what the seam gave it here.
-        value = consume(codegen, source, value, cap.ty, ConsumingUse.CAPTURE)
-        field_ptr = codegen.builder.gep(env_ptr, [zero, ir.Constant(i32, idx)], inbounds=True)
-        codegen.builder.store(value, field_ptr)
+    for index, part in enumerate(parts):
+        builder.store(part, builder.gep(env_ptr, [zero, ir.Constant(i32, index)], inbounds=True))
+    str_ptr = codegen.types.str_ptr
+    return build_closure_value(codegen, builder.bitcast(target, str_ptr), raw,
+                               builder.bitcast(get_or_create_env_drop(codegen, env_struct), str_ptr),
+                               builder.bitcast(get_or_create_env_clone(codegen, env_struct), str_ptr))
 
-    env_i8 = codegen.builder.bitcast(env_ptr, codegen.types.str_ptr)
-    drop_fn = get_or_create_env_drop(codegen, env_struct)
-    drop_i8 = codegen.builder.bitcast(drop_fn, codegen.types.str_ptr)
-    clone_fn = get_or_create_env_clone(codegen, env_struct)
-    clone_i8 = codegen.builder.bitcast(clone_fn, codegen.types.str_ptr)
-    return build_closure_value(codegen, fn_ptr_i8, env_i8, drop_i8, clone_i8)
+
+def emit_empty_closure(codegen: "LLVMCodegen", target: ir.Function) -> ir.Value:
+    """A lambda that captures nothing: the lifted function takes its environment first, and it
+    never reads the null that comes. The glue does nothing."""
+    nul = null_ptr(codegen)
+    return build_closure_value(codegen, codegen.builder.bitcast(target, codegen.types.str_ptr),
+                               nul, nul, nul)
 
 
 def emit_indirect_call(

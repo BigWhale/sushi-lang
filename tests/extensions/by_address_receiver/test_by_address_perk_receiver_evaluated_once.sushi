@@ -1,0 +1,26 @@
+# A receiver of a perk method that takes `peek self` is evaluated one time: an element
+# whose index is a call runs its call one time, and the method reads the place of the
+# element that the one evaluation found.
+# EXPECT_STDOUT_EXACT: "pick\n4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct Box:
+    i32 n
+    string tag
+
+perk Weighs:
+    fn weight(peek self) i32
+
+extend Box with Weighs:
+    fn weight(peek self) i32:
+        return self.n * 2
+
+fn pick(i32 i) i32:
+    println("pick")
+    return i
+
+fn main() i32:
+    let Box[] boxes = from([Box(1, "x".concat("y")), Box(2, "z".concat("w"))])
+    println(boxes[pick(1)].weight())
+    return 0

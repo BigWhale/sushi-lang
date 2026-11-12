@@ -1,0 +1,46 @@
+unit test_borrow_nom_self_wrapper_receivers
+
+ShirBody owned
+  params : []
+  locals : [_0 "m": Maybe@(string), _1 "s": string]
+  block  :
+    Assign(LocalRef(_0), adopt EnumInit(@Maybe, "Some", [adopt Lit("Mostly Harmless")]), is_init: true)
+    Assign(LocalRef(_1), adopt Try(adopt Call(Builtin(move LocalRef(_0), "or_err"), [(adopt EnumInit(@StdError, "Error", []), Owned)])), is_init: true)
+    Return(adopt EnumInit(@Result, "Ok", [move LocalRef(_1)]))
+
+ShirBody plain
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : [_1 "v": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Try(adopt Call(Builtin(adopt LocalRef(_0), "or_err"), [(adopt EnumInit(@StdError, "Error", []), Owned)])), is_init: true)
+    Return(adopt EnumInit(@Result, "Ok", [adopt Binary(*, LocalRef(_1), Lit(2))]))
+
+ShirBody through
+  params : [(_0 "m": Maybe@(string), Guaranteed)]
+  locals : [_1 "s": string]
+  regions : [_1: {_0} until #7]
+  block  :
+    Assign(LocalRef(_1), reject Try(adopt Call(Builtin(reject LocalRef(_0), "or_err"), [(adopt EnumInit(@StdError, "Error", []), Owned)])), is_init: true)
+    Return(adopt EnumInit(@Result, "Ok", [adopt Call(Builtin(LocalRef(_1), "len"), [])]))
+
+ShirBody nested
+  params : [(_0 "r": Result@(Result@(string, StdError), StdError), Guaranteed)]
+  locals : [_1 "s": string]
+  regions : [_1: {_0} until #9]
+  block  :
+    Assign(LocalRef(_1), reject Try(reject Try(reject LocalRef(_0))), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Call(Builtin(LocalRef(_1), "len"), [])]))
+
+ShirBody main
+  params : []
+  locals : [_0 "m": Maybe@(string), _1 "r": Result@(Result@(string, StdError), StdError), _2 "n": i32]
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@owned), []), "realise"), [(Lit("none"), Guaranteed)]), Guaranteed)]))
+    Assign(LocalRef(_0), adopt EnumInit(@Maybe, "Some", [adopt Lit("Mostly Harmless")]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@through), [(LocalRef(_0), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@plain), [(EnumInit(@Maybe, "Some", [adopt Lit(4)]), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@plain), [(EnumInit(@Maybe, "None", []), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), Guaranteed)]))
+    Assign(LocalRef(_1), adopt EnumInit(@Result, "Ok", [adopt EnumInit(@Result, "Ok", [adopt Lit("Mostly Harmless")])]), is_init: true)
+    Assign(LocalRef(_2), adopt Call(Builtin(Call(Free(@nested), [(LocalRef(_1), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), is_init: true)
+    Return(adopt Binary(-, LocalRef(_2), Lit(15)))

@@ -1,0 +1,31 @@
+# A `nom` pattern binding takes a `string[2]` payload out of the variant whole.
+# `match nom s:` hands a local over and the arm gives the fixed array to a `nom`
+# parameter; a temporary scrutinee keeps it to the end of the arm. Each string is
+# destroyed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate a 1 b 1\nheld a 2 b 2\nempty\n"
+enum Shape:
+    Rows(string[2])
+    Blank
+
+fn make(i32 n) Shape:
+    if (n == 0):
+        return Shape.Blank
+    return Shape.Rows(["a {n}", "b {n}"])
+
+fn eat(nom string[2] rows) ~:
+    println("ate {rows[0]} {rows[1]}")
+
+fn main() i32:
+    let Shape s = make(1)
+    match nom s:
+        Shape.Rows(nom rows) -> eat(nom rows)
+        Shape.Blank -> println("empty")
+    match make(2):
+        Shape.Rows(nom rows) -> println("held {rows[0]} {rows[1]}")
+        Shape.Blank -> println("empty")
+    match make(0):
+        Shape.Rows(nom rows) -> eat(nom rows)
+        Shape.Blank -> println("empty")
+    return 0

@@ -1,0 +1,27 @@
+# A lambda that captures, in a loop, with each exit: the end of the body, `break` and `return`.
+# EXPECT_STDOUT_EXACT: "3\n4\n5\n"
+# EXPECT_NO_LEAKS
+fn walk(i32 stop) i32:
+    foreach(i in 0..10):
+        let string s = "abc"
+        let string kept = s.clone()
+        let fn(i32) -> i32 f = |i32 x| x + kept.len()
+        if (i == stop):
+            return f(i)
+    return 0
+
+fn broken() i32:
+    let i32 found = 0
+    foreach(i in 0..10):
+        let string kept = "abcd".clone()
+        let fn() -> i32 f = |~| kept.len()
+        found := f()
+        if (i == 2):
+            break
+    return found
+
+fn main() i32:
+    println(walk(0))
+    println(broken())
+    println(walk(2))
+    return 0

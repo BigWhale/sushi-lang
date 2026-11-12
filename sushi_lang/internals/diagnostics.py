@@ -55,6 +55,12 @@ class InternalCompilerError(SushiError, RuntimeError):
     code = "CE0000"
 
 
+class AfterAnError(Exception):
+    """The walk of a body that has an error met a node that its stage does not handle
+    (`semantics/shir/dispatch.py`). The pass that walks the body catches it and ends the
+    walk; nothing reports it, so the error of the program is the diagnostic."""
+
+
 class AstBuilderICE(InternalCompilerError):
     """The grammar produced a parse-tree shape the AST builder cannot build."""
 

@@ -1,0 +1,21 @@
+unit test_err_typeck_match_wildcard_not_last
+
+ShirBody early
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(1), [Return(adopt Lit("one"))]), Arm(Or([Literal(2), Wildcard]), [Return(adopt Lit("other"))])], consumes: false)
+
+ShirBody late
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Wildcard, [Return(Lit("other"))]), Arm(Literal(1), [Return(Lit("one"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@early), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@late), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

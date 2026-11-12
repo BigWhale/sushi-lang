@@ -1,0 +1,10 @@
+unit test_err_borrow_destructure_rebinds_a_binder
+
+ShirBody main
+  params : []
+  locals : [_0 "m": Maybe@(i32), _1 "b": i32, _2 "x": i32]
+  block  :
+    Assign(LocalRef(_0), adopt EnumInit(@Maybe, "Some", [adopt Lit(3)]), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [(_2, Bare)]), [Destructure([Place(LocalRef(_2)), Place(LocalRef(_1))], adopt TupleInit([adopt Lit(1), adopt Lit(2)]))]), Arm(Variant(@Maybe, "None", []), [Assign(LocalRef(_1), adopt Lit(1), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))

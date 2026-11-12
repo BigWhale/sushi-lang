@@ -1,0 +1,42 @@
+# A bare binder of a string payload in each alternative of an arm is a view of the
+# scrutinee. The arm body is one body for the two alternatives. A nested alternative
+# reads the payload of a payload. The strings are built at run time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a mostly\nb harmless\nnone\ndeep mostly\ndeep harmless\ndeep none\nafter mostly\n"
+
+enum Word:
+    A(string)
+    B(string)
+    Gone
+
+fn show(Word w) ~:
+    match w:
+        Word.A(s) -> println("a {s}")
+        Word.B(s) -> println("b {s}")
+        Word.Gone -> println("none")
+
+fn deep(Maybe@(Word) m) ~:
+    match m:
+        Maybe.Some(Word.A(s) | Word.B(s)) -> println("deep {s}")
+        Maybe.Some(Word.Gone) | Maybe.None -> println("deep none")
+
+fn main() i32:
+    let string most = "most"
+    let string harm = "harm"
+    let Word a = Word.A("{most}ly")
+    let Word b = Word.B("{harm}less")
+    match a:
+        Word.A(s) | Word.B(s) -> println("a {s}")
+        Word.Gone -> println("none")
+    match b:
+        Word.A(s) | Word.B(s) -> println("b {s}")
+        Word.Gone -> println("none")
+    show(Word.Gone)
+    deep(Maybe.Some(Word.A("{most}ly")))
+    deep(Maybe.Some(Word.B("{harm}less")))
+    deep(Maybe.None())
+    match a:
+        Word.A(s) | Word.B(s) -> println("after {s}")
+        Word.Gone -> println("none")
+    return 0

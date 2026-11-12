@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "00\n11\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_late_instance.shir
+#
+# the SHIR dump of a LATE instance. The early passes do not know the type of the binder of
+# a `foreach` over a range, so no early pass makes `twice@(i32)`. The typecheck pass asks
+# for the instance when it checks the call, and the copy fixpoint places the copy after
+# the per-unit loop. Lowering runs on the copy at that point, and the copy is a body of
+# the unit like an early instance.
+
+fn twice@(T: Display)(T x) string:
+    return "{x}{x}"
+
+fn main() i32:
+    foreach(i in 0..2):
+        println(twice(i))
+    return 0

@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_result_return.slir
+#
+# A `return` of a `Result` writes the variant into `_0`. A literal payload is a constant
+# operand. The `StdError` payload is a new value, so it goes into a temporary first, and
+# the `Result` moves it.
+
+fn found() string | StdError:
+    return Result.Ok("Mostly Harmless")
+
+fn lost() ~ | StdError:
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    lost()
+    return 0

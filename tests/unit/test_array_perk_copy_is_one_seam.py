@@ -1,8 +1,9 @@
-"""The copy of an array-template perk implementation is cut in ONE place (#699).
+"""The copy of a perk implementation on a miss is cut in ONE place (#699).
 
 `extend T[] with P` covers every dynamic array, and an array type has no instantiation
-set, so the copy for one array type is cut on a miss of the perk-implementation table:
-`ArrayPerkCopies` (`semantics/generics/array_perk_copies.py`) is the hook, and the
+set, so the copy for one array type is cut on a miss of the perk-implementation table, and
+so is the copy for an instance of a generic target that comes after the cut per
+instantiation: `PerkCopies` (`semantics/generics/perk_copies.py`) is the hook, and the
 analyzer is the one place that installs it. A second caller of `monomorphize_perk_impl`
 could register a copy whose body nothing places and checks, and a second installer could
 leave the hook armed in the backend, where a miss must stay a miss.
@@ -19,7 +20,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 
 CUTTERS = frozenset({
     SOURCE_ROOT / "semantics" / "generics" / "extensions.py",
-    SOURCE_ROOT / "semantics" / "generics" / "array_perk_copies.py",
+    SOURCE_ROOT / "semantics" / "generics" / "perk_copies.py",
     # The template check cuts a CHECK copy in its overlay and registers nothing (#1070).
     SOURCE_ROOT / "semantics" / "passes" / "types" / "templates.py",
 })
@@ -28,7 +29,7 @@ INSTALLERS = frozenset({
 })
 
 CUT = "monomorphize_perk_impl"
-HOOK = "on_array_miss"
+HOOK = "on_perk_miss"
 
 
 def _cuts(tree: ast.AST) -> list[int]:
@@ -75,7 +76,7 @@ def test_the_scans_see_a_cut_and_an_install():
         "def f(t, ty, s):\n"
         "    return extensions.monomorphize_perk_impl(t, ty, (), substitutor=s)\n"
         "def g(tables, hook):\n"
-        "    tables.perk_impls.on_array_miss = hook\n"
+        "    tables.perk_impls.on_perk_miss = hook\n"
     )
     tree = ast.parse(source)
     assert _cuts(tree) == [1, 3]

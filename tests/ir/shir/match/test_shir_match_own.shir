@@ -1,0 +1,15 @@
+unit test_shir_match_own
+
+ShirBody main
+  params : []
+  locals : [_0 "o": Own@(i32), _1 "h": Holder, _2 "inner": i32, _3 "v": i32, _4 "v": i32]
+  regions : [_2: {_1} until #14, _3: {_1} until #29]
+  block  :
+    Assign(LocalRef(_0), adopt Call(BuiltinStatic(Own@(i32), "alloc"), [(adopt Lit(7), Owned)]), is_init: true)
+    Assign(LocalRef(_1), adopt EnumInit(@Holder, "Full", [move LocalRef(_0)]), is_init: true)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own((_2, Ref(Poke)))]), [Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(100)), is_init: false)]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("nil"), Guaranteed)]))])], consumes: false)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own((_3, Ref(Peek)))]), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("nil"), Guaranteed)]))])], consumes: false)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own((_4, Bare))]), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_4), Guaranteed)]))]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("nil"), Guaranteed)]))])], consumes: false)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own(Wildcard)]), [ExprStmt(Call(Intrinsic("println"), [(Lit("full"), Guaranteed)]))]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("nil"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

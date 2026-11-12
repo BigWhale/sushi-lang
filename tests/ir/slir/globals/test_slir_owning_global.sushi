@@ -1,0 +1,33 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nArthur\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_owning_global.slir
+#
+# A `var` that owns is a `Global` place with no scope. A rebind puts the new value into a
+# temporary, drops the old value with `Drop(Global)` and then moves the temporary into
+# the global. A field write that owns drops the old field first. A `poke` argument, a
+# `peek` argument and a receiver use the global where it is, and a borrowed read is a
+# `copy` of the place. No exit drops the global.
+
+struct Entry:
+    string name
+    i32 count
+
+var string text = "Mostly"
+var Entry last = Entry("none", 0)
+
+fn add(poke string s, string tail) ~:
+    s := "{s}{tail}"
+
+fn show(peek string s) ~:
+    println(s)
+
+fn main() i32:
+    add(poke text, " Harmless")
+    show(peek text)
+    last.name := "{'Arthur'}"
+    println(last.name)
+    text := "{text}!"
+    text := "end"
+    last.name := "none"
+    return 0

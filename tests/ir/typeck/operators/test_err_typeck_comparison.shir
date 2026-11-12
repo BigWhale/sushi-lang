@@ -1,0 +1,27 @@
+unit test_err_typeck_comparison
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "small": u8, _2 "eq": bool, _3 "ne": bool, _4 "lt": bool, _5 "le": bool, _6 "gt": bool, _7 "ge": bool, _8 "sums": bool, _9 "same": bool, _10 "other": bool, _11 "name": string, _12 "named": bool, _13 "before": bool, _14 "all": bool, _15 "texts": bool, _16 "mixed": bool, _17 "truth": bool, _18 "order": bool]
+  block  :
+    Assign(LocalRef(_0), Lit(7), is_init: true)
+    Assign(LocalRef(_1), Lit(3), is_init: true)
+    Assign(LocalRef(_2), Binary(==, LocalRef(_0), Lit(7)), is_init: true)
+    Assign(LocalRef(_3), Binary(!=, LocalRef(_0), Lit(8)), is_init: true)
+    Assign(LocalRef(_4), Binary(<, LocalRef(_0), Lit(10)), is_init: true)
+    Assign(LocalRef(_5), Binary(<=, LocalRef(_1), Lit(3)), is_init: true)
+    Assign(LocalRef(_6), Binary(>, Lit(300), LocalRef(_0)), is_init: true)
+    Assign(LocalRef(_7), Binary(>=, LocalRef(_0), Unary(neg, Lit(1))), is_init: true)
+    Assign(LocalRef(_8), Binary(>, Binary(+, LocalRef(_0), Lit(1)), Binary(-, LocalRef(_0), Lit(1))), is_init: true)
+    Assign(LocalRef(_9), Binary(==, LocalRef(_2), LocalRef(_3)), is_init: true)
+    Assign(LocalRef(_10), Binary(!=, LocalRef(_4), LocalRef(_5)), is_init: true)
+    Assign(LocalRef(_11), Lit("Arthur"), is_init: true)
+    Assign(LocalRef(_12), Binary(==, LocalRef(_11), Lit("Arthur")), is_init: true)
+    Assign(LocalRef(_13), Binary(<, LocalRef(_11), Lit("Ford")), is_init: true)
+    Assign(LocalRef(_14), Binary(==, LocalRef(_6), LocalRef(_7)), is_init: true)
+    Assign(LocalRef(_15), Binary(!=, LocalRef(_12), LocalRef(_13)), is_init: true)
+    Assign(LocalRef(_16), Binary(!=, LocalRef(_14), LocalRef(_15)), is_init: true)
+    Assign(LocalRef(_17), Binary(==, LocalRef(_8), Lit(true)), is_init: true)
+    Assign(LocalRef(_18), Binary(<, LocalRef(_9), LocalRef(_10)), is_init: true)
+    Assign(LocalRef(_16), Binary(==, LocalRef(_17), LocalRef(_18)), is_init: false)
+    Return(Lit(0))

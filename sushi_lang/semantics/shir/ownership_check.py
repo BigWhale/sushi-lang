@@ -1,0 +1,328 @@
+"""The completeness check of `OwnershipResults` (docs/design/ir.md 7.9, 8.10, ruling S6).
+
+A consuming use is a value in a position that takes it over (the closed set of
+docs/design/ownership-conventions.md 3.1). SHIR shows the position, so the rule reads the node and the
+answers of `typecheck`:
+
+- the value of an `Assign` (a `let`, a rebind, a write of a field or an element) and the
+  value of a `Destructure`. The value of a reference `let` is a `Borrow` of its place, and
+  no consuming use: the local points into the place;
+- the value of a `Return`;
+- an argument of a `Call` whose convention is `Owned`, and a bloom argument with no
+  convention (a bloom into a stdlib row borrows, ir.md 7.4);
+- each field of a `StructInit`, each payload of an `EnumInit`, each part of a
+  `TupleInit`, and the value of each `Single` run of an `ArrayInit` (a repeated value is
+  a borrow, and each slot takes its own copy);
+- the scrutinee of a `Match` that consumes (`match nom r:`); a tuple literal there gives
+  each part, and its parts are no consuming use when the match does not consume: a tuple
+  literal that owns builds no tuple, and each part is a root (ruling 3 of tuples.md);
+- the operand of a `Try`, and the operand of every `Cast`: a conversion takes it as
+  `nom self`, and an identity cast moves it (a plain operand gets ADOPT);
+- the iterable of a `Loop` over an iterator value or a `next()` type that does not walk
+  in place;
+- each capture of a `Lambda`, from its environment layout in `LiftResults`.
+
+The receiver of a `Method` callee whose `receiver` is `Owned` (a `nom self` extension method)
+and the receiver of a built-in method that declares `nom self` (`or_err`, `map_err`) are
+consuming uses too: the convention is a fact of the callee row.
+
+The clone of an iterator and a call with a `peek` return that answers an iterator have LENT or
+OWNED too (`_makes_an_iterator`).
+
+When the `borrow` pass ends on a body with no error, the check walks the body once and
+asks the table: each consuming use and each capture has an `Ownership`; each iterator
+producer and each lazy adapter has LENT or OWNED, except the iterable of a direct walk
+(`Cursor`, `HashMapCursor`), which makes no value; each lent one has its heap decision;
+each `Loop` of kind `Protocol` or `IteratorValue` has its walk in place. The conditionally
+moved locals have no check: no row for a local is the answer "moved on no path, or on
+every path". REJECT is an error of `borrow`, except at four positions, where it is a
+borrowed view with no error: the value of a `let` (a let-borrow of the owner), the value
+of a destructure (each binder views its element), the
+operand of a `??` that reads through a borrowed owning wrapper or through the answer of a
+call with a `peek` return, and the receiver of an
+`or_err` that is the operand of a `??`. The wrapper is a local that holds a borrow: a
+parameter with no `nom`, a local of a reference type, or a let-borrow. The receiver of the
+`or_err` is a view by the shape of the call. A REJECT row at any other
+position of a body that `borrow` ended with no error is a gap too. A gap is the internal
+error CE0157, which names the pass and the table.
+"""
+from __future__ import annotations
+
+from typing import Any, Callable, Iterator, TypeAlias
+
+from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
+from sushi_lang.semantics.generics.iterators import (
+    answers_an_iterator, is_lazy_adapter, produces_from_a_container)
+from sushi_lang.semantics.method_effects import ITERATOR_FAMILY, receiver_convention
+from sushi_lang.semantics.ownership import Ownership
+from sushi_lang.semantics.param_modes import Convention, bloom_moves
+from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.internals import errors as er
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.body import ShirBody
+from sushi_lang.semantics.shir.callee import Builtin, Method
+from sushi_lang.semantics.shir.decls import DeclNames
+from sushi_lang.semantics.shir.ids import LocalId, ShirId
+from sushi_lang.semantics.shir.lift import LiftResults
+from sushi_lang.semantics.shir.loop_kind import Cursor, HashMapCursor, IteratorValue, Protocol
+from sushi_lang.semantics.shir.ownership import OwnershipResults
+from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
+from sushi_lang.semantics.shir.typeck import TypeckResults, lambda_conventions
+from sushi_lang.semantics.shir.walk import walk
+from sushi_lang.semantics.typesys import IteratorType, ReferenceType, deref_type
+
+Consumed: TypeAlias = Callable[[Any, TypeckResults, OwnershipResults], Iterator[e.ShirExpr]]
+
+
+def _value(node: s.Assign | s.Destructure | s.Return, _typeck: TypeckResults,
+           _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    if not isinstance(node.value, e.Borrow):
+        yield node.value
+
+
+def _call(node: e.Call, typeck: TypeckResults,
+          _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    resolved = typeck.callee_of(node.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    if ((isinstance(callee, Method) and callee.receiver is Convention.OWNED)
+            or (isinstance(callee, Builtin)
+                and receiver_convention(callee.method) is Convention.OWNED)):
+        yield callee.recv
+    for position, arg in enumerate(node.args):
+        convention = typeck.convention_of(node.shir_id, position)
+        if convention is Convention.OWNED or (arg.bloom and bloom_moves(convention)):
+            yield arg.value
+
+
+def _fields(node: e.StructInit | e.EnumInit, _typeck: TypeckResults,
+            _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    yield from (arg.value for arg in (node.fields if isinstance(node, e.StructInit)
+                                      else node.payload)
+                if arg.marker not in (Convention.IN_GUARANTEED, Convention.INOUT))
+
+
+def _parts(node: e.TupleInit, _typeck: TypeckResults,
+           _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    yield from node.parts
+
+
+def _runs(node: e.ArrayInit, _typeck: TypeckResults,
+          _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    yield from (run.value for run in node.runs if isinstance(run, e.Single))
+
+
+def _scrutinee(node: s.Match, _typeck: TypeckResults,
+               _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    if node.consumes and isinstance(node.scrutinee, e.TupleInit):
+        yield from node.scrutinee.parts
+    elif node.consumes:
+        yield node.scrutinee
+
+
+def _try(node: e.Try, _typeck: TypeckResults,
+         _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    yield node.inner
+
+
+def _cast(node: e.Cast, _typeck: TypeckResults,
+          _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    yield node.operand
+
+
+def _iterable(node: s.Loop, typeck: TypeckResults,
+              ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    if (isinstance(node.source, s.Items) and _walks_a_value(node, typeck)
+            and ownership.in_place_of(node.shir_id) is False):
+        yield node.source.iterable
+
+
+#: The consuming positions of each node class.
+CONSUMED: dict[type, Consumed] = {
+    s.Assign: _value,
+    s.Destructure: _value,
+    s.Return: _value,
+    e.Call: _call,
+    e.StructInit: _fields,
+    e.EnumInit: _fields,
+    e.TupleInit: _parts,
+    e.ArrayInit: _runs,
+    s.Match: _scrutinee,
+    e.Try: _try,
+    e.Cast: _cast,
+    s.Loop: _iterable,
+}
+
+
+def _walks_a_value(loop: s.Loop, typeck: TypeckResults) -> bool:
+    """Is `loop` a walk of an iterator value or of a type that carries `next()`?"""
+    return isinstance(typeck.loop_kind_of(loop.shir_id), (Protocol, IteratorValue))
+
+
+def consuming_uses(body: ShirBody, typeck: TypeckResults,
+                   ownership: OwnershipResults) -> list[e.ShirExpr]:
+    """Each consuming use of `body` that is a node, in the order of the walk."""
+    found: list[e.ShirExpr] = []
+    scrutinees = {value.scrutinee.shir_id for _path, value in walk(body.block, "block", body)
+                  if isinstance(value, s.Match) and isinstance(value.scrutinee, e.TupleInit)}
+    for _path, value in walk(body.block, "block", body):
+        consumed = CONSUMED.get(type(value))
+        if consumed is not None and not (isinstance(value, e.TupleInit)
+                                         and value.shir_id in scrutinees):
+            found.extend(consumed(value, typeck, ownership))
+    return found
+
+
+def _direct_iterables(body: ShirBody, typeck: TypeckResults) -> set[ShirId]:
+    """The iterable of each direct walk: it makes no iterator value, so it has no state."""
+    return {value.source.iterable.shir_id for _path, value in walk(body.block, "block", body)
+            if isinstance(value, s.Loop) and isinstance(value.source, s.Items)
+            and isinstance(typeck.loop_kind_of(value.shir_id), (Cursor, HashMapCursor))}
+
+
+def _makes_an_iterator(call: e.Call, typeck: TypeckResults) -> bool:
+    """Is `call` an iterator producer over a container, a lazy adapter, the clone of an
+    iterator, or a call with a `peek` return that answers an iterator?"""
+    if _borrowed_call(call, typeck):
+        return answers_an_iterator(typeck.type_of(call.shir_id))
+    resolved = typeck.callee_of(call.shir_id)
+    if resolved is None or not isinstance(resolved.callee, Builtin):
+        return False
+    method = resolved.callee.method
+    return (produces_from_a_container(method.family, method.name, len(call.args))
+            or is_lazy_adapter(method.family, method.name)
+            or (method.family == ITERATOR_FAMILY and method.name == "clone"))
+
+
+def _iterator_gaps(call: e.Call, ownership: OwnershipResults) -> Iterator[str]:
+    lent = ownership.lent_of(call.shir_id)
+    if lent is None:
+        yield "iterator state"
+    elif lent and ownership.lent_on_heap(call.shir_id) is None:
+        yield "heap decision"
+
+
+def _capture_gaps(lam: e.Lambda, lift: LiftResults,
+                  ownership: OwnershipResults) -> Iterator[str]:
+    for local in lift.environment_of(lam.shir_id) or ():
+        if ownership.capture_ownership_of(lam.shir_id, local) is None:
+            yield f"ownership of capture _{local.index}"
+
+
+def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
+                     ownership: OwnershipResults) -> set[LocalId]:
+    """The locals that hold a borrow: a parameter with no `nom`, a local of a reference
+    type, a let-borrow (a `let` whose value answers REJECT), and the binder of a direct
+    walk."""
+    borrowed = {param.local for param in body.params
+                if param.convention is not Convention.OWNED}
+    borrowed |= {local.id for local in body.locals
+                 if isinstance(typeck.local_type(local.id), ReferenceType)}
+    for _path, value in walk(body.block, "block", body):
+        if isinstance(value, e.Lambda):
+            borrowed |= set(value.captures)
+            borrowed |= {param.local for param, convention
+                         in zip(value.params, lambda_conventions(typeck, value), strict=True)
+                         if convention is not Convention.OWNED}
+        elif (isinstance(value, s.Assign) and value.is_init
+                and isinstance(value.target, e.LocalRef)
+                and ownership.ownership_of(value.value.shir_id) is Ownership.REJECT):
+            borrowed.add(value.target.local)
+        elif (isinstance(value, s.Loop) and isinstance(value.source, s.Items)
+                and isinstance(value.source.binder, LocalId)
+                and _binder_borrows(value, typeck)):
+            borrowed.add(value.source.binder)
+    return borrowed
+
+
+def _binder_borrows(loop: s.Loop, typeck: TypeckResults) -> bool:
+    """Whether the binder of `loop` holds a borrow: a direct walk, or a value walk of an
+    iterator whose item has a `peek` part."""
+    kind = typeck.loop_kind_of(loop.shir_id)
+    if isinstance(kind, IteratorValue):
+        source = loop.source
+        iterator = (deref_type(typeck.type_of(source.iterable.shir_id))
+                    if isinstance(source, s.Items) else None)
+        return isinstance(iterator, IteratorType) and bool(iterator.peeks)
+    return isinstance(kind, (Cursor, HashMapCursor))
+
+
+def borrowed_views(body: ShirBody, typeck: TypeckResults,
+                   ownership: OwnershipResults) -> set[ShirId]:
+    """The positions where a REJECT row is a borrowed view and no error: the value of a
+    `let` and of a destructure, the operand of a `??` that reads through a borrowed wrapper
+    or through the answer of a call with a `peek` return, and the receiver of a
+    read-through `or_err` that is the operand of a `??`. A rebind
+    form takes each owning element, so `borrow` refuses its borrowed value (CE2411) at each
+    place of one; a value of a rebind form with no such place is read. A REJECT row comes only for a
+    wrapper that owns, so the operand of the `??` is a local that holds a borrow, or a `??`
+    over one (a nested `??`)."""
+    borrowed = _borrowed_locals(body, typeck, ownership)
+    views: set[ShirId] = set()
+    for _path, value in walk(body.block, "block", body):
+        if (isinstance(value, s.Assign) and value.is_init) or isinstance(value, s.Destructure):
+            views.add(value.value.shir_id)
+        elif isinstance(value, e.Try) and (
+                walk_place(value.inner, Step.TRY).local in borrowed
+                or _borrowed_call(walk_place(value.inner, Step.TRY).node, typeck)):
+            views.add(value.inner.shir_id)
+        elif isinstance(value, e.Try):
+            receiver = _read_through_receiver(value.inner, typeck)
+            if receiver is not None:
+                views.add(receiver.shir_id)
+    return views
+
+
+def _borrowed_call(node: object, typeck: TypeckResults) -> bool:
+    """Whether `node` is a call of a callable with a `peek` return: its answer is a view."""
+    return isinstance(node, e.Call) and typeck.sources_of(node.shir_id) is not None
+
+
+def _read_through_receiver(operand: e.ShirExpr, typeck: TypeckResults) -> e.ShirExpr | None:
+    """The receiver of `operand` when it is a call of a built-in method that reads a
+    borrowed receiver through (`reads_borrow_through`: `or_err`), else None."""
+    resolved = typeck.callee_of(operand.shir_id) if isinstance(operand, e.Call) else None
+    if resolved is None or not isinstance(resolved.callee, Builtin):
+        return None
+    receiver = resolved.callee.recv
+    signature = builtin_signature_of(deref_type(typeck.type_of(receiver.shir_id)),
+                                     resolved.callee.method.name)
+    return receiver if signature is not None and signature.reads_borrow_through else None
+
+
+def missing_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,
+                      ownership: OwnershipResults) -> list[MissingAnswer]:
+    """Each answer that `body` needs and that `ownership` does not hold, in the order of the
+    walk. `typeck` and `lift` give the positions: they are complete when `borrow` runs."""
+    consumed = {node.shir_id for node in consuming_uses(body, typeck, ownership)}
+    views = borrowed_views(body, typeck, ownership)
+    direct = _direct_iterables(body, typeck)
+    gaps: list[MissingAnswer] = []
+    for _path, value in walk(body.block, "block", body):
+        if not isinstance(value, (e.ExprNode, s.Loop)):
+            continue
+        node = type(value).__name__
+        answers: list[str] = []
+        decided = ownership.ownership_of(value.shir_id)
+        if value.shir_id in consumed and decided is None:
+            answers.append("ownership")
+        elif (value.shir_id in consumed and decided is Ownership.REJECT
+                and value.shir_id not in views):
+            answers.append("ownership other than reject")
+        if (isinstance(value, e.Call) and value.shir_id not in direct
+                and _makes_an_iterator(value, typeck)):
+            answers.extend(_iterator_gaps(value, ownership))
+        if isinstance(value, e.Lambda):
+            answers.extend(_capture_gaps(value, lift, ownership))
+        if (isinstance(value, s.Loop) and _walks_a_value(value, typeck)
+                and ownership.in_place_of(value.shir_id) is None):
+            answers.append("walk in place")
+        gaps.extend(MissingAnswer(answer, node, value.loc) for answer in answers)
+    return gaps
+
+
+def check_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,
+                    ownership: OwnershipResults, decls: DeclNames) -> None:
+    """CE0157 at the first answer that `body` needs and that `ownership` does not hold."""
+    raise_first_gap(er.ERR.CE0157, missing_ownership(body, typeck, lift, ownership),
+                    decls.name_of(body.fn_id), writer="borrow", table=type(ownership).__name__)

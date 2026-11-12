@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7 0 4 1 9\n3 9 5\n0 2 1 0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_array_runs.slir
+#
+# An array construction is ONE `Aggregate(AggArray)` with a run for each run of the
+# literal (ir.md 8.7): a plain element, a repeated value and its count (the value first),
+# and a range as a sequence. Two constant bounds give the first value and the count as
+# constants; a computed bound gives them as locals. A `T[]` local drops at its scope exit.
+
+fn main() i32:
+    let i32 n = 3
+    let i32[5] fixed = [7, 0; 3, 4..=4]
+    let i32[] run = from([9; n, 1..=n, 5])
+    let i32[] down = from([(0..n).rev(), 0])
+    let i32[] none = new()
+    let i32[] empty = from([])
+    none := empty
+    println("{fixed[0]} {fixed[1]} {fixed[4]} {run[3]} {run[0]}")
+    println("{run[5]} {run[2]} {run[6]}")
+    println("{down[3]} {down[0]} {down[1]} {down[2]}")
+    return 0

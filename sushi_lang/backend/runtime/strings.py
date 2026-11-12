@@ -4,7 +4,7 @@ from __future__ import annotations
 import typing
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import emit_memcpy_bytes
 from sushi_lang.internals.errors import raise_internal_error
@@ -12,6 +12,18 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+def literal_fat_pointer(data: ir.GlobalVariable) -> ir.Constant:
+    """The `{i8* data, i32 size, i8 owned}` constant over the global byte array `data` of a
+    literal. The bytes live in a read-only global, so the owned field is 0 and RAII never
+    frees them (#145). Every field is concrete: on ARM64 `size` and `owned` share one
+    by-value argument register, so an undef owned field poisons `size`."""
+    zero = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 0)
+    return ir.Constant.literal_struct([
+        data.gep([zero, zero]),
+        ir.Constant(ir.IntType(INT32_BIT_WIDTH), data.value_type.count),
+        ir.Constant(ir.IntType(INT8_BIT_WIDTH), 0)])
 
 
 class StringOperations:
@@ -26,27 +38,13 @@ class StringOperations:
         self._declare_and_define_utf8_char_count()
 
     def emit_string_literal(self, string_value: str) -> ir.Value:
-        """Generate a global string constant and return a fat pointer struct."""
-        global_str = self.codegen.string_manager.get_or_create_raw(string_value)
+        """The fat pointer of a string literal, over the deduplicated global of its bytes."""
+        return self.string_literal_constant(string_value)
 
-        zero = ir.Constant(self.codegen.i32, 0)
-        data_ptr = self.codegen.builder.gep(global_str, [zero, zero])
-
-        # Build fat pointer struct: {i8* data, i32 size, i8 owned}
-        # Literals are backed by a deduplicated global -> owned=0 (RAII must NEVER free it).
-        # The owned field must be set concretely (not left undef): on ARM64 `size` and
-        # `owned` share one by-value argument register, so an undef owned poisons `size`.
-        string_struct_type = self.codegen.types.string_struct
-        size = len(string_value.encode('utf-8'))
-        size_value = ir.Constant(self.codegen.i32, size)
-
-        undef_struct = ir.Constant(string_struct_type, ir.Undefined)
-        struct_with_data = self.codegen.builder.insert_value(undef_struct, data_ptr, 0)
-        struct_with_size = self.codegen.builder.insert_value(struct_with_data, size_value, 1)
-        struct_complete = self.codegen.builder.insert_value(
-            struct_with_size, ir.Constant(self.codegen.i8, 0), 2)
-
-        return struct_complete
+    def string_literal_constant(self, string_value: str) -> ir.Constant:
+        """The fat pointer of a string literal as a constant, over the deduplicated global
+        of its bytes. It owns no heap (owned=0)."""
+        return literal_fat_pointer(self.codegen.string_manager.get_or_create_raw(string_value))
 
     def emit_string_comparison(self, op: str, lhs: ir.Value, rhs: ir.Value) -> ir.Value:
         """Generate string comparison for fat pointer structs."""
@@ -156,11 +154,6 @@ class StringOperations:
 
         total_size_i64 = self.codegen.builder.zext(total_size, ir.IntType(INT64_BIT_WIDTH))
         new_data = emit_malloc(self.codegen, self.codegen.builder, total_size_i64)
-        # If emitted inside a print/println argument, this concat buffer is a temporary
-        # to free after output (#141). No-op elsewhere. The innermost frame is what
-        # answers, and an INTERPOLATION opens one of its own, so a buffer it builds is
-        # never an enclosing print's to free (#521).
-        self.codegen.print_frames.register_data(new_data)
 
         emit_memcpy_bytes(self.codegen, new_data, data1, size1)
         offset_ptr = self.codegen.builder.gep(new_data, [size1])

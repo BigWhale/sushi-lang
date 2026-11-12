@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_borrow_iterator_rows.shir
+# The rows of an iterator value: a producer over a place is lent with a stack state, and with a
+# heap state when it leaves through a `peek` return. A producer over a temporary is owned. A walk
+# of a `let` that holds a lent iterator is in place, and any other value goes to the loop.
+use <collections/iter>
+
+fn lend(i32[] xs) peek Iterator@(i32):
+    return xs.iter()
+
+fn own() Iterator@(i32):
+    return from([1]).iter()
+
+fn main() i32:
+    let i32[] xs = from([1])
+    let Iterator@(i32) lent = lend(xs)
+    foreach(x in lent):
+        println(x)
+    foreach(x in own()):
+        println(x)
+    return 0

@@ -1,0 +1,54 @@
+# A plain and a `peek` parameter of an adapter chain are borrows. The callee walks a
+# clone and destroys nothing it was lent; the caller then walks its own chain and
+# destroys it, each closure and what it captured once. An owned chain and a chain over a
+# local array are lent alike.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "plain 9\npeek 9\nt0:a\nt0:bb\nplain 9\npeek 9\nu0:x\nu0:yy\nplain 6\npeek 6\n2\n4\n"
+use <collections/iter>
+
+fn length_plain(Iterator@(string) it) ~:
+    let i32 n = 0
+    foreach(s in it.clone()):
+        n := n + s.len()
+    println("plain {n}")
+
+fn length_peek(peek Iterator@(string) it) ~:
+    let i32 n = 0
+    foreach(s in it.clone()):
+        n := n + s.len()
+    println("peek {n}")
+
+fn sum_plain(Iterator@(i32) it) ~:
+    let i32 n = 0
+    foreach(x in it.clone()):
+        n := n + x
+    println("plain {n}")
+
+fn sum_peek(peek Iterator@(i32) it) ~:
+    let i32 n = 0
+    foreach(x in it.clone()):
+        n := n + x
+    println("peek {n}")
+
+fn main() i32:
+    let string tag = "t{0}"
+    let Iterator@(string) owned = from(["a", "bb", "ccc"]).iter().clone_each().map(nom |string s| "{tag}:{s}").filter(nom |string s| s.len() < 6)
+    length_plain(owned)
+    length_peek(peek owned)
+    foreach(s in owned):
+        println(s)
+    let string other = "u{0}"
+    let string[] names = from(["x", "yy"])
+    let Iterator@(string) lent = names.iter().map(nom |string s| "{other}:{s}")
+    length_plain(lent)
+    length_peek(peek lent)
+    foreach(s in lent):
+        println(s)
+    let Iterator@(i32) r = 1..3
+    let Iterator@(i32) doubled = r.map(nom |i32 x| x * 2)
+    sum_plain(doubled)
+    sum_peek(peek doubled)
+    foreach(x in doubled):
+        println(x)
+    return 0

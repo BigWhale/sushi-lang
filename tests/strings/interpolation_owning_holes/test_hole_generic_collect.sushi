@@ -1,0 +1,18 @@
+# A hole holds the result of an iterator collect and an instance of a generic struct.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[2, 4, 6]\n[Wrap(value: "s")] [Wrap(value: 3)]\n[2, 3, 4]\n"
+# EXPECT_NO_LEAKS: true
+
+struct Wrap@(T):
+    T value
+
+fn show@(T: Display)(Wrap@(T) w) string:
+    return "[{w}]"
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let List@(i32) xs = a.iter().map(nom |i32 x| x * 2).collect()
+    println("{xs}")
+    println("{show(Wrap('s'))} {show(Wrap(3))}")
+    println("{a.iter().map(nom |i32 x| x + 1).collect()}")
+    return 0

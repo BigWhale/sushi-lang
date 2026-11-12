@@ -1,0 +1,19 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n4\n4\n"
+# EXPECT_NO_LEAKS
+
+struct Holder:
+    fn(i32) -> i32 f
+
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let fn(i32) -> i32 f = inc
+    let fn(i32) -> i32 c = f.clone()
+    println(c(3))
+    println(f(3))
+    let Holder h = Holder(inc)
+    let fn(i32) -> i32 d = h.f.clone()
+    println(d(3))
+    return 0

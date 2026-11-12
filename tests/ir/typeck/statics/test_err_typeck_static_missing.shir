@@ -1,0 +1,14 @@
+unit test_err_typeck_static_missing
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Static(Vec, "doubled"), []), is_init: true)
+    Return(LocalRef(_0))
+
+ShirBody Vec.doubled
+  params : [(_0 "self": Vec, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(*, Field(LocalRef(_0), "x"), Lit(2)))

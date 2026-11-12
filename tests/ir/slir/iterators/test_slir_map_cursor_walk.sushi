@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "one0\nnew\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_map_cursor_walk.slir
+# The SLIR of a `HashMapCursor` walk: a hidden cursor, and each round a call of the
+# `cursor_next` row of the view into a view local of a `Maybe`, then a switch on its tag. A
+# `poke` binder is the address that the payload holds, in a region over the map.
+use <collections/hashmap>
+
+fn main() i32:
+    let i32 n = 0
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one{n}")
+    foreach(v in m.values()):
+        println(v)
+    foreach(poke v in m.values()):
+        v := "new"
+    foreach(v in m.values()):
+        println(v)
+    m.free()
+    return 0

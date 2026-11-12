@@ -1,0 +1,22 @@
+# `getcwd` answers an owning string: bound, discarded, matched and passed on with `nom`.
+# EXPECT_STDOUT_EXACT: "bound /tmp\nmatched /tmp\nkept /tmp\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn keep(nom string s) ~:
+    println("kept {s}")
+
+fn main() i32:
+    let i32 rc = chdir("/tmp").realise(-1)
+    if (rc != 0):
+        return 1
+    let string here = getcwd().realise("?")
+    println("bound {here.s(here.len() - 4, here.len())}")
+    getcwd().realise("?")
+    match getcwd():
+        Result.Ok(path) -> println("matched {path.s(path.len() - 4, path.len())}")
+        Result.Err(_) -> println("err")
+    let string again = getcwd().realise("?")
+    keep(nom again.s(again.len() - 4, again.len()))
+    return 0

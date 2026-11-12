@@ -1,0 +1,13 @@
+# A `continue` outside a loop is CE1003, and it still ends the path in its block, so the
+# statement after it is CE0140.
+# EXPECT_ERROR_CODES_EXACT: CE1003, CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_after_a_continue_outside_a_loop.sushi:8:9: error [CE0140]
+fn f(i32 x) i32:
+    if (x > 0):
+        continue
+        println("after")
+    return x
+
+fn main() i32:
+    println(f(1))
+    return 0

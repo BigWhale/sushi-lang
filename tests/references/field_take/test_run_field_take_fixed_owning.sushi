@@ -1,0 +1,29 @@
+# A marked field take of a `string[2]` field: `nom s.names` moves the fixed array out of
+# a value this function owns, in a `let`, in a `return` and in a `nom` argument. The
+# other owning field is destroyed at the take, and the two strings are destroyed once by
+# their new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let a 1 b 1\nreturn a 2 b 2\nate a 3 b 3\n"
+struct Pair:
+    string[2] names
+    string label
+
+fn make(i32 n) Pair:
+    return Pair(["a {n}", "b {n}"], "label {n}")
+
+fn take_out(nom Pair s) string[2]:
+    return nom s.names
+
+fn eat(nom string[2] names) ~:
+    println("ate {names[0]} {names[1]}")
+
+fn main() i32:
+    let Pair a = make(1)
+    let string[2] got = nom a.names
+    println("let {got[0]} {got[1]}")
+    let string[2] back = take_out(nom make(2))
+    println("return {back[0]} {back[1]}")
+    let Pair c = make(3)
+    eat(nom c.names)
+    return 0

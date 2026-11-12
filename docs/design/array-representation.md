@@ -1,6 +1,6 @@
 # Dynamic Array Value Representation
 
-Status: **Decided** (a `T[]` is its descriptor, by value, and `emit_expr` yields it).
+Status: **Decided** (a `T[]` is its descriptor, by value).
 Companion to
 `string-representation.md`, which answers the same question for `string`.
 
@@ -12,16 +12,18 @@ A dynamic array value is a **3-field descriptor**:
 { i32 len, i32 cap, T* data }
 ```
 
-`ll_type(DynamicArrayType)` says so. The rule this document adds is about `emit_expr`:
+`ll_type(DynamicArrayType)` says so. The rule this document adds is about the value:
 
-> **`emit_expr` of a `T[]` yields the DESCRIPTOR, by value** — the same contract every other
-> type has. Exactly one place turns it into an address: `as_array_address` in
+> **The value of a `T[]` is the DESCRIPTOR, by value** — the same contract every other type
+> has. Exactly one place turns it into an address: `as_array_address` in
 > `backend/types/arrays/addressing.py`.
 
-An address that reaches `as_array_address` is **kept**, never re-spilled. That is what makes
-a mutating method reach the owner: a `Name` receiver hands over its slot, and a field read
-hands over a GEP into the struct. A value can only have come from a temporary, so nobody else
-can observe the copy `as_array_address` spills.
+An address that reaches `as_array_address` is **kept**, never re-spilled. The receiver of an
+array method never needs the seam: it is a SLIR place, and the emitter gives the method the
+address of that place (`docs/design/ir.md` 8.6), so a method that changes the array writes
+its owner. The seam turns a borrowed `T[]` argument (the source of a bulk copy, the other
+array of `eq_range`) into an address. That value is a copy that the method only reads, so
+nobody can observe the copy that `as_array_address` spills.
 
 ## Why the descriptor goes by value
 
@@ -43,11 +45,10 @@ define internal { i32, [2 x i64] } @take({ i32, i32, ptr } %a)
 
 Every producer answers the descriptor: `to_bytes()` and `split()` included, and
 `File.read_bytes` is Sushi source over `fd_read` (`src_sushi/io/fs.sushi`). The regression
-test is `tests/array/value_seam/`. Three consumers keep an "if it is a pointer to a dynamic
-array, load it" branch -- `statements/variables.py`, `statements/initialization.py` and
-`types/core/inference.py`. They are a normalisation point, not a workaround: a field read
-such as `let i32[] b = w.items` is a GEP by nature, and the `let` is where it must be loaded
-and deep-copied.
+test is `tests/array/value_seam/`. In SLIR a field read such as `let i32[] b = w.items` is a
+place (`Field`), and the `let` is a `Copy` or a `Move` of it, so no emitter has to ask whether
+a value is the descriptor or its address. `types/core/inference.py` keeps an "if it is a
+pointer to a dynamic array, load it" branch for its own callers.
 
 ## Why not make `ll_type` a pointer instead
 
@@ -58,36 +59,35 @@ wherever it is stored.
 
 ## The fixed array's own seam
 
-A `T[N]` has no duality: `[N x T]` is a value everywhere, and `emit_member_access` hands a fixed-array field over BY VALUE while it hands a
-dynamic one over as a GEP. That difference is deliberate and stays -- returning a pointer from
-the fixed field read would change what an assignment, an argument and a hash receive.
+A `T[N]` has no duality: `[N x T]` is a value everywhere. A fixed-array field read and an
+element read are places in SLIR, and a `Copy` of the place gives the value.
 
-A fixed array needs the other half: **a rule for the RECEIVER of a built-in method**. A
-receiver that falls back to an `alloca` of a COPY is silently wrong: `b.slots.fill(9)` would
-fill the copy and leave the owner unchanged, and no diagnostic is possible, because that store
-is legal.
+A fixed array needs one rule for the RECEIVER of a built-in method. A receiver that falls
+back to a slot of a COPY is silently wrong: `b.slots.fill(9)` would fill the copy and leave
+the owner unchanged, and no diagnostic is possible, because that store is legal. In SLIR the
+receiver is the first operand of the call, a `Copy` of its place or a constant. The emitter
+gives the array family the ADDRESS of that place (`operand_address`,
+`backend/slir/values.py`), for an `Inout` receiver and a `Guaranteed` one alike:
 
-`as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`) is the one rule. It
-resolves the address from the AST rather than from the value, through
-`try_get_struct_alloca`, which already walks a `Name`, a nested field chain, an `IndexAccess`
-and a reference parameter.
+| receiver | address |
+|---|---|
+| local | its slot |
+| `peek` / `poke` parameter | the pointer it arrived as |
+| field or element chain | a GEP of the place |
+| slice | the view local |
+| constant | a new entry-block slot that holds its value |
+| temporary | the temporary local of the statement |
 
-It takes one flag, and that flag is the whole of the read/write split:
+A constant and a temporary are only read. A method that changes the array cannot get one:
+[CE2096](../error-catalog.md#ce2096) refuses a method that changes a constant, and the
+borrow pass refuses each other unwritable receiver ([CE2408](../error-catalog.md#ce2408),
+[CE2414](../error-catalog.md#ce2414), [CE2421](../error-catalog.md#ce2421),
+[CE2422](../error-catalog.md#ce2422), [CE2426](../error-catalog.md#ce2426),
+[CE2429](../error-catalog.md#ce2429)) before SLIR lowering runs.
 
-| receiver | write address | read address |
-|---|---|---|
-| local `Name` | its alloca | the same |
-| `peek` / `poke` parameter | the pointer it arrived as | the same |
-| field or element chain | a GEP | the same |
-| constant `Name` | **none. [CE0132](../error-catalog.md#ce0132)** | its global |
-| temporary | **none. [CE0132](../error-catalog.md#ce0132)** | a `park_value` spill |
-
-**A read may spill a value that names no storage. A write may not, and there is no fallback.**
-That is what keeps a store out of `.rodata` -- a constant resolves for a read and to nothing
-for a write, so no such binary can be built even if [CE2096](../error-catalog.md#ce2096) were bypassed. The other unwritable
-receivers have their own diagnostics ([CE2408](../error-catalog.md#ce2408), [CE2414](../error-catalog.md#ce2414), [CE2421](../error-catalog.md#ce2421), [CE2422](../error-catalog.md#ce2422), [CE2426](../error-catalog.md#ce2426), [CE2429](../error-catalog.md#ce2429)), so
-reaching [CE0132](../error-catalog.md#ce0132) means one of them did not fire. Same treatment `backend/ownership.py` gives a
-consuming use with no decision.
+A borrowed `T[N]` ARGUMENT (the source of a bulk copy) arrives as its value.
+`as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`), the fixed twin of
+`as_array_address`, keeps an address and spills a value into an entry-block slot.
 
 ## A run-time length, and the cursor
 
@@ -130,8 +130,8 @@ is the one builder of it, and `new()` and `from([])` are the same array. A liter
 count zero elements with a count that the compiler can read: `from([0; 0])` is [CE2017](../error-catalog.md#ce2017).
 
 `new()` names no element type. It takes one from the position it stands in: the typecheck pass
-stamps `DynamicArrayNew.resolved_type` in `propagate_types_to_value`, beside the arm that gives
-an array literal's elements their declared type. Every value position funnels there -- a call
+writes the type of the position as the type row of the node in `TypeckResults`, as it gives
+an array literal's elements their declared type. Every value position does so -- a call
 argument, an enum payload, a struct field, a rebind, and a `.realise()` default -- so the
 emitter always has a type to build from. An empty `from([])` or `new()` in a position that
 gives no type (a receiver, an index base, a `println` argument) is the user error [CE2111](../error-catalog.md#ce2111). A
@@ -144,22 +144,24 @@ rather than building a value to copy into it.
 
 ## The one element address
 
-`emit_element_pointer` (`backend/types/arrays/indexing.py`) is the single place that turns an
-`IndexAccess` into an element address, and it emits the bounds check on the way. It has two
-consumers: the READ (`arr[i]`) and the WRITE (`arr[i] := v`). That is why the
+SLIR lowering makes an element read and an element write into the place `Index`, after the
+bounds check (`element`, `semantics/slir/lower_arrays.py`; `Trap("RE2020")` on the failing
+edge, no check under `dont_panic`). The emitter turns the place into an address with
+`element_address` (`backend/types/arrays/indexing.py`), the single place that does so. It
+has two consumers: the READ (`arr[i]`) and the WRITE (`arr[i] := v`). That is why the
 write is bounds-checked by construction rather than by a second check written beside it.
 
-The write emits its VALUE before it asks for the address. A dynamic array can reallocate while
-the value is being emitted -- `a[0] := grow(poke a)??` is a legal program -- so an address taken
-first would point into the buffer that `realloc` released. Rust orders `a[i] = v` the same way,
-right operand before place.
+The write lowers its VALUE before the index and its check. A dynamic array can reallocate
+while the value is evaluated -- `a[0] := grow(poke a)??` is a legal program -- so an address
+taken first would point into the buffer that `realloc` released. Rust orders `a[i] = v` the
+same way, right operand before place.
 
 ## A nested array
 
 An array element can be an array (ruling R1). The suffixes read from LEFT TO RIGHT: a
 suffix applies to the type on its left. The grammar says so with one left-recursive rule
-(`array_type` in `grammar.lark`), and `ArrayType.__str__`, `display_type`,
-`parse_type_string` and `resolve_type_from_string` all peel the LAST suffix.
+(`array_type` in `grammar.lark`), and `ArrayType.__str__`, `display_type` and
+`parse_type_string` all peel the LAST suffix.
 
 | Written | Is | Layout |
 |---|---|---|
@@ -181,11 +183,11 @@ Two place emitters must give the inner array its ADDRESS, never a spilled copy. 
 takes the write or the growth, and the element keeps the old value (or, after a growth, a
 pointer to the freed buffer, which is then freed twice):
 
-- `emit_element_pointer` chains through an `IndexAccess` receiver: for `a[i][j]` it calls
-  itself on `a[i]`, and the address of that element is the base of the second index.
-- `emit_receiver_value` (`backend/expressions/calls/utils.py`) gives an `IndexAccess`
-  receiver whose element is a dynamic array its element address, as the `Name` arm gives
-  its slot. So `a[i].push(x)` grows the inner array in place.
+- `place_address` (`backend/slir/values.py`) chains through an `Index` place: for
+  `a[i][j]` the address of the element `a[i]` is the base of the second index.
+- The receiver of a mutating method is a place in SLIR (`Index` of the outer array), so the
+  emitter gives the method the address of the element, as it gives a local its slot. So
+  `a[i].push(x)` grows the inner array in place, when the groups B1 and B2 bring it back.
 
 ## The one bulk copy
 
@@ -235,13 +237,12 @@ A slice `data[a..b]` is a `T[]` and needs no new representation: its descriptor 
 storage of the array ([Slices](slices.md)). The capacity is the length, so nothing can read
 it as room to grow; the borrow pass refuses every growth through a slice anyway.
 
-`emit_slice_address` (`backend/types/arrays/indexing.py`) is the one emitter. It finds the
-base array as an element access does, checks `0 <= a <= b <= len()` (RE2028), and writes the
-descriptor into an `entry_alloca` slot through the `gep_utils` trio. A read loads the slot,
-and `emit_element_pointer` answers the slot for a slice, so a method receiver
-(`data[1..3].len()`), a chained index (`data[1..3][0]`) and a `peek` argument use the one
-address path that every element uses. The slice is BORROWED: no scope frees the slot or the
-storage it points into.
+SLIR lowering checks `0 <= a <= b <= len()` (RE2028) and writes the descriptor into a VIEW
+local with a `Slice` rvalue (`docs/design/ir.md` 8.7). `slice_value`
+(`backend/types/arrays/indexing.py`) is the one emitter of the descriptor, through the
+`gep_utils` trio. A method receiver (`data[1..3].len()`), a chained index (`data[1..3][0]`)
+and a `peek` argument read the view local as any other place. The slice is BORROWED: a view
+local owns nothing, and no drop frees it or the storage it points into.
 
 The bulk copy reads a slice like any other source. A slice of the destination itself is
 CE2430, as `a.extend(a)` is: the alias check sees through a slice to the array it views.
@@ -259,5 +260,5 @@ library manifest carries.
 
 One reader, not one per container: a hand-rolled reader that parses the interned name
 misses a case (an array element, `List@(T[])` or `HashMap@(K, V[])`), the element resolves to
-`None`, the typecheck pass stamps nothing on the `??`, and the backend reports **[CE0124](../error-catalog.md#ce0124)**.
-A hole in one reader is then a hole in one place.
+`None`, and the program fails with an internal error. A hole in one reader is then a hole in
+one place.

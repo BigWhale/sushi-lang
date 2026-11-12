@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 300 out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_stdlib_literal_pair.shir
+#
+# A literal argument of a two-argument `<math>` family takes the type of the other
+# argument, in either position, as an operand of a binary operator does. 300 does not fit
+# a u8, so it is CE2073 at the literal.
+use <math>
+
+fn main() i32:
+    let u8 x = 7
+    let u8 lo = min(x, 2)
+    let u8 hi = max(300, x)
+    println("{lo} {hi}")
+    return 0

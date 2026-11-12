@@ -56,25 +56,17 @@ _add(ErrorMessage("CE0009", Severity.ERROR,
     "builder not initialized",
     Category.INTERNAL, "IR builder is None - function compilation context required."))
 
-_add(ErrorMessage("CE0010", Severity.ERROR,
-    "function context not initialized",
-    Category.INTERNAL, "Function context is None - cannot emit code outside function context."))
+# CE0010 ("function context not initialized") is retired. Only `require_function` raised it,
+# and the deletion of the AST body emitter left that helper with no caller. The number is
+# not reused.
 
 _add(ErrorMessage("CE0013", Severity.ERROR,
     "runtime function '{name}' not declared",
     Category.INTERNAL, "C library function not declared - runtime initialization required."))
 
-_add(ErrorMessage("CE0014", Severity.ERROR,
-    "dynamic array manager not initialized",
-    Category.INTERNAL, "Dynamic array manager is None - initialization required."))
-
 _add(ErrorMessage("CE0015", Severity.ERROR,
     "AST invariant violated: {message}",
     Category.INTERNAL, "An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program."))
-
-_add(ErrorMessage("CE0016", Severity.ERROR,
-    "scope stack underflow: attempted to pop from empty scope stack",
-    Category.INTERNAL, "Push/pop mismatch - each push_scope() must be paired with exactly one pop_scope()."))
 
 # Type Conversion/Casting (CE0017-CE0022)
 _add(ErrorMessage("CE0017", Severity.ERROR,
@@ -85,9 +77,10 @@ _add(ErrorMessage("CE0018", Severity.ERROR,
     "unknown builtin type: '{type}'",
     Category.INTERNAL, "Encountered unrecognized builtin type during codegen."))
 
-_add(ErrorMessage("CE0019", Severity.ERROR,
-    "cannot determine language type for LLVM type: {llvm_type}",
-    Category.INTERNAL, "Failed to map LLVM type back to semantic type."))
+# CE0019 ("cannot determine language type for LLVM type") is retired. Only
+# `TypeInference.map_llvm_to_language_type` raised it, a read of a language type from an
+# LLVM layout, and the deletion of the AST body emitter left it with no caller. The number
+# is not reused.
 
 _add(ErrorMessage("CE0020", Severity.ERROR,
     "unresolved type '{type}' - semantic analysis should have caught this",
@@ -101,7 +94,7 @@ _add(ErrorMessage("CE0022", Severity.ERROR,
     "unsupported type for operation: {type}",
     Category.INTERNAL, "Type cannot be used in this context."))
 
-# Method/Function Validation (CE0023-CE0028)
+# Method/Function Validation (CE0023-CE0027)
 _add(ErrorMessage("CE0023", Severity.ERROR,
     "method '{method}' expects {expected} argument(s), got {got}",
     Category.INTERNAL, "Method called with wrong number of arguments during codegen."))
@@ -110,55 +103,23 @@ _add(ErrorMessage("CE0024", Severity.ERROR,
     "unknown method '{method}' for type '{type}'",
     Category.INTERNAL, "Method not found for this type - semantic analysis should prevent this."))
 
-_add(ErrorMessage("CE0025", Severity.ERROR,
-    "extension method '{name}' not declared",
-    Category.INTERNAL, "Extension method reference not found in symbol table."))
-
-_add(ErrorMessage("CE0026", Severity.ERROR,
-    "function expects {expected} arguments, got {got}",
-    Category.INTERNAL, "Function parameter count mismatch during codegen."))
-
-_add(ErrorMessage("CE0027", Severity.ERROR,
-    "callee must be a Name, got {type}",
-    Category.INTERNAL, "Function call expression has invalid callee type - AST invariant violation."))
-
-_add(ErrorMessage("CE0028", Severity.ERROR,
-    "stdlib method not implemented: {method}",
-    Category.INTERNAL, "Standard library method missing backend implementation."))
-
 # Struct Operations (CE0029-CE0032)
-_add(ErrorMessage("CE0029", Severity.ERROR,
-    "struct '{struct}' has no field '{field}'",
-    Category.INTERNAL, "Struct field lookup failed - semantic analysis should prevent this."))
-
-_add(ErrorMessage("CE0030", Severity.ERROR,
-    "cannot get address of struct for member access",
-    Category.INTERNAL, "Failed to retrieve struct pointer for field access."))
-
-_add(ErrorMessage("CE0031", Severity.ERROR,
-    "member access on non-struct type: {type}",
-    Category.INTERNAL, "Attempted field access on non-struct type - semantic analysis failure."))
-
 _add(ErrorMessage("CE0032", Severity.ERROR,
     "expected StructType, got {type}",
     Category.INTERNAL, "Type mismatch: expected struct type but got different type."))
 
 # Enum Operations (CE0033-CE0040)
-_add(ErrorMessage("CE0033", Severity.ERROR,
-    "unknown enum type: {name}",
-    Category.INTERNAL, "Enum type not found in symbol table during codegen."))
-
-_add(ErrorMessage("CE0034", Severity.ERROR,
-    "variant '{variant}' not found in enum '{enum}'",
-    Category.INTERNAL, "Enum variant lookup failed - semantic analysis should prevent this."))
+# CE0034 ("variant not found in enum") is retired. The enum packer raised it; the SLIR
+# emitter now checks a variant one time, before the packer, as an internal error of the
+# emitter. The number is not reused.
 
 _add(ErrorMessage("CE0035", Severity.ERROR,
     "enum '{enum}' missing required variant '{variant}'",
     Category.INTERNAL, "Expected enum variant not found in enum definition."))
 
-_add(ErrorMessage("CE0036", Severity.ERROR,
-    "enum variant '{variant}' has wrong number of associated types: expected {expected}, got {got}",
-    Category.INTERNAL, "Enum variant associated type count mismatch - monomorphization failure."))
+# CE0036 ("enum variant has wrong number of associated types") is retired. The `realise`
+# emitter raised it; SLIR lowering makes a switch on the tag of `realise` now. The number is
+# not reused.
 
 
 _add(ErrorMessage("CE0040", Severity.ERROR,
@@ -173,14 +134,6 @@ _add(ErrorMessage("CE0041", Severity.ERROR,
 _add(ErrorMessage("CE0042", Severity.ERROR,
     "expected DynamicArrayType, got {type}",
     Category.INTERNAL, "Type mismatch: expected dynamic array but got different type."))
-
-_add(ErrorMessage("CE0043", Severity.ERROR,
-    "array.get() returned non-struct type: {type}",
-    Category.INTERNAL, "Array element type is not a struct as expected."))
-
-_add(ErrorMessage("CE0044", Severity.ERROR,
-    "nested member access on non-struct field type: {type}",
-    Category.INTERNAL, "Attempted nested field access on non-struct type."))
 
 # Generic Type Resolution (CE0045-CE0050)
 _add(ErrorMessage("CE0045", Severity.ERROR,
@@ -217,35 +170,11 @@ _add(ErrorMessage("CE0054", Severity.ERROR,
     Category.INTERNAL, "Hash method called with incorrect number of arguments."))
 
 # Variable/Constant Lookup (CE0055-CE0058)
-_add(ErrorMessage("CE0055", Severity.ERROR,
-    "unknown variable or constant: {name}",
-    Category.INTERNAL, "Variable/constant not found in symbol table during codegen."))
-
-_add(ErrorMessage("CE0056", Severity.ERROR,
-    "cannot determine type for variable: {name}",
-    Category.INTERNAL, "Variable type information missing during codegen."))
-
-_add(ErrorMessage("CE0057", Severity.ERROR,
-    "dynamic array '{name}' not declared",
-    Category.INTERNAL, "Dynamic array not found in tracking state."))
-
-_add(ErrorMessage("CE0058", Severity.ERROR,
-    "dynamic array '{name}' already destroyed",
-    Category.INTERNAL, "Attempted to use dynamic array after explicit destruction."))
+# CE0055 ("unknown variable or constant") is retired. Its last emitter was the AST entry of
+# the `<net/socket>` rows, which the operand form replaced (docs/design/ir.md 8.6). The
+# number is not reused.
 
 # Builder/Context State (CE0059-CE0063)
-_add(ErrorMessage("CE0059", Severity.ERROR,
-    "attempt to emit into a terminated block",
-    Category.INTERNAL, "Cannot add instructions to basic block that already has a terminator."))
-
-_add(ErrorMessage("CE0060", Severity.ERROR,
-    "attempt to emit statement after a terminator",
-    Category.INTERNAL, "Cannot emit code after return/branch - control flow analysis failure."))
-
-_add(ErrorMessage("CE0061", Severity.ERROR,
-    "block has no 'statements' list",
-    Category.INTERNAL, "AST block node missing expected statements field."))
-
 # CE0062 ("invalid cleanup_type") is retired. `emit_scope_cleanup` took a cleanup kind
 # that every caller gave as 'all', so the guard could not fire; #835 removed the
 # parameter. The number is not reused.
@@ -262,23 +191,6 @@ _add(ErrorMessage("CE0064", Severity.ERROR,
 
 
 # Type Inference (CE0067-CE0070)
-_add(ErrorMessage("CE0067", Severity.ERROR,
-    "cannot infer struct type from expression: {expr}",
-    Category.INTERNAL, "Struct type inference failed for expression."))
-
-_add(ErrorMessage("CE0068", Severity.ERROR,
-    "cannot infer struct type from method call: {method}",
-    Category.INTERNAL, "Struct type inference failed for method call."))
-
-_add(ErrorMessage("CE0069", Severity.ERROR,
-    "cannot infer struct type from DotCall: {method}",
-    Category.INTERNAL, "Struct type inference failed for dot-call expression."))
-
-
-# Iterator Operations (CE0071)
-_add(ErrorMessage("CE0071", Severity.ERROR,
-    "iter() expects 0 arguments, got {got}",
-    Category.INTERNAL, "Iterator method called with incorrect number of arguments."))
 
 # CE0072 ("unsupported iterator operation") is retired. It refused a dynamic-array receiver
 # whose element type the name tables did not hold, and #482 gave every receiver its type, so
@@ -372,41 +284,10 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 # CE2095 from the finite-types pass, which stops the analysis before the derive pass runs. The
 # number is not reused.
 
-_add(ErrorMessage("CE0129", Severity.ERROR,
-    "no ownership decision for the {use} consuming use of a {node}",
-    Category.INTERNAL,
-    "Every position that takes ownership routes through backend/ownership.py::consume, which "
-    "reads the Provenance semantics stamped on the source expression. A missing stamp means "
-    "The borrow pass did not classify this position -- a gap in the borrow checker's coverage of the "
-    "ConsumingUse set, not a user error. It is fatal ON PURPOSE: a fallback that guessed the "
-    "decision would be a twelfth derivation of the rule, which is the thing the seam exists to "
-    "make impossible. Same treatment CE0124 gives a missing try-expression annotation."))
-
-_add(ErrorMessage("CE0132", Severity.ERROR,
-    "no write address for a fixed-array receiver of kind {node}",
-    Category.INTERNAL,
-    "A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through "
-    "backend/types/arrays/fixed_addressing.py::as_fixed_array_address with writable=True, "
-    "which resolves an address from the AST. A receiver that names no storage has no write "
-    "address, and every such receiver already has a diagnostic: CE2096 for a constant, and "
-    "CE2408, CE2414, CE2421, CE2422, CE2426 or CE2429 for the read-only receivers. Reaching "
-    "this means one of them did not fire, so it is a gap in that coverage and not a user "
-    "error. It is fatal ON PURPOSE: the `alloca` fallback that stood here filled a COPY of "
-    "the receiver and reported nothing, which is the silent no-op #480 records. Same "
-    "treatment CE0129 gives a consuming use with no ownership decision."))
-
-_add(ErrorMessage("CE0137", Severity.ERROR,
-    "lifted lambda name '{name}' is already registered",
-    Category.INTERNAL,
-    "The lambda lifter claims its index before it builds anything: it steps past every "
-    "__lambda_<n> already in the function table and every __closure_env_<n> already in the "
-    "struct table, so the name it then registers is free in both. A registration that "
-    "fails anyway means the name entered a table between that search and the "
-    "registration, and the closure that loses the race silently aliases another unit's "
-    "body and environment layout -- which is the #402 fault the search exists to prevent. "
-    "It is fatal ON PURPOSE. It was a bare RuntimeError, so it reached the user as CE0000 "
-    "with no explanation of what had gone wrong (#687). Same treatment derive.py gives an "
-    "unsortable struct cycle with CE0128."))
+# CE0132 ("no write address for a fixed-array receiver of kind {node}") is retired. Only the
+# AST argument half of the array method family raised it. The SLIR emitter gives that family
+# the address of the receiver place, so no receiver is left with no address. The number is
+# not reused.
 
 _add(ErrorMessage("CE0139", Severity.ERROR,
     "operator '{op}' received integer operands of two widths: {left} and {right}",
@@ -451,23 +332,18 @@ _add(ErrorMessage("CE0093", Severity.ERROR,
     Category.INTERNAL, "Maybe.Some variant has incorrect number of associated types."))
 
 _add(ErrorMessage("CE0094", Severity.ERROR,
-    "unknown Maybe@(T) method: {method}",
-    Category.INTERNAL, "Maybe@(T) method not implemented."))
+    "unknown Result@(T, E) or Maybe@(T) method: {method}",
+    Category.INTERNAL, "A method of Result@(T, E) or Maybe@(T) has no row of its family: the typecheck pass has no argument row for it, or the backend has no emitter for it. The family table names every method, so no program reaches this error."))
 
-_add(ErrorMessage("CE0095", Severity.ERROR,
-    "expect() expects 1 argument, got {got}",
-    Category.INTERNAL, "Maybe.expect() method called with incorrect arguments."))
+# CE0095 ("expect() expects 1 argument") is retired. The emitter of `expect` raised it;
+# SLIR lowering now lowers `expect` as an assert, and no emitter of `expect` is left. The
+# number is not reused.
 
 # Intrinsic/Builtin Operations (CE0096-CE0098)
-_add(ErrorMessage("CE0096", Severity.ERROR,
-    "invalid intrinsic operation: {operation}",
-    Category.INTERNAL, "Intrinsic operation not recognized."))
+# CE0096 ("invalid intrinsic operation") is retired. Only the payload count check of the
+# enum packer raised it, and the one variant check of the SLIR emitter replaces it. The
+# number is not reused.
 
-
-# Expression Type Validation (CE0099-CE0100)
-_add(ErrorMessage("CE0099", Severity.ERROR,
-    "not an operator type: {type}",
-    Category.INTERNAL, "Expression node is not a valid operator - AST invariant violation."))
 
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
@@ -534,3 +410,72 @@ _add(ErrorMessage("CE0150", Severity.ERROR,
     "#1200, a join kept the flag and dropped the location when a later path rebound the "
     "name, and the error showed no note. This is a fault in the compiler, not in the "
     "program; please report the program."))
+
+_add(ErrorMessage("CE0153", Severity.ERROR,
+    "the scope pass recorded no binding for the {what} '{name}'",
+    Category.INTERNAL,
+    "The scope pass writes the binding table of each body (docs/design/ir.md 7.1): what "
+    "each name denotes, the local of each binder, and the captures of each lambda. When "
+    "a body ends, a check walks it again and finds each name, binder and lambda that the "
+    "pass did not record. Such a gap means that an arm of the pass did not walk a part of "
+    "the body, or that it did not record what it found. "
+    "tests/unit/test_scope_binder_walk_is_total.py is the gate; this is the backstop. "
+    "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0154", Severity.ERROR,
+    "the SHIR printer has no text for the class '{name}'",
+    Category.INTERNAL,
+    "The SHIR printer writes the text of --dump-shir through one table, with one row for "
+    "each class that a body can hold (docs/design/ir.md 11.3). A value of a class with "
+    "no row means that a node or a part was added and the table was not. "
+    "tests/unit/test_shir_printer_is_total.py is the gate; this is the backstop. "
+    "This is a fault in the compiler, not in the program; please report the program."))
+
+# CE0155 ("the new pipeline does not emit this program yet: {stage}, {construct}") is
+# retired. It was the stop code of the move to SHIR and SLIR (docs/design/ir.md): a stage
+# that met a construct it did not handle yet stopped the program with it. When the move was
+# complete, no construct stopped a stage any more, and a construct that a stage does not
+# handle is now an internal error, CE0000. The number is not reused.
+
+_add(ErrorMessage("CE0156", Severity.ERROR,
+    "the typecheck pass recorded no {answer} for the {node} at {where} in the body '{body}'",
+    Category.INTERNAL,
+    "The typecheck pass writes each answer that it gives into the table of the body "
+    "(docs/design/ir.md 7.3): the type of each local and each expression, the callee and "
+    "the conventions of each call, and the other decisions that the later stages read. "
+    "No node of the body holds an answer. When the pass ends on a body with no error, a "
+    "check walks the body again and finds each answer that a node needs and that the "
+    "table does not hold. Such a gap means that an arm of the pass did not answer for a "
+    "part of the body, and a later stage would then read no answer. "
+    "tests/unit/test_typeck_results_are_complete.py tests the check. "
+    "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0157", Severity.ERROR,
+    "the {writer} pass recorded no {answer} in its {table} for the {node} at {where} in the "
+    "body '{body}'",
+    Category.INTERNAL,
+    "The borrow pass and the lift pass each write their answers into a table of the body "
+    "(docs/design/ir.md 7.9): borrow the ownership of each consuming use, the state of each "
+    "iterator and the walk of each loop, lift the symbol and the environment of each "
+    "lambda. No node of the body holds an answer. When a pass ends on a body with no "
+    "error, a check walks the body again and finds each answer that a node needs and that "
+    "the table does not hold. Such a gap means that the pass did not answer for a part of "
+    "the body, and a later stage would then read no answer. "
+    "tests/unit/test_ownership_results_are_complete.py and "
+    "tests/unit/test_lift_results_are_complete.py test the checks. "
+    "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0158", Severity.ERROR,
+    "the SLIR of the function '{function}' breaks the verifier rule '{rule}': {detail}",
+    Category.INTERNAL,
+    "The SLIR lowering makes one SLIR function from each body (docs/design/ir.md 8.2). "
+    "Before the function goes to the next stage, the SLIR verifier checks it on every "
+    "compile (ir.md 8.13): each local and each place has a type, no place is read after a "
+    "move, no value moves out of a unit variable, each block has one terminator and goes to "
+    "blocks that exist, each drop is of an owning type and its flag is a bool local, each "
+    "owning value is moved or dropped one time on each path, each argument of a direct "
+    "call has the convention of its parameter, no binary carries `and` or `or`, and each "
+    "trap names a runtime code with the values that its text prints. Each statement and "
+    "each terminator has a location. The message names the function and the rule that "
+    "the lowering broke. tests/unit/test_slir_verifier.py tests each rule. "
+    "This is a fault in the compiler, not in the program; please report the program."))

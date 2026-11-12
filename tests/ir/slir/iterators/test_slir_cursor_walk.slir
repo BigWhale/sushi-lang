@@ -1,0 +1,141 @@
+unit test_slir_cursor_walk
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // n
+    let _2: string
+    let _3: string
+    let _4: string[]                       // words
+    let _5: i32
+    let _6: i32
+    let _7: bool
+    let _8: string view                    // w
+    let _9: ~
+    let _10: i32
+    let _11: i32
+    let _12: bool
+    let _13: string                        // w
+    let _14: i32
+    let _15: i32
+    let _16: bool
+    let _17: string view                   // w
+    let _18: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 0_i32
+    StorageLive(_2)
+    _2 = call builtin interp@(string, i32)(const "a" @guaranteed, copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin interp@(string, i32)(const "b" @guaranteed, copy _1 @guaranteed)
+    StorageLive(_4)
+    _4 = [move _2, move _3]
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageLive(_5)
+    _5 = len(_4)
+    StorageLive(_6)
+    _6 = const 0_i32
+    goto -> bb1
+
+  bb1:
+    StorageLive(_7)
+    _7 = copy _6 < copy _5
+    switchInt(copy _7) -> [0: bb4, otherwise: bb2]
+
+  bb2:
+    StorageDead(_7)
+    StorageLive(_8)
+    BeginBorrow(b0, _4, peek, for _8)
+    _8 = copy (_4[copy _6])
+    StorageLive(_9)
+    _9 = call builtin println@(string)(copy _8 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_9)
+    StorageDead(_8)
+    goto -> bb3
+
+  bb3:
+    _6 = copy _6 + const 1_i32
+    goto -> bb1
+
+  bb4:
+    StorageDead(_7)
+    goto -> bb5
+
+  bb5:
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_10)
+    _10 = len(_4)
+    StorageLive(_11)
+    _11 = const 0_i32
+    goto -> bb6
+
+  bb6:
+    StorageLive(_12)
+    _12 = copy _11 < copy _10
+    switchInt(copy _12) -> [0: bb9, otherwise: bb7]
+
+  bb7:
+    StorageDead(_12)
+    StorageLive(_13)
+    BeginBorrow(b1, _4, poke)
+    _13 = ref poke (_4[copy _11])
+    Drop(_13)
+    _13 = const "new"
+    EndBorrow(b1)
+    StorageDead(_13)
+    goto -> bb8
+
+  bb8:
+    _11 = copy _11 + const 1_i32
+    goto -> bb6
+
+  bb9:
+    StorageDead(_12)
+    goto -> bb10
+
+  bb10:
+    StorageDead(_11)
+    StorageDead(_10)
+    StorageLive(_14)
+    _14 = len(_4)
+    StorageLive(_15)
+    _15 = const 0_i32
+    goto -> bb11
+
+  bb11:
+    StorageLive(_16)
+    _16 = copy _15 < copy _14
+    switchInt(copy _16) -> [0: bb14, otherwise: bb12]
+
+  bb12:
+    StorageDead(_16)
+    StorageLive(_17)
+    BeginBorrow(b2, _4, peek, for _17)
+    _17 = copy (_4[copy _15])
+    StorageLive(_18)
+    _18 = call builtin println@(string)(copy _17 @guaranteed)
+    EndBorrow(b2)
+    StorageDead(_18)
+    StorageDead(_17)
+    goto -> bb13
+
+  bb13:
+    _15 = copy _15 + const 1_i32
+    goto -> bb11
+
+  bb14:
+    StorageDead(_16)
+    goto -> bb15
+
+  bb15:
+    StorageDead(_15)
+    StorageDead(_14)
+    _0 = const 0_i32
+    Drop(_4)
+    StorageDead(_4)
+    StorageDead(_1)
+    return
+}

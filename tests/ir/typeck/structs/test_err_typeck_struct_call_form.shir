@@ -1,0 +1,23 @@
+unit units/crates
+
+ShirBody Crate
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+unit test_err_typeck_struct_call_form
+
+ShirBody keep
+  params : [(_0 "c": Crate, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep), [(StructInit(@Crate, [Lit(4)], written_order: [0]), Guaranteed)]))
+    ExprStmt(Call(Free(@keep), [StructInit(@Crate, [Lit(true)], written_order: [0])]))
+    Return(Lit(0))

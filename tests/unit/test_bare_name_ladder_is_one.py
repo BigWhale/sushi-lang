@@ -7,8 +7,8 @@ CE0055, which blames the compiler for the user's typo (#600).
 
 Two gates here. The first is on the ladder itself: every rung of `RUNGS` is asked, in
 order, and a higher rung wins over a lower one -- so a rung cannot be silently dropped
-or reordered. The second is on the two consumers: each answers every rung, and a bare
-type name in every value position reads CE2105 and never CE0055, CE1001 or CE2400.
+or reordered. The second is on the consumer, the scope pass: it answers every rung, and a
+bare type name in every value position reads CE2105 and never CE0055, CE1001 or CE2400.
 """
 from __future__ import annotations
 
@@ -79,13 +79,12 @@ def test_the_ladder_stops_asking_once_a_rung_claims():
     assert claims.asked == [BareName.LOCAL, BareName.CONSTANT]
 
 
-@pytest.mark.parametrize("consumer", ["scope", "typecheck"])
-def test_both_consumers_answer_every_rung(consumer):
-    """The gate that keeps the two implementations one: a missing rung is a hole."""
+def test_the_consumer_answers_every_rung():
+    """A missing rung is a hole. The scope pass is the one consumer of the AST ladder:
+    the inference of the early passes went (ruling E4)."""
     from sushi_lang.semantics.passes.scope import ScopeAnalyzer
-    from sushi_lang.semantics.passes.types.visitor import _InferenceRungs
 
-    answerer = ScopeAnalyzer if consumer == "scope" else _InferenceRungs
+    answerer = ScopeAnalyzer
     asked = typing.get_protocol_members(Rungs)
     assert len(asked) == len(RUNGS), "a rung with no question, or a question with no rung"
     for method in sorted(asked):

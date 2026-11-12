@@ -1,0 +1,38 @@
+# A `nom` pattern binding takes a `HashMap@(K, V)` payload out of the variant whole.
+# `match nom s:` hands a local over and the arm gives the map to a `nom` parameter; a
+# temporary scrutinee keeps the map to the end of the arm. Each map, its buckets and its
+# owning entries are destroyed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate value 1\nheld value 2\nempty\n"
+use <collections/hashmap>
+
+enum Slot:
+    Full(HashMap@(string, string))
+    Empty
+
+fn make(i32 n) Slot:
+    if (n == 0):
+        return Slot.Empty
+    let HashMap@(string, string) m = HashMap.new()
+    m.insert("key", "value {n}")
+    return Slot.Full(m)
+
+fn eat(nom HashMap@(string, string) m) ~:
+    let string v = m.get("key").realise("none")
+    println("ate {v}")
+
+fn main() i32:
+    let Slot s = make(1)
+    match nom s:
+        Slot.Full(nom m) -> eat(nom m)
+        Slot.Empty -> println("empty")
+    match make(2):
+        Slot.Full(nom m) ->
+            let string v = m.get("key").realise("none")
+            println("held {v}")
+        Slot.Empty -> println("empty")
+    match make(0):
+        Slot.Full(nom m) -> eat(nom m)
+        Slot.Empty -> println("empty")
+    return 0

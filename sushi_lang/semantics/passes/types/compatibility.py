@@ -2,157 +2,56 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.internals.report import Reporter, Span
-from sushi_lang.semantics import array_runs
+from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode, IteratorType
-from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from .inference import infer_array_element_type, infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
-    from sushi_lang.semantics.conversions import Conversion
 
 
-def validate_assignment_compatibility(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> None:
-    """Validate the value, then that its type matches the declared one (CE2002)."""
-    if declared_type is None:
-        return  # Can't validate without declared type
+def reject_unhandled_result(validator: 'TypeValidator', got: Optional[Type], expected: Type,
+                            span: Optional[Span]) -> bool:
+    """CE2505 when a value of a `Result` type goes where a type that is no `Result` is
+    declared (#535). Asked before CE2002, which refuses the same value and names no fix."""
+    from sushi_lang.semantics.generics.results import is_result_enum
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    unsolved = isinstance(got, GenericTypeRef) and got.base_name == "Result"
+    if not (is_result_enum(got) or unsolved) or is_result_enum(expected):
+        return False
+    er.emit(validator.reporter, er.ERR.CE2505, span)
+    return True
 
-    validator.validate_expression(value_expr)
-    reject_incompatible_assignment(validator, declared_type, value_expr,
-                                   declared_span, value_span)
 
+def reject_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: Type,
+                    value_span: Optional[Span], declared_span: Optional[Span]) -> bool:
+    """CE2002 when a value of the type `got` cannot go where `expected` is declared.
 
-def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> bool:
-    """CE2002 alone: the value has been validated already.
-
-    Split from the validation because a caller can have a better code for the SAME
-    binding and still owes the value its own diagnostics -- an unhandled `Result` is
-    CE2505, and the call that produced it may hold a wrong argument the reader needs
-    to see (#535). Answers whether a diagnostic refused the binding.
+    A note points at the declared type, when the position writes one. No type (`got` is
+    None) is an error that is already reported, and nothing more is said. Answers whether
+    a diagnostic refused the value.
     """
-    if declared_type is None:
-        return False
-
-    if isinstance(declared_type, ArrayType) and isinstance(value_expr, ArrayLiteral):
-        if reject_array_size_mismatch(validator, declared_type, value_expr, value_span):
-            return True
-
-    # CE2011 spoke at a short row (`validate_array_literal`); a CE2002 would pile on.
-    literal = value_expr.elements if isinstance(value_expr, DynamicArrayFrom) else value_expr
-    if short_rows(validator, literal):
-        return True
-
-    if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayNew):
-        return False
-    if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayFrom):
-        value_type = infer_dynamic_array_from_type(validator, value_expr, expected_type=declared_type)
-    else:
-        value_type = validator.infer_expression_type(value_expr)
-    if value_type is None:
-        return False  # Error already reported, or no type to compare
-
-    if types_compatible(validator, value_type, declared_type):
+    if got is None or types_compatible(validator, got, expected):
         return False
     b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
-           got=display_type(value_type), expected=display_type(declared_type))
+           got=display_type(got), expected=display_type(expected))
     if declared_span:
         b.note_at("declared here", declared_span)
     b.emit()
     return True
 
 
-def short_rows(validator: 'TypeValidator', literal: Expr) -> list[ArrayLiteral]:
-    """The rows of a literal whose rows DISAGREE that miss their stamped row size. Silent.
-
-    Rows that agree with each other and not with the declared type are one mismatch of
-    the whole literal (CE2002). Rows that disagree are measured one by one against the row
-    type their position stamped, so a short FIRST row is not the one the others are
-    compared with (CE2011 at that row, not CE2013 at each of the others). A measured row
-    of the right size is measured again one level down, because its own rows can agree
-    with each other and still miss the row type of their position.
-    """
-    if not isinstance(literal, ArrayLiteral) or len(literal.elements) < 2:
-        return []
-    row_types = [infer_array_element_type(validator, element.value)
-                 for element in literal.elements]
-    if all(ty == row_types[0] for ty in row_types):
-        return []
-    short: list[ArrayLiteral] = []
-    for element in literal.elements:
-        _measure_row(validator, element.value, short)
-    return short
-
-
-def _measure_row(validator: 'TypeValidator', row: Expr, short: list[ArrayLiteral]) -> None:
-    """Add `row` to `short` when it misses its stamped size; else measure its own rows."""
-    if not (isinstance(row, ArrayLiteral) and isinstance(row.resolved_type, ArrayType)):
-        return
-    runs = array_runs.read_runs(
-        row.elements, array_runs.const_int_reader(validator.constant_evaluator()),
-        Reporter())
-    if runs is None:
-        return
-    if array_runs.expanded_length(runs) != row.resolved_type.size:
-        short.append(row)
-        return
-    for element in row.elements:
-        _measure_row(validator, element.value, short)
-
-
-def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayType,
-                               literal: ArrayLiteral, value_span: Optional[Span]) -> bool:
-    """CE2011: the EXPANDED element count must match the declared size.
-
-    A repeated element is written by length, so the compiler cannot know which run is
-    short -- either of them could be. It lists what it does know instead: every run with
-    the absolute span it fills. A reader who knows a boundary sees which run misses it.
-    """
-    runs = array_runs.read_runs(
-        literal.elements,
-        array_runs.const_int_reader(validator.constant_evaluator()),
-        Reporter())
-    if runs is None:
-        return True  # a bad count. CE2017 said so; a size report would pile on.
-
-    # A fixed array's length is part of its TYPE, so this caller needs a number (Ruling 3).
-    # The readable-length diagnostic speaks first and CE2011 stays silent after it, the way
-    # it already stays silent after CE2017.
-    got = array_runs.require_readable_length(runs, validator.reporter)
-    if got is None:
-        return True
-    if got == declared_type.size:
+def reject_return_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: Type,
+                           span: Optional[Span]) -> bool:
+    """CE2003 when a returned value of the type `got` does not match the return type."""
+    if got is None or types_compatible(validator, got, expected):
         return False
-
-    b = er.emit_with(validator.reporter, er.ERR.CE2011, value_span,
-                     got=got, expected=declared_type.size)
-    if array_runs.has_run(literal.elements):
-        for number, run in enumerate(runs, start=1):
-            fills = (f"run {number} fills {run.start}..{run.end} "
-                     f"({run.count} element{'' if run.count == 1 else 's'})")
-            if run.loc is None:
-                b.note(fills)
-            else:
-                b.note_at(fills, run.loc)
-    b.emit()
+    er.emit(validator.reporter, er.ERR.CE2003, span,
+            got=display_type(got), expected=display_type(expected))
     return True
-
-
-def validate_return_compatibility(validator: 'TypeValidator', expected_type: Type, return_expr: Expr, return_span: Optional[Span]) -> None:
-    """Validate that return expression type matches function return type (CE2003)."""
-    validator.validate_expression(return_expr)
-
-    actual_type = validator.infer_expression_type(return_expr)
-    if actual_type is None:
-        return  # Can't validate without inferred type
-
-    if not types_compatible(validator, actual_type, expected_type):
-        er.emit(validator.reporter, er.ERR.CE2003, return_span,
-               got=display_type(actual_type), expected=display_type(expected_type))
 
 
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
@@ -174,7 +73,6 @@ def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Compare two resolved types (no GenericTypeRef or UnknownType resolution)."""
-    from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType
 
     if actual == expected:
         return True
@@ -281,18 +179,14 @@ def _iterators_compatible(validator: 'TypeValidator', actual: IteratorType,
                                  settled_expected.element_type))
 
 
-def is_valid_cast(source_type: Type, target_type: Type,
-                  conversion: Optional['Conversion'] = None) -> bool:
+def is_valid_cast(source_type: Type, target_type: Type) -> bool:
     """Check if a cast from source_type to target_type is valid.
 
-    `conversion` is the declared conversion of the pair, when both are error types; the
-    caller asks `conversions.find_conversion` for it (docs/design/error-conversion.md
-    section 3.2). An identity cast is a no-op and stays legal.
+    An identity cast is a no-op and stays legal. A cast between two error types calls the
+    declared conversion of the pair, which the caller asks `conversions.find_conversion`
+    for (docs/design/error-conversion.md section 3.2).
     """
     if source_type == target_type:
-        return True
-
-    if conversion is not None:
         return True
 
     # Only allow casts between numeric types for now

@@ -1,0 +1,29 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'STEP' with `poke`"
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'text'"
+#
+# A `poke` of a constant is refused by the scope pass (CE2400), and lowering keeps the
+# refused argument as an error hole that carries CE2400. The error of one body does not hide
+# the errors of another: the borrow pass still checks `spend`, and its use after a move is
+# CE2405, as on the old pipeline.
+
+const i32 STEP = 1
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn make() string:
+    return "{1} towels"
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn spend() ~:
+    let string text = make()
+    eat(nom text)
+    println(text)
+
+fn main() i32:
+    bump(poke STEP)
+    spend()
+    return 0

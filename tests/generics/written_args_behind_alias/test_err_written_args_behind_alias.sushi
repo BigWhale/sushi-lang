@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE6102
+# EXPECT_STDERR_CONTAINS: "explicit type arguments are only supported on direct function calls"
+# EXPECT_STDERR_CONTAINS: "= help: write the type arguments on the type of the position, e.g. `let gb.Box@(i32) v = gb.Box(1)`"
+#
+# A struct construction behind an alias takes no written type arguments, as the form with
+# no alias. `gb.Box@(i32)(1)` is CE6102 at the construction, and the help names the
+# construction as the source writes it. The old pipeline compiled this program with no
+# error.
+use "helpers/wa_box" as gb
+
+fn main() i32:
+    let gb.Box@(i32) b = gb.Box@(i32)(1)
+    println(b.v)
+    return 0

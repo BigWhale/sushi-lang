@@ -1,0 +1,4 @@
+# A unit of test_emit_rebuild whose body v2/ changes, and whose interface stays.
+
+public fn base() i32:
+    return 40

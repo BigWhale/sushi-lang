@@ -1,0 +1,9 @@
+# A name that the generic struct does not declare is CE2080, with no solved instance.
+# EXPECT_ERROR_CODES_EXACT: CE2080
+
+struct Box@(T):
+    T value
+
+fn main() i32:
+    println(Box(nope: 1).value)
+    return 0

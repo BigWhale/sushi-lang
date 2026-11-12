@@ -1,0 +1,28 @@
+# A generic enum takes its instance from the position or from its payload; a variant with
+# no payload needs the position. An owning payload moves in, and the instance drops it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\nempty\nMostly Harmless\n8\n"
+
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn show(Slot@(i32) s) ~:
+    match s:
+        Slot.Full(v) -> println(v)
+        Slot.Empty -> println("empty")
+
+fn main() i32:
+    let Slot@(i32) a = Slot.Full(7)
+    let Slot@(i32) b = Slot.Empty
+    show(a)
+    show(b)
+    let string s = "Mostly Harmless"
+    match Slot.Full(s.clone()):
+        Slot.Full(v) -> println(v)
+        Slot.Empty -> println("empty")
+    match Slot.Full(8):
+        Slot.Full(v) -> println(v)
+        Slot.Empty -> println("empty")
+    return 0

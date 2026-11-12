@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "word true\nnumber 42\npair 7 -3 true\npair 1 -9 true\nend\n"
+# EXPECT_NO_LEAKS
+#
+# A constant variant packs a string literal into its payload: the literal owns no heap, so
+# a read of the constant frees nothing. A run-time variant with an owning string payload
+# packs it at the same offsets, and the temporary frees it after the call. The derived
+# equality reads each string payload back.
+
+enum Token:
+    End
+    Word(string)
+    Number(i32)
+    Pair(u8, string, i64)
+
+const Token GREETING = Token.Word("Mostly Harmless")
+const Token ANSWER = Token.Number(42)
+const Token BOTH = Token.Pair(7, "two", -3)
+const Token RUN = Token.Pair(1, "run 42", -9)
+
+fn show(Token t) ~:
+    match t:
+        Token.End -> println("end")
+        Token.Word(_) -> println("word {t == GREETING}")
+        Token.Number(n) -> println("number {n}")
+        Token.Pair(a, _, b) -> println("pair {a} {b} {t == BOTH or t == RUN}")
+
+fn main() i32:
+    show(GREETING)
+    show(ANSWER)
+    show(BOTH)
+    let i32 n = 42
+    show(Token.Pair(1, "run {n}", -9))
+    show(Token.End)
+    return 0

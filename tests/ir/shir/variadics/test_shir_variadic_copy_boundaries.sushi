@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\nMostly Harmless\n42\n"
+# EXPECT_DUMP_SHIR: test_shir_variadic_copy_boundaries.shir
+#
+# the SHIR dump of the copy boundaries of an unrolled `expand`. The monomorphize pass puts
+# one copy of the body of an `expand` in the enclosing block for each element of the pack,
+# as ordinary statements. Lowering keeps the statement range of each copy in a side table
+# of the body, keyed by the block, and the dump prints it on the `copies` line: the path of
+# each block from the block of the body, and the range `start..stop` of each copy, in the
+# order of the statements. Here the body block holds the two copies of the first `expand`,
+# and the body of the loop holds the two copies of the second. A body with no copy prints
+# no `copies` line. The value pack parameter of the template prints with `pack: true`.
+
+fn tally@(...Ts: Display)(...Ts args) i32:
+    let i32 n = 0
+    expand(a in args):
+        println("{a}")
+        n := n + 1
+    let i32 round = 0
+    while (round < 2):
+        expand(_ in args):
+            n := n + 10
+        round := round + 1
+    return n
+
+fn main() i32:
+    println(tally(7, "Mostly Harmless"))
+    return 0

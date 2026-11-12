@@ -1,0 +1,23 @@
+unit test_err_lift_empty_table
+
+ShirBody greet
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(>, LocalRef(_0), Lit(1)), then: [Return(adopt Interp(["", LocalRef(_0), " towels"]))])
+    Return(adopt Lit("a towel"))
+
+ShirBody keep
+  params : [(_0 "line": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "line": string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Free(@greet), [(Lit(2), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Free(@keep), [(move LocalRef(_0), Owned)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt Lit(0))

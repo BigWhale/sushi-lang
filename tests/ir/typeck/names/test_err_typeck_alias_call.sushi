@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_DUMP_SHIR: test_err_typeck_alias_call.shir
+#
+# A call behind an alias names a function of a user unit. The call takes the signature of
+# that function: `twice(3)` yields an `i32`. A string argument where the parameter is an
+# `i32` is CE2006, as with a bare call.
+
+use "units/mathx" as mx
+
+fn main() i32:
+    let i32 ok = mx.twice(3)
+    let i32 bad = mx.twice("Mostly Harmless")
+    return ok + bad

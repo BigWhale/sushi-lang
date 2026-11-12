@@ -1,0 +1,19 @@
+unit test_err_typeck_cast_error_types
+
+ShirBody keep
+  params : [(_0 "e": LowError, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Cast(adopt LocalRef(_0), LowError))
+
+ShirBody lift
+  params : [(_0 "e": LowError, Guaranteed)]
+  locals : []
+  block  :
+    Return(Cast(LocalRef(_0), AppError))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

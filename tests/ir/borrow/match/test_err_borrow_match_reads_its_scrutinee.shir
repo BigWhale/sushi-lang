@@ -1,0 +1,45 @@
+unit test_err_borrow_match_reads_its_scrutinee
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody word_code
+  params : [(_0 "word": string, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal("get"), [Return(adopt Lit(1))]), Arm(Wildcard, [Return(adopt Lit(2))])], consumes: false)
+
+ShirBody twice
+  params : []
+  locals : [_0 "w": string, _1 "n": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Interp(["", Lit(1), " towels"]), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal("1 towels"), [Assign(LocalRef(_1), adopt Lit(1), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), adopt Lit(2), is_init: false)])], consumes: false)
+    Match(LocalRef(_0), [Arm(Literal("1 towels"), [Return(adopt LocalRef(_1))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody temporary
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(Interp(["", LocalRef(_0), ""]), [Arm(Literal("1"), [Return(adopt Lit(1))]), Arm(Wildcard, [Return(adopt Lit(2))])], consumes: false)
+
+ShirBody after_move
+  params : []
+  locals : [_0 "w": string]
+  block  :
+    Assign(LocalRef(_0), adopt Interp(["", Lit(2), " towels"]), is_init: true)
+    ExprStmt(Call(Free(@eat), [(move LocalRef(_0), Owned)]))
+    Match(LocalRef(_0), [Arm(Literal("x"), [Return(adopt Lit(1))]), Arm(Wildcard, [Return(adopt Lit(2))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@word_code), [(Lit("get"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@twice), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@temporary), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Call(Free(@after_move), []))

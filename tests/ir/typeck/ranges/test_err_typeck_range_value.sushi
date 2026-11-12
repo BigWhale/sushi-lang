@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE2122, CE2072, CE2121
+# EXPECT_STDERR_CONTAINS: "a range bound is i32, got i64"
+# EXPECT_DUMP_SHIR: test_err_typeck_range_value.shir
+#
+# A range is a value only where `Iterator@(i32)` is expected (CE2122); its bounds are still
+# checked. A bound that is no number is CE2072, and a number of another type is CE2121.
+
+fn main() i32:
+    let i64 big = 4
+    let i32 x = 0.."end"
+    foreach(i in 0..big):
+        println(i)
+    return x

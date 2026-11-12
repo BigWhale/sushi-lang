@@ -1,0 +1,8 @@
+use "helpers/gc_box"
+
+public fn gc_text() string:
+    let GcBox@(string) b = GcBox("Mostly Harmless")
+    return b.value.clone()
+
+public fn gc_number() i32:
+    return GcBox(6).value

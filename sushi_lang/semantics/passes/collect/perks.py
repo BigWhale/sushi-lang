@@ -194,12 +194,13 @@ class PerkImplementationTable:
         """The unit that declared this implementation, if a unit declared it."""
         return self.units.get((type_name, perk_name))
 
-    # Cuts the copy of an array template (`extend T[] with P`) for one array type, on
-    # a miss (#699): an array has no instantiation set to cut it from ahead of time.
-    # It takes the array type and the perk OR the method name that was asked, and cuts
-    # only a template that gives it. The analyzer installs it for the length of the
-    # analysis; with none, a miss is a miss. True when a copy was registered.
-    on_array_miss: Optional[Callable[..., bool]] = field(
+    # Cuts the copy of a template (`extend T[] with P`, `extend Box@(T) with P`) for one
+    # type, on a miss (#699): an array has no instantiation set to cut it from ahead of
+    # time, and an instance can come after that cut. It takes the type and the perk OR the
+    # method name that was asked, and cuts only a template that gives it. The analyzer
+    # installs it for the length of the analysis; with none, a miss is a miss. True when a
+    # copy was registered.
+    on_perk_miss: Optional[Callable[..., bool]] = field(
         default=None, repr=False, compare=False)
 
     # The program's perks, set by `SymbolTables`: an opaque type parameter answers the
@@ -225,14 +226,14 @@ class PerkImplementationTable:
         return (type_name, perk_name) in self.implementations
 
     def implements_type(self, ty: 'Type', perk_name: str) -> bool:
-        """Does this TYPE implement the perk? An array template's copy is cut on a miss.
+        """Does this TYPE implement the perk? The copy of a template is cut on a miss.
 
         An opaque type parameter implements what a constraint of it promises (#1070).
         """
         from sushi_lang.semantics.generics.types import TypeParameter
         if isinstance(ty, TypeParameter):
             return ty.promises(perk_name)
-        type_name = _get_type_name(ty)
+        type_name = perk_type_name(ty)
         if type_name is None:
             return False
         if self.implements(type_name, perk_name):
@@ -242,13 +243,11 @@ class PerkImplementationTable:
 
     def _cut_on_miss(self, ty: 'Type', *, perk: Optional[str] = None,
                      method: Optional[str] = None) -> bool:
-        """No copy is cut for an array over an opaque type parameter: it is no type of
-        the program (#1070)."""
+        """No copy is cut for a type over an opaque type parameter: it is no type of the
+        program (#1070)."""
         from sushi_lang.semantics.generics.opaque import holds_opaque
-        from sushi_lang.semantics.typesys import DynamicArrayType
-        return (self.on_array_miss is not None and isinstance(ty, DynamicArrayType)
-                and not holds_opaque(ty)
-                and self.on_array_miss(ty, perk=perk, method=method))
+        return (self.on_perk_miss is not None and not holds_opaque(ty)
+                and self.on_perk_miss(ty, perk=perk, method=method))
 
     def get(self, type_name: str, perk_name: str) -> Optional[ExtendWithDef]:
         """Get a specific perk implementation."""
@@ -262,7 +261,7 @@ class PerkImplementationTable:
         from sushi_lang.semantics.generics.types import TypeParameter
         if isinstance(target_type, TypeParameter):
             return self._promised_method(target_type, method_name)
-        type_name = _get_type_name(target_type)
+        type_name = perk_type_name(target_type)
         if type_name is None:
             return None
         found = self._method(type_name, method_name)
@@ -283,7 +282,7 @@ class PerkImplementationTable:
         if isinstance(target_type, TypeParameter):
             perks = self.promising_perks(target_type, method_name)
             return perks[0] if perks else None
-        type_name = _get_type_name(target_type)
+        type_name = perk_type_name(target_type)
         if type_name is None:
             return None
         for perk_name in self.by_type.get(type_name, set()):
@@ -398,7 +397,7 @@ def _as_implementation(sig: PerkMethodSignature, param: Type) -> FuncDef:
         self_mode_span=sig.self_mode_span)
 
 
-def _get_type_name(ty: Optional[Type]) -> Optional[str]:
+def perk_type_name(ty: Optional[Type]) -> Optional[str]:
     """Extract a string name from a Type for use in perk implementation tables."""
     if ty is None:
         return None
@@ -854,7 +853,7 @@ class PerkCollector:
         er.emit(self.r, ERR.CE4017, impl.perk_name_span or impl.loc,
                 type=display_type(target_type))
         type_name = (target_type.base_name if isinstance(target_type, GenericTypeRef)
-                     else _get_type_name(target_type))
+                     else perk_type_name(target_type))
         if type_name is not None:
             self._refuse_methods(type_name, impl)
         return True
@@ -1086,7 +1085,7 @@ class PerkCollector:
                                or impl.loc, ERR.CE2420):
             return False
 
-        type_name = _get_type_name(target_type)
+        type_name = perk_type_name(target_type)
         if type_name is None:
             return False
 

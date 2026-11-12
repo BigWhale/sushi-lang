@@ -1,0 +1,15 @@
+unit units/rose
+
+unit test_err_typeck_match_enum_alias_private
+
+ShirBody peek_secret
+  params : [(_0 "w": Wind, Guaranteed)]
+  locals : [_1 "n"]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@rs.Hidden, "Secret", [(_1, Bare)]), [Return(LocalRef(_1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@peek_secret), [(EnumInit(@rs.Wind, "Calm", []), Guaranteed)]))

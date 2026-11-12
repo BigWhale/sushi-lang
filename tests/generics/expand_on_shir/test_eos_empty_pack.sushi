@@ -1,0 +1,13 @@
+# An empty pack runs the body of its `expand` zero times, and the statements around it
+# run one time.
+# EXPECT_STDOUT_EXACT: "before\nafter\n"
+
+fn around@(...Ts: Display)(...Ts args) ~:
+    println("before")
+    expand(a in args):
+        println("{a}")
+    println("after")
+
+fn main() i32:
+    around()
+    return 0

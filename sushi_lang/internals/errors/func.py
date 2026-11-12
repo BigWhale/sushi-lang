@@ -9,9 +9,9 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
-_add(ErrorMessage("CE0100", Severity.ERROR,
-    "unsupported expression type: {expr}",
-    Category.INTERNAL, "Expression type not supported in this context."))
+# CE0100 ("unsupported expression type: {expr}") is retired. Only the AST templates of an
+# array literal, an index, a slice and `from` raised it; the SLIR emitter replaces them, and
+# a construct that it does not handle is an internal error. The number is not reused.
 
 # Function/header errors
 _add(ErrorMessage("CE0101", Severity.ERROR,
@@ -63,10 +63,6 @@ _add(ErrorMessage("CE0112", Severity.ERROR,
     "division by zero",
     Category.FUNC, "The compiler can read this divisor, and it is zero. One compile-time arithmetic answers a constant and a body alike, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it. The message named the constant position until #709, where the body half was added: a body divided by a literal zero, emitted 'sdiv i32 1, 0' and printed whatever the optimizer left behind -- 2 at --opt none and a different number at O2, because LLVM makes the result poison."))
 
-_add(ErrorMessage("CE0113", Severity.ERROR,
-    "{message}",
-    Category.INTERNAL, "Generic enum constructor requires type annotation from semantic analysis."))
-
 _add(ErrorMessage("CE0114", Severity.ERROR,
     "{message}",
     Category.FUNC, "A variadic '...T' parameter must be the last parameter, a function may declare at most one, and its element type must not be a reference (a dynamic-array element '...T[]' is allowed and moved per element)."))
@@ -95,9 +91,10 @@ _add(ErrorMessage("CE0120", Severity.ERROR,
     "{message}",
     Category.FUNC, "A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site."))
 
-_add(ErrorMessage("CE0121", Severity.ERROR,
-    "could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted",
-    Category.INTERNAL, "The backend could not determine the scrutinee's concrete enum type for a match arm with bindings. The type checker should have annotated Match.resolved_scrutinee_type; a miss here would otherwise silently drop the arm's binding locals."))
+# CE0121 ("could not resolve the concrete enum type for match pattern") is retired. It was the
+# backstop of the AST dispatch of a pattern in the typecheck pass; the pass types a pattern on
+# SHIR through one table now (`PATTERN_ARMS`), and a class with no row is an internal error
+# there (docs/design/ir.md 7.3). The number is not reused.
 
 _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",
@@ -111,17 +108,13 @@ _add(ErrorMessage("CE0127", Severity.ERROR,
     "no clone emitter registered for kind '{kind}'",
     Category.INTERNAL, "The derive pass registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
 
-_add(ErrorMessage("CE0124", Severity.ERROR,
-    "'??' expression reached codegen without a type annotation from semantic analysis",
-    Category.INTERNAL, "The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error."))
+# CE0125 ("borrow checker has no arm for expression node") is retired. It was the backstop
+# of the AST dispatch of the borrow pass; the pass walks SHIR through one table now, and a
+# class with no row is an internal error at the span of the node (docs/design/ir.md 7.9).
 
-_add(ErrorMessage("CE0125", Severity.ERROR,
-    "internal error: borrow checker has no arm for expression node '{node}'",
-    Category.INTERNAL, "The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test_borrow_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
-
-_add(ErrorMessage("CE0143", Severity.ERROR,
-    "internal error: the {kind} call '{name}' behind a namespace has no parameter modes",
-    Category.INTERNAL, "The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. It is fatal ON PURPOSE: the borrow pass skipped such a call with no diagnostic, so a generic call behind an alias lost the CE2427 marker check and the back end then found no ownership decision for a `nom` argument (CE0129, #1125)."))
+# CE0143 ("a call behind a namespace has no parameter modes") is retired. The AST borrow
+# pass read a stamp of the modes; the borrow pass on SHIR reads the convention of each
+# argument from the TypeckResults row of the call (docs/design/ir.md 8.3).
 
 _add(ErrorMessage("CE0131", Severity.ERROR,
     "'??' operator not allowed in {context}: it returns a bare value and has no error channel",
@@ -129,7 +122,7 @@ _add(ErrorMessage("CE0131", Severity.ERROR,
 
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",
-    Category.INTERNAL, "The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class CE0125 closed in the borrow checker. Notably the expand(...) statement was skipped this way. tests/unit/test_scope_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
+    Category.INTERNAL, "The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class that the backstop of the borrow pass closes. Notably the expand(...) statement was skipped this way. tests/unit/test_scope_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
 
 _add(ErrorMessage("CE0133", Severity.ERROR,
     "method '{name}' declares {found}, but perk '{perk}' requires {expected}",
@@ -137,11 +130,12 @@ _add(ErrorMessage("CE0133", Severity.ERROR,
 
 _add(ErrorMessage("CE0135", Severity.ERROR,
     "internal error: type substitution has no arm for {kind} node '{node}'",
-    Category.INTERNAL, "The monomorphizer substitutes a type argument for every type parameter an instantiated body names. The walk handled a cast and a '??' and COPIED every other node, so a type parameter one level deeper survived and the internal name (T, U) was printed to the user (#602): a nested cast answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation answered CE2002 and a foreach item annotation answered CE2001. ONE code for TWO positions, expression and statement, because it is one fault. tests/unit/test_substitution_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
+    Category.INTERNAL, "The monomorphizer substitutes a type argument for every type parameter an instantiated body names. The walk handled a cast and a '??' and COPIED every other node, so a type parameter one level deeper survived and the internal name (T, U) was printed to the user (#602): a nested cast answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation answered CE2002 and a foreach item annotation answered CE2001. ONE code for TWO positions, expression and statement, because it is one fault. tests/unit/test_substitution_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0130 gives the scope checker."))
 
-_add(ErrorMessage("CE0136", Severity.ERROR,
-    "internal error: the AST walk has no arm for node '{node}'",
-    Category.INTERNAL, "semantics/visitors.py dispatches on a method name it BUILDS from the class name, and RecursiveVisitor.generic_visit answered a miss with a bare `pass`. A node kind that ast.py added was therefore skipped in SILENCE by every consumer -- StatementValidator, ExpressionValidator and TypeInferenceVisitor -- and a class RENAME read exactly the same way (#639). Expand and Lambda were both missing an arm. A node kind a PARENT arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED_IN_PARENT and never arrives here. tests/unit/test_visitor_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
+# CE0136 ("the AST walk has no arm for node") is retired. It was the backstop of
+# RecursiveVisitor, the base of the AST statement and expression validators of the typecheck
+# pass; the pass walks SHIR through one table now, and a class with no row is an internal
+# error there (docs/design/ir.md 7.3).
 
 _add(ErrorMessage("CE0138", Severity.ERROR,
     "main() takes one parameter, `string[] args`, or no parameter",

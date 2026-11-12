@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n42\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_library_callee.slir
+# BUILD_LIB_BINARY: slir_callee_lib.sushi
+#
+# A call of a function of a binary library is `Direct` with the link symbol of the
+# manifest, and the function as a value is `Aggregate(Closure, [FnRef])` with that symbol
+# (ir.md 8.6, S26).
+use <lib/slir_callee_lib>
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return f(x)
+
+fn main() i32:
+    println(twice(21))
+    println(apply(twice, 21))
+    return 0

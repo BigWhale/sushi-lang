@@ -2,9 +2,9 @@
 
 There used to be three implementations of "does this own something RAII must release":
 `typesys.owns_heap` decided the MOVE class, `destructors.needs_cleanup` gated destructor
-RECURSION, and a field walk in `memory/dynamic_arrays.py` gated cleanup REGISTRATION. The
-comment that walk carried named the hazard outright -- "the two disagreeing is exactly
-what #162/#183 were".
+RECURSION, and a field walk in the array manager of the old backend gated cleanup
+REGISTRATION. The comment that walk carried named the hazard outright -- "the two
+disagreeing is exactly what #162/#183 were".
 
 A `Drop` type is where they parted company, and it is why HANDLES.md ruling R2a collapsed
 them. A handle holds one `i32` descriptor, so a field walk finds nothing: the MOVE class

@@ -1,0 +1,11 @@
+# A bloom is the sole value of the tail: a bloom after a value is CE0120.
+# EXPECT_ERROR_CODES_EXACT: CE0120
+# EXPECT_STDERR_CONTAINS: "must be the sole, last trailing argument"
+
+fn total(...i32 xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(total(1, xs...))
+    return 0

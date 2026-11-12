@@ -1,0 +1,509 @@
+unit test_slir_tuple_match
+
+fn kind(_1: (i32, u8) @guaranteed) -> string {
+    let _0: string
+    let _2: bool
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: i32                            // n
+    let _7: u8                             // c
+
+  bb0:
+    switchInt(copy (_1.0)) -> [0: bb1, otherwise: bb3]
+
+  bb1:
+    switchInt(copy (_1.1)) -> [97: bb2, otherwise: bb3]
+
+  bb2:
+    _0 = const "zero a"
+    return
+
+  bb3:
+    switchInt(copy (_1.0)) -> [1: bb5, otherwise: bb4]
+
+  bb4:
+    switchInt(copy (_1.0)) -> [2: bb5, otherwise: bb6]
+
+  bb5:
+    _0 = const "one or two"
+    return
+
+  bb6:
+    _2 = copy (_1.0) >= const 3_i32
+    switchInt(copy _2) -> [0: bb11, otherwise: bb7]
+
+  bb7:
+    _3 = copy (_1.0) <= const 9_i32
+    switchInt(copy _3) -> [0: bb11, otherwise: bb8]
+
+  bb8:
+    _4 = copy (_1.1) >= const 48_u8
+    switchInt(copy _4) -> [0: bb11, otherwise: bb9]
+
+  bb9:
+    _5 = copy (_1.1) <= const 57_u8
+    switchInt(copy _5) -> [0: bb11, otherwise: bb10]
+
+  bb10:
+    _0 = const "small digit"
+    return
+
+  bb11:
+    switchInt(copy (_1.1)) -> [122: bb12, otherwise: bb13]
+
+  bb12:
+    StorageLive(_6)
+    _6 = copy (_1.0)
+    _0 = call builtin interp@(string, i32)(const "z " @guaranteed, copy _6 @guaranteed)
+    StorageDead(_6)
+    return
+
+  bb13:
+    StorageLive(_7)
+    _7 = copy (_1.1)
+    _0 = call builtin interp@(string, u8)(const "rest " @guaranteed, copy _7 @guaranteed)
+    StorageDead(_7)
+    return
+}
+
+fn pick(_1: (i32, i32) @guaranteed) -> i32 {
+    let _0: i32
+    let _2: i32                            // x
+    let _3: i32                            // x
+    let _4: i32                            // y
+
+  bb0:
+    switchInt(copy (_1.1)) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    switchInt(copy (_1.0)) -> [0: bb3, otherwise: bb5]
+
+  bb2:
+    StorageLive(_2)
+    _2 = copy (_1.0)
+    goto -> bb4
+
+  bb3:
+    StorageLive(_2)
+    _2 = copy (_1.1)
+    goto -> bb4
+
+  bb4:
+    _0 = copy _2
+    StorageDead(_2)
+    return
+
+  bb5:
+    StorageLive(_3)
+    _3 = copy (_1.0)
+    StorageLive(_4)
+    _4 = copy (_1.1)
+    _0 = copy _3 * copy _4
+    StorageDead(_4)
+    StorageDead(_3)
+    return
+}
+
+fn go(_1: (Dir, i32) @guaranteed) -> i32 {
+    let _0: i32
+    let _2: i32
+    let _3: i32                            // n
+    let _4: i32
+    let _5: i32                            // n
+
+  bb0:
+    _2 = discriminant((_1.0))
+    switchInt(copy _2) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    StorageLive(_3)
+    _3 = copy (_1.1)
+    _0 = copy _3 + const 1_i32
+    StorageDead(_3)
+    return
+
+  bb2:
+    _4 = discriminant((_1.0))
+    switchInt(copy _4) -> [1: bb3, otherwise: bb4]
+
+  bb3:
+    StorageLive(_5)
+    _5 = copy (_1.1)
+    _0 = copy _5 - const 1_i32
+    StorageDead(_5)
+    return
+
+  bb4:
+    trap RE2023(const "(Dir.Down, n)")
+}
+
+fn pair() -> (i32, i32) {
+    let _0: (i32, i32)
+
+  bb0:
+    _0 = (const 3_i32, const 4_i32)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: (i32, u8)
+    let _2: string
+    let _3: ~
+    let _4: (i32, u8)
+    let _5: string
+    let _6: ~
+    let _7: (i32, u8)
+    let _8: string
+    let _9: ~
+    let _10: (i32, u8)
+    let _11: string
+    let _12: ~
+    let _13: (i32, u8)
+    let _14: string
+    let _15: ~
+    let _16: (i32, i32)
+    let _17: i32
+    let _18: ~
+    let _19: (i32, i32)
+    let _20: i32
+    let _21: ~
+    let _22: (i32, i32)
+    let _23: i32
+    let _24: ~
+    let _25: Dir
+    let _26: (Dir, i32)
+    let _27: i32
+    let _28: ~
+    let _29: Dir
+    let _30: (Dir, i32)
+    let _31: i32
+    let _32: ~
+    let _33: i32                           // a
+    let _34: i32                           // b
+    let _35: (i32, i32)
+    let _36: i32                           // x
+    let _37: string
+    let _38: ~
+    let _39: ~
+    let _40: (i32, i32)
+    let _41: i32                           // x
+    let _42: string
+    let _43: ~
+    let _44: i32                           // x
+    let _45: i32                           // y
+    let _46: string
+    let _47: ~
+    let _48: i32
+    let _49: (i32, i32)
+    let _50: (i32, (i32, i32))
+    let _51: ~
+    let _52: i32                           // z
+    let _53: string
+    let _54: ~
+    let _55: (i32, i32)                    // t
+    let _56: i32                           // l
+    let _57: i32                           // r
+    let _58: string
+    let _59: ~
+    let _60: i32                           // total
+    let _61: i32                           // i
+    let _62: bool
+    let _63: i32
+    let _64: (i32, i32)
+    let _65: i32                           // n
+    let _66: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = (const 0_i32, const 97_u8)
+    StorageLive(_2)
+    _2 = call @kind(copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin println@(string)(copy _2 @guaranteed)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    StorageDead(_1)
+    StorageLive(_4)
+    _4 = (const 2_i32, const 113_u8)
+    StorageLive(_5)
+    _5 = call @kind(copy _4 @guaranteed)
+    StorageLive(_6)
+    _6 = call builtin println@(string)(copy _5 @guaranteed)
+    StorageDead(_6)
+    Drop(_5)
+    StorageDead(_5)
+    StorageDead(_4)
+    StorageLive(_7)
+    _7 = (const 5_i32, const 55_u8)
+    StorageLive(_8)
+    _8 = call @kind(copy _7 @guaranteed)
+    StorageLive(_9)
+    _9 = call builtin println@(string)(copy _8 @guaranteed)
+    StorageDead(_9)
+    Drop(_8)
+    StorageDead(_8)
+    StorageDead(_7)
+    StorageLive(_10)
+    _10 = (const 40_i32, const 122_u8)
+    StorageLive(_11)
+    _11 = call @kind(copy _10 @guaranteed)
+    StorageLive(_12)
+    _12 = call builtin println@(string)(copy _11 @guaranteed)
+    StorageDead(_12)
+    Drop(_11)
+    StorageDead(_11)
+    StorageDead(_10)
+    StorageLive(_13)
+    _13 = (const 40_i32, const 121_u8)
+    StorageLive(_14)
+    _14 = call @kind(copy _13 @guaranteed)
+    StorageLive(_15)
+    _15 = call builtin println@(string)(copy _14 @guaranteed)
+    StorageDead(_15)
+    Drop(_14)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageLive(_16)
+    _16 = (const 5_i32, const 0_i32)
+    StorageLive(_17)
+    _17 = call @pick(copy _16 @guaranteed)
+    StorageLive(_18)
+    _18 = call builtin println@(i32)(copy _17 @guaranteed)
+    StorageDead(_18)
+    StorageDead(_17)
+    StorageDead(_16)
+    StorageLive(_19)
+    _19 = (const 0_i32, const 6_i32)
+    StorageLive(_20)
+    _20 = call @pick(copy _19 @guaranteed)
+    StorageLive(_21)
+    _21 = call builtin println@(i32)(copy _20 @guaranteed)
+    StorageDead(_21)
+    StorageDead(_20)
+    StorageDead(_19)
+    StorageLive(_22)
+    _22 = (const 2_i32, const 3_i32)
+    StorageLive(_23)
+    _23 = call @pick(copy _22 @guaranteed)
+    StorageLive(_24)
+    _24 = call builtin println@(i32)(copy _23 @guaranteed)
+    StorageDead(_24)
+    StorageDead(_23)
+    StorageDead(_22)
+    StorageLive(_25)
+    _25 = Dir::Up
+    StorageLive(_26)
+    _26 = (move _25, const 1_i32)
+    StorageLive(_27)
+    _27 = call @go(copy _26 @guaranteed)
+    StorageLive(_28)
+    _28 = call builtin println@(i32)(copy _27 @guaranteed)
+    StorageDead(_28)
+    StorageDead(_27)
+    StorageDead(_26)
+    StorageDead(_25)
+    StorageLive(_29)
+    _29 = Dir::Down
+    StorageLive(_30)
+    _30 = (move _29, const 11_i32)
+    StorageLive(_31)
+    _31 = call @go(copy _30 @guaranteed)
+    StorageLive(_32)
+    _32 = call builtin println@(i32)(copy _31 @guaranteed)
+    StorageDead(_32)
+    StorageDead(_31)
+    StorageDead(_30)
+    StorageDead(_29)
+    StorageLive(_33)
+    _33 = const 1_i32
+    StorageLive(_34)
+    _34 = const 2_i32
+    StorageLive(_35)
+    _35 = (copy _33, copy _34)
+    switchInt(copy (_35.0)) -> [1: bb1, otherwise: bb2]
+
+  bb1:
+    StorageLive(_36)
+    _36 = copy (_35.1)
+    StorageLive(_37)
+    _37 = call builtin interp@(string, i32)(const "one then " @guaranteed, copy _36 @guaranteed)
+    StorageLive(_38)
+    _38 = call builtin println@(string)(copy _37 @guaranteed)
+    StorageDead(_38)
+    Drop(_37)
+    StorageDead(_37)
+    StorageDead(_36)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_39)
+    _39 = call builtin println@(string)(const "other" @guaranteed)
+    StorageDead(_39)
+    goto -> bb3
+
+  bb3:
+    StorageDead(_35)
+    StorageLive(_40)
+    _40 = call @pair()
+    switchInt(copy (_40.1)) -> [4: bb4, otherwise: bb5]
+
+  bb4:
+    StorageLive(_41)
+    _41 = copy (_40.0)
+    StorageLive(_42)
+    _42 = call builtin interp@(string, i32, string)(const "x " @guaranteed, copy _41 @guaranteed, const " four" @guaranteed)
+    StorageLive(_43)
+    _43 = call builtin println@(string)(copy _42 @guaranteed)
+    StorageDead(_43)
+    Drop(_42)
+    StorageDead(_42)
+    StorageDead(_41)
+    goto -> bb6
+
+  bb5:
+    StorageLive(_44)
+    _44 = copy (_40.0)
+    StorageLive(_45)
+    _45 = copy (_40.1)
+    StorageLive(_46)
+    _46 = call builtin interp@(i32, string, i32)(copy _44 @guaranteed, const " " @guaranteed, copy _45 @guaranteed)
+    StorageLive(_47)
+    _47 = call builtin println@(string)(copy _46 @guaranteed)
+    StorageDead(_47)
+    Drop(_46)
+    StorageDead(_46)
+    StorageDead(_45)
+    StorageDead(_44)
+    goto -> bb6
+
+  bb6:
+    StorageDead(_40)
+    StorageLive(_48)
+    _48 = copy _33 + copy _34
+    StorageLive(_49)
+    _49 = (copy _33, move _48)
+    StorageLive(_50)
+    _50 = (copy _34, move _49)
+    switchInt(copy (_50.0)) -> [2: bb7, otherwise: bb10]
+
+  bb7:
+    switchInt(copy ((_50.1).0)) -> [1: bb8, otherwise: bb10]
+
+  bb8:
+    switchInt(copy ((_50.1).1)) -> [9: bb9, otherwise: bb10]
+
+  bb9:
+    StorageLive(_51)
+    _51 = call builtin println@(string)(const "nested literal" @guaranteed)
+    StorageDead(_51)
+    goto -> bb11
+
+  bb10:
+    StorageLive(_52)
+    _52 = copy ((_50.1).1)
+    StorageLive(_53)
+    _53 = call builtin interp@(string, i32)(const "z " @guaranteed, copy _52 @guaranteed)
+    StorageLive(_54)
+    _54 = call builtin println@(string)(copy _53 @guaranteed)
+    StorageDead(_54)
+    Drop(_53)
+    StorageDead(_53)
+    StorageDead(_52)
+    goto -> bb11
+
+  bb11:
+    StorageDead(_50)
+    StorageDead(_49)
+    StorageDead(_48)
+    StorageLive(_55)
+    _55 = (const 7_i32, const 8_i32)
+    StorageLive(_56)
+    _56 = copy (_55.0)
+    StorageLive(_57)
+    _57 = copy (_55.1)
+    StorageLive(_58)
+    _58 = call builtin interp@(string, i32, string, i32)(const "all " @guaranteed, copy _56 @guaranteed, const " " @guaranteed, copy _57 @guaranteed)
+    StorageLive(_59)
+    _59 = call builtin println@(string)(copy _58 @guaranteed)
+    StorageDead(_59)
+    Drop(_58)
+    StorageDead(_58)
+    StorageDead(_57)
+    StorageDead(_56)
+    goto -> bb12
+
+  bb12:
+    StorageLive(_60)
+    _60 = const 0_i32
+    StorageLive(_61)
+    _61 = neg const 1_i32
+    goto -> bb13
+
+  bb13:
+    StorageLive(_62)
+    _62 = copy _61 < const 6_i32
+    switchInt(copy _62) -> [0: bb15, otherwise: bb14]
+
+  bb14:
+    StorageDead(_62)
+    _61 = copy _61 + const 1_i32
+    StorageLive(_63)
+    _63 = copy _61 % const 2_i32
+    StorageLive(_64)
+    _64 = (move _63, copy _61)
+    switchInt(copy (_64.0)) -> [0: bb17, otherwise: bb19]
+
+  bb15:
+    StorageDead(_62)
+    goto -> bb16
+
+  bb16:
+    StorageLive(_66)
+    _66 = call builtin println@(i32)(copy _60 @guaranteed)
+    StorageDead(_66)
+    _0 = const 0_i32
+    StorageDead(_61)
+    StorageDead(_60)
+    StorageDead(_55)
+    StorageDead(_34)
+    StorageDead(_33)
+    return
+
+  bb17:
+    switchInt(copy (_64.1)) -> [0: bb18, otherwise: bb19]
+
+  bb18:
+    StorageDead(_64)
+    StorageDead(_63)
+    goto -> bb13
+
+  bb19:
+    switchInt(copy (_64.0)) -> [0: bb20, otherwise: bb21]
+
+  bb20:
+    StorageLive(_65)
+    _65 = copy (_64.1)
+    _60 = copy _60 + copy _65
+    StorageDead(_65)
+    goto -> bb24
+
+  bb21:
+    switchInt(copy (_64.1)) -> [5: bb22, otherwise: bb23]
+
+  bb22:
+    StorageDead(_64)
+    StorageDead(_63)
+    goto -> bb16
+
+  bb23:
+    _60 = copy _60 + const 100_i32
+    goto -> bb24
+
+  bb24:
+    StorageDead(_64)
+    StorageDead(_63)
+    goto -> bb13
+}

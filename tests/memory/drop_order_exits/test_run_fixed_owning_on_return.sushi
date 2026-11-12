@@ -1,0 +1,18 @@
+# A `return` leaves a loop body that holds a `string[2]` local. The exit destroys the two
+# heap strings of the fixed array once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "left 0 right 0\nleft 1 right 1\nreturn at 1\n"
+fn find() i32:
+    let i32 i = 0
+    while (i < 10):
+        let string[2] pair = ["left {i}", "right {i}"]
+        println("{pair[0]} {pair[1]}")
+        if (i == 1):
+            println("return at {i}")
+            return i
+        i := i + 1
+    return 0
+
+fn main() i32:
+    return find() - 1

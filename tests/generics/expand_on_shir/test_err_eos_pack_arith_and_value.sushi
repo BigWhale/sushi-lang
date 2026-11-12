@@ -1,0 +1,17 @@
+# The template check reads a pack template one time: arithmetic on an element is CE2518
+# with no constraint, a use of the pack as a value is CE0144, and no copy adds to them.
+# EXPECT_ERROR_CODES_EXACT: CE0144, CE2518
+
+fn one@(...Ts)(...Ts args) i32:
+    expand(a in args):
+        let i32 n = a + 1
+        println(n)
+    return 0
+
+fn two@(...Ts)(...Ts args) i32:
+    return args
+
+fn main() i32:
+    println(one(1, 2))
+    println(two(1, 2))
+    return 0

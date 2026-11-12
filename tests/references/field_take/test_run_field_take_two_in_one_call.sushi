@@ -1,0 +1,56 @@
+# Two field takes of one receiver in one call, and a `??` in a later argument of the same
+# call. The receiver moves one time. The other owning fields that no take of the call moves
+# drop right before the call. The error path of the `??` finds the receiver whole and drops
+# it one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ab1 ab2 7\nab3 ab5 7\nab6 ab7 7\n1 9 1 9 1 9\n"
+
+struct Two:
+    string a
+    string b
+
+struct Three:
+    string a
+    string b
+    string c
+
+fn eat(nom string x, nom string y, i32 k) ~:
+    println("{x} {y} {k}")
+
+fn pick(nom string x, nom string y, i32 k) string:
+    return "{x} {y} {k}"
+
+fn g(i32 n) i32 | StdError:
+    if (n > 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(7)
+
+fn two(i32 n) i32 | StdError:
+    let string base = "ab"
+    let Two w = Two("{base}1", "{base}2")
+    eat(nom w.a, nom w.b, g(n)??)
+    return Result.Ok(1)
+
+fn three(i32 n) i32 | StdError:
+    let string base = "ab"
+    let Three w = Three("{base}3", "{base}4", "{base}5")
+    eat(nom w.a, nom w.c, g(n)??)
+    return Result.Ok(1)
+
+fn three_let(i32 n) i32 | StdError:
+    let string base = "ab"
+    let Three w = Three("{base}6", "{base}7", "{base}8")
+    let string s = pick(nom w.a, nom w.b, g(n)??)
+    println(s)
+    return Result.Ok(1)
+
+fn main() i32:
+    let i32 a = two(0).realise(9)
+    let i32 b = two(1).realise(9)
+    let i32 c = three(0).realise(9)
+    let i32 d = three(1).realise(9)
+    let i32 e = three_let(0).realise(9)
+    let i32 f = three_let(1).realise(9)
+    println("{a} {b} {c} {d} {e} {f}")
+    return 0

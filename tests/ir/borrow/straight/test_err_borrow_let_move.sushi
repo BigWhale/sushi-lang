@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'other'"
+# EXPECT_STDERR_CONTAINS: "'other' was moved here"
+# EXPECT_DUMP_SHIR: test_err_borrow_let_move.shir
+#
+# A `let` of a call adopts the value: nothing owned it before. A `let` of an owning local
+# moves the local into the new one, and a `nom` argument moves the local into the callee.
+# A use of the local after the move is CE2405, with a note at the move. The `return` of an
+# interpolated string adopts the new string.
+
+fn make(i32 n) string:
+    return "{n} towels"
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    let string text = make(42)
+    let string other = text
+    eat(nom other)
+    println(other)
+    return 0

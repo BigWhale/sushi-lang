@@ -23,36 +23,34 @@ SEAM = TYPES_PASS / "arguments.py"
 _ARGUMENT_CODES = ("CE2006", "CE2009")
 
 #: What each module that still holds a copy may emit, at MOST. A row may only go DOWN:
-#: `arrays.py` (the built-in array arity checks) converts under its own ticket, and
-#: `calls/user_defined.py` keeps the two checks that are not a parameter list at all --
-#: the variadic TAIL, measured against an element type, and the polymorphic math family,
-#: measured against a SET of types. `calls/methods.py` held the perk arm and the
-#: extension arm; both read the seam since #752, so it carries no row. A module absent
-#: from this table may emit neither code.
+#: `arrays.py` keeps the one i32 seam (`reject_non_i32`), whose text names the argument
+#: and helps with `as i32`, and `calls/user_defined.py` keeps the one check that is not a
+#: parameter list at all: the polymorphic math family, measured against a SET of types.
+#: A module absent from this table may emit neither code.
 _CEILING = {
-    "arrays.py": {"CE2006": 2},
-    "calls/user_defined.py": {"CE2006": 6, "CE2009": 2},
+    "arrays.py": {"CE2006": 1},
+    "calls/user_defined.py": {"CE2006": 2, "CE2009": 1},
 }
 
 #: The reader above sees a code SPELLED at the emit. A module that carries the code in a
 #: table row and emits `er.emit(reporter, row.code, ...)` is invisible to it, so a copy of
-#: the loop could hide behind one indirection. These are the four positions that legitimately
-#: do it -- the seam, whose codes travel IN, and the two tables that hold a code per row --
-#: and the count is pinned so a fifth cannot appear unseen. A row may only go DOWN.
+#: the loop could hide behind one indirection. The seam is the one position that
+#: legitimately does it, because its codes travel IN, and the count is pinned so a second
+#: cannot appear unseen. A row may only go DOWN. The struct construction reads the seam
+#: since group A5, and the array table counts through `reject_builtin_miscount` since A6.
 _INDIRECT_CEILING = {
     "arguments.py": 2,
-    "arrays.py": 1,
-    "calls/structs.py": 1,
 }
 
-#: The modules that must reach the seam, one per converted copy.
+#: The modules that must reach the seam, one per converted copy. `visit/calls.py` is the
+#: call arm of the SHIR walk (docs/design/ir.md 7.3), and it checks the arguments of a
+#: static too (group A10).
 _CALLERS = (
-    "calls/methods.py",
+    "visit/calls.py",
     "calls/user_defined.py",
-    "calls/statics.py",
     "calls/enums.py",
-    "externals.py",
-    "calls/dotcall.py",
+    "calls/structs.py",
+    "visit/extern_calls.py",
 )
 
 

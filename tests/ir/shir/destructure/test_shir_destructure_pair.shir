@@ -1,0 +1,11 @@
+unit test_shir_destructure_pair
+
+ShirBody main
+  params : []
+  locals : [_0 "pair": (i32, i32), _2 "a": i32, _3 "b": i32, _5 "c": i32]
+  block  :
+    Assign(LocalRef(_0), adopt TupleInit([adopt Lit(40), adopt Lit(2)]), is_init: true)
+    Destructure([_2, _3], adopt LocalRef(_0))
+    Destructure([_5, _], adopt LocalRef(_0))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, Binary(+, LocalRef(_2), LocalRef(_3)), LocalRef(_5)), Guaranteed)]))
+    Return(adopt Lit(0))

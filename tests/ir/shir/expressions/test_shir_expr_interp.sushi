@@ -1,0 +1,27 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless, Arthur\n42\nx=3 y=4 sum=7 big=true\n[2] 9 3.5\n"
+# EXPECT_DUMP_SHIR: test_shir_expr_interp.shir
+#
+# the SHIR dump of an interpolated string. An `Interp` holds its parts in the written
+# order: a text part is a string, and a hole is the expression that the source writes in
+# it, of any kind: a name, a field read, a method call, an operator, an index and a cast.
+# A string that starts or ends with a hole has an empty text part there, as the AST
+# builder keeps it. A string with no hole is a `Lit`.
+
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec sum() i32:
+    return self.x + self.y
+
+fn main() i32:
+    let string name = "Arthur"
+    let i32 n = 42
+    let Vec v = Vec(3, 4)
+    let i32[] xs = from([2, 9])
+    println("Mostly Harmless, {name}")
+    println("{n}")
+    println("x={v.x} y={v.y} sum={v.sum()} big={n > 40}")
+    println("[{xs[0]}] {xs[1]} {(n as f64) / 12.0}")
+    return 0

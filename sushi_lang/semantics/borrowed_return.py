@@ -19,7 +19,7 @@ from typing import Any, Callable, FrozenSet, Optional, Sequence, Tuple
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, UnknownType
 
-# The name of the receiver in a source set, and its position in a call (`callee_borrows`).
+# The name of the receiver in a source set, and its position in a call (`sources_of`).
 RECEIVER = "self"
 RECEIVER_POSITION = -1
 
@@ -117,25 +117,3 @@ def source_positions(record: Optional[BorrowedReturn], param_names: Sequence[str
 def borrowed_return_of(decl: Any) -> Optional[BorrowedReturn]:
     """The record a declaration, a signature or a lifted lambda carries, or None."""
     return getattr(decl, "borrowed_return", None)
-
-
-def is_borrowed_call(expr: Any) -> bool:
-    """Is `expr` a call of a callable with a borrowed return (a `??` over one included)?"""
-    from sushi_lang.semantics.ast import TryExpr
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
-    return getattr(expr, "callee_borrows", None) is not None
-
-
-def lends_a_view(expr: Any) -> bool:
-    """Is `expr` the answer of a borrowed return that owns nothing of its own?
-
-    The answer views storage that a source keeps, so nothing may free it. A returned
-    iterator is the one exception: it owns its state, which its holder destroys.
-    """
-    from sushi_lang.semantics.ast import TryExpr
-    from sushi_lang.semantics.generics.iterators import LENT
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
-    return (getattr(expr, "callee_borrows", None) is not None
-            and getattr(expr, "iterator_state", None) != LENT)

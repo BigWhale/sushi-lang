@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE2108
+# EXPECT_STDERR_CONTAINS: "nested pattern needs an enum value, got 'i32'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_not_enum.shir
+#
+# A nested enum pattern needs an enum to read. The payload of `Held` is an `i32`.
+
+enum Box:
+    Held(i32)
+    Empty
+
+enum Other:
+    Alpha
+
+fn open(Box b) i32:
+    match b:
+        Box.Held(Other.Alpha) -> return 1
+        Box.Empty -> return 0
+
+fn main() i32:
+    return open(Box.Held(3))

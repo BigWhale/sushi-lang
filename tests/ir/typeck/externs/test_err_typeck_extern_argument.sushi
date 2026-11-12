@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: "argument type mismatch at position 1: expected string, got i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_extern_argument.shir
+#
+# A function of an `unsafe external` block behind its alias is an `Extern` callee with
+# its link name. Its arguments go through the one argument check, and the call yields
+# the declared return type also after a fault of an argument.
+unsafe external "C" as c because "string length":
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    let i64 n = c.strlen(42)
+    let i64 m = c.strlen("Mostly Harmless")
+    println("{n + m}")
+    return 0

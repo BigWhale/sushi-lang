@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n2\n"
+# EXPECT_NO_LEAKS
+# The last use of a view is in an arm that returns. The path that does not take the arm has
+# no use of the view, so the owner may change after the branch.
+
+fn f(string[] a) i32:
+    let string[] xs = from(["q".concat("1")])
+    let peek string r = xs[0]
+    if (a.len() > 0):
+        return r.len()
+    xs.push("n")
+    return xs.len()
+
+fn main() i32:
+    let string[] a = from(["a"])
+    println(f(a))
+    let string[] none = from([])
+    println(f(none))
+    return 0

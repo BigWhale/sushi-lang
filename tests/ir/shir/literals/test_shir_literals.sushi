@@ -1,0 +1,39 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_literals.shir
+#
+# the SHIR dump of each literal kind: an integer in each base, a byte literal, a float, a
+# bool, a string of each quote and the blank value. Each body returns one literal, so each
+# block holds one `Return` of one `Lit`.
+
+fn decimal() i32:
+    return 42
+
+fn hexadecimal() u32:
+    return 0xDEAD_BEEF
+
+fn octal() i32:
+    return 0o17
+
+fn binary() u8:
+    return 0b1010
+
+fn byte() u8:
+    return a'x'
+
+fn ratio() f64:
+    return 2.5
+
+fn flag() bool:
+    return true
+
+fn text() string:
+    return "Mostly Harmless"
+
+fn quoted() string:
+    return 'can\'t'
+
+fn nothing() ~:
+    return ~
+
+fn main() i32:
+    return 0

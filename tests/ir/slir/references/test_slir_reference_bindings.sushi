@@ -1,0 +1,41 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5 2\n9 3 Mostly\n7\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_reference_bindings.slir
+#
+# A reference `let` is an address local that one `Ref` writes, in a region over the root
+# of its place with the mode of the `Ref`, to its last use (ir.md 8.2, 8.9): a field, an
+# element and the payload of an `Own`. A change of the owner after the last use is legal. A
+# `Ref` of a constant reads a hidden local of the block. A `peek` or `poke` binder of a
+# variant payload is an address local of the arm.
+struct Holder:
+    i32 n
+    string name
+
+enum Shape:
+    Named(i32, i32[])
+    Empty
+
+const i32 SEVEN = 7
+
+fn main() i32:
+    let Holder h = Holder(1, "Mostly".concat(""))
+    let poke i32 r = h.n
+    r := 5
+    let i32[] xs = from([1, 2])
+    let peek i32 e = xs[1]
+    println("{h.n} {e}")
+    xs.push(3)
+    let Own@(Holder) o = Own.alloc(Holder(2, "Mostly".concat("")))
+    let poke Holder p = o.get()
+    p.n := 9
+    let Shape s = Shape.Named(1, from([4]))
+    match s:
+        Shape.Named(poke n, peek sides) -> n := n + sides.len() + 1
+        Shape.Empty -> println("empty")
+    match s:
+        Shape.Named(n, _) -> println("{o.get().n} {n} {o.get().name}")
+        Shape.Empty -> println("empty")
+    let peek i32 c = SEVEN
+    println(c)
+    return 0

@@ -1,0 +1,5 @@
+public const i32 STEP = 3
+public const string NAME = "Mostly Harmless"
+
+public fn twice(i32 x) i32:
+    return x * 2

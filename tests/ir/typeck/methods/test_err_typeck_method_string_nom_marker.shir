@@ -1,0 +1,11 @@
+unit test_err_typeck_method_string_nom_marker
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string, _1 "t": string, _2 "a": bool]
+  block  :
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_1), Lit("H"), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "contains"), [(LocalRef(_1), Owned)]), is_init: true)
+    If(LocalRef(_2), then: [Return(Lit(1))])
+    Return(Lit(0))

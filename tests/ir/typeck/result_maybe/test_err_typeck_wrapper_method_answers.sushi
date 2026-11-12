@@ -1,0 +1,38 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_DUMP_SHIR: test_err_typeck_wrapper_method_answers.shir
+#
+# Each method of `Result@(T, E)` and `Maybe@(T)` yields the type of its row: `is_ok`,
+# `is_err`, `is_some` and `is_none` a bool, `realise` and `expect` the payload `T`, and
+# `err` a `Maybe@(E)`. The argument of each borrows. A bool where the binding holds a
+# string is a mismatch, and the call keeps its `Builtin` callee row.
+
+fn parse(i32 n) i32 | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(n)
+
+fn half(i32 n) Maybe@(i32):
+    if (n % 2 == 1):
+        return Maybe.None()
+    return Maybe.Some(n / 2)
+
+fn tests(i32 n) i32:
+    let Result@(i32, StdError) r = parse(n)
+    let Maybe@(i32) m = half(n)
+    let bool ok = r.is_ok()
+    let bool bad = r.is_err()
+    let bool some = m.is_some()
+    let bool none = m.is_none()
+    let i32 a = r.realise(0)
+    let i32 b = m.realise(1)
+    let i32 c = r.expect("Mostly Harmless")
+    let i32 d = m.expect("Mostly Harmless")
+    let Maybe@(StdError) e = r.err()
+    let i32 f = parse(n).realise(2)
+    if (ok and not bad and some and not none and e.is_none()):
+        return a + b + c + d + f
+    return 0
+
+fn main() i32:
+    let string s = parse(1).is_ok()
+    return tests(4) + s.len()

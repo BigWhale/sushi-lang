@@ -36,29 +36,16 @@ extensions of the units that the calling unit imports. One predicate answers it,
 [`CE3022`](../error-catalog.md#ce3022), and two imported public ones are
 [`CE3023`](../error-catalog.md#ce3023) at the call.
 
-## The three layers
+## The layers
 
-The same precedence is implemented three times, and all three must agree. Any disagreement is
-a bug:
-
-| layer | file | what it decides |
-|---|---|---|
-| **validation** | `semantics/passes/types/method_registry.py` (the family's `validate` hook) | which family checks arity and argument types |
-| **inference** | `semantics/passes/types/method_registry.py` (the family's `infer` hook) | what the call expression's type is |
-| **codegen** | `backend/expressions/calls/dispatcher.py:emit_method_call` | which body actually runs |
-
-Validation and inference are ONE table. Each of its eleven family rows carries both hooks,
-and `calls/methods.py:validate_method_call` asks the table and holds no arm chain of its
-own. Codegen is its own dispatcher, so two layers must agree: the table and the
-dispatcher.
-
-Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
-`if value_type is None: return`, so a family that fails to infer does not report anything --
-the annotation is simply never checked, and the mismatch reaches the backend as a [`CE0017`](../error-catalog.md#ce0017)
-internal error. Two faults can hide there: an inference layer that reads the
-backend-populated builtin-method registry (the pipeline imports codegen after semantic
-analysis, so the registry is empty then), and a family that claims a name it cannot type
-(a claim whose inferrer returns `None` *ends* the chain rather than falling through).
+One table reads the precedence: the family table, `METHOD_TYPE_REGISTRY` in
+`semantics/passes/types/method_registry.py`. Each of its family rows carries the CLAIM, the
+argument count and the parameter modes of its methods. The ladder of the typecheck pass,
+`resolve_dotted` (`semantics/passes/types/calls/dotcall.py`), asks the claim first, then a
+perk implementation, then an extension, and the arm of the call in `visit/calls.py` checks
+what answered and writes its type as a row of `TypeckResults`. The backend keeps no
+dispatcher of its own: the `Callee` of each SLIR `Call` (`docs/design/ir.md` 7.6) names the
+body that runs.
 
 Two rules follow, and both are load-bearing:
 
@@ -110,10 +97,9 @@ Inside the built-in step, both layers try the families in one canonical order:
 The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair and the
 contract methods apply to `StructType`/`EnumType` (`eq` and `compare` also to a primitive),
 the function-value clone to `FunctionType` -- and the method names are disjoint, so the order
-is arbitrary. What matters is that validation and codegen state the SAME one: if the two layers stated
-it differently, a type that satisfied two families would dispatch differently per layer
-with no diagnostic.
-`tests/unit/test_method_resolution_family_order.py` pins the order in both files.
+is arbitrary. What matters is that the one table states it once.
+`tests/unit/test_method_resolution_family_order.py` pins the order of the table and of the
+ladder in `calls/dotcall.py:resolve_dotted`.
 
 **The families claim pairwise disjointly, and a gate proves it.** At most ONE family claims any
 (receiver kind, method name), over a space proved to reach every family
@@ -148,7 +134,7 @@ precedence over every family that yields to a perk: the derived `hash`/`clone` p
 contract family (`eq`, `compare`, `to_str`), the function-value `clone` and the primitive
 family (`beats_perk=False`). The typecheck pass
 asks the perk implementation between the two halves of the family table
-(`passes/types/visit/inference.py` for the type, `calls/methods.py` for the check), and the
+(`calls/methods.py` for the check), and the
 codegen dispatcher runs its perk step before the auto-derived ones. The array, string,
 `Result`, `Maybe`, `Own`, `HashMap` and `List` families are `beats_perk=True`: a perk
 implementation does not take a name from one of them. `tests/perks/hashable/test_perk_override_hash.sushi` pins it.
@@ -268,8 +254,10 @@ instance too, and the next round cuts its own copies (#1146).
 array, and the collect pass files it under the array base `$array`. An array type has no
 instantiation set, because a program writes, infers and nests `i32[]` anywhere. So the copy
 for one array type is cut when a lookup of the perk-implementation table misses for that
-type: `PerkImplementationTable.on_array_miss` is the hook, and `ArrayPerkCopies`
-(`semantics/generics/array_perk_copies.py`) is the one seam that cuts. The hook cuts only a
+type: `PerkImplementationTable.on_perk_miss` is the hook, and `PerkCopies`
+(`semantics/generics/perk_copies.py`) is the one seam that cuts. An instance of a generic
+target that comes after the cut per instantiation (the return of a copy that a call cut)
+takes the same hook. The hook cuts only a
 template that gives the perk or the method that the lookup asked for, so a `u8[]` in a
 stdlib body does not get a copy that no question needs. Every reader of the table then
 agrees with no edit: a method call, a constraint, a contract walk and the hash override.

@@ -1,9 +1,10 @@
 # Ownership Conventions: One Authority for Every Consuming Use
 
-*Design doc. Status: **implemented**. The seam lives in `sushi_lang/semantics/ownership.py`
-(the rule, `classify()`) and `sushi_lang/backend/ownership.py` (`consume`/`bind`/`copy_out`/
-`relinquish`/`relinquish_temp`, the only module allowed to move-mark a value —
-`tests/unit/test_consuming_use_coverage.py` is the no-bypass gate).*
+*Design doc. Status: **implemented**. The rule is `classify()` in
+`sushi_lang/semantics/ownership.py`. The borrow pass on SHIR asks it once for each consuming use
+and writes the answer into `OwnershipResults`, and SHIR-to-SLIR lowering turns the answer into a
+`Move` or a `Copy` (`docs/design/ir.md` 7.9, 8.10). `tests/unit/test_consuming_use_coverage.py` is
+the no-bypass gate.*
 
 *The one language question this design raised — what a `match`/`foreach` binding is — is settled in
 §8: **a read-only borrow**. It is not an open question; §4.3's table is final.*
@@ -49,10 +50,14 @@ meaning here.
 
 ## 3. The two enumerations
 
-### 3.1 `ConsumingUse` — where (a closed set)
+### 3.1 The consuming positions — where (a closed set)
 
-```python
-class ConsumingUse(Enum):
+The list below names each consuming position. The `borrow` pass finds each one from its
+SHIR node (`consuming_uses` and its table `CONSUMED`, `semantics/shir/ownership_check.py`,
+pinned by `tests/unit/test_ownership_results_are_complete.py`), so the names are the
+vocabulary of the rule and not members of an enum.
+
+```text
     CALL_ARG          # f(x), including struct/enum constructor calls and indirect calls
     LET               # let T x = <source>, and the hidden slot of a `next()` foreach
     REBIND            # x := <source>
@@ -61,7 +66,6 @@ class ConsumingUse(Enum):
     ENUM_PAYLOAD      # E.Variant(<source>), incl. Result.Ok / Maybe.Some
     ARRAY_ELEMENT     # from([<source>, ...]) and [<source>, ...]
     ELEMENT_ASSIGN    # arr[i] := <source>
-    CONTAINER_INSERT  # List.push/.insert, HashMap.insert (key AND value), T[].push
     RETURN            # return Result.Ok(<source>)
     CAPTURE           # a lambda's captured environment slot
     OWN_ALLOC         # Own.alloc(<source>)
@@ -143,9 +147,11 @@ through `drops_of(codegen)`, and every backend caller already holds `codegen`.
 every type, `string` included. The predicate is `owns_resource`
 (`sushi_lang/semantics/typesys.py`); the backend's `needs_cleanup`
 (`sushi_lang/backend/destructors.py`) is the same rule with the tables supplied, and it is the
-ONLY backend cleanup predicate: destructor recursion and cleanup registration both ask it. A
-`Drop` type shows why: a field walk finds nothing in a handle, so a second predicate would move
-the value correctly and never register it, and its `drop()` would never run.
+ONLY backend cleanup predicate: the destructor walk and the container emitters ask it. SLIR
+lowering gives a `Drop` only to a local that `owns_resource` says owns, so the decision of WHERE
+to free reads the same rule (`docs/design/ir.md` 8.10). A `Drop` type shows why: a field walk
+finds nothing in a handle, so a second predicate would move the value correctly and never drop
+it, and its `drop()` would never run.
 `tests/unit/test_cleanup_predicates_agree.py` is the gate that keeps them one.
 
 **The string exception lives on the BINDING, not the type.** A `string` bound directly from a
@@ -197,16 +203,15 @@ each other's question: the borrow is the PROVENANCE (a `peek`/`poke` parameter i
 the table in §4.2), and the type class asks only "does this value own heap?". `type_class_of`
 classifies a `ReferenceType` as its `referenced_type`, so the (BORROWED, MOVE) cell is reachable
 through a reference: a consume through one is [CE2411](../error-catalog.md#ce2411), and `.clone()` (which derefs a reference
-receiver) is the escape. If a reference classified as PLAIN, the checker would answer ADOPT while
-the backend classified the same transfer from the TARGET type and answered REJECT.
+receiver) is the escape. If a reference classified as PLAIN, the checker would answer ADOPT for a
+transfer that the type of its TARGET says must be REJECT.
 
 **Two different consuming uses read `REJECT` two different ways** (§5), and this is what makes the
-table stable across the merge in §4.2: `consume()` (a genuine consuming use — a call argument, a
-constructor field, a return) turns `REJECT` into the **[CE2411](../error-catalog.md#ce2411)** diagnostic; `bind()` (a `let`)
-turns the identical `REJECT` into "the binding BORROWS instead of owning" (§8), no diagnostic at
-all. A `let x = s.field` and `take(s.field)` see the same table cell and reach opposite surface
-behaviour, because a `let` does not require ownership the way a call argument does — see §5's `bind`
-vs `consume` split.
+table stable across the merge in §4.2: a genuine consuming use — a call argument, a constructor
+field, a return — turns `REJECT` into the **[CE2411](../error-catalog.md#ce2411)** diagnostic; a
+`let` turns the identical `REJECT` into "the binding BORROWS instead of owning" (§8), no diagnostic
+at all. A `let x = s.field` and `take(s.field)` see the same table cell and reach opposite surface
+behaviour, because a `let` does not require ownership the way a call argument does.
 
 ### 4.4 The rejected cell
 
@@ -241,88 +246,63 @@ binding's own mutability but the owner changing out from under it.
 
 ## 5. The seam
 
-The seam is `sushi_lang/backend/ownership.py`. Every consuming use routes through one of two entry
-points, both built on the shared `classify()` table:
+The seam is ONE decision for each consuming use, made in the borrow pass on SHIR:
 
-```python
-def consume(codegen, source, value: ir.Value,
-            target_type: Optional[Type], use: ConsumingUse) -> ir.Value:
-    """Give `value` to a new owner, and return what the caller should store.
+1. The pass knows where the value came from (its `Provenance`: the scopes and the borrow state
+   are there) and the type at the position. It asks `classify(provenance, type_class)` once.
+2. One function of the pass writes the answer, an `Ownership`, as the row of the consuming use in
+   `OwnershipResults` (`docs/design/ir.md` 7.9). The pass refuses REJECT with its diagnostic
+   ([CE2411](../error-catalog.md#ce2411) for a borrow of an owning value). When it ends a body with
+   no error, it checks that each consuming use has a row (`check_ownership`): a missing row is the
+   internal error [CE0157](../error-catalog.md#ce0157).
+3. SHIR-to-SLIR lowering reads the row: MOVE gives a `Move` operand and the source is dead after
+   it, ADOPT and a plain value give a `Copy`. Drop placement (`semantics/slir/drops.py`, ir.md 8.10)
+   places every drop from the same facts.
+4. The emitter of a `SlirFunction` decides nothing: a `Move` is a load, and a `Drop` goes through
+   the one destroy seam (`emit_value_destructor`).
 
-    Reads the Provenance the borrow pass stamped on `source`, asks classify() what that means for
-    `target_type`, and performs the answer: MOVE marks the source moved and returns the
-    value as-is; ADOPT returns it as-is; REJECT raises CE0129 (internal -- the borrow pass should
-    already have reported CE2411 for the same source before codegen runs).
-    """
-
-
-def bind(codegen, source, value: ir.Value,
-         target_type: Optional[Type]) -> tuple[ir.Value, bool]:
-    """Bind a `let` to its initializer, and say whether the binding OWNS the value.
-
-    consume() with ONE answer mapped differently: where consume() cannot satisfy REJECT
-    and raises, bind() returns (value, False) -- the binding owns nothing, i.e. it
-    BORROWS (see S8). Returns (the value to store, whether the caller must register the
-    local for cleanup).
-    """
-```
-
-Two more functions round out the seam: `copy_out` (the ONE place `emit_value_clone` is reached from
-— an explicit `.clone()` and a few internal reader positions that need an independent copy) and
-`relinquish`/`relinquish_temp` (state that a binding or a compiler-synthesized temporary transferred
-ownership, for the two shapes that have no source `Expr` to stamp a decision on). All five are
-listed in the module's `__all__`; nothing else in the backend may call the primitives underneath
-them (§5.2).
+`copy_out` (`sushi_lang/backend/ownership.py`) is the one place outside the clone engine that
+reaches `emit_value_clone`: a family that hands out an independent copy of a value that a
+container still owns calls it (`tests/unit/test_clone_entry_is_copy_out.py`).
 
 **A conditional move carries a runtime drop flag.** "Mark the source moved" is a
 compile-time fact, but a move inside an if arm, a match arm, or a loop body does not dominate the
 owner's scope exit: on the paths that skip the move, a static skip would leak the value. The borrow pass
-counts branch depth; a move recorded deeper than its owner's declaration lands the name in the
-callable's `conditional_move_names` stamp (on the BODY block, so the perk-method wrapper shares
-it). The backend arms those bindings with an entry-block `i1` drop flag — set live at declaration
-(re-armed on every loop iteration and on a rebind), cleared at each move site — and every free
-gate goes through `MoveTracker.emit_free_unless_moved`, which skips a statically moved slot,
-emits an `if (flag)` free for a flagged one, and frees unconditionally otherwise. An
-unconditional move keeps the zero-cost static skip; the gate
-`tests/memory/conditional_moves/` holds the leak batch.
+records, at each exit of a scope (the end of a block that the path reaches, a `return`, the error
+path of a `??`, a `break`, a `continue`, and a rebind for the old value of its local), each
+local of the scope that is not moved on every path there. A local that is moved on some path and that an exit sees not moved on every path is
+conditionally moved: a row of the `OwnershipResults` of the body (`docs/design/ir.md` 7.9), keyed
+by its `LocalId`. A local moved in each arm of an `if` is moved on every path and has no row.
+SHIR-to-SLIR lowering gives each row an `i1` drop flag (ir.md 8.10, rule 4) — set live at
+declaration (again on every loop iteration and at a rebind), cleared at each move site — and
+the drop of a flagged local is `DropIfSet`. A local that each exit sees moved on every path
+gets no drop; the gate `tests/memory/conditional_moves/` holds the leak batch.
 
 ### 5.1 The decision is computed in semantics, not in the backend
 
-This is what makes it a *single* authority rather than a backend-local one.
+This is what makes it a *single* authority rather than a backend-local one. The borrow pass has the
+scopes, the types and the borrow state, so it *knows* that a match binding is a binding and where a
+value came from. A cleanup-registry lookup ("is this name registered for cleanup?") is not a proxy
+for "is this a borrow of something still live?": the two diverge for a pattern binding. So the
+backend keeps no move state and no cleanup registry at all.
 
-The backend has LLVM values and cleanup registries; it does not reliably have provenance. A
-cleanup-registry lookup ("is this name registered for cleanup?") is not a proxy for "is this a
-borrow of something still live?": the two diverge for a pattern binding. Semantics has the AST,
-the types, the scopes and `borrow_state` — it *knows* a match binding is a binding — so provenance
-is computed there.
-
-**The borrow pass stamps `Provenance`, not the final `Ownership` decision.** The borrow pass is the only
-side that can compute *where a value came from* — it has the AST, the scopes and `borrow_state` — so
-it stamps `Provenance` on the source node (`expr.ownership_provenance`). The backend supplies the
-other half, the resolved *target type* at its position, and both sides call the identical
-`classify(provenance, type_class)` to reach `Ownership`. Reusing one pure function is what makes two
-calls agree rather than one stamped value: the borrow checker uses its answer to decide whether to
-mark the source moved (and therefore whether a later use is [CE2405](../error-catalog.md#ce2405), or — for a `let` — whether the
-binding borrows instead, §8); the backend uses its answer to decide what to emit. If a source somehow
-reaches the backend with no `Provenance` stamped, the seam raises **[CE0129](../error-catalog.md#ce0129)** (internal) rather than
-guessing, as a try-expression with no stamped type is [CE0124](../error-catalog.md#ce0124): reaching this code path with no stamp
-means the borrow pass disagreed with itself.
-
-Because both sides compute the answer from one stamp, `l.push(a)` marks `a` moved in the borrow
-pass, so a later use of `a` is [CE2405](../error-catalog.md#ce2405), and a `foreach` binding is a typed binding with a real
-`Provenance` (§8.1), so a consuming use of it is [CE2411](../error-catalog.md#ce2411) at the correct span.
+The borrow checker uses the answer to decide whether the source is moved (and therefore whether a
+later use is [CE2405](../error-catalog.md#ce2405), or — for a `let` — whether the binding borrows
+instead, §8), and lowering uses the same row to decide the operand. One row, two readers: they
+cannot disagree. So `l.push(a)` moves `a`, a later use of `a` is
+[CE2405](../error-catalog.md#ce2405), and a `foreach` binding is a typed binding with a real
+`Provenance` (§8.1), so a consuming use of it is [CE2411](../error-catalog.md#ce2411) at the
+correct span.
 
 ### 5.2 Nothing may bypass the seam
 
-A shared helper that callers may decline to call is not an authority. The ownership-transferring
-primitives are private to the seam module (`sushi_lang/backend/ownership.py`'s internal `_mark_moved`
-and `_clone`); every other backend module reaches them only through `consume`/`bind`/`copy_out`/
-`relinquish`/`relinquish_temp`.
-
-Enforced by a CI gate that fails when any backend module outside the seam references the primitives
-directly: `tests/unit/test_consuming_use_coverage.py`. This mirrors an existing, proven mechanism:
-`tests/unit/test_borrow_dispatch_is_total.py` pins the borrow checker's `Expr` dispatch against the
-AST union, with **[CE0125](../error-catalog.md#ce0125)** as the runtime backstop.
+A shared helper that callers may decline to call is not an authority. One function of the borrow
+pass writes the row of a consuming use, and it writes what `classify()` answers; the pass checks
+the table when it ends a body; and one module of lowering builds a `Drop` or a `DropIfSet`. The
+gates are `tests/unit/test_consuming_use_coverage.py` and
+`tests/unit/test_slir_drop_placement_is_one.py`. The dispatch of the borrow pass is total over
+the SHIR statement and expression unions (`tests/unit/test_borrow_dispatch_is_total.py`), and a
+class with no arm is an internal error at the span of the node (docs/design/ir.md 7.9).
 
 ## 6. Collapsing the predicate
 
@@ -377,8 +357,9 @@ escape.
 
 ### 8.1 How the binding is typed
 
-`register_pattern_bindings` (`semantics/passes/borrow/bindings.py`) stamps each `match` binding's
-`var_type` from the variant the typecheck pass resolved, and the `foreach` binding is stamped from
+The borrow pass gives each `match` binding (`bindings.declare_bare_binders`,
+`references.declare_reference_binders`) the type that the typecheck pass resolved for its
+local, and the `foreach` binding is stamped from
 the container's element type, so `owns_resource` has a type to answer on. A write through a
 binding is **[CE2414](../error-catalog.md#ce2414)**, and a consuming use of an owning binding is **[CE2411](../error-catalog.md#ce2411)**.
 
@@ -531,10 +512,11 @@ fn make_tag() string:
     return s.say_it()
 ```
 
-The backend clears the owned bit of a method's `string` parameter on entry, so a method body
-can never free the caller's buffer; no consuming use compiles, so the bit guards read paths
-only. `.clone()` on a `string` copies unconditionally, a view included; the destructor keeps
-its owned-bit guard. So `.clone()` is always a deep copy.
+A method body can never free the caller's buffer: a borrowed receiver or parameter is never
+dropped, because SLIR gives no `Drop` to a `Guaranteed`, an `InGuaranteed` or an `Inout`
+parameter (`docs/design/ir.md` 8.10, rule 5). A `Guaranteed` `string` keeps the `owned` bit of
+the caller's value (`ir.md` 8.3), and no consuming use of it compiles. `.clone()` on a `string` copies unconditionally, a view included;
+the destructor keeps its owned-bit guard. So `.clone()` is always a deep copy.
 
 The mutable receiver is spelled **`poke self`**, an opt-in first parameter carrying the borrow
 vocabulary the language already has —
@@ -574,19 +556,17 @@ that backs each rule — are `docs/design/borrowing.md`.
 
 ## 9. Invariants
 
-**Annotation completeness.** `Provenance` must survive both monomorphization and field
-resolution, with the same failure shape as `resolved_scrutinee_type`'s **[CE0121](../error-catalog.md#ce0121)**. A missing
-stamp is **[CE0129](../error-catalog.md#ce0129)** (internal), so a gap surfaces loudly and never silently misclassifies.
+**Table completeness.** Each consuming use of a body has its `Ownership` row when the borrow pass
+ends the body with no error. A missing row is **[CE0157](../error-catalog.md#ce0157)** (internal),
+so a gap surfaces loudly and never silently misclassifies.
 
-**`RETURN` and `CAPTURE` need per-use behaviour** beyond the plain table. `RETURN` routes
-through `consume()` with `ConsumingUse.RETURN`; its special case is "emit the value before scope
-cleanup runs", which `returns.py` does, and it needs no new table cell. `CAPTURE` reads its
-`Provenance` off a `Param`, not an `Expr` (`Lambda.captures` is a list of `Param`, not a list of
-expressions) — a plumbing difference, not a rule difference; `classify` answers it exactly like
-every other use.
+**`RETURN` and `CAPTURE` need per-use behaviour** beyond the plain table. A `RETURN` is a `Move`
+into the return slot `_0`, and drop placement drops the other locals after it (ir.md 8.10); it
+needs no new table cell. `CAPTURE` reads its `Provenance` off a `Param`, not an `Expr`
+(`Lambda.captures` is a list of `Param`, not a list of expressions) — a plumbing difference, not a
+rule difference; `classify` answers it exactly like every other use.
 
-**The seam is not a cleanup-registry lookup.** `consume`/`bind` take `Provenance` computed in
-semantics and the resolved target type from the backend; neither queries a cleanup registry to
-decide. `resolver_for` (`backend/ownership.py`) exists only to resolve an `UnknownType` name to
-its struct/enum table entry before classifying it — a type lookup, not an ownership-registry
-lookup.
+**The seam is not a cleanup-registry lookup.** The row comes from `Provenance` and the type class
+alone, and no registry exists to ask. `resolver_for` (`backend/ownership.py`) resolves an
+`UnknownType` name to its struct or enum table entry before a type class is read — a type lookup,
+not an ownership-registry lookup.

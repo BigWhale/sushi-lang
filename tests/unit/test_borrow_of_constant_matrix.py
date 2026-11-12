@@ -19,6 +19,22 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.ownership import Provenance
+from sushi_lang.semantics.passes.borrow.borrows import check_borrow
+from sushi_lang.semantics.passes.borrow.consume import source_provenance
+from sushi_lang.semantics.passes.collect import ConstSig
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.body import Initializer, Instance
+from sushi_lang.semantics.shir.decls import DeclNames
+from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+from sushi_lang.semantics.typesys import BorrowMode, BuiltinType
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
@@ -83,3 +99,120 @@ def test_every_caller_names_the_mode():
                 and node.name == "reject_borrow_of_constant")
     assert [arg.arg for arg in gate.args.kwonlyargs][:1] == ["mode"], ast.dump(gate.args)
     assert gate.args.kw_defaults[0] is None, "the mode has a default, so a caller can skip it"
+
+
+# --- The SHIR caller: the borrow pass asks the seam at a `ConstRef` place (ir.md 7.9).
+
+def _calls_of_the_seam(path: Path) -> list[int]:
+    """The line of each call of the seam in one module."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return [node.lineno for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == "reject_borrow_of_constant"]
+
+
+def test_the_borrow_pass_asks_the_seam_from_one_arm():
+    """The borrow of a place is the one arm: a marked argument, a `Borrow` and the value of
+    a reference `let` all reach it."""
+    borrow = SOURCE_ROOT / "semantics" / "passes" / "borrow"
+    calls = {path.name: _calls_of_the_seam(path) for path in sorted(borrow.glob("*.py"))}
+    callers = {name: lines for name, lines in calls.items() if lines}
+    assert list(callers) == ["borrows.py"] and len(callers["borrows.py"]) == 1, callers
+
+
+def test_lowering_refuses_no_borrow_of_a_constant():
+    """A `poke` of a constant is a `Borrow` of a `ConstRef` in SHIR, and no error hole: the
+    borrow pass reports CE2400, so lowering holds no copy of the rule."""
+    shir = SOURCE_ROOT / "semantics" / "shir"
+    offenders = [f"{path.name}:{number}" for path in sorted(shir.glob("*.py"))
+                 for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+                 if '"CE2400"' in line]
+    assert not offenders, offenders
+
+
+_AT = Span(7, 15, 7, 21)
+
+
+class _Diagnostic:
+    def __init__(self, sink: list, code: object, span: object, params: dict) -> None:
+        self.sink, self.code, self.span, self.params = sink, code, span, params
+
+    def help(self, _text: str) -> "_Diagnostic":
+        return self
+
+    def emit(self) -> None:
+        self.sink.append((self.code, self.span, self.params))
+
+
+class _Errors:
+    def __init__(self) -> None:
+        self.emitted: list = []
+
+    def emit_with(self, code: object, span: object, **params: object) -> _Diagnostic:
+        return _Diagnostic(self.emitted, code, span, params)
+
+
+def _checker(record: object) -> SimpleNamespace:
+    """A stand-in for the pass whose lookup answers `record`: a `ConstSig`, or the record of
+    a stdlib constant."""
+    decls = DeclNames()
+    return SimpleNamespace(err=_Errors(), decls=decls, decl_name=decls.name_of,
+                           constant_record=lambda _node: record)
+
+
+def _ref(checker: SimpleNamespace, written: str) -> e.ConstRef:
+    return e.ConstRef(ShirId(1), _AT, checker.decls.refer(written))
+
+
+_CONSTANT = ConstSig(name="STEP", const_type=BuiltinType.I32)
+_VARIABLE = ConstSig(name="count", const_type=BuiltinType.I32, is_var=True)
+
+
+@pytest.mark.parametrize("written", ["STEP", "t.STEP"], ids=["bare", "behind_an_alias"])
+def test_a_poke_of_a_constant_is_refused(written: str):
+    checker = _checker(_CONSTANT)
+    check_borrow(checker, _ref(checker, written), BorrowMode.POKE, _AT)  # type: ignore[arg-type]
+    assert checker.err.emitted == [(er.ERR.CE2400, _AT, {"name": "STEP", "mode": "poke"})]
+
+
+def test_a_peek_of_a_constant_reads_it():
+    """A `peek` of read-only storage reads it (#713)."""
+    checker = _checker(_CONSTANT)
+    check_borrow(checker, _ref(checker, "STEP"), BorrowMode.PEEK, _AT)  # type: ignore[arg-type]
+    assert checker.err.emitted == []
+
+
+@pytest.mark.parametrize("mode", [BorrowMode.PEEK, BorrowMode.POKE], ids=["peek", "poke"])
+@pytest.mark.parametrize("written", ["PI", "m.PI"], ids=["bare", "behind_an_alias"])
+def test_a_stdlib_constant_has_no_storage(written: str, mode: BorrowMode):
+    """A stdlib constant has a record that is no `ConstSig`, and no storage, so both modes are
+    refused."""
+    checker = _checker(lookup_stdlib_constant("PI", None))
+    check_borrow(checker, _ref(checker, written), mode, _AT)  # type: ignore[arg-type]
+    assert checker.err.emitted == [(er.ERR.CE2400, _AT, {"name": "PI", "mode": mode.value})]
+
+
+def test_the_record_decides_and_not_the_name():
+    """A `var` takes both modes. A `ConstRef` never names one; the record decides all the
+    same."""
+    checker = _checker(_VARIABLE)
+    check_borrow(checker, _ref(checker, "count"), BorrowMode.POKE, _AT)  # type: ignore[arg-type]
+    assert checker.err.emitted == []
+
+
+# --- An initializer body: the constant evaluator makes its value (ir.md 7.9).
+
+def _in(origin: object) -> SimpleNamespace:
+    return SimpleNamespace(body=SimpleNamespace(origin=origin))
+
+
+def test_a_constant_that_an_initializer_names_is_not_moved():
+    """`const string ALIAS = GREETING` reads `GREETING`: the value is FRESH, so the `Return`
+    of the initializer adopts it and no CE2436 is reported."""
+    ref = e.ConstRef(ShirId(1), _AT, DeclNames().refer("GREETING"))
+    assert source_provenance(_in(Initializer()), ref) is Provenance.FRESH  # type: ignore[arg-type]
+
+
+def test_a_constant_in_a_function_body_is_storage_the_program_keeps():
+    ref = e.ConstRef(ShirId(1), _AT, DeclNames().refer("GREETING"))
+    assert source_provenance(_in(Instance()), ref) is Provenance.OWNED  # type: ignore[arg-type]

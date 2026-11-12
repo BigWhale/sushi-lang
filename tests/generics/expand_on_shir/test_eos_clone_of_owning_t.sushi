@@ -1,0 +1,16 @@
+# `.clone()` of an owning `T` that `Clone` promises: the instance makes a deep copy, and
+# each copy has its own drop.
+# EXPECT_STDOUT_EXACT: "towel\ntowel\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn twice@(T: Clone)(T x) T:
+    return x.clone()
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    let string t = twice(s)
+    println(s)
+    println(t)
+    return 0

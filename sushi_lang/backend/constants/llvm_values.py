@@ -1,8 +1,6 @@
 """LLVM IR constant value creation utilities."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
 from llvmlite import ir
 from sushi_lang.backend.constants.bit_widths import (
     INT8_BIT_WIDTH,
@@ -10,17 +8,11 @@ from sushi_lang.backend.constants.bit_widths import (
     INT64_BIT_WIDTH,
 )
 
-if TYPE_CHECKING:
-    from sushi_lang.semantics.const_eval import ConstantValue
-
-
 ZERO_I8 = ir.Constant(ir.IntType(INT8_BIT_WIDTH), 0)
 
 ZERO_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 0)
 ONE_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 1)
 TWO_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 2)
-
-ONE_I64 = ir.Constant(ir.IntType(INT64_BIT_WIDTH), 1)
 
 
 def make_i8_const(value: int) -> ir.Constant:
@@ -57,61 +49,3 @@ BUCKETS_DATA_INDICES = [ZERO_I32, TWO_I32]                  # buckets.data (inde
 ENTRY_KEY_INDICES = [ZERO_I32, ZERO_I32]    # Entry.key (index 0)
 ENTRY_VALUE_INDICES = [ZERO_I32, ONE_I32]   # Entry.value (index 1)
 ENTRY_STATE_INDICES = [ZERO_I32, TWO_I32]   # Entry.state (index 2, internal only)
-
-
-def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
-    """An evaluated `ConstantValue` as an LLVM constant, or None where it needs a module.
-
-    Lives here and not on `ConstantValue` because the evaluator is a semantic helper and
-    may not name an LLVM type (IR.md Phase 0). A string returns None: its bytes need a
-    module to live in, so `_materialize_constant` finishes one.
-    """
-    from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
-    from sushi_lang.semantics.const_eval import AggregateConstant
-
-    if isinstance(value, AggregateConstant):
-        if isinstance(value.semantic_type, StructType):
-            # A struct is an aggregate whose fields have types of their own, so it is
-            # asked before the array arm below -- that one reads `elements[0].type` for
-            # every slot.
-            field_constants = [const_value_to_llvm(field, types) for field in value.elements]
-            if any(c is None for c in field_constants):
-                return None
-            return ir.Constant(types.ll_type(value.semantic_type), field_constants)
-        if isinstance(value.semantic_type, EnumType):
-            # No module here either, so a string payload answers None like a bare string.
-            from sushi_lang.backend.constants.enum_initializers import enum_initializer
-            return enum_initializer(value, types, None, "")
-        element_constants = [const_value_to_llvm(elem, types) for elem in value.elements]
-        if any(c is None for c in element_constants):
-            return None
-        element_type = element_constants[0].type
-        array_type = ir.ArrayType(element_type, len(element_constants))
-        return ir.Constant(array_type, element_constants)
-
-    if value.semantic_type == BuiltinType.BOOL:
-        return ir.Constant(types.i8, 1 if value.value else 0)
-    elif value.semantic_type == BuiltinType.I8:
-        return ir.Constant(types.i8, value.value)
-    elif value.semantic_type == BuiltinType.I16:
-        return ir.Constant(types.i16, value.value)
-    elif value.semantic_type == BuiltinType.I32:
-        return ir.Constant(types.i32, value.value)
-    elif value.semantic_type == BuiltinType.I64:
-        return ir.Constant(types.i64, value.value)
-    elif value.semantic_type == BuiltinType.U8:
-        return ir.Constant(types.u8, value.value)
-    elif value.semantic_type == BuiltinType.U16:
-        return ir.Constant(types.u16, value.value)
-    elif value.semantic_type == BuiltinType.U32:
-        return ir.Constant(types.u32, value.value)
-    elif value.semantic_type == BuiltinType.U64:
-        return ir.Constant(types.u64, value.value)
-    elif value.semantic_type == BuiltinType.F32:
-        return ir.Constant(types.f32, value.value)
-    elif value.semantic_type == BuiltinType.F64:
-        return ir.Constant(types.f64, value.value)
-    elif value.semantic_type == BuiltinType.STRING:
-        return None
-    else:
-        return None

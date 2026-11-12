@@ -20,11 +20,10 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parents[2] / "sushi_lang"
 SEMANTICS = PACKAGE / "semantics"
 
-# Program-wide names that are not locals. `_claim_index` in the lift pass steps past a
-# name the function table or the struct table already holds, so no collision occurs.
+# Program-wide names that are not locals. A lifted function has the symbol of its body as its
+# prefix, and an environment type has its name from its layout.
 ALLOWED = {
-    ("passes/lift.py", "__lambda_"): "a lifted function name, guarded by _claim_index",
-    ("passes/lift.py", "__closure_env_"): "an environment struct name, guarded by _claim_index",
+    ("slir/lower_closures.py", "__closure_env"): "an environment struct name, from its layout",
 }
 
 MONOMORPHIZE = SEMANTICS / "generics" / "monomorphize"

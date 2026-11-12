@@ -1,12 +1,7 @@
-"""Recognition and Pass-2 validation of the built-in primitive methods."""
+"""Recognition, arity and return types of the built-in primitive methods."""
 from __future__ import annotations
 
-from typing import Any
-
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import BuiltinType, Type
-from sushi_lang.internals import errors as er
-from sushi_lang.semantics.generics.type_display import display_type
 
 
 _ALL_PRIMITIVES = frozenset({
@@ -49,9 +44,8 @@ PRIMITIVE_METHOD_TYPES: dict[str, frozenset] = {
 }
 
 
-def is_builtin_primitive_method(method_name: str) -> bool:
-    """Check if a method name is a builtin primitive method."""
-    return method_name in PRIMITIVE_METHOD_TYPES
+#: The argument count of each primitive method: none of them takes an argument.
+PRIMITIVE_METHOD_ARITY: dict[str, int] = dict.fromkeys(PRIMITIVE_METHOD_RETURNS, 0)
 
 
 def has_primitive_method(target_type: Type, method_name: str) -> bool:
@@ -63,10 +57,3 @@ def has_primitive_method(target_type: Type, method_name: str) -> bool:
 def primitive_method_return_type(target_type: Type, method_name: str) -> Type | None:
     """Return type of a builtin primitive method call, or None if this pair has none."""
     return PRIMITIVE_METHOD_RETURNS.get(method_name, {}).get(target_type)
-
-
-def validate_primitive_method(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate a builtin primitive method call. None of them takes an argument."""
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(target_type)}.{call.method}", expected=0, got=len(call.args))

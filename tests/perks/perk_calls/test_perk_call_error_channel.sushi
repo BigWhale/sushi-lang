@@ -1,0 +1,32 @@
+# A perk method with a `| E` channel: the call yields a Result, `??` propagates, and the body
+# spells both constructors.
+# EXPECT_STDOUT_EXACT: "4\nodd\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+error OddError:
+    TooOdd
+
+perk Halves:
+    fn half() i32 | OddError
+
+struct N:
+    i32 v
+
+extend N with Halves:
+    fn half() i32 | OddError:
+        if (self.v % 2 == 1):
+            return Result.Err(OddError.TooOdd)
+        return Result.Ok(self.v / 2)
+
+fn twice(N a) i32 | OddError:
+    let i32 x = a.half()??
+    return Result.Ok(N(x).half()??)
+
+fn main() i32:
+    println(N(8).half().realise(0))
+    match N(3).half():
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println("odd")
+    println(twice(N(12)).realise(0))
+    return 0

@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2511
+# EXPECT_DUMP_SHIR: test_err_typeck_try_other_error.shir
+#
+# `??` propagates the error of its operand into the channel of the body. An error type of
+# the program is constructed as `Odd.Found`. The error types differ and no conversion
+# joins them: CE2511.
+
+error Odd:
+    Found
+
+fn half(i32 n) i32 | Odd:
+    if (n % 2 == 1):
+        return Result.Err(Odd.Found)
+    return Result.Ok(n / 2)
+
+fn show(i32 n) ~ | StdError:
+    println(half(n)??)
+    return Result.Ok(~)
+
+fn main() i32:
+    show(8)
+    return 0

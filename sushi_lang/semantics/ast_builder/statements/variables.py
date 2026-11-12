@@ -6,7 +6,8 @@ from itertools import count
 
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.semantics.ast import (
-    DestructureTarget, Expr, Let, Name, Rebind, Stmt, TupleLiteral)
+    DestructureTarget, Expr, IndexAccess, IntLit, Let, MemberAccess, Name, Rebind, Stmt,
+    TupleLiteral)
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_token, first_tree, ice, is_type_node, mark_nom)
@@ -161,11 +162,25 @@ def _rebind_targets(target: TupleLiteral, rebinds: List[Stmt], seen: Dict[str, E
 
 
 def _place_spelling(place: Expr) -> Optional[str]:
-    """The source spelling of a place, or None when a part of it is not written plainly."""
-    from sushi_lang.semantics.passes.borrow.diagnostics import expr_to_string
+    """The written place, spelled from its steps, or None when CE6109 does not compare it.
+
+    A place is a name, a field chain and an index off it. An index is compared only when it
+    is a literal or a name: two calls or two expressions can name two slots. The spelling
+    comes from the steps of the place, so the space in the source changes nothing.
+    """
     from sushi_lang.semantics.places import Step, walk_place
 
-    if walk_place(place, Step.MEMBER | Step.INDEX).name is None:
+    walked = walk_place(place, Step.MEMBER | Step.INDEX)
+    if walked.name is None:
         return None
-    spelled = expr_to_string(place)
-    return None if "<expression>" in spelled else spelled
+    spelled = walked.name.id
+    for step in reversed(walked.path):
+        if isinstance(step, MemberAccess):
+            spelled += f".{step.member}"
+        elif isinstance(step, IndexAccess) and isinstance(step.index, IntLit):
+            spelled += f"[{step.index.value}]"
+        elif isinstance(step, IndexAccess) and isinstance(step.index, Name):
+            spelled += f"[{step.index.id}]"
+        else:
+            return None
+    return spelled

@@ -1,0 +1,33 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "AppError.Token(TokenError.Bad("cast"))\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_conversion_calls.slir
+#
+# A conversion is a `Direct` call of the symbol of its body, with its operand `@owned`
+# (ir.md 8.9). The body of the conversion is a function with `_1` owned. A `??` across two
+# error types calls it on the `Err` path, with the move of the error, and builds the `Err`
+# of the channel from its answer. `e as B` calls it with the move of `e`.
+
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("token"))
+    return Result.Ok(n)
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = tokenize(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    let TokenError e = TokenError.Bad("cast")
+    let AppError a = e as AppError
+    println(a)
+    return 0

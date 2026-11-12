@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE0140
+# EXPECT_DUMP_SHIR: test_err_typeck_dead_statement.shir
+#
+# An `if` whose two blocks return ends the path, so the statement after it cannot run:
+# CE0140, with a note at the statement that ends the path. The body does not reach its
+# end, so it has no CE0107.
+
+fn half(i32 n) i32 | StdError:
+    if (n % 2 == 1):
+        return Result.Err(StdError.Error)
+    else:
+        return Result.Ok(n / 2)
+    println(n)
+
+fn show(i32 n) ~ | StdError:
+    println(half(n)??)
+    return Result.Ok(~)
+
+fn main() i32:
+    show(8)
+    return 0

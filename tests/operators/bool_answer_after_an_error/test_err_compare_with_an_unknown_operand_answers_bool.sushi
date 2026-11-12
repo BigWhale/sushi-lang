@@ -1,0 +1,6 @@
+# A comparison answers a bool also when an operand has an error, so the bool in an i32
+# position is a fault of its own.
+# EXPECT_ERROR_CODES_EXACT: CE1001, CE2002
+fn main() i32:
+    let i32 x = y < 3
+    return x

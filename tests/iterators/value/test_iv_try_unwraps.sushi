@@ -1,0 +1,49 @@
+# `let Iterator@(i32) it = upto(n)??` unwraps an owned iterator value over a range, and
+# `words(n)??` an owned iterator over a temporary array. On the Ok path the iterator
+# moves into the local and is destroyed once. On the Err path the `??` returns early and
+# destroys the owning local that came before it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\n1\nsum run 1\nx\ny\nwords run 2\nfailed\nfailed\n"
+use <collections/iter>
+
+fn upto(i32 n) Iterator@(i32) | StdError:
+    if (n == 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(0..n + 1)
+
+fn words(i32 n) Iterator@(peek string) | StdError:
+    if (n == 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(from(["x", "y"]).iter())
+
+fn count(i32 n) i32 | StdError:
+    let string label = "run {n}"
+    let Iterator@(i32) it = upto(n)??
+    foreach(x in it):
+        println(x)
+    println("sum {label}")
+    return Result.Ok(n)
+
+fn spell(i32 n) i32 | StdError:
+    let string label = "run {n}"
+    let Iterator@(peek string) it = words(n)??
+    foreach(w in it):
+        println(w)
+    println("words {label}")
+    return Result.Ok(n)
+
+fn main() i32:
+    match count(1):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    match spell(2):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    match count(0):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    match spell(0):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    return 0

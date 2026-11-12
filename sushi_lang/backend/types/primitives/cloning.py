@@ -1,20 +1,19 @@
 """Built-in clone() for the primitive types."""
 
-from typing import Any
+from typing import Any, Sequence
 
 import llvmlite.ir as ir
 
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_RETURNS
 from sushi_lang.sushi_stdlib.src.common import BuiltinMethod, register_builtin_method
 
 
-def _emit_clone(codegen: Any, call: MethodCall, receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+def _emit_clone(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+                receiver_type: ir.Type) -> ir.Value:
     """clone() on a primitive: the value is its own deep copy."""
-    if len(call.args) != 0:
-        raise_internal_error("CE0078", got=len(call.args))
+    if args:
+        raise_internal_error("CE0078", got=len(args))
     return receiver_value
 
 

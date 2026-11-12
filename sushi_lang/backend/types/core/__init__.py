@@ -60,14 +60,6 @@ class LLVMTypeSystem:
         """Convert Sushi type to LLVM type."""
         return self.mapper.ll_type(semantic_type)
 
-    def infer_llvm_type_from_value(self, value: ir.Value) -> ir.Type:
-        """Infer LLVM type from runtime value."""
-        return self.inference.infer_llvm_type_from_value(value)
-
-    def map_llvm_to_language_type(self, llvm_type: ir.Type) -> str:
-        """Map LLVM type back to language type name."""
-        return self.inference.map_llvm_to_language_type(llvm_type)
-
     def is_string_type(self, llvm_type: ir.Type) -> bool:
         """Check if LLVM type represents a string."""
         return self.inference.is_string_type(llvm_type)
@@ -75,10 +67,6 @@ class LLVMTypeSystem:
     def is_integer_type(self, llvm_type: ir.Type, width: int | None = None) -> bool:
         """Check if LLVM type is an integer with optional width constraint."""
         return self.inference.is_integer_type(llvm_type, width)
-
-    def is_dynamic_array_type(self, llvm_type: ir.Type) -> bool:
-        """Check if LLVM type represents a dynamic array."""
-        return self.inference.is_dynamic_array_type(llvm_type)
 
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
         """Get size in bytes of a Sushi type."""

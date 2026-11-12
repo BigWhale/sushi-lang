@@ -1,0 +1,8 @@
+# The bool of a `while` gives `Result.Ok(1)` no error type.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "nothing gives"
+
+fn main() i32:
+    while (Result.Ok(1)):
+        println(1)
+    return 0

@@ -1,0 +1,99 @@
+unit test_slir_match_owning_binders
+
+fn word(_1: string @guaranteed) -> string {
+    let _0: string
+
+  bb0:
+    _0 = call builtin interp@(string, string)(copy _1 @guaranteed, const "!" @guaranteed)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string
+    let _2: Maybe@(string)                 // m
+    let _3: i32
+    let _4: string view                    // s
+    let _5: ~
+    let _6: Maybe@(string)
+    let _7: ~
+    let _8: bool
+    let _9: ~
+    let _10: string                        // a
+    let _11: string
+    let _12: string view                   // x
+    let _13: string view                   // y
+    let _14: string
+    let _15: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @word(const "q" @guaranteed)
+    StorageLive(_2)
+    _2 = Maybe::Some(move _1)
+    StorageDead(_1)
+    _3 = discriminant(_2)
+    switchInt(copy _3) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_4)
+    BeginBorrow(b0, _2, peek, for _4)
+    _4 = copy ((_2 as Some).0)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_5)
+    StorageLive(_6)
+    _6 = Maybe::None
+    Drop(_2)
+    _2 = move _6
+    StorageDead(_6)
+    StorageDead(_4)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_7)
+    _7 = call builtin println@(string)(const "none" @guaranteed)
+    StorageDead(_7)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_8)
+    _8 = call builtin maybe.is_some(copy _2 @guaranteed)
+    StorageLive(_9)
+    _9 = call builtin println@(bool)(copy _8 @guaranteed)
+    StorageDead(_9)
+    StorageDead(_8)
+    StorageLive(_10)
+    _10 = call @word(const "a" @guaranteed)
+    StorageLive(_11)
+    _11 = call @word(const "b" @guaranteed)
+    StorageLive(_12)
+    BeginBorrow(b1, _10, peek, for _12)
+    _12 = copy _10
+    StorageLive(_13)
+    BeginBorrow(b2, _11, peek, for _13)
+    _13 = copy _11
+    StorageLive(_14)
+    _14 = call builtin interp@(string, string, string)(copy _12 @guaranteed, const " " @guaranteed, copy _13 @guaranteed)
+    StorageLive(_15)
+    _15 = call builtin println@(string)(copy _14 @guaranteed)
+    EndBorrow(b2)
+    EndBorrow(b1)
+    StorageDead(_15)
+    Drop(_14)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageDead(_12)
+    goto -> bb4
+
+  bb4:
+    Drop(_11)
+    StorageDead(_11)
+    _0 = const 0_i32
+    Drop(_10)
+    StorageDead(_10)
+    Drop(_2)
+    StorageDead(_2)
+    return
+}

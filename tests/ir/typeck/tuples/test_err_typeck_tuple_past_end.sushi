@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "'(i32, string)' has no field '2'."
+# EXPECT_STDERR_CONTAINS: "  |     return t.2\n  `             -+\n"
+# EXPECT_STDERR_CONTAINS: "= help: '(i32, string)' declares '0', '1'"
+# EXPECT_DUMP_SHIR: test_err_typeck_tuple_past_end.shir
+#
+# An index past the last element is a field that the tuple type does not declare:
+# CE2106 at the member, and the help names the elements.
+
+fn main() i32:
+    let (i32, string) t = (1, "a")
+    let string s = t.1
+    println(s)
+    return t.2

@@ -1,0 +1,16 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "82\n"
+# EXPECT_DUMP_SHIR: test_shir_destructure_pair.shir
+#
+# the SHIR dump of a destructure: `let (a, b) = pair` and `let (c, _) = pair`. A target
+# is the local of its binder, or `_` (`Discard`). The value is the expression as written.
+# Whether the destructure owns or borrows its elements is an answer of the borrow pass.
+# The AST builder binds the whole value to a hidden local, but SHIR has no node that
+# reads it, so the `locals` line does not list it, and the ids have a gap.
+
+fn main() i32:
+    let (i32, i32) pair = (40, 2)
+    let (a, b) = pair
+    let (c, _) = pair
+    println(a + b + c)
+    return 0

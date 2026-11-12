@@ -1,0 +1,19 @@
+# A `break` and a `return` in a walk over a chain over a temporary free the whole chain:
+# each state, each closure, and the array that the chain owns.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "bb\nccc\n"
+use <collections/iter>
+
+fn first_long() string:
+    foreach(s in from(["a", "bb", "ccc"]).iter().clone_each().filter(nom |string s| s.len() > 1)):
+        return s
+    return "none"
+
+fn main() i32:
+    println(first_long())
+    foreach(p in from(["a", "bb", "ccc"]).iter().clone_each().enumerate()):
+        if (p.0 == 2):
+            println(p.1)
+            break
+    return 0

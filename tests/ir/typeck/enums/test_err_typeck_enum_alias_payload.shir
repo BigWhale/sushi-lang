@@ -1,0 +1,18 @@
+unit units/compass
+
+unit test_err_typeck_enum_alias_payload
+
+ShirBody pick
+  params : [(_0 "h": Heading, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@pick), [(EnumInit(@cp.Heading, "North", []), Guaranteed)]))
+    ExprStmt(Call(Free(@pick), [(EnumInit(@cp.Heading, "Turn", [Lit(1), Lit(2)]), Guaranteed)]))
+    ExprStmt(Call(Free(@pick), [EnumInit(@cp.Heading, "East", [Lit("Mostly Harmless")])]))
+    Return(Lit(0))

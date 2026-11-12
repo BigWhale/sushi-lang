@@ -26,7 +26,8 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
 )
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.types.core.resolution import require_named_type, require_generic_instance
+from sushi_lang.backend.types.core.resolution import require_generic_instance
+from sushi_lang.semantics.type_resolution import require_named_type
 
 
 class TypeMapper:

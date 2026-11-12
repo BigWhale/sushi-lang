@@ -99,8 +99,8 @@ binding or out of a `peek` owner; [CE2411](../error-catalog.md#ce2411) on a cons
 as in mechanism 3, and the binding is released at block exit. Two rules are its own:
 one `poke` binding of an owner at a time (**[CE2403](../error-catalog.md#ce2403)**), and a `peek` beside a live `poke`,
 or the reverse, is **[CE2407](../error-catalog.md#ce2407)** — the two codes `acquire_borrow` gives an argument list,
-here at the binding instead of the statement. `bind_let_reference` in
-`passes/borrow/bindings.py` is the one seam.
+here at the binding instead of the statement. `check_let_reference` in
+`passes/borrow/references.py` is the one seam.
 
 **4 — the pattern value binding** is compiled as a copy of the payload, so a write through
 it could never reach the owner. The copy is SHALLOW: it holds the owner's descriptor and
@@ -129,8 +129,8 @@ is parked in a slot for the whole statement, so a binding into it has storage to
 `borrow-model.md` §10b is the rule.
 
 **7 — the pattern taking binding** is not a borrow: `E.V(nom p)`
-moves the payload out and the arm becomes its owner, so it is registered for its own free
-through `register_owning_value`, the complete registry router. What stops the second free
+moves the payload out and the arm becomes its owner, so drop placement drops the binding at
+the end of the arm. What stops the second free
 is the SCRUTINEE'S drop flag, cleared at the head of the taking arm, so whether the match
 still owns its value at the end is a run-time fact -- exactly the drop-flag mechanism
 that a conditional move of an ordinary local uses. Three fences: the match must OWN its scrutinee
@@ -234,9 +234,10 @@ invalidated at the change, and the error is reported at the next read of the bor
   entry point (`_check_callable`), so a relational diagnostic renders its second location in
   a method body like anywhere else.
 - **The ownership seam** needs no reference arm: the rejection happens in the borrow pass, before
-  codegen. An unstamped consuming use in the backend is [CE0129](../error-catalog.md#ce0129), which is fatal on purpose.
-- **The backend** keys every deref on the semantic type the scope manager holds for the name
-  (`codegen.memory.find_semantic_type`), one entry per scope.
+  lowering. A consuming use with no `Ownership` row is
+  [CE0157](../error-catalog.md#ce0157), which is fatal on purpose.
+- **The backend** reads no reference-ness of its own: a `peek` or `poke` parameter is an `InGuaranteed`
+  or an `Inout` convention in SLIR, and its local IS the incoming address (`docs/design/ir.md` 8.3).
 
 ## 7. What keeps this total
 
@@ -244,7 +245,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 
 | gate | what it pins |
 |---|---|
-| `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node ([CE0125](../error-catalog.md#ce0125)) |
+| `test_borrow_dispatch_is_total.py` | an arm for every SHIR statement and expression class, and a located backstop |
 | `test_scope_dispatch_is_total.py` | the same for the scope pass ([CE0130](../error-catalog.md#ce0130)) |
 | `test_peek_write_gate_is_total.py` | its case table covers every method in `MUTATING_METHODS` (the table is `METHOD_EFFECTS`, `semantics/method_effects.py`; it compiles nothing) |
 | `test_readonly_receiver_matrix.py` | every kind of the read-only table has its code |

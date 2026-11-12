@@ -1,0 +1,23 @@
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: "cannot mutate 'xs' while 'tail' borrows from it"
+# EXPECT_DUMP_SHIR: test_err_borrow_list_view_changed.shir
+#
+# A slot of `push` and of `insert` takes its value by position: an owning local moves
+# into the List, and a new value is adopted. `get`, `first` and `last` answer a view of
+# the List (`answers_view`): a `let` of an owning element is a let-borrow of the List.
+# A change of the List after the last use of the view is legal. A change while the view
+# lives is CE2412.
+
+fn main() i32:
+    let List@(string) xs = List.new()
+    let string s = "a{1}"
+    xs.push(s)
+    let Result@(~, StdError) put = xs.insert(0, "b{2}")
+    println(put.is_ok())
+    let Maybe@(string) head = xs.first()
+    println(head.is_some())
+    xs.push("c{3}")
+    let Maybe@(string) tail = xs.get(xs.len() - 1)
+    xs.clear()
+    println(tail.is_some())
+    return 0

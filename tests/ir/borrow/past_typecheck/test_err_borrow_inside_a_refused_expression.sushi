@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2509, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+#
+# The `+` of an integer and a string has no answer of typecheck, so the borrow pass does
+# not run its arm. It reads each expression that the `+` holds through its own arm: the
+# call in it takes `s` after the move, and that is CE2405.
+
+fn take(nom string s) i32:
+    return s.len()
+
+fn main() i32:
+    let string s = "Mostly Harmless {42}"
+    take(nom s)
+    let i32 n = take(nom s) + "!"
+    return n

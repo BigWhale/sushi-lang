@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from sushi_lang.backend.functions.helpers import callee_owns_param
+import ast
+from pathlib import Path
+
 from sushi_lang.semantics.param_modes import (
     CalleeKind,
+    Convention,
     ParamMode,
     receiver_mode,
 )
@@ -31,16 +34,6 @@ POSITIONAL_KINDS = [
 def test_every_callee_kind_is_in_exactly_one_group():
     assert set(DECLARING_KINDS) | set(POSITIONAL_KINDS) == set(CalleeKind)
     assert not set(DECLARING_KINDS) & set(POSITIONAL_KINDS)
-
-
-# 3. The callee registers cleanup iff the mode is nom
-
-
-def test_ownership_does_not_depend_on_the_kind_of_callee():
-    """The whole point: the same declaration means the same thing everywhere."""
-    import inspect
-    signature = inspect.signature(callee_owns_param)
-    assert list(signature.parameters) == ["param"]
 
 
 # 5. The RECEIVER's mode is read through the same seam
@@ -114,3 +107,47 @@ def test_a_method_with_no_row_borrows_each_argument():
     from sushi_lang.semantics.param_modes import BuiltinModes
     assert BuiltinModes().of("get", 2) == (ParamMode.BORROW, ParamMode.BORROW)
     assert BuiltinModes(slots=frozenset({"push"})).of("push", 1) is None
+
+
+# 7. The convention of an argument is the declared mode of its parameter (ir.md 7.3, 8.3)
+
+TYPES_PASS = (Path(__file__).resolve().parents[2]
+              / "sushi_lang" / "semantics" / "passes" / "types")
+
+CONVENTIONS = {
+    ParamMode.BORROW: Convention.GUARANTEED,
+    ParamMode.NOM: Convention.OWNED,
+    ParamMode.PEEK: Convention.IN_GUARANTEED,
+    ParamMode.POKE: Convention.INOUT,
+}
+
+
+@pytest.mark.parametrize("mode,convention", list(CONVENTIONS.items()))
+def test_each_declared_mode_gives_its_convention(mode, convention):
+    assert mode.convention is convention
+
+
+def _convention_rows() -> dict[str, list[ast.Call]]:
+    """Each call of `record_convention` under the typecheck pass, by module."""
+    found: dict[str, list[ast.Call]] = {}
+    for path in sorted(TYPES_PASS.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "record_convention"):
+                module = path.relative_to(TYPES_PASS).as_posix()
+                found.setdefault(module, []).append(node)
+    return found
+
+
+def test_a_declared_parameter_gives_its_convention_in_the_argument_check():
+    """The argument check is the one writer of the convention of a declared parameter, and
+    it reads the convention from the mode. The intrinsic `print` declares no parameter: its
+    one argument is read, so it is `Guaranteed`."""
+    rows = _convention_rows()
+    assert set(rows) == {"arguments.py", "visit/calls.py"}, sorted(rows)
+    for call in rows["arguments.py"]:
+        value = call.args[2]
+        assert isinstance(value, ast.Attribute) and value.attr == "convention", ast.dump(value)
+    for call in rows["visit/calls.py"]:
+        assert ast.unparse(call.args[2]) == "Convention.GUARANTEED", ast.unparse(call)

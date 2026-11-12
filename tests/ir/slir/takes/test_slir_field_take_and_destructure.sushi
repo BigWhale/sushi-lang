@@ -1,0 +1,33 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ford\nleft 1 3\nzaphod beeblebrox\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_field_take_and_destructure.slir
+#
+# A marked field take drops each other owning field of its receiver, then moves the field
+# out of it: the receiver is spent whole and gets no drop. A destructure of an owned value
+# drops each part that `_` discards, then moves each part into its binder: two moves of
+# disjoint parts of one root in one block. A destructure of a borrowed value gives each
+# binder of an owning part a view local in a region over the owner.
+
+struct Crew:
+    string name
+    string[] ships
+    i32 count
+
+fn make(i32 k) (string, string[], i32):
+    return ("left {k}", from(["a", "b"]), 3)
+
+fn show(peek (string, string) pair) ~:
+    let (string first, string last) = pair
+    println("{first} {last}")
+
+fn main() i32:
+    let string seed = "f"
+    let Crew c = Crew("{seed}ord", from(["{seed}hog"]), 1)
+    let string name = nom c.name
+    println(name)
+    let (string left, _, i32 n) = make(1)
+    println("{left} {n}")
+    let (string, string) zaphod = ("zaphod", "beeblebrox")
+    show(peek zaphod)
+    return 0

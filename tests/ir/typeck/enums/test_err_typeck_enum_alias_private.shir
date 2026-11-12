@@ -1,0 +1,10 @@
+unit units/compass
+
+unit test_err_typeck_enum_alias_private
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(EnumInit(@cp.Secret, "Hidden", [Lit(1)]))
+    Return(Lit(0))

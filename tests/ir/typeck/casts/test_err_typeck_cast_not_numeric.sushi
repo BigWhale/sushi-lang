@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2014
+# EXPECT_STDERR_CONTAINS: "invalid cast from 'bool' to 'u8'"
+# EXPECT_DUMP_SHIR: test_err_typeck_cast_not_numeric.shir
+#
+# `as` changes a number into a number of another type. A cast to the type of its operand
+# is legal for any type: here a `bool` and a `string`. A `bool` is not a number, so a cast
+# of a `bool` to `u8` is CE2014: the program compares the value or matches it.
+
+fn main() i32:
+    let bool flag = true
+    let string text = "Mostly Harmless"
+    let bool same = flag as bool
+    let string copy = text as string
+    println(same)
+    println(copy)
+    let u8 bit = flag as u8
+    return bit as i32

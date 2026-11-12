@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.ast import Program
 
-from sushi_lang.semantics.generics.instantiate.types import TypeInferrer
+from sushi_lang.semantics.generics.instantiate.types import ScanTables
 from sushi_lang.semantics.generics.instantiate.expressions import ExpressionScanner
 from sushi_lang.semantics.generics.instantiate.functions import FunctionCollector
 
@@ -42,10 +42,7 @@ class InstantiationCollector:
     # FunctionType for a bare function reference passed as a higher-order argument.
     func_table: dict | None = field(default=None)
 
-    # The whole-program SymbolTables. When present, the instantiate pass infers generic-call
-    # argument and receiver types through the typecheck pass's own TypeValidator instead of a thin
-    # parallel inferrer -- the two used to disagree, and every method the typecheck pass knew and
-    # the instantiate pass did not dropped an instantiation on the floor (CE2061; issues #171/#191).
+    # The whole-program SymbolTables: name resolution reads them.
     tables: object | None = field(default=None)
 
     # What the unit being walked may write behind a dot. `alias.generic(...)` is a
@@ -80,24 +77,19 @@ class InstantiationCollector:
 
     def _build_function_collector(self) -> FunctionCollector:
         """The collaborator trio, wired. Both entry points walk types the same way."""
-        type_inferrer = TypeInferrer(
+        scan_tables = ScanTables(
             variable_types=self.variable_types,
             struct_table=self.struct_table or {},
             enum_table=self.enum_table or {},
             func_table=self.func_table or {},
         )
 
-        # The typecheck pass's inference, read-only (#806). It shares this collector's
-        # variable_types dict, so the scope the collector builds as it walks is the scope
-        # the inferrer sees. Constructed only when the whole SymbolTables is available.
-        type_validator = self._build_shared_inferrer()
-
         expression_scanner = ExpressionScanner(
-            type_inferrer=type_inferrer,
+            scan_tables=scan_tables,
             instantiations=self.instantiations,
             function_instantiations=self.function_instantiations,
             generic_funcs=self.generic_funcs or {},
-            type_validator=type_validator,
+            tables=self.tables,
             namespaces=self.namespaces,
             generic_enums=self._generic_enums_by_name(),
             sites=self.sites,
@@ -168,13 +160,3 @@ class InstantiationCollector:
             function_collector._reset_scope()
             function_collector.collect_from_signature(
                 sig.ret_type, getattr(sig, "err_type", None), sig.params)
-
-    def _build_shared_inferrer(self):
-        """The typecheck pass's inference over the same tables: no diagnostic, no stamp."""
-        if self.tables is None:
-            return None
-        from sushi_lang.semantics.passes.types import ReadOnlyInferrer
-
-        validator = ReadOnlyInferrer(self.tables, self.namespaces)
-        validator.variable_types = self.variable_types
-        return validator

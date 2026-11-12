@@ -58,3 +58,11 @@ def get_list_data_ptr(builder: Any, list_value: ir.Value) -> ir.Value:
         LIST_DATA_INDICES,
         name="list_data_ptr"
     )
+
+
+def list_slots(codegen: Any, list_ptr: ir.Value) -> tuple[ir.Value, ir.Value]:
+    """The length and the data of a List at an address."""
+    b = codegen.builder
+    length = b.load(get_list_len_ptr(b, list_ptr), name="list_len")
+    data = b.load(get_list_data_ptr(b, list_ptr), name="list_data")
+    return length, data

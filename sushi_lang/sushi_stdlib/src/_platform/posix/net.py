@@ -117,11 +117,6 @@ def declare_getpeername(module: ir.Module) -> ir.Function:
     return declare_libc(module, "getpeername")
 
 
-def declare_shutdown(module: ir.Module) -> ir.Function:
-    """int shutdown(int fd, int how)"""
-    return declare_libc(module, "shutdown")
-
-
 def declare_getaddrinfo(module: ir.Module) -> ir.Function:
     """int getaddrinfo(const char *node, const char *service,
                        const struct addrinfo *hints, struct addrinfo **res)"""
@@ -152,6 +147,6 @@ __all__ = [
     "declare_socket", "declare_connect", "declare_bind", "declare_listen",
     "declare_accept", "declare_send", "declare_recv", "declare_sendto",
     "declare_recvfrom", "declare_setsockopt", "declare_getsockname",
-    "declare_getpeername", "declare_shutdown", "declare_getaddrinfo",
+    "declare_getpeername", "declare_getaddrinfo",
     "declare_freeaddrinfo", "declare_getnameinfo", "declare_close", "declare_dup",
 ]

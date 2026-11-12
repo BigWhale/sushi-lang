@@ -1,0 +1,13 @@
+unit test_err_borrow_list_push_moves
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": List@(string), _1 "s": string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(BuiltinStatic(List@(string), "new"), []), is_init: true)
+    Assign(LocalRef(_1), adopt Interp(["n", Lit(1), ""]), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "reserve"), [(Binary(+, Call(Builtin(LocalRef(_0), "len"), []), Lit(2)), Guaranteed)]))
+    ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(move LocalRef(_1), Owned)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "len"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2008
+# EXPECT_STDERR_CONTAINS: "string.shout"
+# EXPECT_DUMP_SHIR: test_err_typeck_method_unknown_on_string.shir
+#
+# A method call types its receiver first, then the ladder looks for its callee: a
+# built-in family, a perk implementation, an extension method. No family of a `string`
+# answers `shout`, and no unit declares an extension of that name, so the call is CE2008
+# at the call. The call answers nothing, so the `let` and the read of `loud` have no
+# error of their own.
+
+fn main() i32:
+    let string text = "Mostly Harmless"
+    let string loud = text.shout()
+    println(loud)
+    return 0

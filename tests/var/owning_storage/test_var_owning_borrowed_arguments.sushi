@@ -1,0 +1,27 @@
+# A `var string` is a `poke` argument, a `peek` argument, a plain borrowed argument and a
+# receiver. Each one uses the global where it is. The rebind through the `poke`
+# parameter drops the old value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n15\nMostly Harmless!\n16\n"
+
+var string greeting = "Mostly"
+
+fn add(poke string s, string tail) ~:
+    s := "{s}{tail}"
+
+fn show(peek string s) ~:
+    println(s)
+
+fn size(string s) i32:
+    return s.len()
+
+fn main() i32:
+    add(poke greeting, " Harmless")
+    show(peek greeting)
+    println(size(greeting))
+    add(poke greeting, "!")
+    println(greeting)
+    println(greeting.len())
+    greeting := "end"
+    return 0

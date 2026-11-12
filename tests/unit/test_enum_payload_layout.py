@@ -3,14 +3,20 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from llvmlite import ir
 
 from sushi_lang.backend.enum_utils import unpack_all_variant_fields
+from sushi_lang.backend.constants.enum_initializers import constant_of, enum_initializer
+from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.types.core import LLVMTypeSystem
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
+from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.semantics.const_eval import AggregateConstant, ScalarConstant
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
-    BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType,
 )
 
 
@@ -123,3 +129,124 @@ def test_unpack_has_no_layout_of_its_own():
     field_types = (BuiltinType.I32, BuiltinType.I32, BuiltinType.I64)
     types.sizing.payload_field_offsets = lambda _ts: [8, 16, 24]
     assert _unpacked_offsets(types, field_types) == [8, 16, 24]
+
+
+def _packed_offsets(types: LLVMTypeSystem, field_types) -> list[int]:
+    """Run the real enum packer and read back the byte offset of each store."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=tuple(field_types)))
+    module = ir.Module()
+    fn = ir.Function(module, ir.FunctionType(ir.VoidType(), []), "f")
+    builder = ir.IRBuilder(fn.append_basic_block("entry"))
+    codegen = SimpleNamespace(types=types, builder=builder)
+    values = [ir.Constant(types.ll_type(ty), None) for ty in field_types]
+    emit_enum_variant_value(codegen, enum_type, enum_type.variants[0], values)
+    offsets = []
+    for instruction in fn.blocks[0].instructions:
+        if instruction.opname != "store" or instruction.operands[0] not in values:
+            continue
+        address = instruction.operands[1]
+        while getattr(address, "opname", "") == "bitcast":
+            address = address.operands[0]
+        offsets.append(address.indices[0].constant if address.opname == "getelementptr" else 0)
+    return offsets
+
+
+def test_pack_reads_the_authority():
+    """The enum packer stores each payload value at the offset payload_field_offsets gives."""
+    types = LLVMTypeSystem()
+    field_types = (BuiltinType.I8, BuiltinType.STRING, BuiltinType.I32, BuiltinType.F64)
+    assert _packed_offsets(types, field_types) == types.payload_field_offsets(field_types)
+
+
+def test_pack_has_no_layout_of_its_own():
+    """A changed authority moves every store: the packer keeps no second offset walk."""
+    types = LLVMTypeSystem()
+    field_types = (BuiltinType.I32, BuiltinType.I32, BuiltinType.I64)
+    types.sizing.payload_field_offsets = lambda _ts: [8, 16, 24]
+    assert _packed_offsets(types, field_types) == [8, 16, 24]
+
+
+def test_constant_has_no_layout_of_its_own():
+    """The one converter of an enum constant writes each payload value at the offset of
+    the authority: a changed authority moves the bytes."""
+    types = LLVMTypeSystem()
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,
+                                                                   BuiltinType.I32)))
+    constant = k.Aggregate(enum_type, (k.Int(5, BuiltinType.I32), k.Int(7, BuiltinType.I32)),
+                           "A")
+    natural = enum_initializer(constant, types, None, "")
+    assert [word.constant for word in natural.constant[1].constant] == [5 | 7 << 32]
+    types.sizing.payload_field_offsets = lambda _ts: [4, 0]
+    moved = enum_initializer(constant, types, None, "")
+    assert [word.constant for word in moved.constant[1].constant] == [7 | 5 << 32]
+
+
+def _one(value: int) -> ScalarConstant:
+    return ScalarConstant(value, BuiltinType.I32)
+
+
+POINT = StructType(name="Point", fields=(("x", BuiltinType.I32), ("y", BuiltinType.I32)))
+
+
+def test_a_global_with_a_struct_payload_writes_each_field_at_the_authority_offset() -> None:
+    """A struct value in a payload is a SLIR constant (A5). The one converter writes its
+    fields at the offsets of the layout authority, inside the offset of the payload."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(POINT,)))
+    value = AggregateConstant([AggregateConstant([_one(1), _one(2)], POINT)], enum_type, "A")
+    constant = constant_of(value, None, None)
+    assert constant == k.Aggregate(enum_type, (k.Aggregate(
+        POINT, (k.Int(1, BuiltinType.I32), k.Int(2, BuiltinType.I32))),), "A")
+    words = enum_initializer(constant, LLVMTypeSystem(), None, "").constant[1].constant
+    assert [word.constant for word in words] == [1 | 2 << 32]
+
+
+@pytest.mark.parametrize("payload, words", [
+    (AggregateConstant([_one(1), _one(2)], ArrayType(BuiltinType.I32, 2)), [1 | 2 << 32]),
+    (AggregateConstant([AggregateConstant([_one(3)], ArrayType(BuiltinType.I32, 1))],
+                       StructType(name="Row", fields=(("row", ArrayType(BuiltinType.I32, 1)),))),
+     [3]),
+], ids=["array", "array in a struct"])
+def test_a_global_with_an_array_payload_writes_each_element_at_its_stride(
+        payload: AggregateConstant, words: list[int]) -> None:
+    """An array value in a payload, also in a struct, is a SLIR constant (A6). The one
+    converter writes each element at its stride, inside the offset of the payload."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(payload.semantic_type,)))
+    constant = constant_of(AggregateConstant([payload], enum_type, "A"), None, None)
+    written = enum_initializer(constant, LLVMTypeSystem(), None, "").constant[1].constant
+    assert [word.constant for word in written] == words
+
+
+def test_a_global_of_an_enum_value_is_its_slir_constant() -> None:
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,)))
+    value = AggregateConstant([_one(5)], enum_type, "A")
+    assert constant_of(value, None, None) == k.Aggregate(
+        enum_type, (k.Int(5, BuiltinType.I32),), "A")
+
+
+def _faulty(constant: k.Aggregate) -> None:
+    """The one converter refuses `constant` with an internal error; it never answers None."""
+    with pytest.raises(InternalCompilerError):
+        enum_initializer(constant, LLVMTypeSystem(), None, "")
+
+
+def test_the_converter_checks_the_type_of_each_part() -> None:
+    """The one check of a variant runs on every path of a constant: a part of another
+    integer type than its payload field is an internal error."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,)))
+    _faulty(k.Aggregate(enum_type, (k.Int(5, BuiltinType.I64),), "A"))
+
+
+def test_the_converter_checks_a_nested_variant() -> None:
+    inner = _enum(EnumVariantInfo(name="X", associated_types=(BuiltinType.I32,)))
+    outer = EnumType(name="Outer", variants=(EnumVariantInfo(name="A", associated_types=(inner,)),))
+    _faulty(k.Aggregate(outer, (k.Aggregate(inner, (k.Int(5, BuiltinType.U8),), "X"),), "A"))
+
+
+def test_the_converter_refuses_a_variant_that_its_enum_does_not_declare() -> None:
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=()))
+    _faulty(k.Aggregate(enum_type, (), "B"))
+
+
+def test_a_string_part_with_no_finisher_is_an_internal_error() -> None:
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.STRING,)))
+    _faulty(k.Aggregate(enum_type, (k.text("x"),), "A"))

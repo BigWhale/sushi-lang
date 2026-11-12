@@ -1,0 +1,15 @@
+# A call of a variadic function behind `use ... as`: values that own, an empty tail and a
+# bloom of a local.
+# EXPECT_STDOUT_EXACT: "-Mostly-Harmless-Harmless!\n6\n0\n9\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use "helpers/tail_unit" as t
+
+fn main() i32:
+    let string w = "Harmless"
+    println(t.joined("-", "Mostly", w, "{w}!"))
+    println(t.total(1, 2, 3))
+    println(t.total())
+    let i32[] xs = from([4, 5])
+    println(t.total(xs...))
+    return 0

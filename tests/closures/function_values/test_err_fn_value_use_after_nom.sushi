@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+fn eat(nom string s) i32:
+    return s.len()
+
+fn main() i32:
+    let fn(nom string) -> i32 f = eat
+    let string s = "a".clone()
+    println(f(nom s))
+    println(s)
+    return 0

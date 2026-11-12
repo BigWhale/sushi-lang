@@ -1,0 +1,12 @@
+unit test_shir_lambda_channel
+
+ShirBody main
+  params : []
+  locals : [_0 "half": fn(i32) -> i32 | OddError, _1 "x": i32, _2 "third": fn(i32) -> i32 | OddError, _3 "x": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Lambda([(_1, Guaranteed)], ret: i32, err: OddError, [If(Binary(==, Binary(%, LocalRef(_1), Lit(2)), Lit(1)), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@OddError, "TooOdd", [])]))]), Return(adopt EnumInit(@Result, "Ok", [adopt Binary(/, LocalRef(_1), Lit(2))]))], expr_body: false, symbol: "user_main.__lambda_0", env: []), is_init: true)
+    Assign(LocalRef(_2), adopt Lambda([(_3, Guaranteed)], [Return(adopt Binary(/, LocalRef(_3), Lit(3)))], expr_body: true, symbol: "user_main.__lambda_1", env: []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Indirect(LocalRef(_0)), [(Lit(84), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Indirect(LocalRef(_0)), [(Lit(7), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Indirect(LocalRef(_2)), [(Lit(9), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

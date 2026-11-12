@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+import pytest
 
 from sushi_lang.semantics.method_effects import METHOD_EFFECTS, effect_of
 from sushi_lang.semantics.passes.types import arrays
@@ -38,3 +39,198 @@ def test_every_array_method_the_table_marks_is_measured():
     marked = {name for name in arrays._ARRAY_METHODS if effect_of(name).mutates}
     assert {"clear", "push", "pop", "fill", "reverse", "extend",
             "extend_back"} <= marked
+
+
+def _receiver_sets():
+    from sushi_lang.semantics import method_effects as me
+    return {"only reads": me.RECEIVER_READ_FAMILIES, "effect": me.EFFECT_FAMILIES,
+            "consumes": me.CONSUMING_RECEIVER_FAMILIES}
+
+
+def test_each_registry_family_is_in_exactly_one_receiver_set():
+    """The receiver sets are a TOTAL partition of the families of `METHOD_TYPE_REGISTRY`
+    but the clone family and the contract families, which are in no set (ruling R-V,
+    docs/design/ir.md 8.3)."""
+    from sushi_lang.semantics.method_effects import CLONE_FAMILY, CONTRACT_FAMILIES
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    registry = [family.name for family in METHOD_TYPE_REGISTRY.families]
+    in_no_set = CONTRACT_FAMILIES | {CLONE_FAMILY}
+    assert in_no_set <= set(registry)
+    sets = _receiver_sets()
+    for name in registry:
+        holders = [label for label, families in sets.items() if name in families]
+        assert len(holders) == (0 if name in in_no_set else 1), \
+            f"the family {name!r} is in {holders}"
+    unknown = frozenset().union(*sets.values()) - set(registry)
+    assert not unknown, f"no family of METHOD_TYPE_REGISTRY is named {sorted(unknown)}"
+    assert all(sets.values()), "a receiver set is empty"
+
+
+def test_the_borrow_pass_and_slir_lowering_read_the_one_receiver_convention():
+    from sushi_lang.semantics import method_effects
+    from sushi_lang.semantics.passes.borrow import calls
+    from sushi_lang.semantics.slir import lower_calls
+
+    assert calls.receiver_convention is method_effects.receiver_convention
+    assert lower_calls.receiver_convention is method_effects.receiver_convention
+
+
+def test_a_read_family_gives_a_borrow():
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    for name in me.RECEIVER_READ_FAMILIES | me.CONTRACT_FAMILIES | {me.CLONE_FAMILY}:
+        callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
+        assert me.receiver_convention(callee) is Convention.GUARANTEED
+
+
+def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
+    """The array family (group A6): a method whose row `mutates` takes its receiver
+    `Inout`, and every other method of the family reads it (docs/design/ir.md 8.3)."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    assert me.RULED_EFFECT_FAMILIES == {"array", "list", "hashmap", "own"}
+    assert me.RULED_EFFECT_FAMILIES <= me.EFFECT_FAMILIES
+    family = METHOD_TYPE_REGISTRY.family("array")
+    answers = {name: me.receiver_convention(family.callee(name))
+               for name in arrays._ARRAY_METHODS}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {name for name in arrays._ARRAY_METHODS if effect_of(name).mutates}
+    assert {"push", "insert", "pop", "fill", "swap", "extend"} <= written
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
+
+
+def test_the_list_family_writes_a_receiver_that_its_row_mutates():
+    """The `List@(T)` family (group B2) has the rule of the array family: `push`,
+    `insert`, `pop`, `clear`, ... take the receiver `Inout`, and each other method reads it.
+    The slot of `push` and of `insert` is `Owned`, and each other argument is `Guaranteed`,
+    the index of `insert` too."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    family = METHOD_TYPE_REGISTRY.family(me.LIST_FAMILY)
+    answers = {name: me.receiver_convention(family.callee(name)) for name in LIST_METHOD_ARITY}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {name for name in LIST_METHOD_ARITY if effect_of(name).mutates}
+    assert {"push", "insert", "pop", "remove", "clear", "reserve", "free"} <= written
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
+    owned = {name: me.argument_conventions(me.LIST_FAMILY, name, count)
+             for name, count in LIST_METHOD_ARITY.items()
+             if Convention.OWNED in me.argument_conventions(me.LIST_FAMILY, name, count)}
+    assert owned == {"push": (Convention.OWNED,),
+                     "insert": (Convention.GUARANTEED, Convention.OWNED)}
+
+
+def test_the_hashmap_family_writes_a_receiver_that_its_row_mutates():
+    """The `HashMap@(K, V)` family (group B4) has the rule of the List family: `insert`,
+    `remove`, `free`, `destroy` and `rehash` take the receiver `Inout`, and each other method
+    reads it. `insert` takes its key and its value `Owned`; a key of a lookup borrows."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    family = METHOD_TYPE_REGISTRY.family(me.HASHMAP_FAMILY)
+    answers = {name: me.receiver_convention(family.callee(name))
+               for name in HASHMAP_METHOD_ARITY}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {"insert", "remove", "free", "destroy", "rehash"}
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
+    owned = {name: me.argument_conventions(me.HASHMAP_FAMILY, name, count)
+             for name, count in HASHMAP_METHOD_ARITY.items()
+             if Convention.OWNED in me.argument_conventions(me.HASHMAP_FAMILY, name, count)}
+    assert owned == {"insert": (Convention.OWNED, Convention.OWNED)}
+
+
+def test_the_own_family_writes_a_receiver_that_its_row_mutates():
+    """The `Own@(T)` family (group B5) has the rule of the List family: `destroy` takes the
+    receiver `Inout`, and `get`, `clone` and `alloc` read it. `alloc` takes its value
+    `Owned`; `get` answers a view of the payload."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    family = METHOD_TYPE_REGISTRY.family(me.OWN_FAMILY)
+    answers = {name: me.receiver_convention(family.callee(name)) for name in OWN_METHOD_ARITY}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {"destroy"}
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
+    owned = {name: me.argument_conventions(me.OWN_FAMILY, name, count)
+             for name, count in OWN_METHOD_ARITY.items()
+             if Convention.OWNED in me.argument_conventions(me.OWN_FAMILY, name, count)}
+    assert owned == {"alloc": (Convention.OWNED,)}
+    assert {name for name in OWN_METHOD_ARITY if me.answers_view(family.callee(name))} \
+        == {"get"}
+
+
+def test_the_array_slot_is_the_one_owned_argument_of_its_conventions():
+    """The `slot` of an array row and `argument_conventions` of the array family give one
+    answer: the slot is `Owned`, and each other argument (the index of `insert`) borrows."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.arrays import _ARRAY_METHODS
+
+    for name, spec in _ARRAY_METHODS.items():
+        conventions = me.argument_conventions(me.ARRAY_FAMILY, name, spec.arity)
+        owned = {index for index, convention in enumerate(conventions)
+                 if convention is Convention.OWNED}
+        assert owned == ({spec.slot} if spec.slot is not None else set()), name
+
+
+def test_a_get_out_answers_a_view_by_its_family_and_its_name():
+    """`get`, `first` and `last` of a List and of an array answer a view (`answers_view`,
+    docs/design/ir.md 7.9). The same name of another family, and another method of the
+    family, do not."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    for family_name, names in ((me.LIST_FAMILY, LIST_METHOD_ARITY),
+                               (me.ARRAY_FAMILY, arrays.ARRAY_METHOD_ARITY)):
+        family = METHOD_TYPE_REGISTRY.family(family_name)
+        views = {name for name in names if me.answers_view(family.callee(name))}
+        assert views == {"get", "first", "last"}
+    assert set(me.VIEW_ANSWERS) <= me.EFFECT_FAMILIES
+    for name in me.RECEIVER_READ_FAMILIES:
+        assert not me.answers_view(METHOD_TYPE_REGISTRY.family(name).callee("get"))
+
+
+@pytest.mark.parametrize("family, arity", [
+    ("result", "RESULT_METHOD_ARITY"), ("maybe", "MAYBE_METHOD_ARITY")])
+def test_a_wrapper_method_takes_its_receiver_only_when_it_declares_nom_self(family, arity):
+    """The answer is per method, from the signature row of the method: `map_err` and
+    `or_err` take their receiver. `realise` and `expect` read it, as on `main`."""
+    from sushi_lang.semantics.generics import maybe, results
+    from sushi_lang.semantics.method_effects import receiver_convention
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    methods = getattr(results if family == "result" else maybe, arity)
+    answers = {name: receiver_convention(METHOD_TYPE_REGISTRY.family(family).callee(name))
+               for name in methods}
+    owned = {name for name, answer in answers.items() if answer is Convention.OWNED}
+    assert owned == ({"map_err"} if family == "result" else {"or_err"})
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in owned)
+    assert {"realise", "expect"} <= set(answers) - owned
+
+
+def test_a_family_in_no_receiver_set_is_an_internal_error():
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.semantics.method_effects import receiver_convention
+    from sushi_lang.semantics.shir.callee import BuiltinMethod
+
+    with pytest.raises(InternalCompilerError) as caught:
+        receiver_convention(BuiltinMethod("unheard_of", "probe", nom_self=False))
+    assert caught.value.code == "CE0000"

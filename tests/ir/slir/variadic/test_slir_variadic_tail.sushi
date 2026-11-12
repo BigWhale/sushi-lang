@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n0\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_DUMP_SLIR: test_slir_variadic_tail.slir
+#
+# A variadic tail is ONE temporary `T[]` local of the call: one `Aggregate(AggArray)` of the
+# values in the written order, a value that owns the `Move` of its temporary. The local is
+# the `Guaranteed` argument of the call, and it drops at the end of the statement (ir.md
+# 7.4, 8.9). An empty tail is the empty array.
+
+fn count(string head, ...string xs) i32:
+    return xs.len() + head.len() - 1
+
+fn mk(i32 a) string:
+    return "v{a}"
+
+fn main() i32:
+    println(count("h", mk(1), "two", mk(3)))
+    println(count("h"))
+    return 0

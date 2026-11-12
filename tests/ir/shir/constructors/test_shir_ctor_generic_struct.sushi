@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\nanswer\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_DUMP_SHIR: test_shir_ctor_generic_struct.shir
+#
+# the SHIR dump of the construction of a generic struct. `StructInit` names the struct
+# as written; the instance is an answer of the typecheck pass. A named construction
+# gives the declaration order of the generic struct, and an argument keeps its written
+# marker, as the argument of a call does.
+
+struct Pair@(T, U):
+    T first
+    U second
+
+struct Box@(T):
+    T item
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(second: "answer", first: 42)
+    let string s = "Mostly Harmless"
+    let Box@(string) b = Box(nom s)
+    println(p.first)
+    println(p.second)
+    println(b.item)
+    return 0

@@ -1,0 +1,66 @@
+# An instance of a generic target that only the typecheck pass names: the return of a copy of
+# a method-level template that the call cuts. The first lookup of the perk-implementation
+# table cuts the copy of the implementation, also for a constraint and for a predefined
+# override.
+# EXPECT_STDOUT_EXACT: "box 2.5\ntag 1\ntag 1\nboxed\ntrue\n9\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T v
+
+struct Tag@(T):
+    i32 n
+
+struct Held@(T):
+    T v
+
+struct Pt:
+    i32 x
+
+extend Box@(T: Display) with Show:
+    fn show() string:
+        return "box {self.v}"
+
+extend Tag@(T) with Show:
+    fn show() string:
+        return "tag {self.n}"
+
+extend Held@(T) with Display:
+    fn to_str() string:
+        return "boxed"
+
+extend Held@(T) with Eq:
+    fn eq(Held@(T) other) bool:
+        return other.to_str() == "boxed"
+
+extend Held@(T) with Hashable:
+    fn hash() u64:
+        return 9 as u64
+
+extend i32 boxed@(U)(nom U u) Box@(U):
+    return Box(nom u)
+
+extend i32 tagged@(U: Hashable)(U u) Tag@(U):
+    let u64 h = u.hash()
+    if (h == h):
+        return Tag(self)
+    return Tag(0)
+
+extend i32 held@(U)(nom U u) Held@(U):
+    return Held(nom u)
+
+fn pr@(T: Show)(T x) ~:
+    println(x.show())
+
+fn main() i32:
+    println(1.boxed(nom 2.5).show())
+    println(1.tagged(Pt(1)).show())
+    pr(1.tagged(true))
+    println(1.held(nom 2))
+    println(1.held(nom 2) == 1.held(nom 3))
+    println(1.held(nom 2).hash())
+    return 0

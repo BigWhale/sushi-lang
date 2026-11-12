@@ -1,0 +1,11 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SLIR: test_borrow_template_check_meets_no_slir.slir
+#
+# The borrow pass checks the template check of `ident`, but a template check never goes
+# to SLIR. So the SLIR dump holds `main` alone, and the program runs.
+
+fn ident@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    return 0

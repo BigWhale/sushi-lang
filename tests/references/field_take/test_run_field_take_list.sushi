@@ -1,0 +1,32 @@
+# A marked field take of a `List@(T)` field: `nom s.items` moves the list out of a
+# value this function owns, in a `let`, in a `return` and in a `nom` argument. The other
+# owning field is destroyed at the take, and the list with its strings is destroyed once
+# by its new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let 2\nreturn 2\nate 2\n"
+struct Bag:
+    List@(string) items
+    string label
+
+fn make(i32 n) Bag:
+    let List@(string) items = List.new()
+    items.push("first {n}")
+    items.push("second {n}")
+    return Bag(items, "label {n}")
+
+fn take_out(nom Bag s) List@(string):
+    return nom s.items
+
+fn eat(nom List@(string) items) ~:
+    println("ate {items.len()}")
+
+fn main() i32:
+    let Bag a = make(1)
+    let List@(string) got = nom a.items
+    println("let {got.len()}")
+    let List@(string) back = take_out(nom make(2))
+    println("return {back.len()}")
+    let Bag c = make(3)
+    eat(nom c.items)
+    return 0

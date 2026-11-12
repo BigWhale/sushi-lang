@@ -1,0 +1,13 @@
+unit test_err_typeck_struct_spread
+
+ShirBody make
+  params : [(_0 "xs": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(StructInit(@Point, [LocalRef(_0)...], written_order: [0]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

@@ -224,3 +224,26 @@ def test_an_environment_read_before_the_fork_takes_a_fresh_process(server, tmp_p
     for name in fork_server.IMPORT_TIME_ENV:
         other = {**os.environ, name: str(tmp_path / "elsewhere")}
         assert server.run(["--version"], str(tmp_path), other, 60) is None, name
+
+
+def test_a_request_with_another_hash_seed_takes_a_fresh_process(monkeypatch, tmp_path):
+    """The server fixes its hash seed when it starts, and each child keeps that seed.
+
+    So a request with another PYTHONHASHSEED must not get the answer of a child: the
+    caller starts a fresh process, which reads the seed of the request.
+    """
+    monkeypatch.setenv("PYTHONHASHSEED", "0")
+    probe = tmp_path / "hash_probe.py"
+    probe.write_text('print(hash("Mostly Harmless"))\n', encoding="utf-8")
+    seeded = {**os.environ, fork_server.COMPILER_STUB_ENV: str(probe)}
+    expected = subprocess.run([sys.executable, str(probe)], capture_output=True, text=True,
+                              env=seeded, timeout=60).stdout
+    handle = fork_server.ForkServer(PROJECT_ROOT, tmp_path / "server")
+    try:
+        forked = handle.run([], str(tmp_path), seeded, 60)
+        assert forked is not None and forked.stdout == expected, "the control: seed 0"
+        other = {**seeded, "PYTHONHASHSEED": "1"}
+        assert handle.run([], str(tmp_path), other, 60) is None, (
+            "a request with another hash seed got the answer of the server's seed")
+    finally:
+        handle.close()

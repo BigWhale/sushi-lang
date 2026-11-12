@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
@@ -15,27 +16,26 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.library_registry import LibraryRegistry
     from sushi_lang.semantics.generics.instantiate import InstantiationCollector
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
-    from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
+    from sushi_lang.semantics.generics.perk_copies import PerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
+from sushi_lang.semantics.shir.lookup import DeclLookup
+from sushi_lang.semantics.shir.lowering import (
+    LoweredProgram,
+    check_error_holes,
+    lower_copy,
+    lower_unit,
+)
+from sushi_lang.semantics.passes.borrow import BorrowChecker
+from sushi_lang.semantics.passes.lift import LiftPass
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
-from sushi_lang.semantics.passes.borrow import BorrowChecker
-from sushi_lang.semantics.passes.lift import LambdaLifter
+from sushi_lang.semantics.slir.function import SlirProgram
+from sushi_lang.semantics.slir.lower import SlirStage
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
-
-
-def enum_base_names(*tables) -> set[str]:
-    """The base name of every enum in `tables`, for the borrow checker's sink test."""
-    names: set[str] = set()
-    for table in tables:
-        mapping = table.by_name if hasattr(table, 'by_name') else table
-        names.update(name.split('<', 1)[0] for name in mapping)
-    return names
-
 
 
 # The test runner's stdlib gates, hidden like SUSHI_SPELLING_GATE. Set, a lint also checks
@@ -80,23 +80,21 @@ class Lints:
 
 @dataclass(frozen=True)
 class _UnitPasses:
-    """The four per-unit passes of one unit, built in that unit's scope."""
+    """The per-unit passes of one unit that run from the switch to SHIR on, built in that
+    unit's scope. Each SHIR pass gives the next one each body that it finished with no
+    error: typecheck gives it to lift, lift to borrow, and borrow to the SLIR stage."""
     scope: ScopeAnalyzer
     typecheck: TypeValidator
-    lifter: LambdaLifter
+    lift: LiftPass
     borrow: BorrowChecker
+    slir: SlirStage
 
 
 @dataclass(frozen=True)
 class _CopyEntry:
-    """The four per-unit pass entries for one kind of copy.
-
-    `borrow` takes the copy and the functions that the lift pass made from its lambdas.
-    """
+    """The per-unit pass entries for one kind of copy."""
     scope: Callable[[ScopeAnalyzer, Any], None]
     typecheck: Callable[[TypeValidator, Any], None]
-    lift: Callable[[LambdaLifter, Any], list]
-    borrow: Callable[[BorrowChecker, Any, list], None]
 
 
 def _written_declaration(method: Any, template_id: Any) -> tuple:
@@ -114,45 +112,18 @@ def _written_declaration(method: Any, template_id: Any) -> tuple:
     return ("copy", template_id, where)
 
 
-def _borrow_lifted(borrow: BorrowChecker, functions) -> None:
-    """Borrow-check functions, each as the body that the reporter reads."""
-    for fn in functions:
-        borrow.reporter.enter_body(fn)
-        borrow._check_function(fn)
-
-
-def _borrow_function_copy(borrow: BorrowChecker, func: Any, lifted: list) -> None:
-    _borrow_lifted(borrow, (func, *lifted))
-
-
-def _borrow_extension_copy(borrow: BorrowChecker, ext: ExtendDef, lifted: list) -> None:
-    borrow._check_extension(ext)
-    _borrow_lifted(borrow, lifted)
-
-
-def _borrow_perk_copy(borrow: BorrowChecker, impl: ExtendWithDef, lifted: list) -> None:
-    borrow._check_perk_impl(impl)
-    _borrow_lifted(borrow, lifted)
-
-
 # One row per kind of copy that is cut after the per-unit loop: a late function copy, a
-# generic-target or array-target extension copy, and an array-template perk copy.
+# generic-target or array-target extension copy, and a perk copy cut on a miss.
 _COPY_ENTRIES: dict[str, _CopyEntry] = {
     "function": _CopyEntry(
         scope=ScopeAnalyzer._check_function,
-        typecheck=TypeValidator._validate_function,
-        lift=LambdaLifter.lift_body,
-        borrow=_borrow_function_copy),
+        typecheck=TypeValidator._validate_function),
     "extension": _CopyEntry(
         scope=ScopeAnalyzer._check_extension_method,
-        typecheck=TypeValidator._validate_extension_method,
-        lift=LambdaLifter.lift_body,
-        borrow=_borrow_extension_copy),
+        typecheck=TypeValidator._validate_extension_method),
     "perk": _CopyEntry(
         scope=ScopeAnalyzer._check_perk_implementation,
-        typecheck=validate_perk_implementation_method,
-        lift=LambdaLifter.lift_perk_impl,
-        borrow=_borrow_perk_copy),
+        typecheck=validate_perk_implementation_method),
 }
 
 
@@ -206,10 +177,26 @@ class SemanticAnalyzer:
         self.tables: SymbolTables = SymbolTables()
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
-        # The array-template perk copies cut on demand (#699); set with the monomorphizer.
-        self.array_perk_copies: Optional['ArrayPerkCopies'] = None
+        # The perk copies cut on demand (#699); set with the monomorphizer.
+        self.perk_copies: Optional['PerkCopies'] = None
+        # The implementations on one instantiation that no unit reached at the drop,
+        # with their units: a late cut can still intern the instance.
+        self._unreached_perk_impls: list[tuple[Unit, ExtendWithDef]] = []
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
+        # The SHIR of each body that the scope pass checked, per unit, in the compilation
+        # order (docs/design/ir.md 6.3). The typecheck pass walks it, and `--dump-shir`
+        # prints it.
+        self.shir = LoweredProgram()
+        # The SLIR of each body that the borrow pass finished (docs/design/ir.md 8.2).
+        # `--dump-slir` prints it.
+        self.slir = SlirProgram()
+        # Which functions destroy a `poke` parameter, transitively: the summary of the
+        # `effects` pass, which the borrow pass reads.
+        self.destroy_effects: dict = {}
+        # Every error that a per-unit reporter offered, by code, for the error-hole check
+        # at the end of the analysis (docs/design/ir.md 7.4).
+        self._offered: Counter[str] = Counter()
 
     def check(self) -> None:
         """Entry point for semantic analysis. Runs every pass in sequence.
@@ -243,24 +230,39 @@ class SemanticAnalyzer:
                           compiled library ships, then warn
                           where an own extension hides an        _warn_hidden_imported_extensions  here
                           imported one (C3)
-            effects       destroy-effect summary                 _compute_effects                  passes/borrow/destroy_effects.py
-            scope         scope and variable analysis            _check_units                      passes/scope.py
-            typecheck     type validation and inference          _check_units                      passes/types/
-            lift          lambda lifting                         _check_units                      passes/lift.py
-            borrow        borrow checking                        _check_units                      passes/borrow/
+            effects       destroy-effect summary (AST)           _compute_effects                  passes/effects.py
+            scope         scope and variable analysis (AST)      _check_units                      passes/scope.py
+            lowering      the SHIR body of each declaration      _check_units                      shir/lowering.py
+            typecheck     type validation and inference (SHIR)   _check_units                      passes/types/
+            lift          the lambdas of a body, LiftResults     _check_units                      passes/lift.py
+                          (SHIR)
+            borrow        borrow checking, OwnershipResults      _check_units                      passes/borrow/
+                          (SHIR)
+            slir          SHIR to SLIR, one SlirFunction for     _check_units                      slir/lower.py
+                          each body (not a pass)
 
-        The last four run per unit, in one loop. `_check_copies` repeats those four for
-        each copy cut after the loop started: an extension copy of a generic or an array
-        target, an array-template perk copy, and a function instance of a late request
-        of the typecheck pass (#1155). `_check_array_extensions` drives it to a
-        fixpoint. A copy of a checked template reports only the per-instance remainder.
+        From the switch to SHIR (docs/design/ir.md 7.9), `scope`, lowering, `typecheck`,
+        `lift`, `borrow` and the SLIR stage run per unit, in one loop. `scope` reads the
+        AST, and lowering makes the SHIR body of each declaration. The three SHIR passes
+        walk that body, and each gives the next stage each body that it finished with no
+        error: `typecheck` gives it to `lift`, `lift` gives it to `borrow`, and `borrow`
+        gives it to the SLIR stage. A body whose walk in `typecheck` reported an error goes
+        to `lift` and `borrow` too, for the diagnostics of `borrow`, and never to the SLIR
+        stage, which lowers nothing while the program has an error (docs/design/ir.md 7.9).
+        `effects` runs on the AST before the loop, because `borrow` reads its summary. The
+        backend emits the `SlirFunction` of each body (docs/design/ir.md 8.2). `_check_copies` repeats
+        the per-unit stages for each copy cut after the loop started: an extension copy of
+        a generic or an array target, a perk copy cut on a miss, and a function instance
+        of a late request of the typecheck pass (#1155). `_check_array_extensions` drives
+        it to a fixpoint. A copy of a checked template reports only the per-instance
+        remainder.
 
         The `typecheck` pass also checks each template of the unit one time, on a check
         copy, where it is written (#1070, `passes/types/templates.py`): each type
-        parameter is opaque, the copy lives in an overlay of the tables, and the pass runs
-        `lift` and, through a hook, `borrow` on the copy alone. After the fixpoint, `_reject_opaque_in_program_tables`
-        is the backstop (CE0148): no instance over an opaque parameter reached a program
-        table.
+        parameter is opaque, the copy lives in an overlay of the tables, and the pass
+        walks the SHIR body of the template as written. After the fixpoint,
+        `_reject_opaque_in_program_tables` is the backstop (CE0148): no instance over an
+        opaque parameter reached a program table.
 
         `ffi-clash` has a second half with no row of its own: `_check_instance_clash`
         runs CE5013 over the monomorphized function instances, directly after
@@ -276,7 +278,7 @@ class SemanticAnalyzer:
             self._check_multi_file()
         finally:
             # A miss in the backend is a miss: every copy it needs was cut here.
-            self.tables.perk_impls.on_array_miss = None
+            self.tables.perk_impls.on_perk_miss = None
 
     def _unit_reporter(self, unit, gate_env: Optional[str] = None) -> Reporter:
         """A Reporter that knows one unit's file and source, for a per-unit pass.
@@ -297,11 +299,12 @@ class SemanticAnalyzer:
         """Hand one unit's findings to the program reporter, in source order.
 
         The one place a per-unit reporter is drained. The passes emit in pass order and
-        a unit is walked whole by each of them, so a fault the `lift` pass found sits
+        a unit is walked whole by each of them, so a fault the `borrow` pass found sits
         behind every fault the `typecheck` pass found -- source order is what a reader
         asked for (#629).
         """
         self.reporter.items.extend(in_source_order(unit_reporter.items))
+        self._offered.update(unit_reporter.errors_offered)
 
     def _check_multi_file(self) -> None:
         """Multi-file semantic analysis with cross-unit symbol resolution.
@@ -361,18 +364,16 @@ class SemanticAnalyzer:
         self._reject_extensions_beside_shipped_perk_impls()
         self._warn_hidden_imported_extensions()
 
-        destroy_effects = self._compute_effects(compilation_order)
-        # Enum type names for the borrow pass's ownership-sink test, stripped to their
-        # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
-        # while its constructor is written `Result.Ok(...)`.
-        enum_names = enum_base_names(self.tables.enums, self.tables.generic_enums)
-
         self._start_late_requests(monomorphizer, compilation_order)
-        self._check_units(compilation_order, monomorphizer, libraries,
-                          destroy_effects, enum_names)
-        self._check_array_extensions(compilation_order, monomorphizer, libraries,
-                                     destroy_effects, enum_names)
+        self.destroy_effects = self._compute_effects(compilation_order)
+        self._check_units(compilation_order, monomorphizer, libraries)
+        self._check_array_extensions(compilation_order, monomorphizer, libraries)
         self._reject_opaque_in_program_tables()
+
+    def check_error_holes(self) -> None:
+        """CE0000 at the first error hole whose codes no error offered (ir.md 7.4), for an
+        analysis that reported no error."""
+        check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
 
     def _reject_opaque_in_program_tables(self) -> None:
         """CE0148, the backstop of the template check (#1070): no opaque type reached here.
@@ -588,7 +589,26 @@ class SemanticAnalyzer:
             if unit.ast is None or not getattr(unit.ast, "externals", None):
                 continue
             unit_reporter = self._unit_reporter(unit)
-            reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
+            reject_external_naming_an_instance(unit_reporter, unit.ast,
+                                               self.tables.externals, instances)
+            self._merge_unit(unit_reporter)
+
+    def _check_late_instance_clash(self, compilation_order: list[Unit],
+                                   placed: list[tuple[Unit, FuncDef]]) -> None:
+        """ffi-clash, the instance half, over the late copies that a round placed (CE5013)."""
+        from sushi_lang.semantics.passes.types.externals import (
+            reject_external_naming_an_instance,
+        )
+        instances = [(sig, fn) for _home, fn in placed
+                     if (sig := self.tables.funcs.declared(fn.name, fn.home_unit)) is not None]
+        if not instances:
+            return
+        for unit in compilation_order:
+            if unit.ast is None or not unit.ast.externals:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_external_naming_an_instance(unit_reporter, unit.ast,
+                                               self.tables.externals, instances)
             self._merge_unit(unit_reporter)
 
     def _collect_instantiations(self, compilation_order: list[Unit],
@@ -724,11 +744,11 @@ class SemanticAnalyzer:
 
         self.tables.check_call_constraints = monomorphizer.check_call_constraints
 
-        # The array-template perk copies are cut on demand from here on (#699): the
+        # The perk copies are cut on demand from here on (#699): the
         # constraint check of the next stage is the first reader that can miss.
-        from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
-        self.array_perk_copies = ArrayPerkCopies(self.tables, monomorphizer.substitutor)
-        self.tables.perk_impls.on_array_miss = self.array_perk_copies
+        from sushi_lang.semantics.generics.perk_copies import PerkCopies
+        self.perk_copies = PerkCopies(self.tables, monomorphizer.substitutor)
+        self.tables.perk_impls.on_perk_miss = self.perk_copies
         return monomorphizer
 
     def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
@@ -806,15 +826,24 @@ class SemanticAnalyzer:
         """effects: which functions destroy a `poke` parameter, transitively (#168)."""
         # Computed ONCE across EVERY unit -- the borrow pass runs per unit, so a per-unit
         # summary would make a cross-unit callee invisible.
-        from sushi_lang.semantics.passes.borrow import compute_destroy_effects
+        from sushi_lang.semantics.passes.effects import compute_destroy_effects
         return compute_destroy_effects(
             unit.ast for unit in compilation_order if unit.ast is not None
         )
 
     def _check_units(self, compilation_order: list[Unit], monomorphizer,
-                     libraries: LibraryRegistration, destroy_effects,
-                     enum_names: set[str]) -> None:
-        """scope, typecheck, lift and borrow, per unit, in one loop."""
+                     libraries: LibraryRegistration) -> None:
+        """scope, lowering, typecheck, lift, borrow and the SLIR stage, per unit, in one loop.
+
+        Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
+        result goes to `self.shir`, and the body half of `typecheck` walks it; `typecheck`
+        gives each body that it finished with no error to `lift`, `lift` gives each body
+        that it finished to `borrow`, and `borrow` gives each body that it finished to the
+        SLIR stage, which writes `self.slir` while the program has no error. A body whose
+        walk in `typecheck` reported an error goes to `lift` and `borrow` too. The reporter of the unit tells lowering whether
+        scope reported an error: in such a unit a hole does not stop the compile under the
+        strict variable.
+        """
         # Every unit is analysed with the global context, because units reference each
         # other, but each gets its own reporter so a diagnostic names the right file.
         for unit in compilation_order:
@@ -822,19 +851,19 @@ class SemanticAnalyzer:
                 continue
 
             unit_reporter = self._unit_reporter(unit)
-            passes = self._unit_passes(unit, unit_reporter, monomorphizer,
-                                       libraries, destroy_effects, enum_names)
+            passes = self._unit_passes(unit, unit_reporter, monomorphizer, libraries)
             passes.scope.run(unit.ast)
+            lower_unit(self.shir, unit, passes.scope.bindings,
+                       DeclLookup.of(self.tables, unit.name),
+                       scope_failed=unit_reporter.has_offered_errors)
             passes.typecheck.run(unit.ast)
-            passes.lifter.run()
-            passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
 
             self._merge_unit(unit_reporter)
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
-                     monomorphizer, libraries: LibraryRegistration, destroy_effects,
-                     enum_names: set[str]) -> _UnitPasses:
-        """The scope, typecheck, lift and borrow passes of ONE unit, in its own scope.
+                     monomorphizer, libraries: LibraryRegistration) -> _UnitPasses:
+        """The scope, typecheck, lift and borrow passes and the SLIR stage of ONE unit, in
+        its own scope.
 
         Two callers: the per-unit loop, and the check of the generic-target extension
         copies, which each go home to the unit of their template (#1064). A copy is
@@ -850,22 +879,21 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
-        # The enum names let the checker tell `Box.Full(a)` from a method call -- both
-        # are DotCall here. BASE names only: the receiver is written bare.
-        borrow = BorrowChecker(reporter, destroy_effects=destroy_effects,
-                               enum_names=enum_names, tables=self.tables,
-                               unit_name=unit.name,
-                               scope=namespaces.scope if namespaces else None)
-        # The typecheck pass calls the borrow pass on each check copy (#1070, R5).
+        slir = SlirStage(self.shir, self.slir, unit=unit.name,
+                         failed=lambda: self.reporter.has_errors or reporter.has_errors)
+        borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir,
+                               next_stage=slir.lower_body,
+                               destroy_effects=self.destroy_effects, namespaces=namespaces,
+                               program_failed=lambda: self.reporter.has_errors)
+        lift = LiftPass(self.shir, next_stage=borrow.check_body, unit=unit.name)
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,
             in_library_unit=unit.provenance is not None,
             namespaces=namespaces, checks_templates=_checks_templates(unit),
-            borrow_check_copy=borrow.check_template_copy)
-        lifter = LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
-                              annotate=typecheck)
-        return _UnitPasses(scope, typecheck, lifter, borrow)
+            shir=self.shir, next_stage=lift.check_body,
+            program_failed=lambda: self.reporter.has_errors)
+        return _UnitPasses(scope, typecheck, lift, borrow, slir)
 
     @staticmethod
     def _entry_unit(compilation_order: list[Unit]) -> Optional[Unit]:
@@ -915,8 +943,7 @@ class SemanticAnalyzer:
         self.monomorphized_extensions.append(extend_def)
 
     def _check_array_extensions(self, compilation_order: list[Unit], monomorphizer,
-                                libraries: LibraryRegistration,
-                                destroy_effects, enum_names: set[str]) -> None:
+                                libraries: LibraryRegistration) -> None:
         """Check each call-site-driven extension copy, to a fixpoint."""
         # An array-target template instantiates at the CALL SITE (the typecheck pass
         # queued it), and checking one monomorphized body can resolve a call that queues
@@ -932,12 +959,15 @@ class SemanticAnalyzer:
 
         checked = 0
         growing_rounds = 0
+        bound = self.MAX_NEW_TYPE_ROUNDS + self._template_count()
         while True:
             marks = table_marks(self.tables.structs, self.tables.enums)
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
-            perk_copies = self._place_array_perk_copies(monomorphizer, compilation_order)
+            perk_copies = self._place_perk_copies(monomorphizer, compilation_order)
+            perk_copies += self._place_reached_perk_impls()
             batch = self.monomorphized_extensions[checked:]
             functions = self._place_late_functions(monomorphizer, compilation_order)
+            self._check_late_instance_clash(compilation_order, functions)
             if not batch and not functions and not perk_copies:
                 break
             checked = len(self.monomorphized_extensions)
@@ -946,30 +976,46 @@ class SemanticAnalyzer:
                 (units[ext.home_unit or ""], ext) for ext in batch]
             copies += perk_copies
             copies += functions
-            self._check_copies(copies, monomorphizer, libraries, destroy_effects,
-                               enum_names)
+            self._check_copies(copies, monomorphizer, libraries)
             if marks != table_marks(self.tables.structs, self.tables.enums):
                 growing_rounds += 1
-            if growing_rounds >= self.MAX_NEW_TYPE_ROUNDS:
+            if growing_rounds >= bound:
                 self._refuse_pending_copies(monomorphizer)
                 break
 
     # Rounds of the call-site copy fixpoint that make a new type, before the copies
-    # still in the queue are refused. The growth rule refuses a chain that grows
-    # without end long before this (`instance_growth.MAX_GROWTH` copies of one
-    # template). This bound is for a chain whose parent link the rule cannot read.
+    # still in the queue are refused, in addition to one round for each template. A finite
+    # chain of different templates makes one new type for each link, so its length is at
+    # most the number of templates. The growth rule refuses a chain that grows without end
+    # (`instance_growth.MAX_GROWTH` copies of one template). This bound is for a chain
+    # whose parent link the rule cannot read.
     MAX_NEW_TYPE_ROUNDS = 64
+
+    def _template_count(self) -> int:
+        """How many generic templates the program declares: functions, extension methods
+        and perk implementations."""
+        funcs = self.tables.generic_funcs
+        function_ids = {id(f) for f in funcs.by_name.values()}
+        function_ids |= {id(f) for unit in funcs.by_unit.values() for f in unit.values()}
+        methods = sum(len(m) for m in self.tables.generic_extensions.by_type.values())
+        impls = sum(len(i) for i in self.tables.generic_perk_impls.by_base.values())
+        return len(function_ids) + methods + impls
 
     # Rounds `_cut_templates_for_late_instantiations` takes before it stops.
     MAX_ARRAY_EXPANSION_ROUNDS = 8
 
     def _refuse_pending_copies(self, monomorphizer) -> None:
-        """CE0151 at the call of each copy still in the queue when the fixpoint stops."""
+        """CE0151 at the call of each copy still in the queue when the fixpoint stops: an
+        extension copy, and a late function copy that waits for its place."""
         pending = self.tables.pending_extension_instantiations
         self.tables.pending_extension_instantiations = []
         for request in pending:
             self._record_copy_request(monomorphizer, request)
             self._refuses_copy(monomorphizer, request, force=True)
+        waiting = monomorphizer.late_bodies or []
+        monomorphizer.late_bodies = []
+        for _ast, funcdef in waiting:
+            monomorphizer.function_monomorphizer.refuse_at_the_bound(funcdef)
 
     @staticmethod
     def _record_copy_request(monomorphizer, request) -> None:
@@ -1030,19 +1076,19 @@ class SemanticAnalyzer:
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
 
-    def _place_array_perk_copies(self, monomorphizer, compilation_order: list[Unit]
+    def _place_perk_copies(self, monomorphizer, compilation_order: list[Unit]
                                  ) -> list[tuple[Unit, ExtendWithDef]]:
-        """Put each array-template perk copy cut since the last round in its home unit.
+        """Put each perk copy cut since the last round in its home unit.
 
-        A copy is cut on demand (`generics/array_perk_copies.py`), at any point from the
+        A copy is cut on demand (`generics/perk_copies.py`), at any point from the
         `monomorphize` stage on, and its body waits until here: placed during the
         per-unit loop, a copy in a unit the loop has not reached would be checked twice.
         """
         placed: list[tuple[Unit, ExtendWithDef]] = []
-        if self.array_perk_copies is None:
+        if self.perk_copies is None:
             return placed
         fn_instantiations: set = set()
-        for template, impl in self.array_perk_copies.take_pending():
+        for template, impl in self.perk_copies.take_pending():
             home = self._adopt_perk_copy(template, impl, compilation_order,
                                          monomorphizer, fn_instantiations)
             if home is not None:
@@ -1061,29 +1107,43 @@ class SemanticAnalyzer:
         """
         monomorphizer.late_bodies = []
         self.tables.request_function_instance = (
-            lambda key, site: self._request_function_instance(
-                monomorphizer, compilation_order, key, site))
+            lambda key, site, parent, reporter: self._request_function_instance(
+                monomorphizer, compilation_order, key, site, parent, reporter))
 
     def _request_function_instance(self, monomorphizer, compilation_order: list[Unit],
-                                   key, site) -> bool:
-        """Cut the function instance a call asks for. True when a constraint refused it.
+                                   key, site, parent, reporter: Reporter) -> bool:
+        """Cut the function instance a call asks for. True when a rule refused it.
 
-        `key` is (declaring unit, name, type arguments) and `site` the (span, file) of
-        the call, which is where a constraint refusal points. The copy goes through the
-        monomorphizer as an early instance does: its signature is declared now, so the
+        `key` is (declaring unit, name, type arguments), `site` the (span, file) of the
+        call, which is where a refusal points, and `parent` the key of the copy whose body
+        makes the call: the growth rule reads that chain (CE0151). The copy goes through
+        the monomorphizer as an early instance does: its signature is declared now, so the
         call has it, and every instance its body names is cut with it.
+
+        A constraint refusal goes to `reporter`, the reporter of the body that makes the
+        call. So a refusal in a copy of a refused template is muted, as every other
+        diagnostic of that copy is (rule R7 of #1070, ruling R-BC), and the analysis does
+        not stop. A copy whose cut refused an instance waits for no check: the refusal
+        stands, as for an extension copy.
         """
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.extension_targets import function_instance_key
         from sushi_lang.semantics.passes.finite_types import table_marks
 
-        _unit, name, type_args = key
-        site_key = ("fn", instantiation_key(name, type_args))
+        site_key = function_instance_key(*key)
         if site[0] is not None:
             monomorphizer.sites.setdefault(site_key, site)
+        if parent is not None:
+            monomorphizer.parents.setdefault(site_key, parent)
         marks = table_marks(self.tables.structs, self.tables.enums)
-        monomorphizer.monomorphize_all_functions({key}, compilation_order)
+        violations = monomorphizer.constraint_violations
+        waiting = len(monomorphizer.late_bodies)
+        with monomorphizer.constraint_validator.reporting_to(reporter):
+            monomorphizer.monomorphize_all_functions({key}, compilation_order)
         self._settle_new_instances(marks)
-        return monomorphizer.was_refused(site_key)
+        if monomorphizer.constraint_violations == violations:
+            return monomorphizer.was_refused(site_key)
+        del monomorphizer.late_bodies[waiting:]
+        return True
 
     def _place_late_functions(self, monomorphizer,
                               compilation_order: list[Unit]) -> list[tuple[Unit, FuncDef]]:
@@ -1107,17 +1167,9 @@ class SemanticAnalyzer:
         its copy is simply never cut. Leaving the implementation in the walks reached
         the typecheck pass as a CE2001 about the target and the backend as a CE0045.
         """
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
         from sushi_lang.semantics.passes.types.perks import validate_unreached_header
 
-        def unreached(impl) -> bool:
-            return (isinstance(impl.target_type, GenericTypeRef)
-                    and isinstance(
-                        resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
-                                             self.tables.enums.by_name),
-                        GenericTypeRef))
-
+        unreached = self._names_no_instance
         for unit in compilation_order:
             impls = unit.ast.perk_impls if unit.ast is not None else None
             if not impls:
@@ -1126,11 +1178,40 @@ class SemanticAnalyzer:
             if not dropped:
                 continue
             unit.ast.perk_impls = [impl for impl in impls if not unreached(impl)]
+            self._unreached_perk_impls.extend((unit, impl) for impl in dropped)
             # The header of a dropped one is still a written declaration (#898).
             unit_reporter = self._unit_reporter(unit)
             for impl in dropped:
                 validate_unreached_header(self.tables, impl, unit_reporter)
             self._merge_unit(unit_reporter)
+
+    def _names_no_instance(self, impl) -> bool:
+        """The `@(...)` target of a perk implementation names no interned instance."""
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        return (isinstance(impl.target_type, GenericTypeRef)
+                and isinstance(
+                    resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
+                                         self.tables.enums.by_name),
+                    GenericTypeRef))
+
+    def _place_reached_perk_impls(self) -> list[tuple[Unit, ExtendWithDef]]:
+        """Put back each dropped implementation whose instance a late cut interned.
+
+        The typecheck pass cuts an inferred generic call late (ruling E4), so the
+        instance `Box@(string)` of `extend Box@(string) with Show` can come after the
+        drop. The implementation goes back into its unit, and the fixpoint checks it
+        as it checks a perk copy. Answers (unit, implementation).
+        """
+        placed = [(unit, impl) for unit, impl in self._unreached_perk_impls
+                  if not self._names_no_instance(impl)]
+        if not placed:
+            return placed
+        self._unreached_perk_impls = [pair for pair in self._unreached_perk_impls
+                                      if pair not in placed]
+        for unit, impl in placed:
+            unit.ast.perk_impls.append(impl)
+        return placed
 
     def _monomorphize_generic_perk_impls(self, monomorphizer, compilation_order,
                                          struct_instantiations, concrete_structs,
@@ -1253,21 +1334,23 @@ class SemanticAnalyzer:
         settle_new_instances(self.tables, self.reporter, marks)
 
     def _check_copies(self, copies: list[tuple[Unit, Any]], monomorphizer,
-                      libraries: LibraryRegistration, destroy_effects,
-                      enum_names: set[str]) -> None:
-        """scope, typecheck, lift and borrow over each copy cut after the per-unit loop.
+                      libraries: LibraryRegistration) -> None:
+        """scope, lowering, typecheck, lift and borrow over each copy cut after the loop.
 
         A late function copy (#1155), an extension copy of a generic or an array target,
-        and an array-template perk copy (#699). Each copy is checked with the passes of
+        and a perk copy cut on a miss (#699). Each copy is checked with the passes of
         its HOME unit, the unit that declared the template (#1064): its private functions
         and its aliases are the copy's too. The passes run in the per-unit order, and
-        the lifted functions land in the home unit's AST, the one module that defines
-        the copy.
+        `typecheck` walks the SHIR body of the copy.
 
         A copy of a checked template reports only the per-instance remainder (#1070, R7):
         the passes run for the stamps that the backend reads. A copy of a consumed
         library's template keeps its full check, and one diagnostic that two copies give
         is merged one time.
+
+        Lowering runs after the scope pass of each copy, as in the per-unit loop: this is
+        the point where the fixpoint places a copy (ir.md 9 Q2). The copy is listed in its
+        home unit.
         """
         by_home: dict[str, tuple[Unit, list[Any]]] = {}
         for home, node in copies:
@@ -1276,22 +1359,22 @@ class SemanticAnalyzer:
         seen = {diagnostic_identity(d) for d in self.reporter.items}
         for home, nodes in by_home.values():
             scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
-                                       destroy_effects, enum_names)
+            passes = self._unit_passes(home, scratch, monomorphizer, libraries)
+            lookup = DeclLookup.of(self.tables, home.name)
             for node in nodes:
                 entry = _copy_entry(node)
+                written = len(passes.scope.bindings)
                 entry.scope(passes.scope, node)
+                lower_copy(self.shir, home, node, passes.scope.bindings[written:], lookup,
+                           scope_failed=scratch.has_offered_errors)
                 scratch.leave_body()
                 entry.typecheck(passes.typecheck, node)
-                scratch.leave_body()
-                lifted = entry.lift(passes.lifter, node)
-                passes.borrow.refresh_callee_modes()
-                entry.borrow(passes.borrow, node, lifted)
                 scratch.leave_body()
             self._merge_new(scratch, seen)
 
     def _merge_new(self, scratch: Reporter, seen: set) -> None:
         """Hand a copy check's findings to the program reporter, each one time."""
+        self._offered.update(scratch.errors_offered)
         for diagnostic in in_source_order(scratch.items):
             identity = diagnostic_identity(diagnostic)
             if identity in seen:

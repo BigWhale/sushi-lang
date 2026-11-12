@@ -1,0 +1,11 @@
+unit test_shir_assert_forms
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(1), is_init: true)
+    Assert(Binary(==, LocalRef(_0), Lit(1)))
+    Assert(Binary(==, LocalRef(_0), Lit(1)), message: Lit("x is one"))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,30 @@
+unit test_shir_variadic_expand_rebind
+
+ShirBody swap_each (TemplateCheck("test_shir_variadic_expand_rebind.swap_each"))
+  params : [(_0 "args": Ts, Guaranteed, pack: true)]
+  locals : [_1 "a": i32, _2 "b": i32, _3: Ts]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(1), is_init: true)
+    Assign(LocalRef(_2), adopt Lit(2), is_init: true)
+    Expand(_3, "args", [Destructure([Place(LocalRef(_1)), Place(LocalRef(_2))], adopt TupleInit([adopt LocalRef(_2), adopt LocalRef(_1)]))])
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), " ", LocalRef(_2), ""]), Guaranteed)]))
+    Return(adopt Lit(0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@swap_each__i32_i32_i32.pack3), [(Lit(1), Guaranteed), (Lit(2), Guaranteed), (Lit(3), Guaranteed)]))
+
+ShirBody swap_each__i32_i32_i32.pack3
+  params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": i32, Guaranteed), (_2 "#pack_args_2": i32, Guaranteed)]
+  locals : [_3 "a": i32, _4 "b": i32]
+  block  :
+    Assign(LocalRef(_3), adopt Lit(1), is_init: true)
+    Assign(LocalRef(_4), adopt Lit(2), is_init: true)
+    Destructure([Place(LocalRef(_3)), Place(LocalRef(_4))], adopt TupleInit([adopt LocalRef(_4), adopt LocalRef(_3)]))
+    Destructure([Place(LocalRef(_3)), Place(LocalRef(_4))], adopt TupleInit([adopt LocalRef(_4), adopt LocalRef(_3)]))
+    Destructure([Place(LocalRef(_3)), Place(LocalRef(_4))], adopt TupleInit([adopt LocalRef(_4), adopt LocalRef(_3)]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_3), " ", LocalRef(_4), ""]), Guaranteed)]))
+    Return(adopt Lit(0))
+  copies : [block: [2..3, 3..4, 4..5]]

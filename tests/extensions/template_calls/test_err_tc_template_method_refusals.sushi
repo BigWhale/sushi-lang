@@ -1,0 +1,15 @@
+# Two faults in one body: a wrong argument of a template method, and a method that no
+# template declares.
+# EXPECT_ERROR_CODES_EXACT: CE2006, CE2008, CW1001
+struct Wrap@(T):
+    T v
+
+extend Wrap@(T) add(T other) i32:
+    return 1
+
+fn main() i32:
+    let Wrap@(i32) w = Wrap(1)
+    println(w.add("no"))
+    println(w.nope())
+    return 0
+

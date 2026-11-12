@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: "cannot mutate 'b' while 'n' borrows from it"
+# EXPECT_STDERR_CONTAINS: "'n' borrows from 'b' here"
+# EXPECT_STDERR_CONTAINS: "'n' is used here, after the change"
+# EXPECT_STDERR_CONTAINS: ":20:5"
+# EXPECT_DUMP_SHIR: test_err_borrow_field_write_while_a_field_is_borrowed.shir
+#
+# A `let` of a string field is a let-borrow of the root (`reject`, no error): the root is
+# frozen while the binding lives. A write of a field of the root is a change of it, and a
+# use of the binding after the change is CE2412 at the write, with a note at the `let` and
+# a note at the use.
+
+struct Box:
+    string name
+    i32 n
+
+fn main() i32:
+    let Box b = Box("Mostly Harmless", 1)
+    let string n = b.name
+    b.n := 2
+    println(n)
+    return 0

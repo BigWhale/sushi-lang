@@ -1,0 +1,28 @@
+# Each view of a HashMap is a value too, lent or over a temporary map.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "one\n1\none\n1\n1\n"
+use <collections/iter>
+use <collections/hashmap>
+
+fn fresh() HashMap@(string, i32):
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("one", 1)
+    return m
+
+fn main() i32:
+    let HashMap@(string, i32) m = fresh()
+    let Iterator@(peek string) keys = m.keys()
+    foreach(k in keys):
+        println(k)
+    let Iterator@(i32) values = m.values()
+    foreach(v in values):
+        println(v)
+    let Iterator@((peek string, i32)) pairs = m.pairs()
+    foreach((k, v) in pairs):
+        println(k)
+        println(v)
+    let Iterator@(i32) owned = fresh().values()
+    foreach(v in owned):
+        println(v)
+    return 0

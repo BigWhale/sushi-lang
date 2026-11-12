@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "13\n14\n"
+# EXPECT_NO_LEAKS
+
+struct Holder:
+    fn(i32) -> i32 f
+
+fn inc(i32 x) i32:
+    return x + 1
+
+const fn(i32) -> i32 F = inc
+const Holder H = Holder(inc)
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return f(x)
+
+fn main() i32:
+    println(apply(F, 12))
+    println(H.f(13))
+    return 0

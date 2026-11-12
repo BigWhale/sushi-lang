@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_spelled_result_return.slir
+#
+# A spelled `Result@(T, E)` return has the same return slot as a `| E` channel: the
+# interned `Result`, from the one derivation of SLIR lowering. The emitter checks the
+# prototype that the declaration round made against the type of `_0`, and it passes.
+
+fn found(i32 n) Result@(i32, StdError):
+    if (n > 0):
+        return Result.Ok(n)
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    return 0

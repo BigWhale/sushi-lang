@@ -6,12 +6,12 @@ calls, a count), and its `next_fn` asks the inner iterator for an item and chang
 CONSUMER (`fold`, `partition`, `collect`) walks its receiver to the end at the call, in
 the caller's function.
 
-Every adapter takes its receiver and its arguments. The state of an adapter over a LENT
-iterator is a stack slot of the caller (an `entry_alloca`), as the state of its input is,
-and its `drop_fn` destroys what the state holds and frees nothing. The state of an adapter
-over an OWNED iterator is on the heap, and its `drop_fn` destroys what it holds and frees
-the block. A LENT state that leaves through a `peek` return is on the heap too (#1229).
-The borrow pass chose (`state_on_heap`).
+Every adapter takes its receiver and its arguments, as the operands of SLIR (docs/design/
+ir.md 8.7): a lazy adapter is one row of the source table of `AggIterator`, and a consumer
+is the row of the `iterator` family of the call emitter. The state of a lazy adapter is on
+the heap when `heap` is true, and its `drop_fn` destroys what it holds and frees the block.
+Else the state is a stack slot of the caller (an `entry_alloca`), and its `drop_fn`
+destroys what the state holds and frees nothing. The borrow pass decided `heap`.
 
 An item that an adapter does not pass on is destroyed in the parts that the item OWNS
 (`destroy_owned_parts`): a lent part is a view of storage that the source keeps.
@@ -28,8 +28,9 @@ from sushi_lang.backend.runtime.iterators import (
     _clone_type, _drop_type, _function, _heap_state, _next_type, emit_iterator_clone,
     emit_next, iterator_value)
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.iterators import LENT, OWNED, item_parts, state_on_heap
+from sushi_lang.semantics.generics.iterators import item_parts
 from sushi_lang.semantics.typesys import FunctionType, IteratorType, StructType
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -47,67 +48,6 @@ def _key(*types: 'Type') -> str:
     """A symbol-safe key for the types that one adapter function is emitted for."""
     return "__".join("".join(ch if ch.isalnum() or ch == "_" else _SYMBOL_CHARS.get(ch, "_")
                              for ch in str(ty)) for ty in types)
-
-
-# ---------------------------------------------------------------------------------------
-# The call
-
-
-def emit_adapter_call(codegen: 'LLVMCodegen', expr, receiver_value: ir.Value,
-                      receiver_type: IteratorType) -> ir.Value:
-    """Emit `it.<adapter>(args)`: take the receiver and the arguments, then make the
-    value (a lazy adapter) or walk the receiver to its end (a consumer)."""
-    from sushi_lang.backend.expressions.calls.dispatcher import (
-        consume_receiver, emit_method_call_arguments, settle_method_call_arguments)
-
-    args = emit_method_call_arguments(codegen, expr)
-    value = consume_receiver(codegen, expr, receiver_value)
-    settle_method_call_arguments(codegen, expr, args)
-    emitter = _EMITTERS.get(expr.method)
-    if emitter is None:
-        raise_internal_error("CE0015", message=f"no emitter for the iterator adapter "
-                                               f"`.{expr.method}()`")
-    return emitter(codegen, AdapterCall(expr, value, receiver_type, tuple(args)))
-
-
-@dataclass(frozen=True)
-class AdapterCall:
-    """One adapter call after its receiver and its arguments were taken."""
-    expr: object
-    value: ir.Value
-    receiver: IteratorType
-    args: tuple
-
-    @property
-    def result(self) -> Optional['Type']:
-        """What the call answers, as the typecheck pass stamped it."""
-        return getattr(self.expr, "inferred_return_type", None)
-
-    def result_type(self) -> 'Type':
-        result = self.result
-        if result is None:
-            raise_internal_error("CE0015", message="an iterator adapter reached the backend "
-                                                   "untyped")
-        return result
-
-    def result_iterator(self) -> IteratorType:
-        result = self.result
-        if not isinstance(result, IteratorType):
-            raise_internal_error("CE0015", message="an iterator adapter reached the backend "
-                                                   "with no iterator type")
-        return result
-
-    def param(self, index: int) -> Optional['Type']:
-        """The type of parameter `index`, as the solved signature states it."""
-        types = tuple(getattr(self.expr, "callee_param_types", None) or ())
-        return types[index] if index < len(types) else None
-
-    def function_type(self, index: int) -> FunctionType:
-        fn_type = self.param(index)
-        if not isinstance(fn_type, FunctionType):
-            raise_internal_error("CE0015", message="an iterator adapter reached the backend "
-                                                   "with no function type")
-        return fn_type
 
 
 # ---------------------------------------------------------------------------------------
@@ -129,19 +69,11 @@ def destroy_owned_parts(codegen: 'LLVMCodegen', item: ir.Value,
             _destroy_value(codegen, codegen.builder.extract_value(item, index), part)
 
 
-def owned_parts(iterator_type: IteratorType) -> tuple[tuple[int, 'Type'], ...]:
-    """The owned parts of a tuple item whose parts differ in mode: `(index, type)`."""
-    if len(iterator_type.peeks) <= 1:
-        return ()
-    return tuple((index, part) for index, (part, lent) in enumerate(
-        zip(item_parts(iterator_type), iterator_type.peeks, strict=True)) if not lent)
-
-
 def _destroy_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: 'Type') -> None:
     from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
     if not needs_cleanup(codegen, value_type):
         return
-    slot = codegen.memory.entry_alloca(value.type, "iter_item_drop")
+    slot = entry_alloca(codegen.builder, value.type, "iter_item_drop")
     codegen.builder.store(value, slot)
     emit_value_destructor(codegen, slot, value_type)
 
@@ -206,24 +138,20 @@ class LazyKind:
         return ir.LiteralStructType(fields)
 
 
-def _emit_lazy(codegen: 'LLVMCodegen', kind: LazyKind, expr, fields: Sequence[ir.Value],
-               types: Sequence['Type'], context: tuple) -> ir.Value:
-    """The value of a lazy adapter: `fields` in a stack or a heap state."""
+def _emit_lazy(codegen: 'LLVMCodegen', kind: LazyKind, fields: Sequence[ir.Value],
+               types: Sequence['Type'], context: tuple, heap: bool) -> ir.Value:
+    """The value of a lazy adapter: `fields` in a heap state, or in a stack state."""
     state_type = kind.state_type(codegen)
-    if getattr(expr, "iterator_state", None) not in (LENT, OWNED):
-        raise_internal_error("CE0015", message=f"the adapter `.{expr.method}()` reached "
-                                               f"the backend with no state")
-    on_heap = state_on_heap(expr)
-    if on_heap:
+    if heap:
         raw, state = _heap_state(codegen, state_type)
     else:
-        state = codegen.memory.entry_alloca(state_type, f"iter_{kind.name}_state")
+        state = entry_alloca(codegen.builder, state_type, f"iter_{kind.name}_state")
         raw = state
     for index, value in enumerate(fields):
         codegen.builder.store(value, gep_utils.gep_struct_field(
             codegen, state, index, f"iter_{kind.name}_field"))
     next_fn = _lazy_next(codegen, kind, types, context)
-    return iterator_value(codegen, next_fn, raw, _lazy_drop(codegen, kind, on_heap),
+    return iterator_value(codegen, next_fn, raw, _lazy_drop(codegen, kind, heap),
                           _lazy_clone(codegen, kind, types, context))
 
 
@@ -423,39 +351,36 @@ _ZIP = LazyKind("zip", _closure_field, True, _zip_next)
 _CLONE_EACH = LazyKind("clone_each", None, False, _clone_each_next)
 
 
-def _emit_map(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
-    result = call.result_iterator()
-    return _emit_lazy(codegen, _MAP, call.expr, (call.value, call.args[0]),
-                      (call.receiver, result), (call.function_type(0), call.receiver, result))
+def emit_map(codegen: 'LLVMCodegen', inner: ir.Value, function: ir.Value,
+             fn_type: FunctionType, source: IteratorType, result: IteratorType,
+             heap: bool) -> ir.Value:
+    return _emit_lazy(codegen, _MAP, (inner, function), (source, result),
+                      (fn_type, source, result), heap)
 
 
-def _emit_filter(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
-    result = call.result_iterator()
-    return _emit_lazy(codegen, _FILTER, call.expr, (call.value, call.args[0]),
-                      (call.receiver,), (call.function_type(0), call.receiver, result))
+def emit_filter(codegen: 'LLVMCodegen', inner: ir.Value, predicate: ir.Value,
+                fn_type: FunctionType, source: IteratorType, result: IteratorType,
+                heap: bool) -> ir.Value:
+    return _emit_lazy(codegen, _FILTER, (inner, predicate), (source,),
+                      (fn_type, source, result), heap)
 
 
-def _emit_enumerate(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
-    result = call.result_iterator()
-    return _emit_lazy(codegen, _ENUMERATE, call.expr,
-                      (call.value, ir.Constant(codegen.types.i32, 0)),
-                      (call.receiver, result), (call.receiver, result))
+def emit_enumerate(codegen: 'LLVMCodegen', inner: ir.Value, source: IteratorType,
+                   result: IteratorType, heap: bool) -> ir.Value:
+    return _emit_lazy(codegen, _ENUMERATE, (inner, ir.Constant(codegen.types.i32, 0)),
+                      (source, result), (source, result), heap)
 
 
-def _emit_zip(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
-    right = call.param(0)
-    if not isinstance(right, IteratorType):
-        raise_internal_error("CE0015", message="`zip` reached the backend with no "
-                                               "iterator argument type")
-    result = call.result_iterator()
-    return _emit_lazy(codegen, _ZIP, call.expr, (call.value, call.args[0]),
-                      (call.receiver, right, result), (call.receiver, right, result))
+def emit_zip(codegen: 'LLVMCodegen', inner: ir.Value, other: ir.Value, source: IteratorType,
+             right: IteratorType, result: IteratorType, heap: bool) -> ir.Value:
+    return _emit_lazy(codegen, _ZIP, (inner, other), (source, right, result),
+                      (source, right, result), heap)
 
 
-def _emit_clone_each(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
-    result = call.result_iterator()
-    return _emit_lazy(codegen, _CLONE_EACH, call.expr, (call.value,),
-                      (call.receiver, result), (call.receiver, result))
+def emit_clone_each(codegen: 'LLVMCodegen', inner: ir.Value, source: IteratorType,
+                    result: IteratorType, heap: bool) -> ir.Value:
+    return _emit_lazy(codegen, _CLONE_EACH, (inner,), (source, result), (source, result),
+                      heap)
 
 
 # ---------------------------------------------------------------------------------------
@@ -470,7 +395,7 @@ def _walk(codegen: 'LLVMCodegen', value: ir.Value, receiver: IteratorType,
     """
     from sushi_lang.backend.destructors import emit_function_value_destructor
     b = codegen.builder
-    slot = codegen.memory.entry_alloca(value.type, "iter_walked")
+    slot = entry_alloca(codegen.builder, value.type, "iter_walked")
     b.store(value, slot)
     loop, found, done = _blocks(codegen.func, "consume.next", "consume.item", "consume.end")
     b.branch(loop)
@@ -488,32 +413,30 @@ def _new_list(codegen: 'LLVMCodegen', list_type: 'Type') -> ir.Value:
     if not isinstance(list_type, StructType):
         raise_internal_error("CE0015", message="a consumer reached the backend with no "
                                                "List type")
-    slot = codegen.memory.entry_alloca(codegen.types.ll_type(list_type), "collected")
+    slot = entry_alloca(codegen.builder, codegen.types.ll_type(list_type), "collected")
     codegen.builder.store(emit_list_new(codegen, list_type), slot)
     return slot
 
 
 def _append(codegen: 'LLVMCodegen', list_slot: ir.Value, item: ir.Value) -> None:
     from sushi_lang.backend.generics.list.methods_modify import emit_list_append
-    emit_list_append(codegen, list_slot, lambda: item)
+    emit_list_append(codegen, list_slot, item)
 
 
-def _emit_collect(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
+def emit_collect(codegen: 'LLVMCodegen', iterator: ir.Value, receiver: IteratorType,
+                 list_type: 'Type') -> ir.Value:
     """Each item into a new `List@(T)`. The items are owned, or plain and copied."""
-    collected = _new_list(codegen, call.result_type())
-    _walk(codegen, call.value, call.receiver,
-          lambda item: _append(codegen, collected, item))
+    collected = _new_list(codegen, list_type)
+    _walk(codegen, iterator, receiver, lambda item: _append(codegen, collected, item))
     return codegen.builder.load(collected, name="collected_list")
 
 
-def _emit_partition(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
+def emit_partition(codegen: 'LLVMCodegen', iterator: ir.Value, receiver: IteratorType,
+                   pred: ir.Value, fn_type: FunctionType, pair_type: 'Type') -> ir.Value:
     """Each item into the first list when the predicate answers true, else the second."""
     from sushi_lang.semantics.generics.tuples import tuple_elements
-    fn_type = call.function_type(0)
-    pair_type = call.result_type()
     list_type = tuple_elements(pair_type)[0]
     kept, rest = _new_list(codegen, list_type), _new_list(codegen, list_type)
-    pred = call.args[0]
 
     def step(item: ir.Value) -> None:
         b = codegen.builder
@@ -529,35 +452,28 @@ def _emit_partition(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
         b.branch(joined)
         b.position_at_end(joined)
 
-    _walk(codegen, call.value, call.receiver, step)
+    _walk(codegen, iterator, receiver, step)
     _destroy_held(codegen, pred)
     b = codegen.builder
     return _tuple(codegen, pair_type, (b.load(kept), b.load(rest)))
 
 
-def _emit_fold(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
+def emit_fold(codegen: 'LLVMCodegen', iterator: ir.Value, receiver: IteratorType,
+              init: ir.Value, step_fn: ir.Value, fn_type: FunctionType,
+              result_type: 'Type') -> ir.Value:
     """The accumulator through the function, item by item. Each item is given as a
     borrow, and each replaced accumulator is destroyed."""
-    fn_type = call.function_type(1)
-    init, step_fn = call.args
     b = codegen.builder
-    acc = codegen.memory.entry_alloca(init.type, "fold_acc")
+    acc = entry_alloca(codegen.builder, init.type, "fold_acc")
     b.store(init, acc)
 
     def step(item: ir.Value) -> None:
         old = b.load(acc, name="acc")
         new = _call(codegen, step_fn, fn_type, [old, item])
-        _destroy_value(codegen, old, call.result_type())
+        _destroy_value(codegen, old, result_type)
         b.store(new, acc)
-        destroy_owned_parts(codegen, item, call.receiver)
+        destroy_owned_parts(codegen, item, receiver)
 
-    _walk(codegen, call.value, call.receiver, step)
+    _walk(codegen, iterator, receiver, step)
     _destroy_held(codegen, step_fn)
     return b.load(acc, name="folded")
-
-
-_EMITTERS = {
-    "map": _emit_map, "filter": _emit_filter, "enumerate": _emit_enumerate, "zip": _emit_zip,
-    "clone_each": _emit_clone_each, "collect": _emit_collect, "partition": _emit_partition,
-    "fold": _emit_fold,
-}

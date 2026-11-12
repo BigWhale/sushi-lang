@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2436
+
+fn inc(i32 x) i32:
+    return x + 1
+
+const fn(i32) -> i32 F = inc
+
+fn main() i32:
+    let fn(i32) -> i32 g = F
+    println(g(1))
+    return 0

@@ -121,21 +121,16 @@ def is_template_copy(body: object) -> bool:
     generic function and a method of a copied perk implementation carry `instance_of`; a
     copy of an extension carries the unit it went home to.
 
-    Two copies are not muted. A copy of a binary or hybrid library's template: the
-    template is only in the tables, no walk of this build reads it, so the copy is the
-    one place its body is checked. And a lambda lifted out of a copy: the template check
-    does not enter a lambda, because a lambda can take its channel from the type that
-    its position expects.
+    One copy is not muted: a copy of a binary or hybrid library's template. The template is
+    only in the tables, no walk of this build reads it, so the copy is the one place its
+    body is checked.
     """
     from sushi_lang.semantics.ast import ExtendDef
     if getattr(body, "is_library_template", False):
         return False
     if isinstance(body, ExtendDef):
         return body.home_unit is not None
-    if getattr(body, "instance_of", None) is None:
-        return False
-    from sushi_lang.semantics.passes.lift import is_lifted_lambda
-    return not is_lifted_lambda(cast("FuncDef", body))
+    return getattr(body, "instance_of", None) is not None
 
 
 def bodied_with_owner(program: 'Program') -> Iterator[Tuple[str, BodiedDecl,
@@ -585,9 +580,7 @@ def nodes_in(value: object) -> Iterator[Node]:
 def children(node: Node) -> Iterator[Node]:
     """Every node `node` holds directly, in field-declaration order.
 
-    The order is part of the contract. The lambda lifter numbers `__lambda_<n>` from
-    the order it meets the literals in, so a rearrangement here renames every lifted
-    function and every closure environment struct.
+    The order is part of the contract: a reader gets the same answer on every run.
     """
     for _name, value in node_fields(node, aliases=False):
         yield from nodes_in(value)
@@ -648,20 +641,3 @@ def terminates(node, *, leaves_round: bool = False) -> bool:
                                       for arm in arms)
         case _:
             return False
-
-
-def ends_unrolled_run(stmt) -> bool:
-    """Is `stmt` a statement of an unrolled `expand` element that ends every path?
-
-    A copy of a pack template holds each element in place in its block (#1070, R6), so
-    a `break`, a `continue` or a `return` of an element can stand before more statements
-    of that block. No path reaches them, as no path leaves the element in the template
-    check: the borrow pass does not walk them and the backend does not emit them. Both
-    ask here, so the two cannot disagree.
-
-    Only an element statement stops the walk. A WRITTEN block can hold statements after
-    one that `terminates` accepts: the dead-statement rule (CE0140, #854) reads an `if`
-    or a `match` whose arms all break or continue as one that falls through, so it does
-    not refuse the statements after it, and the borrow pass walks them.
-    """
-    return bool(stmt.expand_copies) and terminates(stmt, leaves_round=True)

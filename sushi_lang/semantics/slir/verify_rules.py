@@ -1,0 +1,47 @@
+"""The names of the rules of the SLIR verifier (docs/design/ir.md 8.13).
+
+A failed rule is the internal error CE0158, and the diagnostic names the rule by one of
+these texts. The structure check (`verify.py`), the call check (`verify_calls.py`), the
+check of an array value (`verify_arrays.py`), the check of a function value and of an
+iterator value (`verify_values.py`), the dataflow (`verify_flow.py`), the region check
+(`verify_regions.py`) and the `ptr` quarantine (`verify_quarantine.py`) share them.
+"""
+from __future__ import annotations
+
+TYPED_LOCALS = "typed locals"
+TYPED_PLACES = "typed places"
+USE_AFTER_MOVE = "no use after a move"
+IN_STORAGE = "no use of a local outside its storage"
+RETURN_SLOT = "a written return slot"
+GLOBAL_MOVE = "no move out of a global"
+GLOBAL_DROP = "a drop of a global before its store"
+ONE_TERMINATOR = "one terminator per block"
+KNOWN_BLOCKS = "known blocks"
+OWNING_DROP = "drop of an owning type"
+BOOL_FLAG = "bool drop flag"
+DROP_ONCE = "one drop or move on every path"
+CONVENTIONS = "declared conventions"
+CAPTURE_PLACES = "capture places"
+ITERATOR_VALUE = "an iterator value"
+STACK_ITERATOR = "a stack-state iterator never leaves"
+RECEIVER_OPERAND = "a receiver operand"
+OWNED_COPY = "no copy of an owning value into an owned argument"
+SHORT_CIRCUIT = "no short circuit in a binary"
+NUMERIC_CAST = "a numeric cast"
+CONSTANT_RANGE = "a constant in range"
+INTEGER_SWITCH = "an integer switch"
+TAG_SWITCH = "a switch on a tag"
+ENUM_VALUE = "an enum value"
+STRUCT_VALUE = "a struct value"
+ARRAY_VALUE = "an array value"
+LENGTH_SLICE = "a length and a slice"
+VIEW = "a view"
+VIEW_LOCAL = "a view local"
+PEEK_RETURN = "a peek return"
+ADDRESS_LOCAL = "an address local"
+REGION = "a borrow region"
+REGION_OWNER = "no change of an owner in its region"
+ELEMENT_MOVE = "no move of an element"
+TRAP = "registered trap"
+SPANS = "spans"
+PTR_QUARANTINE = "no ptr at a public signature"

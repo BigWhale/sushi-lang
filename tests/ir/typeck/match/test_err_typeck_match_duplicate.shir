@@ -1,0 +1,27 @@
+unit test_err_typeck_match_duplicate
+
+ShirBody number
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(0x2a), [Return(Lit("answer"))]), Arm(Literal(42), [Return(Lit("again"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody letter
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal("a"), [Return(Lit(1))]), Arm(Literal("a"), [Return(Lit(2))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody tag
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0x80, 0x8f, inclusive: true), [Return(Lit("fixmap"))]), Arm(IntRange(0x8f, 0x9f, inclusive: true), [Return(Lit("fixarray"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@number), [(Lit(42), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@tag), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Call(Free(@letter), [(Lit("a"), Guaranteed)]))

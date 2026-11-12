@@ -1,0 +1,2 @@
+public const i32 LIMIT = 7
+public const string LABEL = "behind an alias"

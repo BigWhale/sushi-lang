@@ -1,0 +1,37 @@
+# A rebind of a `Drop` handle drops the old value and then stores the new one. The
+# `drop()` of a user type runs once for each value, and a rebound `File` closes the old
+# descriptor once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "have first 1\ndrop first 1\nhave second 2\ndrop second 2\nMostly Harmless\nok\n"
+use <io/fs>
+
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn swap_res() ~:
+    let Res r = Res("first {1}")
+    println("have {r.name}")
+    r := Res("second {2}")
+    println("have {r.name}")
+
+fn swap_file() ~ | IoError:
+    let File f = open("/tmp/sushi_drop_handle_rebind_a.txt", FileMode.Write())??
+    f.write("old\n")??
+    f := open("/tmp/sushi_drop_handle_rebind_b.txt", FileMode.Write())??
+    f.write("Mostly Harmless\n")??
+    f := open("/tmp/sushi_drop_handle_rebind_b.txt", FileMode.Read())??
+    print(f.read_all()??)
+    return Result.Ok(~)
+
+fn main() i32:
+    swap_res()
+    match swap_file():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return 0

@@ -1,0 +1,16 @@
+unit test_err_typeck_borrow_operand
+
+ShirBody bump
+  params : [(_0 "n": i32, Inout)]
+  locals : []
+  block  :
+    Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "y": i32, _1 "z": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(3), is_init: true)
+    ExprStmt(Call(Free(@bump), [(LocalRef(_0), Inout)]))
+    Assign(LocalRef(_1), Binary(+, Borrow(LocalRef(_0), Poke), Lit(1)), is_init: true)
+    Return(LocalRef(_1))

@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2001
+# EXPECT_STDERR_CONTAINS: "unknown type 'rs.Breeze'"
+# EXPECT_STDERR_CONTAINS: "'units/rose' declares no 'Breeze'"
+# EXPECT_STDERR_CONTAINS: "  |         rs.Breeze.Calm -> return 0\n  `            ---+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_alias.shir
+#
+# A pattern names its enum behind an alias as a type is named there. A name that the
+# namespace does not hold is CE2001, at the enum name. A variant behind the alias that
+# the namespace holds is typed, and so is its binder.
+
+use "units/rose" as rs
+
+fn blow(rs.Wind w) i32:
+    match w:
+        rs.Wind.Gust(n) -> return n
+        rs.Wind.Calm -> return 0
+
+fn still(rs.Wind w) i32:
+    match w:
+        rs.Breeze.Calm -> return 0
+        _ -> return 1
+
+fn main() i32:
+    return blow(rs.Wind.Gust(3)) + still(rs.Wind.Calm)

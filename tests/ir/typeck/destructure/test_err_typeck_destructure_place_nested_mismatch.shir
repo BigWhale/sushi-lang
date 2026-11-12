@@ -1,0 +1,12 @@
+unit test_err_typeck_destructure_place_nested_mismatch
+
+ShirBody main
+  params : []
+  locals : [_0 "a": string, _1 "b": i32, _2 "c": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(""), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Assign(LocalRef(_2), Lit(0), is_init: true)
+    Destructure([[Place(LocalRef(_0)), Place(LocalRef(_1))], Place(LocalRef(_2))], TupleInit([TupleInit([Lit(1), Lit(2)]), Lit(3)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(Binary(+, LocalRef(_1), LocalRef(_2)))

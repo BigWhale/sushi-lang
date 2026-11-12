@@ -1,0 +1,29 @@
+unit test_err_typeck_arithmetic
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32, _2 "sum": i32, _3 "diff": i32, _4 "prod": i32, _5 "quot": i32, _6 "rest": i32, _7 "small": u8, _8 "more": u8, _9 "both": u8, _10 "half": f64, _11 "neg": i32, _12 "low": i8, _13 "nested": i32, _14 "bytes": u8, _15 "third": f64, _16 "higher": i8, _17 "flag": bool, _18 "bad": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(7), is_init: true)
+    Assign(LocalRef(_1), Lit(2), is_init: true)
+    Assign(LocalRef(_2), Binary(+, LocalRef(_0), LocalRef(_1)), is_init: true)
+    Assign(LocalRef(_3), Binary(-, LocalRef(_0), Lit(3)), is_init: true)
+    Assign(LocalRef(_4), Binary(*, Lit(4), LocalRef(_1)), is_init: true)
+    Assign(LocalRef(_5), Binary(/, LocalRef(_0), LocalRef(_1)), is_init: true)
+    Assign(LocalRef(_6), Binary(%, LocalRef(_0), LocalRef(_1)), is_init: true)
+    Assign(LocalRef(_7), Lit(200), is_init: true)
+    Assign(LocalRef(_8), Binary(+, LocalRef(_7), Lit(50)), is_init: true)
+    Assign(LocalRef(_9), Binary(+, Lit(1), Lit(2)), is_init: true)
+    Assign(LocalRef(_10), Binary(*, Lit(1.5), Lit(2.0)), is_init: true)
+    Assign(LocalRef(_11), Unary(neg, LocalRef(_0)), is_init: true)
+    Assign(LocalRef(_12), Unary(neg, Lit(128)), is_init: true)
+    Assign(LocalRef(_13), Binary(+, Binary(+, Binary(*, Binary(+, LocalRef(_2), LocalRef(_3)), Binary(-, LocalRef(_4), LocalRef(_5))), LocalRef(_6)), LocalRef(_11)), is_init: true)
+    Assign(LocalRef(_14), Binary(-, LocalRef(_8), LocalRef(_9)), is_init: true)
+    Assign(LocalRef(_15), Binary(/, LocalRef(_10), Lit(3.0)), is_init: true)
+    Assign(LocalRef(_16), Binary(+, LocalRef(_12), Lit(1)), is_init: true)
+    Assign(LocalRef(_17), Lit(true), is_init: true)
+    Assign(LocalRef(_18), Binary(+, LocalRef(_17), Lit(1)), is_init: true)
+    Assign(LocalRef(_14), Binary(+, LocalRef(_14), Lit(1)), is_init: false)
+    Assign(LocalRef(_15), Binary(-, LocalRef(_15), Lit(1.0)), is_init: false)
+    Assign(LocalRef(_16), Binary(-, LocalRef(_16), Lit(1)), is_init: false)
+    Return(Binary(+, LocalRef(_13), LocalRef(_18)))

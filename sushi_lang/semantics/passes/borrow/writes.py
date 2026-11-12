@@ -7,17 +7,17 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, MemberAccess, MethodLike
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .diagnostics import expr_to_string, parameter_escape, write_escape
-from .methods import MethodEffect, callee_effect
-from .reads import borrow_owner, chain_call_boundary, slice_on_path
+from .diagnostics import parameter_escape, spelled, write_escape
+from .reads import chain_call_boundary, slice_on_path
 from .state import BorrowState
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
 
 
@@ -119,51 +119,19 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
 )
 
 
-def _effect(expr: MethodLike) -> MethodEffect:
-    """The method-effect row of the callee: a built-in family's row, or none."""
-    return callee_effect(expr.method, expr.callee_builtin_family)
-
-
-def changes_its_receiver(expr: MethodLike) -> bool:
-    """Does this call change the value it is called on?"""
-    # The CALLEE decides, never the name alone: a built-in of a family the effect table
-    # describes, or a `poke self` method (#327). The typecheck pass stamps both on the
-    # node, so this pass never re-resolves.
-    return (_effect(expr).mutates
-            or receiver_mode(expr.callee_self_mode) is ParamMode.POKE)
-
-
-def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
-                          receiver: Optional[Expr] = None,
-                          what: Optional[str] = None) -> None:
-    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242).
-
-    `receiver` replaces the call's own receiver: a `foreach` that walks a value in place
-    calls `next()` on the walked place, not on its hidden slot (#1258).
-    """
-    if not changes_its_receiver(expr):
-        return
-    receiver = receiver if receiver is not None else expr.receiver
-    root = borrow_owner(receiver)
-    what = what or f"call `.{expr.method}()`"
-    if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
-        return
-    # A `poke self` method the table does not carry is taken to move storage.
-    effect = _effect(expr)
-    check_owner_not_borrowed(checker, root, expr.loc, what, place=receiver,
-                             moves_storage=effect.moves_storage or not effect.mutates)
-
-
-def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
+def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
                           span: Optional[Span], what: str,
-                          receiver: Optional[Expr] = None,
+                          receiver: Optional[e.ShirExpr] = None,
                           *, rebind: bool = False) -> bool:
     """THE gate: a write that cannot reach the value it appears to write is rejected.
 
-    `rebind` names the POSITION: a write to the name itself rather than through it. Half
-    the table answers differently there (`refuses_a_rebind`), which is why the position is
-    an argument and not a second gate -- one of those grew beside this one and covered a
-    single kind, so a match binding was rebindable and freed the owner's payload (#590).
+    `local` is the local that the write reaches, and the diagnostic names it by its source
+    name. `rebind` names the POSITION: a write to the name itself rather than through it.
+    Half the table answers differently there (`refuses_a_rebind`), which is why the
+    position is an argument and not a second gate -- one of those grew beside this one
+    and covered a single kind, so a match binding was rebindable and freed the owner's
+    payload (#590). `receiver` is the receiver of a write through a place: the base of a
+    SHIR field.
     """
     # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
     # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
@@ -181,11 +149,12 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         return True
     if receiver is not None and reject_write_through_slice(checker, receiver, span, what):
         return True
-    if name is None:
+    if local is None:
         return False
-    state = checker.borrow_state.get(name)
+    state = checker.borrow_state.get(local)
     if state is None:
         return False
+    name = state.name
     if state.is_lent_iterator and not rebind:
         # The binding owns its iterator value, so a write through it moves its own cursor
         # and nothing its owners keep (#1259). A rebind would drop the value and borrow
@@ -209,7 +178,7 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
     return False
 
 
-def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
+def reject_write_through_slice(checker: 'BorrowChecker', receiver: e.ShirExpr,
                                 span: Optional[Span], what: str) -> bool:
     """CE2426 for a write whose receiver crosses a slice (S4). True when refused.
 
@@ -219,11 +188,11 @@ def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
     view = slice_on_path(receiver)
     if view is None:
         return False
-    text = expr_to_string(view)
+    text = spelled(checker, view)
     diag = checker.err.emit_with(er.ERR.CE2426, span, name=text)
     if view.loc is not None:
         diag.note_at(f"'{text}' is a slice, a read-only view of the storage of "
-                     f"'{expr_to_string(view.array)}'", view.loc)
+                     f"'{spelled(checker, view.base)}'", view.loc)
     diag.help(f"the write ({what}) would go through a view, and a growth would move "
               "storage that the array keeps; write to the array directly, or copy the "
               "part with `.ss(start, count)`")
@@ -231,9 +200,9 @@ def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
     return True
 
 
-def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
+def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[LocalId],
                              span: Optional[Span], what: str, *,
-                             place: Optional[Expr] = None,
+                             place: Optional[e.ShirExpr] = None,
                              moves_storage: bool = True) -> None:
     """Reject a change to `owner` while a `let`-borrow binding reads out of it (#242).
 
@@ -248,7 +217,7 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
     # INVALIDATE, do not report: the change is an error only on a read AFTER it.
     # Reporting here would reject `let g = fns.get(0)??; g(10); fns.free()`.
     # An iterator comes first, so a binding it covers is left to its one report.
-    hit: set[str] = set()
+    hit: set[LocalId] = set()
     kept: list = []
     entries = sorted(state.binding_borrows,
                      key=lambda entry: _views_storage(checker, entry[0]) is None)
@@ -275,24 +244,25 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
                                  if entry in kept]
 
 
-def _views_storage(checker: 'BorrowChecker', name: str) -> Optional[Expr]:
+def _views_storage(checker: 'BorrowChecker', name: LocalId) -> Optional[e.ShirExpr]:
     """The container a foreach iterator binding walks, or None for any other binding."""
     binding = checker.borrow_state.get(name)
     return binding.views_storage_of if binding is not None else None
 
 
-def _place_shape(expr: Optional[Expr]) -> Optional[tuple[str, ...]]:
+def _place_shape(expr: Optional[e.ShirExpr]) -> Optional[tuple[str, ...]]:
     """A place as its root and its steps, every index one step: `a.b[i]` -> a, b, []."""
     walked = walk_place(expr, Step.MEMBER | Step.INDEX)
-    if walked.name is None:
+    if not isinstance(walked.node, (e.LocalRef, e.StorageRef)):
         return None
-    steps = [node.member if isinstance(node, MemberAccess) else "[]"
+    steps = [node.name if isinstance(node, e.Field) else "[]"
              for node in reversed(walked.path)]
-    return (walked.name.id, *steps)
+    root = walked.node.local if isinstance(walked.node, e.LocalRef) else walked.node.decl
+    return (str(root), *steps)
 
 
-def changes_storage_of(place: Optional[Expr], moves_storage: bool,
-                       viewed: Expr) -> bool:
+def changes_storage_of(place: Optional[e.ShirExpr], moves_storage: bool,
+                       viewed: e.ShirExpr) -> bool:
     """Can a change at `place` move or free the storage of the container `viewed`?
 
     A change at the container itself does when it moves storage; a change at a place

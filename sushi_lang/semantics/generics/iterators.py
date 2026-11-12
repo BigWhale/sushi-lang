@@ -24,24 +24,19 @@ ITERATOR_BASE = "Iterator"
 # `List@(T)`, and the four HashMap walks. Each answers `Iterator@(peek T)`.
 CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
 
-# How a producer call keeps the state of its iterator (`MethodCall.iterator_state`). The
-# typecheck pass stamps CURSOR on the iterable of a direct walk; the borrow pass stamps
-# LENT or OWNED on every other producer, and LENT on the clone of a lent iterator.
-CURSOR = "cursor"   # the bare cursor a direct `foreach` walk reads; no value is made
-LENT = "lent"       # a value that borrows the owners of its source; stack state
-OWNED = "owned"     # a value that takes its source (a temporary); heap state
+# The built-in families whose iterator methods are producers over a container.
+_PRODUCER_FAMILIES = frozenset({"array", "list", "hashmap"})
 
 
-def state_on_heap(call: Any) -> bool:
-    """Does a producer or a lazy adapter keep its state on the heap?
+def produces_from_a_container(family: Optional[str], method: str, arity: int) -> bool:
+    """Is a call of the built-in method `method` of `family`, with `arity` arguments, a
+    producer over a container? Each stage that walks SHIR asks this one rule."""
+    return arity == 0 and method in CONTAINER_ITERATORS and family in _PRODUCER_FAMILIES
 
-    The two facts of a value are kept apart: LENT and OWNED say what it borrows, and this
-    says where its state is. An OWNED state is on the heap, and a LENT state is on the
-    stack of its function, except a LENT state that leaves through a `peek` return
-    (`iterator_leaves`, #1229): it is on the heap, and it still borrows its owners.
-    """
-    state = getattr(call, "iterator_state", None)
-    return state == OWNED or (state == LENT and bool(getattr(call, "iterator_leaves", False)))
+
+def is_lazy_adapter(family: Optional[str], method: str) -> bool:
+    """Is a call of the built-in method `method` of `family` a lazy adapter (`it.map(f)`)?"""
+    return family == "iterator" and method in LAZY_ADAPTERS
 
 
 # The adapters of an iterator (#1228, docs/design/iteration.md): compiler code, no import.
@@ -105,9 +100,19 @@ def iterator_method_modes() -> Any:
     """The parameter modes of the family (`BuiltinModes`): `new` takes `nom x`, and each
     adapter reads its modes from its signature row."""
     from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
-    rows = dict(BuiltinModes.from_signatures(ITERATOR_METHOD_SIGNATURES).rows)
+    signed = BuiltinModes.from_signatures(ITERATOR_METHOD_SIGNATURES)
+    rows = dict(signed.rows)
     rows["new"] = (ParamMode.NOM,)
-    return BuiltinModes(rows=MappingProxyType(rows))
+    return BuiltinModes(rows=MappingProxyType(rows), nom_self=signed.nom_self)
+
+
+def answers_an_iterator(ty: Any) -> bool:
+    """Is `ty` an iterator, or a `Result` whose `Ok` is one (`peek Iterator@(T) | E`)? The
+    answer of a `peek` return of such a type owns its value, and it borrows its sources."""
+    from sushi_lang.semantics.generics.results import result_ok_err
+    from sushi_lang.semantics.type_predicates import is_instance_of
+    return isinstance(ty, IteratorType) or (is_instance_of(ty, "Result")
+                                            and isinstance(result_ok_err(ty)[0], IteratorType))
 
 
 def lent_whole(iterator: IteratorType) -> Optional[bool]:
@@ -178,39 +183,6 @@ def iterator_of(item: Type, *, base_name: Optional[str] = None,
             return IteratorType(element_type=tuple_ref(values), peeks=peeks,
                                 base_name=base_name, namespace=namespace)
     return IteratorType(element_type=item, base_name=base_name, namespace=namespace)
-
-
-def read_iterator_string(text: str, read: Callable[[str], Type]) -> Optional[IteratorType]:
-    """The iterator an interned name spells (`Iterator<peek string>`), else None.
-
-    `read` reads one type with no mode. The mode is read here, at the top of the item
-    or of one tuple element, which is where `written_item` writes it.
-    """
-    from sushi_lang.semantics.generics.tuples import TUPLE_BASE
-    from sushi_lang.semantics.generics.type_strings import split_type_arguments
-
-    item = _arguments_of(text, ITERATOR_BASE)
-    if item is None:
-        return None
-    word = f"{BorrowMode.PEEK} "
-
-    def part(spelled: str) -> Type:
-        return _lent(read(spelled[len(word):])) if spelled.startswith(word) else read(spelled)
-
-    elements = _arguments_of(item, TUPLE_BASE)
-    if elements is not None:
-        written = split_type_arguments(elements)
-        if any(element.startswith(word) for element in written):
-            return iterator_of(tuple_ref(part(element) for element in written))
-    return iterator_of(part(item))
-
-
-def _arguments_of(text: str, base: str) -> Optional[str]:
-    """The argument text of an interned name of `base`, or None for another name."""
-    head, angle, rest = text.strip().partition("<")
-    if head.strip() != base or not angle or not rest.endswith(">"):
-        return None
-    return rest[:-1].strip()
 
 
 def written_item(iterator: IteratorType) -> Type:

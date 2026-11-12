@@ -1,0 +1,28 @@
+# A bloom moves the array of a local and of a `nom` parameter into the temporary of the
+# call. The callee borrows it, and the caller drops it once, at the end of the statement.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn joined(...string parts) string:
+    let string out = ""
+    foreach(part in parts.iter()):
+        if (out.len() == 0):
+            out := "{part}"
+        else:
+            out := "{out} {part}"
+    return out
+
+fn count(...string parts) i32:
+    return parts.len()
+
+fn forward(nom string[] parts) i32:
+    return count(parts...)
+
+fn main() i32:
+    let string[] words = from(["Mostly", "{'Harmless'}"])
+    println(joined(words...))
+    println(forward(nom from(["a", "{'b'}"])))
+    let string[] more = from(["x", "y", "z"])
+    println(forward(nom more))
+    return 0

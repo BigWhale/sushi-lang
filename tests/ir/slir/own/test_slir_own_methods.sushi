@@ -1,0 +1,36 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "one 3\ntwo\nbig 42\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_own_methods.slir
+#
+# A method of an Own@(T) is ONE `Builtin` call (ir.md 8.6). `get` reads the Own and answers
+# a view local in a region over it (S7); `destroy` takes it `Inout`; `.clone()` is the rvalue
+# `Clone`. The pointee of an `Own(...)` pattern is the place `Deref(Field(place, 0))`: a bare
+# binder of an owning pointee is a view local, and `Own(poke c)` is an address local that a
+# `Ref` writes, in a region over the scrutinee with the mode `poke` (8.2).
+struct Counter:
+    i32 n
+    string tag
+
+enum Holder:
+    Full(Own@(Counter))
+    Nil
+
+fn main() i32:
+    let Own@(string) o = Own.alloc("one".clone())
+    let string got = o.get()
+    let Own@(string) copy = o.clone()
+    println("{got} {copy.get().len()}")
+    o.destroy()
+    o := Own.alloc("two".clone())
+    println(o.get())
+    let Holder h = Holder.Full(Own.alloc(Counter(1, "small".clone())))
+    match h:
+        Holder.Full(Own(poke c)) ->
+            c.n := c.n + 41
+            c.tag := "big".clone()
+        Holder.Nil -> println("nil")
+    match h:
+        Holder.Full(Own(c)) -> println("{c.tag} {c.n}")
+        Holder.Nil -> println("nil")
+    return 0

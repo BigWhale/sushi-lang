@@ -1,138 +1,24 @@
 """Type inference helpers for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import Optional, Protocol
 
-from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_bit_width
-from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
-from sushi_lang.semantics.ast import (ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, IntLit,
-                                      RangeExpr)
-
-if TYPE_CHECKING:
-    from . import TypeValidator
-
-
-def infer_array_element_type(validator: 'TypeValidator', element_value: Expr,
-                             expected_type: Optional[Type] = None) -> Optional[Type]:
-    """The type this element puts in a SLOT.
-
-    A range yields i32 (Ruling 4, #478) and not the `Iterator@(i32)` it types as in every
-    other position. It is the one element whose slot type is not its own type, which is why
-    both literal inference paths read it here rather than each testing for a range.
-    """
-    if isinstance(element_value, RangeExpr):
-        return BuiltinType.I32
-    return infer_element_type_with_context(validator, element_value, expected_type)
-
-
-def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> Optional[Type]:
-    """Infer type of array literal from its elements. Reports nothing."""
-    if not expr.elements:
-        return None
-
-    first_element_type = infer_array_element_type(validator, expr.elements[0].value)
-    if first_element_type is None:
-        return None
-
-    # Read every element, and judge none: `validate_array_literal` is this literal's one
-    # speaker for CE2013, and inference walks a literal up to three times per position.
-    for element in expr.elements[1:]:
-        infer_array_element_type(validator, element.value)
-
-    # The SIZE is the expanded count, so a run of 144 is 144 slots and not one. Read
-    # silently: CE2017 belongs to validate_array_literal, which speaks for this literal.
-    runs = array_runs.read_runs(
-        expr.elements,
-        array_runs.const_int_reader(validator.constant_evaluator()),
-        Reporter())
-    if runs is None:
-        return None
-
-    # A fixed array literal needs a readable size. Silent here: `validate_array_literal`
-    # speaks for this literal, and inference must not report the same thing twice.
-    size = array_runs.expanded_length(runs)
-    if size is None:
-        return None
-
-    return ArrayType(base_type=first_element_type, size=size)
-
-
-def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Optional[Type]:
-    """Infer type of array indexing - should return element type."""
-    array_type = validator.infer_expression_type(expr.array)
-    if array_type is None:
-        return None
-
-    if expr.is_slice:
-        # A slice is a borrowed `T[]` of either array kind (#1226). A reversed range
-        # and a string have no slice (CE2122), so they yield no type.
-        if (not isinstance(array_type, (ArrayType, DynamicArrayType))
-                or getattr(expr.index, "reverse", False)):
-            return None
-        slice_type = DynamicArrayType(base_type=array_type.base_type)
-        expr.inferred_element_type = slice_type
-        return slice_type
-
-    if isinstance(array_type, (ArrayType, DynamicArrayType)):
-        expr.inferred_element_type = array_type.base_type
-        return array_type.base_type
-
-    # A byte read on a string (#1091).
-    if array_type == BuiltinType.STRING:
-        expr.inferred_element_type = BuiltinType.U8
-        expr.reads_a_string_byte = True
-        return BuiltinType.U8
-
-    return None
-
-
-def infer_dynamic_array_from_type(validator: 'TypeValidator', expr: DynamicArrayFrom, expected_type: Optional[DynamicArrayType] = None) -> Optional[Type]:
-    """Infer type of from(array_literal) constructor from array literal elements."""
-    array_literal = expr.elements
-    if not array_literal.elements:
-        # An empty literal is whatever its position says (#544); nothing, when no
-        # position has said yet.
-        return expected_type or expr.resolved_type
-
-    expected_element_type = expected_type.base_type if expected_type else None
-
-    first_element_type = infer_array_element_type(validator, array_literal.elements[0].value,
-                                                  expected_element_type)
-    if first_element_type is None:
-        return None
-
-    for element in array_literal.elements[1:]:
-        element_type = infer_array_element_type(validator, element.value, expected_element_type)
-        if element_type != first_element_type:
-            return None
-
-    return DynamicArrayType(base_type=first_element_type)
-
-
-def infer_element_type_with_context(validator: 'TypeValidator', expr: Expr, expected_type: Optional[Type]) -> Optional[Type]:
-    """Infer type of an array element expression with optional contextual type hint."""
-    # Context-type a bare numeric literal to the expected element type (stamps the
-    # literal, range-checks it, emits CE2073 on overflow). Shares the single
-    # propagation path so dynamic-array elements behave like every other context.
-    if expected_type is not None and isinstance(expected_type, BuiltinType):
-        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-        propagate_types_to_value(validator, expr, expected_type)
-
-    return validator.infer_expression_type(expr)
-
-
-def infer_range_expression_type(validator: 'TypeValidator', expr: 'RangeExpr') -> Optional[Type]:
-    """Infer type of range expression - always returns Iterator<i32>."""
-    return IteratorType(element_type=BuiltinType.I32)
+from sushi_lang.semantics.typesys import BuiltinType
 
 
 _F32_MAX = 3.4028234663852886e38
 
 
-def int_literal_default(lit: IntLit) -> BuiltinType:
+class IntegerLiteral(Protocol):
+    """An integer literal of the AST or of SHIR: its byte spelling, or None."""
+    @property
+    def byte_spelling(self) -> Optional[str]: ...
+
+
+def int_literal_default(lit: IntegerLiteral) -> BuiltinType:
     """The type of an integer literal that no position has typed: u8 for a byte literal
-    (`a'x'`), i32 for a number literal. The one answer for every pass and the backend."""
+    (`a'x'`), i32 for a number literal. The one answer for every pass and the backend, for
+    an AST literal and a SHIR literal alike."""
     return BuiltinType.U8 if lit.byte_spelling is not None else BuiltinType.I32
 
 

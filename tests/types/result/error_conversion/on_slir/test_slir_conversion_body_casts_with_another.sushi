@@ -1,0 +1,33 @@
+# The body of a conversion calls another conversion with `as`. The inner conversion takes
+# `self` whole, with its string, and the outer one wraps the answer.
+# EXPECT_STDOUT_EXACT: "AppError.Mid(MidError.Low("low 7"))\nAppError.Mid(MidError.Low("low 8"))\n"
+# EXPECT_NO_LEAKS
+error LowError:
+    Bad(string)
+
+error MidError:
+    Low(string)
+
+error AppError:
+    Mid(MidError)
+
+extend LowError as MidError:
+    match nom self:
+        LowError.Bad(nom s) -> return MidError.Low(nom s)
+
+extend LowError as AppError:
+    return AppError.Mid(self as MidError)
+
+fn fail(i32 n) i32 | LowError:
+    return Result.Err(LowError.Bad("low {n}"))
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = fail(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    println(LowError.Bad("low 7") as AppError)
+    match run(8):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println(e)
+    return 0

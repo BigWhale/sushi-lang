@@ -305,10 +305,10 @@ let string utf8 = "café"
 println(utf8.reverse())  # "éfac"
 ```
 
-`.reverse()` does not change the string, but today the compiler checks it like the
-in-place array `.reverse()`. So the receiver must be a name that you could write: a local
-works, but a parameter is refused ([CE2422](../../error-catalog.md#ce2422)) and a temporary is refused ([CE2429](../../error-catalog.md#ce2429)). Bind the
-value to a local first (`let string local = p.clone()`, then `local.reverse()`).
+`.reverse()` gives a new string and does not change its receiver. It only reads the
+receiver, so the receiver can be any string: a local, a parameter or a temporary
+(`p.reverse()`, `"café".reverse()`). The in-place `.reverse()` of an array is a different
+method.
 
 ### `.repeat(i32 n) -> string`
 

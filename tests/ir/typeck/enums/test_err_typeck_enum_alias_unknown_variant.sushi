@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2045
+# EXPECT_STDERR_CONTAINS: "enum variant 'South' not found in enum 'Heading'"
+# EXPECT_DUMP_SHIR: test_err_typeck_enum_alias_unknown_variant.shir
+#
+# A name that is no variant of the enum behind an alias is CE2045, as with a bare enum
+# name. The diagnostic names the enum as it is declared.
+
+use "units/compass" as cp
+
+fn pick(cp.Heading h) cp.Heading:
+    return h
+
+fn main() i32:
+    pick(cp.Heading.South())
+    return 0

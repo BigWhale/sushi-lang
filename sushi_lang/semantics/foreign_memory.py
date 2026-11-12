@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Mapping
 
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
 
@@ -52,13 +52,3 @@ FOREIGN_PTR_METHOD_ARITY: Mapping[str, int] = MappingProxyType(
     {name: len(row.params) for name, row in FOREIGN_PTR_METHODS.items()})
 
 
-def foreign_ptr_return_type(name: str, enums: Any, structs: Optional[dict] = None
-                            ) -> Optional[Type]:
-    """What `p.<name>(...)` answers, with `Maybe@(ptr)` interned in `enums`."""
-    row = FOREIGN_PTR_METHODS.get(name)
-    if row is None:
-        return None
-    if isinstance(row.returns, str):
-        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        return ensure_maybe_type_in_table(enums, ForeignPtrType(), struct_table=structs)
-    return row.returns

@@ -1,0 +1,135 @@
+unit test_slir_map_cursor_walk
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // n
+    let _2: HashMap@(i32, string)          // m
+    let _3: string
+    let _4: ~
+    let _5: Maybe@(string) view
+    let _6: i32
+    let _7: i32
+    let _8: string view                    // v
+    let _9: ~
+    let _10: Maybe@(string*) view
+    let _11: i32
+    let _12: i32
+    let _13: string                        // v
+    let _14: Maybe@(string) view
+    let _15: i32
+    let _16: i32
+    let _17: string view                   // v
+    let _18: ~
+    let _19: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 0_i32
+    StorageLive(_2)
+    _2 = call builtin HashMap.new()
+    StorageLive(_3)
+    _3 = call builtin interp@(string, i32)(const "one" @guaranteed, copy _1 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin hashmap.insert(copy _2 @inout, const 1_i32 @owned, move _3 @owned)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageLive(_5)
+    StorageLive(_6)
+    _6 = const 0_i32
+    goto -> bb1
+
+  bb1:
+    _5 = call builtin hashmap.cursor_next.values(copy _2 @in_guaranteed, copy _6 @inout)
+    StorageLive(_7)
+    _7 = discriminant(_5)
+    switchInt(copy _7) -> [1: bb3, otherwise: bb2]
+
+  bb2:
+    StorageDead(_7)
+    StorageLive(_8)
+    BeginBorrow(b0, _2, peek, for _8)
+    _8 = copy ((_5 as Some).0)
+    StorageLive(_9)
+    _9 = call builtin println@(string)(copy _8 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_9)
+    StorageDead(_8)
+    goto -> bb1
+
+  bb3:
+    StorageDead(_7)
+    goto -> bb4
+
+  bb4:
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_10)
+    StorageLive(_11)
+    _11 = const 0_i32
+    goto -> bb5
+
+  bb5:
+    _10 = call builtin hashmap.cursor_next.values(copy _2 @in_guaranteed, copy _11 @inout)
+    StorageLive(_12)
+    _12 = discriminant(_10)
+    switchInt(copy _12) -> [1: bb7, otherwise: bb6]
+
+  bb6:
+    StorageDead(_12)
+    StorageLive(_13)
+    BeginBorrow(b1, _2, poke)
+    BeginBorrow(b2, _10, poke)
+    _13 = ref poke (*((_10 as Some).0))
+    Drop(_13)
+    _13 = const "new"
+    EndBorrow(b1)
+    EndBorrow(b2)
+    StorageDead(_13)
+    goto -> bb5
+
+  bb7:
+    StorageDead(_12)
+    goto -> bb8
+
+  bb8:
+    StorageDead(_11)
+    StorageDead(_10)
+    StorageLive(_14)
+    StorageLive(_15)
+    _15 = const 0_i32
+    goto -> bb9
+
+  bb9:
+    _14 = call builtin hashmap.cursor_next.values(copy _2 @in_guaranteed, copy _15 @inout)
+    StorageLive(_16)
+    _16 = discriminant(_14)
+    switchInt(copy _16) -> [1: bb11, otherwise: bb10]
+
+  bb10:
+    StorageDead(_16)
+    StorageLive(_17)
+    BeginBorrow(b3, _2, peek, for _17)
+    _17 = copy ((_14 as Some).0)
+    StorageLive(_18)
+    _18 = call builtin println@(string)(copy _17 @guaranteed)
+    EndBorrow(b3)
+    StorageDead(_18)
+    StorageDead(_17)
+    goto -> bb9
+
+  bb11:
+    StorageDead(_16)
+    goto -> bb12
+
+  bb12:
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageLive(_19)
+    _19 = call builtin hashmap.free(copy _2 @inout)
+    StorageDead(_19)
+    _0 = const 0_i32
+    Drop(_2)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}

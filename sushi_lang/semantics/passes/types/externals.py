@@ -1,4 +1,5 @@
-"""Semantic validation for FFI `unsafe external` blocks."""
+"""Semantic validation for FFI `unsafe external` blocks. The call of a C function is
+`passes/types/visit/extern_calls.py`."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 
@@ -7,17 +8,15 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.ffi_boundary import (
-    is_c_abi_param, is_c_abi_scalar, is_c_abi_type as _is_c_abi_type, is_c_abi_variable,
+    is_c_abi_param, is_c_abi_type as _is_c_abi_type, is_c_abi_variable,
     nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
-from .arguments import check_arguments
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
-    from . import TypeValidator
 
 
 def validate_external_signatures(reporter: Reporter, program: 'Program') -> None:
@@ -127,8 +126,9 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
     """Fold each link name written as a string constant, in the declaring unit (#1089).
 
     It runs where every unit's constants and aliases exist and before CE5013 reads the
-    names. The folded name is written to the declaration and to its collected signature,
-    which is what the backend declares.
+    names. The folded name goes to the extern table (`ExternalTable.fold`, which the
+    checks of a declaration read) and to the collected signature, which is what the
+    backend declares. Nothing is written on the AST.
     """
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.const_eval import ConstantEvaluator, is_string_constant
@@ -151,13 +151,14 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
                 er.emit(reporter, er.ERR.CE5015, link.loc, name=decl.name,
                         type=display_type(value.semantic_type))
                 continue
-            decl.link_name = str(value.value)
+            link_name = str(value.value)
+            tables.externals.fold(block.namespace, decl, link_name)
             var = tables.externals.lookup_variable(block.namespace, decl.name)
             if var is not None:
-                var.link_name = decl.link_name
+                var.link_name = link_name
             sig = tables.externals.lookup(block.namespace, decl.name)
             if sig is not None:
-                sig.link_name = decl.link_name
+                sig.link_name = link_name
 
 
 def reject_external_naming_a_defined_symbol(
@@ -183,15 +184,17 @@ def reject_external_naming_a_defined_symbol(
 
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            found = _defining_site(decl.link_name, tables, registry, generated_symbols)
+            link_name = tables.externals.link_name_of(block.namespace, decl)
+            found = _defining_site(link_name, tables, registry, generated_symbols)
             if found is not None:
-                _emit_defined_symbol(reporter, decl, *found)
+                _emit_defined_symbol(reporter, decl, link_name, *found)
 
 
-def _emit_defined_symbol(reporter: Reporter, decl, note: str, span, filename) -> None:
+def _emit_defined_symbol(reporter: Reporter, decl, link_name: str, note: str, span,
+                         filename) -> None:
     """CE5013 at the extern, with a note at the definition when it has a span."""
     diagnostic = er.emit_with(reporter, er.ERR.CE5013, decl.name_span or decl.loc,
-                              symbol=decl.link_name)
+                              symbol=link_name)
     if span is None:
         diagnostic.note(note)
     else:
@@ -221,7 +224,7 @@ def monomorphized_instances(compilation_order, funcs) -> list[tuple]:
 
 
 def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
-                                       instances: list[tuple]) -> None:
+                                       externals_table, instances: list[tuple]) -> None:
     """CE5013, the instance half: an extern that names a monomorphized instance (#1113).
 
     An instance exists only after the `monomorphize` pass, and the first half runs
@@ -235,18 +238,19 @@ def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
     bodies = {id(sig): fn for sig, fn in instances}
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            sig = _declaration_emitting(decl.link_name, [sig for sig, _ in instances])
+            link_name = externals_table.link_name_of(block.namespace, decl)
+            sig = _declaration_emitting(link_name, [sig for sig, _ in instances])
             if sig is None:
                 continue
             fn = bodies[id(sig)]
             generic = getattr(fn, "instance_of", None) or fn.name
             if getattr(fn, "is_library_template", False) or fn.name_span is None:
                 _emit_defined_symbol(
-                    reporter, decl,
+                    reporter, decl, link_name,
                     f"an instance of the library generic '{generic}' defines it",
                     None, None)
             else:
-                _emit_defined_symbol(reporter, decl, "the instance of this generic",
+                _emit_defined_symbol(reporter, decl, link_name, "the instance of this generic",
                                      fn.name_span, getattr(fn, "filename", None))
 
 
@@ -268,37 +272,6 @@ def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
     for ty, span in sites:
         if ty is not None and contains_foreign_ptr(ty):
             er.emit(reporter, er.ERR.CE5009, span)
-
-
-def validate_external_call_args(validator: 'TypeValidator', node) -> None:
-    """Validate argument count and types for a resolved foreign call."""
-    sig = validator.external_table.lookup(node.external_ref[0], node.external_ref[1])
-    if sig is None:
-        for arg in node.args:
-            validator.validate_expression(arg)
-        return
-    expected = sig.param_types
-    is_variadic = getattr(sig, "is_variadic", False)
-    fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
-    # The check walks each fixed argument against its declared type, so a
-    # `Maybe.None` takes the parameter's `Maybe@(ptr)` (#1085).
-    if not check_arguments(validator, fq_name, expected, node.args, node.loc,
-                           mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                           minimum_arity=is_variadic, stop_on_arity=True):
-        for arg in node.args:
-            validator.validate_expression(arg)
-        return
-    # Trailing variadic args: each must be C-ABI representable (CE5005).
-    # Record the inferred types so the backend can apply C promotion.
-    if is_variadic:
-        variadic_types = []
-        for arg in node.args[len(expected):]:
-            got_ty = validator.validate_expression(arg)
-            variadic_types.append(got_ty)
-            if got_ty is not None and not is_c_abi_scalar(got_ty):
-                er.emit(validator.reporter, er.ERR.CE5005, arg.loc,
-                        type=display_type(got_ty), name=fq_name)
-        node.variadic_arg_types = variadic_types
 
 
 def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:

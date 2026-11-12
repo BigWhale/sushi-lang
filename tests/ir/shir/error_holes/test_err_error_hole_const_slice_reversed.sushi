@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE0108
+#
+# an error hole in a constant initializer: a slice with a reversed range. The constant
+# evaluator refuses the whole initializer first (CE0108), before the typecheck pass reads
+# the range (CE2122). So the error hole accepts CE0108 too, and strict mode never stops on
+# it (docs/design/ir.md 7.4).
+
+const i32[3] XS = [1, 2, 3]
+const i32 N = XS[(0..2).rev()].len()
+
+fn main() i32:
+    return N

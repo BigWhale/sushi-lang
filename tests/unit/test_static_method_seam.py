@@ -11,7 +11,6 @@ from __future__ import annotations
 from sushi_lang.semantics.statics import (
     BUILTIN_STATICS,
     BUILTIN_TYPE_NAMES,
-    builtin_type_named,
     is_builtin_static,
     names_a_type,
 )
@@ -22,8 +21,6 @@ from sushi_lang.semantics.typesys import BuiltinType
 
 def test_every_primitive_but_blank_is_a_type_name():
     assert BUILTIN_TYPE_NAMES == {ty.value for ty in BuiltinType} - {"~"}
-    assert builtin_type_named("f64") is BuiltinType.F64
-    assert builtin_type_named("Box") is None
 
 
 def test_a_declared_name_of_any_kind_is_a_type_name():

@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE0120
+# EXPECT_STDERR_CONTAINS: "bloom argument 'arr...' is only allowed as the last argument of a call to a variadic '...T' function"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_spread.shir
+#
+# A struct is never variadic. A bloom argument of a construction is CE0120, and the
+# fields are then not checked: there is no CE2027 for the count.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn make(i32[] xs) Point:
+    return Point(xs...)
+
+fn main() i32:
+    return 0

@@ -238,14 +238,14 @@ _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
     Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints, at any depth of an array type: `i32[]`, `i32[2][]` and `i32[][2]` (a fixed array of dynamic rows) are all refused. Use fixed-size arrays instead (e.g., i32[3] instead of i32[]); a fixed array of fixed rows (`i32[2][2]`) is a key."))
 
-# Array indexing errors (CE2056-CE2057)
+# Array indexing errors (CE2056)
+# CE2057 ("array index {index} out of bounds for array of size {size}") is retired. Only the
+# AST index template raised it, as an internal error. A constant index past the end is CE2012
+# at compile time, and any other index traps with RE2020 at run time. The number is not
+# reused.
 _add(ErrorMessage("CE2056", Severity.ERROR,
     "array index {index} is negative (indices must be >= 0)",
     Category.TYPE, "Array indices must be non-negative. Negative indices are not supported. The index is read as CE2012 reads it: a literal (`a[-1]`), a named constant and an expression of them."))
-
-_add(ErrorMessage("CE2057", Severity.ERROR,
-    "array index {index} out of bounds for array of size {size}",
-    Category.TYPE, "Array index exceeds array bounds. This error is caught at compile-time for constant indices."))
 
 # Generic function call errors (CE2060-CE2069)
 _add(ErrorMessage("CE2060", Severity.ERROR,
@@ -358,7 +358,7 @@ _add(ErrorMessage("CE2092", Severity.ERROR,
 
 _add(ErrorMessage("CE2093", Severity.ERROR,
     "cannot take a function value of '{name}': {reason}",
-    Category.TYPE, "A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method and an FFI external are not function values (#1105)."))
+    Category.TYPE, "A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method, an FFI external and a variadic function are not function values (#1105); a variadic function has no function type."))
 
 _add(ErrorMessage("CE2094", Severity.ERROR,
     "illegal closure capture: {reason}",

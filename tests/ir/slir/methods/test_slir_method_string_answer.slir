@@ -1,0 +1,24 @@
+unit test_slir_method_string_answer
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string                         // s
+    let _2: string                         // upper
+    let _3: string                         // again
+
+  bb0:
+    StorageLive(_1)
+    _1 = const "Mostly Harmless"
+    StorageLive(_2)
+    _2 = call builtin string.upper(copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin string.replace(copy _2 @guaranteed, const "M" @guaranteed, const "m" @guaranteed)
+    _0 = call builtin string.len(copy _3 @guaranteed)
+    Drop(_3)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

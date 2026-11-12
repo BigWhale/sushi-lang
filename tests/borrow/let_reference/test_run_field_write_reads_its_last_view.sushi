@@ -1,0 +1,44 @@
+# a field write whose new value holds the last use of a `let peek` view of the same
+# owner: the field of the view, another field, an `i32[32]` field, a field of a `var` and
+# a field of a `poke` parameter. The new value reads the view before the store.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "11 2\n11 21\n21 21\n2 2\n2\n6\n7\n"
+struct T:
+    i32 a
+    i32 b
+
+struct S:
+    i32[32] a
+    i32 b
+
+var T G = T(1, 2)
+
+fn bump(poke T t) ~:
+    let peek i32 w = t.a
+    t.a := w + 1
+
+fn main() i32:
+    let T t = T(1, 2)
+    let peek i32 w = t.a
+    t.a := w + 10
+    println("{t.a} {t.b}")
+    let peek i32 x = t.a
+    t.b := x + 10
+    println("{t.a} {t.b}")
+    let peek T whole = t
+    t.a := whole.b
+    println("{t.a} {t.b}")
+    let S s = S([1; 32], 7)
+    let peek i32[32] v = s.a
+    s.a := [v[0] + 1; 32]
+    println("{s.a[0]} {s.a[31]}")
+    let peek i32[32] u = s.a
+    s.a := u
+    println("{s.a[0]}")
+    let peek i32 k = G.a
+    G.a := k + 5
+    println("{G.a}")
+    bump(poke G)
+    println("{G.a}")
+    return 0

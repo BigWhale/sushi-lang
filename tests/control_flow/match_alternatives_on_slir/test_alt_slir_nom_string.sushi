@@ -1,0 +1,40 @@
+# A `nom` binder of a string payload in each alternative of an arm takes the variant
+# whole, under `match nom w:` and over a temporary. An arm that takes nothing leaves the
+# payload to the match. Each string is freed one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "took mostly\ntook harmless\nnothing\ntemp mostly\ntemp harmless\ntemp nothing\n"
+
+enum Word:
+    A(string)
+    B(string)
+    Gone
+
+fn make(i32 k) Word:
+    let string most = "most"
+    let string harm = "harm"
+    if (k == 0):
+        return Word.A("{most}ly")
+    if (k == 1):
+        return Word.B("{harm}less")
+    return Word.Gone
+
+fn eat(nom string s) ~:
+    println("temp {s}")
+
+fn take(nom Word w) string:
+    match nom w:
+        Word.A(nom s) | Word.B(nom s) -> return s
+        Word.Gone -> return "nothing"
+
+fn main() i32:
+    let string a = take(nom make(0))
+    println("took {a}")
+    let string b = take(nom make(1))
+    println("took {b}")
+    println(take(nom make(2)))
+    foreach(k in 0..3):
+        match make(k):
+            Word.A(nom s) | Word.B(nom s) -> eat(nom s)
+            Word.Gone -> println("temp nothing")
+    return 0

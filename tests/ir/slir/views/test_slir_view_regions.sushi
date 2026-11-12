@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\n9\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_view_regions.slir
+#
+# A view is a `view` local: a `Copy` writes it, and it never drops. Its region is one
+# `BeginBorrow` for each owner at the write and one `EndBorrow` after the last use on each
+# path and at each exit. A `??` over a borrowed wrapper reads the payload into a view, and
+# its error path copies the error. A temporary view ends its region with its storage. A
+# last use in a condition ends the region at the top of each arm.
+
+fn read(Result@(string, StdError) r) i32 | StdError:
+    let string s = r??
+    return Result.Ok(s.len())
+
+fn make() string | StdError:
+    return Result.Ok("Mostly {42}")
+
+fn main() i32:
+    let List@(string) xs = List.new()
+    xs.push("a{1}")
+    println(xs.get(0).is_some())
+    let Maybe@(string) m = xs.first()
+    if (m.is_some()):
+        xs.push("b{2}")
+    let Result@(string, StdError) r = make()
+    println(read(r).realise(-1))
+    return xs.len() - 2

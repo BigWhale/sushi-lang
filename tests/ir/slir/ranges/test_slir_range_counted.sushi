@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "lo\nhi\n1 3 5 \nn6\nn5\nn4\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_range_counted.slir
+#
+# A counted loop (ir.md 8.9): the bounds are evaluated once, the start first, into locals
+# of the loop statement, then the count, then a counter local at 0. The header compares the
+# counter with the count, the body binds the item, and the step block adds one to the
+# counter and goes to the header. A `continue` goes to the step, and a `break` to the exit.
+# The body of the second loop declares a string, which each exit of the round drops.
+
+fn lo() i32:
+    println("lo")
+    return 1
+
+fn hi() i32:
+    println("hi")
+    return 7
+
+fn main() i32:
+    foreach(i in lo()..hi()):
+        if (i % 2 == 0):
+            continue
+        print("{i} ")
+    println("")
+    let i32 n = 3
+    foreach(i in (n..=6).rev()):
+        let string word = "n{i}"
+        if (i == 3):
+            break
+        println(word)
+    return 0

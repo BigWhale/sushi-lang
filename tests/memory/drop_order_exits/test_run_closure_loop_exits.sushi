@@ -1,0 +1,32 @@
+# A `break` and a `return` leave a loop body that holds a capturing closure local. The
+# closure moves a heap string into its environment. Each exit destroys the environment
+# and the string once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6\n6\nbreak at 1\n6\n7\n8\nreturn at 2\n"
+fn on_break() i32:
+    let i32 i = 0
+    while (true):
+        let string tag = "tag{i}"
+        let fn(i32) -> i32 f = |i32 x| x + tag.len()
+        println(f(2))
+        if (i == 1):
+            println("break at {i}")
+            break
+        i := i + 1
+    return i
+
+fn on_return() i32:
+    foreach(i in 0..5):
+        let string tag = "tag{i}"
+        let fn(i32) -> i32 f = |i32 x| x + tag.len() + i
+        println(f(2))
+        if (i == 2):
+            println("return at {i}")
+            return i
+    return 0
+
+fn main() i32:
+    let i32 a = on_break()
+    let i32 b = on_return()
+    return a + b - 3

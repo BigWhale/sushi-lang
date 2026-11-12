@@ -18,8 +18,11 @@ and nothing is reported. The old rule took the direction from the values, so the
 `(n - 1)..=0` walked -1 and 0 when n was 0. The countdown is `(0..n).rev()` now, and it is
 empty when n is 0.
 
-The formula is stated twice, because it must be: here over Python integers, and in
-`backend/ranges.py` as IR for the bounds the compiler cannot read.
+The formula is stated twice, because it must be: here over Python integers, and as SLIR
+for the bounds the compiler cannot read (`semantics/slir/lower_control.py`, the counted
+loop of a `foreach`, and `semantics/slir/lower_arrays.py`, a range element of an array
+literal; both take this plan for two constant bounds), and a range value reads the same
+operands (`range_operands`).
 `tests/unit/test_range_plan_matrix.py` pins the Python half against a table.
 
 The bounds are read through a callback rather than by importing the evaluator, the way
@@ -76,17 +79,22 @@ def read_range(expr: RangeExpr, read_int: ReadInt,
     end = read_int(expr.end)
     if end is None:
         return None
+    return plan_range(start, end, expr.inclusive, expr.reverse, expr.loc)
 
-    count = max(end - start + (1 if expr.inclusive else 0), 0)
+
+def plan_range(start: int, end: int, inclusive: bool, reverse: bool,
+               loc: Optional[Span]) -> RangePlan:
+    """The plan of a range whose two bounds are read: the formula of this module."""
+    count = max(end - start + (1 if inclusive else 0), 0)
     return RangePlan(
-        first=start + count - 1 if expr.reverse else start,
-        step=-1 if expr.reverse else 1,
+        first=start + count - 1 if reverse else start,
+        step=-1 if reverse else 1,
         count=count,
-        inclusive=expr.inclusive,
-        loc=expr.loc,
+        inclusive=inclusive,
+        loc=loc,
         start=start,
         end=end,
-        reverse=expr.reverse,
+        reverse=reverse,
     )
 
 
@@ -112,35 +120,3 @@ def reject_a_range_that_goes_down(plan: Optional[RangePlan], reporter: Reporter)
     return True
 
 
-def holds_a_range_value(root: object) -> bool:
-    """True when a range under `root` is in none of its own positions (CE2122, #1165).
-
-    The typecheck pass's rule, read off the shape: a range is a `foreach` iterable, an
-    array-literal element or the index of a slice (#1226), and anything else is refused.
-    A pass that types an expression
-    before the typecheck pass reports the range reads this, so it solves nothing from a
-    range -- a constraint judged against `Iterator@(i32)` was CE4006 in place of the
-    range's own error.
-    """
-    from sushi_lang.semantics.ast import ArrayElement, Foreach, IndexAccess
-    from sushi_lang.semantics.ast_walk import children, walk_nodes
-
-    found = False
-
-    def visit(node) -> bool:
-        nonlocal found
-        if isinstance(node, RangeExpr):
-            found = True
-        if found:
-            return False
-        legal = (node.value if isinstance(node, ArrayElement)
-                 else node.iterable if isinstance(node, Foreach)
-                 else node.index if isinstance(node, IndexAccess) else None)
-        if not isinstance(legal, RangeExpr):
-            return True
-        walk_nodes([legal.start, legal.end], visit)
-        walk_nodes([child for child in children(node) if child is not legal], visit)
-        return False
-
-    walk_nodes(root, visit)
-    return found

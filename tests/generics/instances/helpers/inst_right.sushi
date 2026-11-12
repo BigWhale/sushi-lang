@@ -1,0 +1,5 @@
+fn inst_twin@(T: Display)(T x) string:
+    return "right {x}"
+
+public fn inst_call_right() string:
+    return inst_twin(2)

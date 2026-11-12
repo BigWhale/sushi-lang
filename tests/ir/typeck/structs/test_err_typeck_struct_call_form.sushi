@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2028
+# EXPECT_STDERR_CONTAINS: "field 'weight' expects type 'i32', got 'bool'"
+# EXPECT_STDERR_CONTAINS: "  |     keep(Crate(true))\n  `                --+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_call_form.shir
+#
+# A flat import brings a function `Crate`, and the unit declares the struct `Crate`. The
+# unit declares no function of the name, so the bare call `Crate(...)` constructs the
+# struct (#1076): lowering makes it a `StructInit`. `Crate(4)` is typed, and a field that
+# does not fit is CE2028.
+
+use "units/crates"
+
+struct Crate:
+    i32 weight
+
+fn keep(Crate c) Crate:
+    return c
+
+fn main() i32:
+    keep(Crate(4))
+    keep(Crate(true))
+    return 0

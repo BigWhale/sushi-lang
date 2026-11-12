@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2433, CE0140
+#
+# The statement after the exhaustive `match` can never run (CE0140). The borrow pass still
+# walks the body and refuses the `nom` binder beside a `_` of the same variant (CE2433).
+
+enum Shape:
+    Pair(string, string)
+    Nil
+
+fn show(nom Shape s) i32:
+    match nom s:
+        Shape.Pair(nom a, _) -> return a.len()
+        Shape.Nil -> return 0
+    return 0
+
+fn main() i32:
+    println(show(nom Shape.Pair("a{1}", "b{2}")))
+    return 0

@@ -1,0 +1,24 @@
+# `look(peek o)` lends an `Own@(T)` to a `peek` parameter. The callee reads through the
+# pointer and destroys nothing; the caller destroys the box and its payload once. A
+# second call on the same box, and a call through a struct field, read the same value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "look box 1\nlook box 1\nlook box 2\nkept box 1\n"
+struct Note:
+    string text
+
+struct Holder:
+    Own@(Note) o
+
+fn look(peek Own@(Note) o) i32:
+    println("look {o.get().text}")
+    return o.get().text.len()
+
+fn main() i32:
+    let Own@(Note) o = Own.alloc(Note("box {1}"))
+    let i32 a = look(peek o)
+    let i32 b = look(peek o)
+    let Holder h = Holder(Own.alloc(Note("box {2}")))
+    let i32 c = look(peek h.o)
+    println("kept {o.get().text}")
+    return a + b + c - 15

@@ -1,0 +1,14 @@
+# EXPECT_RUNTIME_EXIT: 3
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_NO_LEAKS
+# The rule of a leaving arm holds for a `let` that borrows too.
+
+fn main() i32:
+    let i32 n = 0
+    let string[] xs = from(["a{n}"])
+    let string first = xs[0]
+    if (first == "a0"):
+        xs.push("b")
+        return 3
+    println(first)
+    return 0

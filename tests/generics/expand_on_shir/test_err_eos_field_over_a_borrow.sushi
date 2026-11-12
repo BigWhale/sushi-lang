@@ -1,0 +1,17 @@
+# A field of an instance over a borrow holds a reference. A read of it consumes nothing: a
+# `return` at the type with no `peek` is CE2003 alone, for an opaque `T` and for a `string`.
+# EXPECT_ERROR_CODES_EXACT: CE2003, CE2003
+
+struct Box@(T):
+    T item
+
+fn one@(T)(peek T x) T:
+    return Box(peek x).item
+
+fn two(peek string x) string:
+    return Box(peek x).item
+
+fn main() i32:
+    let i32 x = 5
+    println(one(peek x))
+    return 0

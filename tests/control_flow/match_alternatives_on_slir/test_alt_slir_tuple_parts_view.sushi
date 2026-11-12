@@ -1,0 +1,26 @@
+# The alternatives of one arm bind one name at two parts of a tuple literal. Each part is
+# a scrutinee of its own, so the view of each path is in a region over another owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "m2\nm3\nnone\n"
+
+enum W:
+    A(string)
+    B(string)
+
+fn pick(peek W a, peek W b) ~:
+    match (a, b):
+        (W.A(x), _) | (_, W.A(x)) -> println(x)
+        _ -> println("none")
+
+fn main() i32:
+    let string m = "m"
+    let W a = W.B("{m}1")
+    let W b = W.A("{m}2")
+    match (a, b):
+        (W.A(x), _) | (_, W.A(x)) -> println(x)
+        _ -> println("none")
+    let W c = W.A("{m}3")
+    pick(peek c, peek a)
+    pick(peek a, peek a)
+    return 0

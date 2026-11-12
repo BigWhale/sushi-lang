@@ -1,0 +1,21 @@
+unit test_slir_part_over_a_borrow
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // x
+    let _2: Box@(peek i32)
+    let _3: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 42_i32
+    StorageLive(_2)
+    _2 = Box@(peek i32)(copy _1)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call builtin println@(i32)(copy _1 @guaranteed)
+    StorageDead(_3)
+    _0 = const 0_i32
+    StorageDead(_1)
+    return
+}

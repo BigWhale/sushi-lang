@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2041
+# EXPECT_STDERR_CONTAINS: "duplicate match arm for variant '_'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_wildcard_not_last.shir
+#
+# The `_` arm is the last arm. A `_` among the alternatives of an arm is legal. A `_` arm
+# with an arm after it is CE2041.
+
+fn early(i32 n) string:
+    match n:
+        1 -> return "one"
+        2 | _ -> return "other"
+
+fn late(i32 n) string:
+    match n:
+        _ -> return "other"
+        1 -> return "one"
+
+fn main() i32:
+    println(early(1))
+    println(late(1))
+    return 0

@@ -1,0 +1,15 @@
+# A `self` in a static method is CE0134. The body goes on, so a later fault of the body
+# is reported too.
+# EXPECT_ERROR_CODES_EXACT: CE0134, CE2002
+# EXPECT_STDERR_CONTAINS: test_err_static_mentions_self_then_mismatch.sushi:10:17: error [CE2002]
+struct Vec:
+    i32 x
+
+extend Vec static at(i32 x) i32:
+    let i32 a = self.x
+    let i32 b = "s"
+    return a + b + x
+
+fn main() i32:
+    println(Vec.at(1))
+    return 0

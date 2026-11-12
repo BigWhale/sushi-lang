@@ -1,0 +1,14 @@
+unit test_err_typeck_constant_overflow
+
+ShirBody TOO_BIG (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Binary(+, Lit(200), Lit(100)))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(ConstRef(@TOO_BIG), Guaranteed)]))
+    Return(Lit(0))

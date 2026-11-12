@@ -1,0 +1,29 @@
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\n104\n4\n77\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_array_index.slir
+#
+# An element is the place `Index(place, i)` (ir.md 8.4). A checked index first holds the
+# index and the length in locals, compares the two as `u32`, and goes to the trap RE2020 on
+# the failing edge (ir.md 8.9). A constant index of a `T[N]` has no check, and neither has
+# an index under `dont_panic`. A write checks its index after its value. A string byte is
+# an index of a string.
+
+fn first(poke i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+    xs[0] := xs[0] + 100
+    return xs[0]
+
+fn main() i32:
+    let i32[3] fixed = [1, 2, 3]
+    let i32[] d = from([4, 5, 6])
+    let i32 i = 2
+    let string s = "Mostly Harmless"
+    d[i - 1] := fixed[i] + d[i]
+    println(fixed[1] + fixed[i] + d[0] - d[i - 1] + d[i])
+    println(first(poke d))
+    println(s[1] - 107)
+    let i32[2][2] grid = [[1, 2], [3, 4]]
+    grid[i - 1][0] := 77
+    println(grid[1][0])
+    return 0

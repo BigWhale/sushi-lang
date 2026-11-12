@@ -1,30 +1,44 @@
-"""The typecheck pass: type validation and inference."""
+"""The typecheck pass: type validation and inference (docs/design/ir.md 7.3, 7.9).
+
+The pass has two halves (ruling E1). The DECLARATION half reads the AST: the public
+signatures, the qualified constraints, the declared types, the constraint perks, the
+declared type of a constant and the header of each function, method and perk
+implementation. The BODY half walks the SHIR body of each declaration (`check_body`)
+through the table of `visit/`, and it writes its answers into the `TypeckResults` of the
+body. When a walk ends with no error in its body, the completeness check of the table
+runs (`check_answers`), and the pass gives the body to the next stage, the lift pass
+(`next_stage`), which the driver gives the pass. After an error, a construct that the pass
+does not handle ends the walk of its body (`AfterAnError`).
+"""
 from __future__ import annotations
-from contextlib import contextmanager
-from typing import Callable, Dict, Iterator, Optional, Set, TYPE_CHECKING
+from typing import Callable, Dict, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.namespaces import Binding, NamespaceTable
+    from sushi_lang.semantics.namespaces import NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.conversions import Conversion
-    from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
+    from sushi_lang.semantics.passes.types.constants import InitializerFacts
     from sushi_lang.semantics.passes.types.templates import PackElements
-    from sushi_lang.semantics.template_scope import CheckCopy
+    from sushi_lang.semantics.shir.body import ShirBody, ShirLocal
+    from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
+    from sushi_lang.semantics.shir.lowering import LoweredProgram
+    from sushi_lang.semantics.const_eval import ConstantValue
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
-from sushi_lang.semantics.ast import (
-    Program, FuncDef, ExtendDef, Block, Stmt, Expr
-)
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.diagnostics import AfterAnError
+from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
+from sushi_lang.semantics.passes.types.visit.statements import check_block, check_params
+from sushi_lang.semantics.passes.types.fold import Folder
+from sushi_lang.semantics.shir.typeck import TypeckResults
+from sushi_lang.semantics.shir.typeck_check import check_answers
 
-from .compatibility import types_compatible
-from .operator_nest import OperatorNests
 from .constants import validate_constant
 from .public_signatures import check_public_signatures
 from .signatures import (
@@ -41,13 +55,9 @@ class TypeValidator:
     # table and its body in the copy queue. An inference before it does not (#1153).
     queues_late_copies = True
 
-    # The typecheck pass may ask the analyzer for a function instance that the early
-    # collection did not make (#1155). An early pass only reads, so its inferrer may not.
-    requests_late_instances = True
-
-    # True only over the check copy of a template (`templates.TemplateValidator`, #1070).
+    # True only over the check of a template (`templates.TemplateValidator`, #1070).
     in_template_check = False
-    # The element type of each `expand`, over the check copy of a pack template only.
+    # The element type of each `expand`, over the check of a pack template only.
     pack_elements: Optional['PackElements'] = None
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
@@ -56,18 +66,44 @@ class TypeValidator:
                  in_library_unit: bool = False,
                  namespaces: Optional['NamespaceTable'] = None,
                  checks_templates: bool = False,
-                 borrow_check_copy: Optional[Callable[['CheckCopy'], None]] = None) -> None:
+                 shir: Optional['LoweredProgram'] = None,
+                 next_stage: Optional[Callable[..., None]] = None,
+                 program_failed: Callable[[], bool] = lambda: False) -> None:
         self.reporter = reporter
-        # Whether `run` checks each function template of the unit on a check copy
-        # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
+        # Whether the program has an error that this unit did not report (`has_an_error`).
+        self.program_failed = program_failed
+        # Whether `run` checks each function template of the unit (#1070): a unit of the
+        # program, and a bundled stdlib unit. A consumed library
         # unit was checked by its own `--lib` build.
         self.checks_templates = checks_templates
-        # The borrow pass over a check copy (#1070, R5). The analyzer gives it, because
-        # this pass does not import the borrow pass.
-        self.borrow_check_copy = borrow_check_copy
-        # The written templates that `run` checked on a check copy: the borrow pass
-        # reads each of them on its check copy, and not as written.
+        # The written templates that `run` checked.
         self.checked_template_ids: Set[int] = set()
+        # The SHIR bodies of the program, and the stage that each body goes to when the
+        # body half finished it with no error: the lift pass (`LiftPass.check_body`).
+        self.shir = shir
+        self.next_stage = next_stage
+        # The SHIR body that the body half walks, its `TypeckResults`, its locals by id and
+        # the fold of its readable values (docs/design/ir.md 7.4), or None.
+        self.body: Optional['ShirBody'] = None
+        self.answers: Optional[TypeckResults] = None
+        self.body_locals: Dict['LocalId', 'ShirLocal'] = {}
+        # The locals of the body whose `let` the pass refused (CE2002, an unhandled
+        # `Result`): a method call on one reports no CE2008 (#1128). `_check_let` writes it.
+        self.refused_locals: set['LocalId'] = set()
+        # The value pack parameters of the body of a template check (ir.md 4.5).
+        self.value_packs: set['LocalId'] = set()
+        # The matches of the body whose arms miss a value (CE2040, CE2074): the
+        # dead-statement rule does not take one as the end of a path (#886).
+        self.uncovered_matches: set['ShirId'] = set()
+        self.folder: Optional[Folder] = None
+        # True when the body holds an error that an earlier pass reported: the collect
+        # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
+        self.refused_before = False
+        # The parameters by address of the lambdas around the node that the walk is in.
+        self.lambda_borrows: Set['LocalId'] = set()
+        # The initializer that the body half walks: its declaration and the value that the
+        # constant evaluator gave it (docs/design/ir.md 7.3), or None.
+        self.initializer: Optional['InitializerFacts'] = None
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -133,19 +169,6 @@ class TypeValidator:
         # template's own unit never imported them and never could (section 6).
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
-        # The `let` names whose initializer was refused; a method call on one is not
-        # refused again (#1128).
-        self.refused_bindings: set[str] = set()
-        # The ranges refused outside their two positions (#1165): each answers no type
-        # after the refusal, so the position that holds it adds no second error.
-        self.refused_ranges: set[int] = set()
-
-        # The kept types and the handed overflow checks of the expression being validated.
-        self.operator_nests = OperatorNests()
-
-        self.statement_validator = StatementValidator(self)
-        self.expression_validator = ExpressionValidator(self)
-        self.type_inference_visitor = TypeInferenceVisitor(self)
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
@@ -170,7 +193,7 @@ class TypeValidator:
         for const in program.constants:
             validate_constant(self, const)
 
-        # A template is checked one time, on a check copy, where it is written (#1070):
+        # A template is checked one time, where it is written (#1070):
         # a function template, an extension template and a perk template. The copy reads
         # the statement rules too, with the stamps it gets.
         from .templates import (
@@ -192,11 +215,6 @@ class TypeValidator:
             validate_template_header(self, impl)
             if self.checks_templates and check_perk_template(self, impl):
                 checked.add(id(impl))
-
-        # A template the loops above did not check: its statement rules that need no type
-        # are read once, on the body as written.
-        from .signatures import check_template_statements
-        check_template_statements(self, program, checked)
 
         for ext in program.extensions:
             self._validate_extension_method(ext)
@@ -250,67 +268,122 @@ class TypeValidator:
         from sushi_lang.semantics.const_eval import ConstantEvaluator
         return ConstantEvaluator(reporter if reporter is not None else Reporter(),
                                  self.const_table, self.current_unit_name,
-                                 self.namespaces_of, self.struct_table, self.enum_table)
-
-    def operand_evaluator(self):
-        """A silent evaluator that shares the operator folds of the expression being validated.
-
-        A check that reads an operand at each level of a nest uses it, so the nest is
-        folded one time (`operator_nest.py`).
-        """
-        from sushi_lang.semantics.const_eval import ConstantEvaluator
-        return ConstantEvaluator(Reporter(), self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table,
-                                 folds=self.operator_nests.folds)
+                                 functions=self.func_table)
 
-    def validate_expression(self, expr: Expr) -> Optional[Type]:
-        """Validate an expression and its subexpressions, and answer its type.
+    def check_body(self, decl,
+                   path_faults: Optional[Callable[['ShirBody', Set['ShirId']], None]] = None,
+                   *, offered: Optional[int] = None) -> None:
+        """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
-        The type of a validated operator node is kept until the outermost expression is
-        done (`operator_nest.py`).
+        When the walk reaches its end, the path faults of a function or a method
+        (`path_faults`) are checked, with the matches of the body whose arms miss a value.
+        A walk that ends after an error (`AfterAnError`) gives its body to no
+        stage. A walk that ends with no error in its body is checked for completeness, and its body goes to the next stage, the
+        lift pass, with the tables that the body was read in. A node that has an error has
+        no answer, so a body with an error is not checked: it goes to the lift pass marked
+        `typecheck_failed` when its header has no error (docs/design/ir.md 7.9). `offered` is the count of the errors before the header of
+        a function or a method, so that a body whose header has an error (an unknown
+        parameter type) does not go on.
         """
-        nests = self.operator_nests
-        nests.hold()
+        body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
+        if body is None or self.shir is None or self.next_stage is None:
+            er.raise_internal_error(
+                "CE0000", detail=f"the typecheck pass has no SHIR body of "
+                                 f"'{getattr(decl, 'name', type(decl).__name__)}'")
+        self.body = body
+        self.answers = answers = self.shir.typeck_of(body)
+        self.body_locals = {local.id: local for local in body.locals}
+        self.value_packs = {param.local for param in body.params if param.pack}
+        self.refused_locals = set()
+        self.uncovered_matches = set()
+        self.folder = Folder(self._constant_value, self.written_type)
+        self.refused_before = False
+        origin = self.reporter.origin
+        filename = origin.filename if origin is not None else self.reporter.filename
+        if offered is None:
+            offered = self.errors_offered()
         try:
-            self.expression_validator.visit(expr)
-            expr_type = self.infer_expression_type(expr)
-            nests.keep(expr, expr_type)
-            return expr_type
+            check_params(self, body)
+            header_failed = self.errors_offered() != offered
+            check_block(self, body.block)
+            walk_failed = self.errors_offered() != offered or self.refused_before
+        except AfterAnError:
+            return
         finally:
-            nests.leave()
+            uncovered = self.uncovered_matches
+            self.body = self.answers = self.folder = None
+            self.body_locals = {}
+            self.value_packs = set()
+            self.refused_locals = set()
+            self.uncovered_matches = set()
+        if path_faults is not None:
+            path_faults(body, uncovered)
+        if header_failed:
+            return
+        if walk_failed or self.errors_offered() != offered:
+            self.next_stage(decl, body, tables=self.tables, filename=filename,
+                            typecheck_failed=True)
+            return
+        check_answers(body, answers, self.shir.decls)
+        self.next_stage(decl, body, tables=self.tables, filename=filename)
 
-    def infer_expression_type(self, expr: Expr) -> Optional[Type]:
-        """Infer the type of an expression. A kept type of a validated operator answers first."""
-        known, kept_type = self.operator_nests.kept(expr)
-        if known:
-            return kept_type
-        return self.type_inference_visitor.visit(expr)
+    def has_an_error(self) -> bool:
+        """Whether this unit or the program has an error so far. An error of another unit
+        counts too (`program_failed`), so `dispatch.unhandled` then ends the walk with no
+        CE0000, and an internal fault of this unit stays hidden."""
+        return bool(self.errors_offered()) or self.program_failed()
 
-    def namespace_of(self, receiver) -> Optional[str]:
-        """The namespace a receiver names, or None when it names something else.
+    def errors_offered(self) -> int:
+        """The count of the errors offered so far: a check that adds one refused its node."""
+        return sum(self.reporter.errors_offered.values())
 
-        Local-wins, and it is the whole of section 8's first row: a variable named
-        `libc` or `geo` shadows the namespace for the rest of its scope.
-        """
-        from sushi_lang.semantics.ast import Name
-        if not isinstance(receiver, Name):
-            return None
-        if receiver.id in self.variable_types:
-            return None
-        return receiver.id if self.namespaces.is_namespace(receiver.id) else None
+    def body_answers(self) -> TypeckResults:
+        """The `TypeckResults` of the body that the body half walks."""
+        if self.answers is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass walks no SHIR body")
+        return self.answers
 
-    def resolve_namespaced(self, receiver, name: str) -> Optional['Binding']:
-        """What `<namespace>.<name>` denotes. The ONE reader, for every kind."""
-        ns = self.namespace_of(receiver)
-        return None if ns is None else self.namespaces.lookup(ns, name)
+    def body_folder(self) -> Folder:
+        """The readable fold of the body that the body half walks (docs/design/ir.md 7.4)."""
+        if self.folder is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass walks no SHIR body")
+        return self.folder
 
-    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
-        """Resolve a DotCall to a foreign function signature, if applicable."""
-        binding = self.resolve_namespaced(node.receiver, node.method)
-        if binding is None or binding.kind != "extern":
-            return None
-        node.external_ref = (binding.provider.origin, node.method)
-        return binding.record
+    def decl_name(self, decl: 'DeclId') -> str:
+        """The written name of a declaration that a SHIR node names."""
+        if self.shir is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass has no SHIR program")
+        return self.shir.decls.name_of(decl)
+
+    def method_decl(self, owner: Type, method: str) -> 'DeclId':
+        """The id of the written name `<type>.<method>` of a method that a call names: the
+        name that lowering gives the body of the method (docs/design/ir.md 7.6)."""
+        if self.shir is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass has no SHIR program")
+        from sushi_lang.semantics.generics.type_display import display_type
+        return self.shir.decls.refer(f"{display_type(owner)}.{method}")
+
+    def _constant_value(self, decl: 'DeclId') -> Optional['ConstantValue']:
+        """The value of a constant that a `ConstRef` names, from the constant table (Q5)."""
+        from sushi_lang.semantics.passes.types.visit.expressions import constant_record
+        record = constant_record(self, self.decl_name(decl))
+        return None if record is None else self.constant_value(record)
+
+    def constant_value(self, record) -> Optional['ConstantValue']:
+        """The value of a declared constant or of a stdlib constant, or None when its
+        initializer has an error."""
+        return self.constant_evaluator().value_of(record, None)
+
+    def written_of(self, decl):
+        """The declaration that lowering made the SHIR body of: `decl` itself here. The
+        check of a template walks the body of the template as written."""
+        return decl
+
+    def written_type(self, ty: Type) -> Type:
+        """A type that a SHIR body writes, as the body half reads it: as written here. The
+        check of a template reads it at the opaque type parameters."""
+        return ty
 
     def _validate_function(self, func: FuncDef) -> None:
         """The pass's surface for the `lift` pass (#756).
@@ -321,99 +394,9 @@ class TypeValidator:
         """
         validate_function(self, func)
 
-    def annotate_function(self, func: FuncDef) -> None:
-        """Type one function the lambda lifter built (the `Annotator` contract, #687).
-
-        A lifted lambda is an ordinary function from here on, so it is typed by the path
-        an ordinary one takes. Public because the lift pass runs after this one and
-        depends on it: a lifted body carries no parameter types and no channel until
-        this runs over it. The lift pass used to name `_validate_function` instead, so a
-        rename of a PRIVATE method here broke a different pass with no diagnostic.
-        """
-        self._validate_function(func)
-
     def _validate_extension_method(self, ext: ExtendDef) -> None:
         """The pass's surface for the analyzer, which drives the per-unit loop."""
         validate_extension_method(self, ext)
 
-    def _validate_block(self, block: Block) -> None:
-        """Validate statements in a block."""
-        from .statements import stamp_rebind_places
-        for index, stmt in enumerate(block.statements):
-            stamp_rebind_places(self, block.statements, index)
-            self._validate_statement(stmt)
 
-    def _validate_statement(self, stmt: Stmt) -> None:
-        """Validate a statement using the Visitor Pattern."""
-        self.statement_validator.visit(stmt)
-
-    def _types_compatible(self, actual: Type, expected: Type) -> bool:
-        """The pass's surface for the Maybe and Result intern seams."""
-        return types_compatible(self, actual, expected)
-
-
-class ReadOnlyInferrer(TypeValidator):
-    """The typecheck pass's inference, for a pass that runs BEFORE the typecheck pass (#806).
-
-    The `instantiate` and `monomorphize` passes type a generic call's arguments with it.
-    Inference writes stamps on the nodes it types, and the backend reads those stamps,
-    so an early pass that kept them would leave values read from tables that are not
-    complete yet. This inferrer puts every field of every node under the expression back
-    when the outermost inference returns, and its diagnostics go to a Reporter that
-    nobody reads: the typecheck pass reports them later, for real.
-
-    Only the nodes under the expression are put back. A node that inference builds for
-    itself (the `MethodCall` view of a `DotCall`) is dropped when inference returns.
-    `tests/unit/test_early_inference_writes_no_stamp.py` is the gate.
-
-    `namespaces` is the table of the unit that holds the expression, as the typecheck
-    pass gives it: `sh.Pt(0)` names what `Pt(0)` names under a flat import only when
-    the inferrer knows the alias (#1147). Without it the inferrer has no unit.
-
-    It queues no late copy of a generic static either: the copy of an instance the
-    monomorphize pass reaches is cut by that pass, and a second copy from the queue
-    was a duplicate symbol (#1153). The typecheck pass queues what is still missing.
-    """
-
-    queues_late_copies = False
-    requests_late_instances = False
-
-    def __init__(self, tables: 'SymbolTables',
-                 namespaces: Optional['NamespaceTable'] = None) -> None:
-        unit = namespaces.scope.unit if namespaces is not None else None
-        super().__init__(Reporter(), tables, current_unit_name=unit,
-                         namespaces=namespaces)
-        self._depth = 0
-
-    def infer_expression_type(self, expr: Expr) -> Optional[Type]:
-        if self._depth:
-            return super().infer_expression_type(expr)
-        self._depth += 1
-        try:
-            with fields_restored_under(expr):
-                return super().infer_expression_type(expr)
-        finally:
-            self._depth -= 1
-
-
-@contextmanager
-def fields_restored_under(root: Expr) -> Iterator[None]:
-    """Put back every declared field of every node under `root` when the block ends."""
-    from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
-
-    saved: list = []
-
-    def visit(node) -> bool:
-        saved.append((node, list(node_fields(node))))
-        return True
-
-    walk_nodes(root, visit)
-    try:
-        yield
-    finally:
-        for node, values in saved:
-            for name, value in values:
-                setattr(node, name, value)
-
-
-__all__ = ['ReadOnlyInferrer', 'TypeValidator', 'fields_restored_under']
+__all__ = ['TypeValidator']

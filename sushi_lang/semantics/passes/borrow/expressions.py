@@ -1,287 +1,216 @@
-"""Expression walking. Every `Expr` node has an arm; the `else` is a hard CE0125."""
+"""The expression arms of the borrow pass over SHIR (docs/design/ir.md 7.4, 7.9).
+
+A read of a local reports a use after a move (CE2405, CE2435), after a destroy (CE2406)
+and after a change of the owner of a `let`-borrow (CE2412). A literal, a constant and a
+`var` read nothing that the body owns. An operator reads its operands, an interpolated
+string reads its holes, a field reads its base, and an element and a slice read their array and their
+index or bounds. Each field of a struct construction, each part of a tuple, each payload
+of an enum construction and each element of an array construction is a consuming use, and
+so is the operand of a `??`: the pass decides its `Ownership` and writes the row
+(`consume.py`). An element and a slice are reads through their array, plain or owning: a
+position that takes an owning one refuses it (CE2411), and a `let` of one is a `let`-borrow
+of the root. A `Borrow` borrows its place for the statement.
+"""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import Optional, Sequence, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import (
-    ArrayLiteral,
-    BinaryOp,
-    BlankLit,
-    BoolLit,
-    Borrow,
-    CastExpr,
-    Call,
-    DotCall,
-    DynamicArrayFrom,
-    DynamicArrayNew,
-    EnumConstructor,
-    Expr,
-    FloatLit,
-    IndexAccess,
-    InterpolatedString,
-    IntLit,
-    Lambda,
-    MemberAccess,
-    MethodCall,
-    Name,
-    RangeExpr,
-    Spread,
-    StringLit,
-    TryExpr,
-    TupleLiteral,
-    UnaryOp,
-)
-from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.ownership import Provenance, TypeClass
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.callee import Conversion
 
-from .iterators import settle_iterator_source
-from .borrowed_returns import settle_borrowed_call
-from .borrows import check_borrow
-from .calls import (
-    apply_destroy_effects,
-    consume_call_args,
-    consume_indirect_args,
-    is_enum_constructor,
-    maybe_mark_container_insert,
-    maybe_mark_own_alloc_move,
-    reject_borrow_read_by_the_change,
-    reject_self_aliasing_copy,
-    settle_method_args,
-    settle_namespaced_args,
-    settle_receiver,
-    unchanged_borrowed_roots,
-)
-from .consume import consume, consume_each, consume_named, name_provenance, unwrap_place
+from . import arms
+from .borrows import BY_ADDRESS, check_borrow as borrow_place
+from .consume import StatementTakes, consume, consume_once, decide, unwrap_place
 from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
-from .writes import maybe_reject_mutation
+from .flow import record_exit
+from .iterators import lent_owners
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
 
 
-# Nodes that own nothing and name nothing. Listed EXPLICITLY so `check_expr`'s `case _`
-# can be a hard error (CE0125) instead of a silent skip.
-INERT_EXPRS = (IntLit, FloatLit, BoolLit, BlankLit, StringLit, DynamicArrayNew)
+def check_leaf(_checker: 'BorrowChecker',
+               _node: e.Lit | e.ConstRef | e.StorageRef | e.GlobalRef) -> None:
+    """A literal, a constant, a `var` or a named function: it reads nothing that the body
+    owns, and a `var` always holds its value."""
 
 
-def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
-    """Check borrow safety for an expression."""
-    match expr:
-        case Borrow():
-            check_borrow(checker, expr)
-        case Name():
-            _check_name(checker, expr)
-        case Call():
-            _check_call(checker, expr)
-        case MethodCall():
-            _check_method_call(checker, expr)
-        case DotCall():
-            _check_dot_call(checker, expr)
-        case BinaryOp():
-            check_expr(checker, expr.left)
-            check_expr(checker, expr.right)
-        case CastExpr():
-            check_expr(checker, expr.expr)
-            # `as` consumes its operand by POSITION, unmarked, as a constructor argument
-            # does (docs/design/error-conversion.md section 3.2). A conversion takes it as
-            # its `nom self`; an identity cast moves it to the new owner. A plain operand,
-            # every numeric one included, is a copy.
-            consume(checker, expr.expr, _cast_copy_use(expr))
-        case UnaryOp():
-            check_expr(checker, expr.expr)
-        case TryExpr():
-            # `r??` is a consuming position of its own: an owned wrapper is spent here
-            # (#548), and a use of `r` after it is CE2405.
-            checker.try_operands.add(id(expr.expr))
-            check_expr(checker, expr.expr)
-            unwrap_place(checker, expr)
-        case IndexAccess():
-            check_expr(checker, expr.array)
-            check_expr(checker, expr.index)
-        case MemberAccess():
-            check_expr(checker, expr.receiver)
-        case RangeExpr():
-            check_expr(checker, expr.start)
-            check_expr(checker, expr.end)
-        case Spread():
-            # Bloom: `arr...`. The source is USED here, so a moved source is reported;
-            # the MOVE happens in `consume_call_args`, which unwraps the Spread.
-            check_expr(checker, expr.value)
-        case EnumConstructor():
-            _check_sink_elements(checker, expr.args)
-        case TupleLiteral():
-            # A tuple literal is a construction by position: each element is consumed.
-            _check_sink_elements(checker, expr.elements)
-        case DynamicArrayFrom():
-            _check_run_elements(checker, expr.elements.elements)
-            _check_sink_elements(checker, array_runs.values(expr.elements.elements))
-        case ArrayLiteral():
-            _check_run_elements(checker, expr.elements)
-            _check_sink_elements(checker, array_runs.values(expr.elements))
-        case InterpolatedString():
-            for part in expr.parts:
-                if not isinstance(part, str):
-                    check_expr(checker, part)
-        case Lambda():
-            _check_lambda(checker, expr)
-        case _ if isinstance(expr, INERT_EXPRS):
-            return
-        case _:
-            # NOT a silent fall-through: a node with no arm gets NO borrow checking, a
-            # soundness hole rather than a crash (#174, #175, #176). The CI gate is
-            # tests/unit/test_borrow_dispatch_is_total.py; this is the backstop.
-            er.raise_internal_error("CE0125", node=type(expr).__name__)
+def check_local_ref(checker: 'BorrowChecker', node: e.LocalRef) -> None:
+    read_local(checker, node.local, node.loc)
 
 
-def _check_name(checker: 'BorrowChecker', expr: Name) -> None:
-    """A bare name: report a use after a move, after a destroy, or after an invalidation."""
-    checker.err.meet(expr)
-    state = checker.borrow_state.get(expr.id)
+def read_local(checker: 'BorrowChecker', local: LocalId, span: Optional[Span]) -> None:
+    """A read of a local: a use after a move, after a destroy, or after an invalidation."""
+    state = checker.borrow_state.get(local)
     if state is None:
         return
     if state.is_moved:
-        emit_use_after_move(checker, expr.id, expr.loc, state)
+        emit_use_after_move(checker, state.name, span, state)
     elif state.is_destroyed:
-        checker.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
+        checker.err.emit(er.ERR.CE2406, span, name=state.name)
     else:
-        reject_a_use_after_the_change(checker, expr.id, expr.loc)
+        reject_a_use_after_the_change(checker, local, span)
 
 
-def reject_a_use_after_the_change(checker: 'BorrowChecker', name: str,
+def reject_a_use_after_the_change(checker: 'BorrowChecker', local: LocalId,
                                   span: Optional[Span]) -> bool:
     """Report CE2412 for a use of a binding whose owner changed; True when reported.
 
     A read and a store through a `poke` reference are both uses (#242, #1026).
     """
-    state = checker.borrow_state.get(name)
+    state = checker.borrow_state.get(local)
     if state is None or state.invalidated_at is None:
         return False
-    emit_use_of_invalidated_borrow(checker, name, span, state)
+    emit_use_of_invalidated_borrow(checker, state.name, span, state)
     return True
 
 
-def _cast_copy_use(expr: CastExpr) -> CopyUse:
-    """What the CE2411 escape does with the copy of a cast operand: `e.clone() as T`."""
-    clause = "convert the copy" if expr.inferred_conversion is not None else "cast the copy"
-    return CopyUse(clause, f" as {display_type(expr.target_type)}")
+def check_unary(checker: 'BorrowChecker', node: e.Unary) -> None:
+    arms.check(checker, node.operand)
 
 
-def _check_call(checker: 'BorrowChecker', expr: Call) -> None:
-    """A direct or indirect call: walk it, then apply the callee's declared modes."""
-    unchanged = unchanged_borrowed_roots(checker, expr)
-    check_expr(checker, expr.callee)
-    for arg in expr.args:
-        check_expr(checker, arg)
-    # An argument is consumed if and only if the parameter it lands on DECLARES a
-    # consume. The callee's kind decides where the declaration is read from
-    # (docs/design/borrow-model.md S5); the mode decides what happens.
-    consume_call_args(checker, expr)
-    settle_borrowed_call(checker, expr)
-    reject_borrow_read_by_the_change(checker, expr, unchanged)
-    # A callee that destroys its `poke` parameter destroys the CALLER's value (#168).
-    # CE2406 still fires from the Name arm above -- no new emit site.
-    apply_destroy_effects(checker, expr)
+def check_binary(checker: 'BorrowChecker', node: e.Binary) -> None:
+    arms.check(checker, node.lhs)
+    arms.check(checker, node.rhs)
 
 
-def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
-    """`x.m(args)`: gate the write, then apply the method's declared modes."""
-    unchanged = unchanged_borrowed_roots(checker, expr)
-    _check_receiver_and_args(checker, expr)
-    maybe_reject_mutation(checker, expr)
-    reject_self_aliasing_copy(checker, expr)
-    settle_iterator_source(checker, expr)
-    settle_receiver(checker, expr)
-    settle_method_args(checker, expr)
-    settle_borrowed_call(checker, expr)
-    maybe_mark_container_insert(checker, expr)
-    maybe_mark_own_alloc_move(checker, expr)
-    reject_borrow_read_by_the_change(checker, expr, unchanged)
+def check_cast(checker: 'BorrowChecker', node: e.Cast) -> None:
+    """A cast reads its operand and takes it by POSITION: a plain one by value (ADOPT), and
+    an owning one, the identity cast `a as string`, as any consuming use (a move of a local,
+    CE2411 for a field). The escape of CE2411 casts the copy, or converts it when the cast
+    calls a conversion."""
+    arms.check(checker, node.operand)
+    answers = checker.answers()
+    target = display_type(answers.type_of(node.shir_id))
+    clause = ("convert the copy" if isinstance(answers.conversion_of(node.shir_id), Conversion)
+              else "cast the copy")
+    consume(checker, node.operand, CopyUse(clause, f" as {target}"))
 
 
-def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
-    """`X.Y(args)`: an enum constructor, an indirect call, an FFI call, or a method."""
-    # An FFI string argument NEVER consumes (docs/design/borrow-model.md S5), and that
-    # holds STRUCTURALLY: an FFI call arrives as a DotCall, and this function consumes
-    # only for an enum constructor, an indirect call and a container insert. Do NOT add
-    # a blanket `consume(arg, CALL_ARG)` loop -- it would make every `libc.*(s)` call
-    # site a false CE2405. `tests/ffi/extern_calls/test_ffi_string_arg_not_consumed.sushi` is the gate.
-    unchanged = unchanged_borrowed_roots(checker, expr)
-    _check_receiver_and_args(checker, expr)
-    maybe_reject_mutation(checker, expr)
-    reject_self_aliasing_copy(checker, expr)
-    if is_enum_constructor(checker, expr):
-        # `Box.Full(a)` arrives here as a DotCall, not an EnumConstructor.
-        consume_each(checker, expr.args)
-    elif expr.callee_fn_type is not None:
-        # Keyed on the typecheck pass's `callee_fn_type` stamp, so an FFI / extension / builtin
-        # method keeps the rule above.
-        consume_indirect_args(checker, expr)
-    elif expr.namespace_ref is not None:
-        # `geo.eat(nom s)` is a FUNCTION written behind a dot, not a method: the
-        # receiver names a namespace and takes no argument position.
-        settle_namespaced_args(checker, expr)
-        settle_borrowed_call(checker, expr)
+def check_interp(checker: 'BorrowChecker', node: e.Interp) -> None:
+    """Each hole of an interpolated string is read."""
+    for part in node.parts:
+        if not isinstance(part, str):
+            arms.check(checker, part)
+
+
+def check_field(checker: 'BorrowChecker', node: e.Field) -> None:
+    """A field read reads its base, so a read of a field of a moved local is CE2405 at the
+    local. The value is a borrow of the root: a position that takes it decides that."""
+    arms.check(checker, node.base)
+
+
+def check_array_init(checker: 'BorrowChecker', node: e.ArrayInit) -> None:
+    """An array construction takes each element of a `Single` run by POSITION, in the
+    written order. A repeated value is read, then its count (ruling R2), and each slot
+    takes its own copy. A range run reads its bounds."""
+    for run in node.runs:
+        if isinstance(run, e.Single):
+            _take_by_position(checker, run.value)
+        elif isinstance(run, e.Repeat):
+            read_value(checker, run.value)
+            arms.check(checker, run.count)
+        else:
+            read_value(checker, run.range)
+
+
+def read_value(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
+    """Read a value. A range is no value of its own here: its bounds are read."""
+    if isinstance(value, e.Range):
+        arms.check(checker, value.start)
+        arms.check(checker, value.end)
     else:
-        settle_iterator_source(checker, expr)
-        settle_receiver(checker, expr)
-        settle_method_args(checker, expr)
-        settle_borrowed_call(checker, expr)
-        maybe_mark_container_insert(checker, expr)
-    maybe_mark_own_alloc_move(checker, expr)
-    reject_borrow_read_by_the_change(checker, expr, unchanged)
+        arms.check(checker, value)
 
 
-def _check_lambda(checker: 'BorrowChecker', expr: Lambda) -> None:
-    """Each capture is the CAPTURE consuming use -- the heap env outlives this scope."""
-    # A capture holds no source `Expr`, so the provenance goes on the `Param` itself and
-    # `emit_lambda` reads it there.
-    for cap in (expr.captures or []):
-        if not isinstance(cap.name, str):
-            continue
-        if cap.capture_source is not None:
-            # A field of the enclosing environment: a read through it is a borrow.
-            consume(checker, cap.capture_source)
-            cap.ownership_provenance = cap.capture_source.ownership_provenance
-            continue
-        provenance = name_provenance(checker, cap.name)
-        cap.ownership_provenance = provenance
-        consume_named(checker, cap.name, provenance, expr.loc)
+def check_index(checker: 'BorrowChecker', node: e.Index) -> None:
+    """An element read reads its array, then its index. The value is a borrow of the root
+    of the array, as a field is: a position that takes it decides that, and a plain
+    element is a copy."""
+    arms.check(checker, node.base)
+    arms.check(checker, node.index)
 
 
-def _check_receiver_and_args(checker: 'BorrowChecker', expr) -> None:
-    """Walk a method-shaped call's receiver and every argument."""
-    check_expr(checker, expr.receiver)
-    for arg in expr.args:
-        check_expr(checker, arg)
+def check_slice(checker: 'BorrowChecker', node: e.Slice) -> None:
+    """A slice reads its array, then its bounds. The value is a view of the storage of the
+    array (docs/design/slices.md): a `let` of it is a let-borrow of the root, and a
+    position that takes it over is refused (CE2411)."""
+    arms.check(checker, node.base)
+    arms.check(checker, node.start)
+    arms.check(checker, node.end)
 
 
-def _check_run_elements(checker: 'BorrowChecker', elements) -> None:
-    """Walk what an array literal USES but does not consume (#478, Ruling 7).
-
-    A range run is inert at an ownership sink: it yields i32 (Ruling 4), so it owns nothing.
-    Its bounds are ordinary expressions, though, so `from([0..xs.len()])` must still report
-    a moved `xs`.
-
-    A repeated value BORROWS: `[towel; 3]` copies three times and leaves `towel` usable, so
-    it is USED here and not consumed. A run-time count is an ordinary expression too.
-    """
-    for bound in array_runs.range_bounds(elements):
-        check_expr(checker, bound)
-    for value in array_runs.repeated_values(elements):
-        check_expr(checker, value)
-    for element in elements:
-        if element.count is not None:
-            check_expr(checker, element.count)
+def check_struct_init(checker: 'BorrowChecker', node: e.StructInit) -> None:
+    """A construction reads each field, then consumes each by POSITION, in the order that
+    the source writes the fields (ruling R1), as a call does with its arguments. A `nom`
+    field of a local that the body owns is a take, so two takes of one local in one
+    construction are one take (docs/design/ir.md 8.9, `Take`)."""
+    _take_args(checker, [node.fields[position] for position in node.written_order])
 
 
-def _check_sink_elements(checker: 'BorrowChecker', elements) -> None:
-    """Walk each element of an ownership sink, then consume it (#134).
+def check_tuple_init(checker: 'BorrowChecker', node: e.TupleInit) -> None:
+    """A tuple consumes each part by POSITION."""
+    for part in node.parts:
+        _take_by_position(checker, part)
 
-    A bare owning element variable MOVES into the constructed value; a MemberAccess
-    element keeps its continuing-owner copy, because only bare Names are marked moved.
-    """
-    for elem in elements:
-        check_expr(checker, elem)
-        consume(checker, elem)
+
+def check_enum_init(checker: 'BorrowChecker', node: e.EnumInit) -> None:
+    """A construction consumes each payload by POSITION, marked or not (#134), after it
+    reads them all."""
+    _take_args(checker, node.payload)
+
+
+def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
+    arms.check(checker, value)
+    consume(checker, value)
+
+
+def _take_args(checker: 'BorrowChecker', args: Sequence[e.Arg]) -> None:
+    """The fields or the payloads that a construction takes by position: each is read
+    first, then each is consumed, and a `nom` one is a take. A `peek` or `poke` one
+    (`Box(peek x)`, whose type argument is a reference type) borrows its place and takes
+    nothing."""
+    owned = []
+    for arg in args:
+        mode = None if arg.marker is None else BY_ADDRESS.get(arg.marker)
+        if mode is not None:
+            borrow_place(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
+        else:
+            arms.check(checker, arg.value)
+            owned.append(arg)
+    taken: StatementTakes = {}
+    for arg in owned:
+        consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
+
+
+def check_take(checker: 'BorrowChecker', node: e.Take) -> None:
+    """`nom s.out`: its place is read. The position that takes it decides whether it is a
+    take (`consume.py`)."""
+    arms.check(checker, node.place)
+
+
+def check_try(checker: 'BorrowChecker', node: e.Try) -> None:
+    """`r??` is a consuming position of its own: an owned wrapper is spent here (#548), and
+    a use of `r` after it is CE2405. Its error path returns, so it is an exit of each block
+    (`flow.record_exit`). Its operand is the one position of a read-through `or_err`."""
+    checker.try_operands.add(node.inner.shir_id)
+    arms.check(checker, node.inner)
+    if lent_owners(checker, node.inner) is not None:
+        # The answer of a `peek` return that holds an iterator owns its value: the `??` takes it.
+        decide(checker, node.inner, Provenance.FRESH, TypeClass.MOVE)
+    else:
+        unwrap_place(checker, node)
+    record_exit(checker)
+
+
+def check_borrow(checker: 'BorrowChecker', node: e.Borrow) -> None:
+    """`peek x` or `poke x` in a position that is no call argument: a hole of an
+    interpolated string reads the value through the borrow."""
+    borrow_place(checker, node.place, node.mode, node.loc)

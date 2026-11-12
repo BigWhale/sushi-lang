@@ -1,0 +1,14 @@
+# A variadic C function behind the alias of its block: C writes into a `poke u8[]`
+# buffer, the format is a string literal, and two values fill the variadic tail.
+# EXPECT_STDOUT_EXACT: "7: 42 3.50\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as c because "formatted text through snprintf":
+    fn snprintf(poke u8[] buf, i64 n, string fmt, ...) i32 = "snprintf"
+
+fn main() i32:
+    let u8[] buf = from([0; 32])
+    let i32 got = c.snprintf(poke buf, 32, "%d %.2f", 42, 3.5)
+    buf.truncate(got)
+    println("{got}: {string.from_bytes(nom buf)}")
+    return 0

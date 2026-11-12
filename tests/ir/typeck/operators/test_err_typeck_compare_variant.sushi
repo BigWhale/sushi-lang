@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2513
+# EXPECT_STDERR_CONTAINS: "cannot compare 'Maybe@(i32)' with 'i32' using operator '=='"
+# EXPECT_DUMP_SHIR: test_err_typeck_compare_variant.shir
+#
+# A `Maybe` or a `Result` variant in a comparison takes the type of the other operand,
+# on either side, as the variant of a `let` takes the written type. A plain enum
+# compares by its derived `Eq`. Two operands of two types are CE2513.
+
+enum Color:
+    Red
+    Green
+
+fn same(Maybe@(i32) m, Result@(i32, StdError) r, Color c) bool:
+    let bool a = m == Maybe.None
+    let bool b = Maybe.Some(3) != m
+    let bool d = r == Result.Err(StdError.Error)
+    let bool f = c == Color.Green
+    return a and b and d and f
+
+fn mixed(Maybe@(i32) m) bool:
+    return m == 3
+
+fn main() i32:
+    println(same(Maybe.Some(1), Result.Ok(1), Color.Red))
+    println(mixed(Maybe.None))
+    return 0

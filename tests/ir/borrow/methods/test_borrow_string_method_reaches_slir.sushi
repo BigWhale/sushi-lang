@@ -1,0 +1,16 @@
+# EXPECT_DUMP_SLIR: test_borrow_string_method_reaches_slir.slir
+# EXPECT_RUNTIME_EXIT: 20
+#
+# A string method and a primitive method read their receiver and their arguments, and the
+# borrow pass finishes the body with no error. The SLIR lowering makes each call a `Call`
+# of a `Builtin` callee. The receiver is the first operand, with the convention of a borrow.
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let string needle = "H"
+    let bool found = s.contains(needle)
+    let u8 byte = 5 as u8
+    let i32 zeros = byte.leading_zeros()
+    if (found):
+        return s.len() + zeros
+    return 0

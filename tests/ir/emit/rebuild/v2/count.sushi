@@ -1,0 +1,4 @@
+# The v2 of count: the body changes, the signature does not.
+
+public fn base() i32:
+    return 41

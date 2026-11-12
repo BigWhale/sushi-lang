@@ -1,0 +1,87 @@
+unit test_slir_conversion_calls
+
+fn tokenize(_1: i32 @guaranteed) -> Result@(i32, TokenError) {
+    let _0: Result@(i32, TokenError)
+    let _2: bool
+    let _3: TokenError
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy _1 < const 0_i32
+    switchInt(copy _2) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = TokenError::Bad(const "token")
+    _0 = Result::Err(move _3)
+    StorageDead(_3)
+    return
+
+  bb2:
+    StorageDead(_2)
+    goto -> bb3
+
+  bb3:
+    _0 = Result::Ok(copy _1)
+    return
+}
+
+fn run(_1: i32 @guaranteed) -> Result@(i32, AppError) {
+    let _0: Result@(i32, AppError)
+    let _2: Result@(i32, TokenError)
+    let _3: i32
+    let _4: AppError
+    let _5: i32                            // v
+
+  bb0:
+    StorageLive(_2)
+    _2 = call @tokenize(copy _1 @guaranteed)
+    _3 = discriminant(_2)
+    switchInt(copy _3) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_5)
+    _5 = move ((_2 as Ok).0)
+    StorageDead(_2)
+    _0 = Result::Ok(copy _5)
+    StorageDead(_5)
+    return
+
+  bb2:
+    StorageLive(_4)
+    _4 = call @TokenError.as(move ((_2 as Err).0) @owned)
+    _0 = Result::Err(move _4)
+    StorageDead(_4)
+    StorageDead(_2)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: TokenError                     // e
+    let _2: AppError                       // a
+    let _3: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = TokenError::Bad(const "cast")
+    StorageLive(_2)
+    _2 = call @TokenError.as(move _1 @owned)
+    StorageLive(_3)
+    _3 = call builtin println@(AppError)(copy _2 @guaranteed)
+    StorageDead(_3)
+    _0 = const 0_i32
+    Drop(_2)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}
+
+fn TokenError.as(_1: TokenError @owned) -> AppError {
+    let _0: AppError
+
+  bb0:
+    _0 = AppError::Token(move _1)
+    return
+}

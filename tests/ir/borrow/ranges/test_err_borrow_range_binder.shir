@@ -1,0 +1,10 @@
+unit test_err_borrow_range_binder
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "j": i32, _2 "i": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(3), is_init: true)
+    Loop(Items(Range(Lit(0), LocalRef(_0), inclusive: false, reverse: false), _1, Bare), [Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), LocalRef(_1)), is_init: false)])
+    Loop(Items(Range(Lit(0), LocalRef(_0), inclusive: false, reverse: false), _2, Bare), [Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(10)), is_init: false)])
+    Return(adopt LocalRef(_0))

@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'line'"
+# EXPECT_DUMP_SHIR: test_err_lift_empty_table.shir
+#
+# The lift pass gives each body with no lambda an empty LiftResults, and the dump prints
+# no answer of lift. Each body goes on to the borrow pass: `greet` and `keep` are correct,
+# and the use of `line` after its move in `main` is CE2405.
+
+fn greet(i32 n) string:
+    if (n > 1):
+        return "{n} towels"
+    return "a towel"
+
+fn keep(nom string line) ~:
+    println(line)
+
+fn main() i32:
+    let string line = greet(2)
+    keep(nom line)
+    println(line)
+    return 0

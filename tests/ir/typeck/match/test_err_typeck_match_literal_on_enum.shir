@@ -1,0 +1,14 @@
+unit test_err_typeck_match_literal_on_enum
+
+ShirBody first
+  params : [(_0 "c": Color, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0, 1, inclusive: true), [Return(Lit("first"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@first), [(EnumInit(@Color, "Red", []), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

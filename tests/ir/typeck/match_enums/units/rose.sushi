@@ -1,0 +1,6 @@
+public enum Wind:
+    Calm
+    Gust(i32)
+
+enum Hidden:
+    Secret(i32)

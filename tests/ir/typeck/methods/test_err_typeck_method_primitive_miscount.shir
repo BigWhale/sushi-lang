@@ -1,0 +1,10 @@
+unit test_err_typeck_method_primitive_miscount
+
+ShirBody main
+  params : []
+  locals : [_0 "c": u32, _1 "r": u32, _2 "z": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(11), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "reverse_bits"), [Lit(4)]), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "leading_zeros"), []), is_init: true)
+    Return(Binary(+, LocalRef(_2), Cast(LocalRef(_1), i32)))

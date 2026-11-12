@@ -1,0 +1,23 @@
+unit test_err_typeck_wrapper_method_miscount
+
+ShirBody parse
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_0)]))
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody main
+  params : []
+  locals : [_0 "ok": bool, _1 "a": i32, _2 "b": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Builtin(Call(Free(@parse), [(Lit(1), Guaranteed)]), "is_ok"), [Lit(2)]), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(Call(Free(@half), [(Lit(4), Guaranteed)]), "realise"), []), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(Call(Free(@parse), [(Lit(5), Guaranteed)]), "expect"), [Lit("Mostly"), Lit("Harmless")]), is_init: true)
+    If(LocalRef(_0), then: [Return(Binary(+, LocalRef(_1), LocalRef(_2)))])
+    Return(Lit(0))

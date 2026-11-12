@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'K' with `poke`"
+# EXPECT_STDERR_CONTAINS: "  |         (poke r, _) -> return r\n  `          ---+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_tuple_poke_constant.shir
+#
+# Each element of a tuple-literal scrutinee is its own scrutinee. A `poke` binding at the
+# position of a constant element points into read-only storage: CE2400. A `poke` binding
+# at the position of a local is legal.
+
+const i32 K = 4
+
+fn local(i32 n) i32:
+    match (K, n):
+        (_, poke m) -> return m
+
+fn constant(i32 n) i32:
+    match (K, n):
+        (poke r, _) -> return r
+
+fn main() i32:
+    return local(1) + constant(2)

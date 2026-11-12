@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_STDERR_CONTAINS: 17:17: error [CE2009]
+# EXPECT_DUMP_SHIR: test_err_typeck_call_arg_count.shir
+#
+# A call gives each parameter one argument, and a call with no parameter takes none. A
+# call is the argument of another call. The last call gives three arguments to a function
+# of two parameters, which is CE2009 at the name of the function.
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn none() i32:
+    return 0
+
+fn main() i32:
+    let i32 x = add(none(), add(1, 2))
+    let i32 y = add(x, 3, 4)
+    return y

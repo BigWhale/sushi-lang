@@ -1,0 +1,37 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 1 2 3\n6 4 9 30\n1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_var_places.slir
+#
+# A `var` is a `Global` place, named by the symbol of its global. A read copies out of it,
+# a rebind and a field write and an element write store into it, and a `peek` or a `poke`
+# argument takes its address. A `var` of another unit behind an alias is the `Global` of
+# that unit's symbol.
+
+use "units/tally" as t
+
+struct Point:
+    i32 x
+    i32 y
+
+var i32 counter = 0
+var Point origin = Point(1, 2)
+var i32[3] table = [3, 20, 3]
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn show(peek i32 n) ~:
+    println("{n}")
+
+fn main() i32:
+    println("{counter} {origin.x} {origin.y} {table[0]}")
+    counter := counter + 5
+    bump(poke counter)
+    origin.y := origin.y * 2
+    origin.x := table[2] + origin.x * 6
+    table[1] := table[1] + 10
+    t.count := t.count + 1
+    println("{counter} {origin.y} {origin.x} {table[1]}")
+    show(peek t.count)
+    return 0

@@ -1,0 +1,25 @@
+unit test_shir_call_namespace
+
+ShirBody root
+  params : [(_0 "x": f64, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Stdlib(<math>, @m.sqrt), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody magnitude
+  params : [(_0 "x": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Extern(@libc.abs, "abs"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody table
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(BuiltinStatic(HashMap@(i32, i32), "new"), []))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

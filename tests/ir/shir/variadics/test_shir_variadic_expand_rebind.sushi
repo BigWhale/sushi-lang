@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 1\n"
+# EXPECT_DUMP_SHIR: test_shir_variadic_expand_rebind.shir
+#
+# the SHIR dump of a tuple rebind in the body of an `expand`. In an instance, each copy of
+# the body holds the rebind as ONE `Destructure` with `Place` targets, so the `copies` line
+# gives each copy a range of one statement.
+
+fn swap_each@(...Ts)(...Ts args) i32:
+    let i32 a = 1
+    let i32 b = 2
+    expand(_ in args):
+        (a, b) := (b, a)
+    println("{a} {b}")
+    return 0
+
+fn main() i32:
+    return swap_each(1, 2, 3)

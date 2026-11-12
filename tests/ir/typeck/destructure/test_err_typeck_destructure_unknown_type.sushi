@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2001
+# EXPECT_STDERR_CONTAINS: "unknown type 'Foo'."
+# EXPECT_STDERR_CONTAINS: "  |     let (Foo a, b) = (1, 2)\n  `          -+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_destructure_unknown_type.shir
+#
+# The written type of a binder is checked as the type of a `let` is checked: a type that
+# the unit does not declare is CE2001, and its element is not compared with it.
+
+fn main() i32:
+    let (Foo a, b) = (1, 2)
+    println(a)
+    return b

@@ -1,0 +1,63 @@
+unit test_slir_owning_global
+
+fn add(_1: string @inout, _2: string @guaranteed) -> ~ {
+    let _0: ~
+    let _3: string
+
+  bb0:
+    StorageLive(_3)
+    _3 = call builtin interp@(string, string)(copy _1 @guaranteed, copy _2 @guaranteed)
+    Drop(_1)
+    _1 = move _3
+    StorageDead(_3)
+    _0 = const ~
+    return
+}
+
+fn show(_1: string @in_guaranteed) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: ~
+    let _2: ~
+    let _3: string
+    let _4: ~
+    let _5: string
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @add(copy @test_slir_owning_global$text @inout, const " Harmless" @guaranteed)
+    StorageDead(_1)
+    StorageLive(_2)
+    _2 = call @show(copy @test_slir_owning_global$text @in_guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call builtin interp@(string)(const "Arthur" @guaranteed)
+    Drop((@test_slir_owning_global$last.0))
+    (@test_slir_owning_global$last.0) = move _3
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = call builtin println@(string)(copy (@test_slir_owning_global$last.0) @guaranteed)
+    StorageDead(_4)
+    StorageLive(_5)
+    _5 = call builtin interp@(string, string)(copy @test_slir_owning_global$text @guaranteed, const "!" @guaranteed)
+    Drop(@test_slir_owning_global$text)
+    @test_slir_owning_global$text = move _5
+    StorageDead(_5)
+    Drop(@test_slir_owning_global$text)
+    @test_slir_owning_global$text = const "end"
+    Drop((@test_slir_owning_global$last.0))
+    (@test_slir_owning_global$last.0) = const "none"
+    _0 = const 0_i32
+    return
+}

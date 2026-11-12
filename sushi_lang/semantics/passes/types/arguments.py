@@ -1,73 +1,116 @@
 """The one argument check: the arity, then each argument against the parameter it fills.
 
 Every call-shaped position in the typecheck pass measures its arguments the same way --
-count them, propagate the parameter's declared type into each one, walk it, compare, and
-say where it does not fit. The shape was written once per callee kind, and a copy that
-falls behind is a behaviour the compiler has on one path and has lost on another: the
-generics copy lost the bloom-spread refusal and the borrow help (#747), and the FFI copy
-numbered its arguments from zero (#746).
+count them, check each one at the type of its parameter, compare, and say where it does
+not fit. The shape was written once per callee kind, and a copy that falls behind is a
+behaviour the compiler has on one path and has lost on another: the generics copy lost
+the bloom-spread refusal and the borrow help (#747), and the FFI copy numbered its
+arguments from zero (#746).
+
+The arguments are the SHIR `Arg`s of the call (docs/design/ir.md 7.4). A `peek x` or a
+`poke x` argument is a borrow of the type of `x`, so a wrong or a missing `peek`/`poke`
+marker is a type mismatch. A `nom` marker changes no type: when the caller gives the
+declared parameters (`Parameters`), each written marker is compared against the declared
+mode (CE2427), and each argument that fits gets its convention, a row of the
+`TypeckResults` of the body. A construction has no declared modes and gives none.
 
 What legitimately differs between the callers is a four-tuple -- the callee's display
-name, the parameter types, the arity code and the mismatch code -- plus four policy
+name, the parameter types, the arity code and the mismatch code -- plus five policy
 questions, each a keyword:
 
   ``minimum_arity``  a variadic callee's FIXED prefix. More arguments than parameters is
                      the tail, not a fault, and the tail carries its own rule at each
                      caller.
   ``stop_on_arity``  the callers that report the count and then say nothing more.
-  ``walk_arguments`` an FFI call, whose arguments the namespaced caller walked already:
-                     measure them, do not walk them twice.
   ``also_accepts``   per parameter, the other types it takes (`string.join` takes a
                      `List@(string)` beside a `string[]`). The mismatch names the
                      declared type, and the help names the others.
+  ``field_names``    per parameter, the field that it fills, for a mismatch code whose
+                     text names the field (a struct construction: CE2028, CE2083).
+  ``compares_nom``   False for a C function, whose `nom` marker is inert (no CE2427).
+  ``tail``           the type `T[]` of the variadic tail parameter. The arguments after
+                     the fixed prefix are its values, each at `T`, or one bloom `arr...`
+                     at `T[]`. Each takes the convention `Owned`: it moves into the array
+                     (docs/design/ir.md 7.4, S22).
 
-The codes travel IN, so this module spells none of them. That is what lets the enum
-constructor read the same check with CE2049/CE2050, which name a VARIANT where the
-function pair names a function. The gate is
+The codes travel IN, so this module spells neither the arity code nor the mismatch code.
+That is what lets the enum constructor read the same check with CE2049/CE2050, which name
+a VARIANT where the function pair names a function, and the struct constructor with
+CE2027 and CE2028 or CE2083. The gate is
 ``tests/unit/test_argument_check_is_one.py``.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Collection, Dict, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Call, Expr, Name, Spread
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.param_modes import Convention, ParamMode
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.source_text import source_text
+from sushi_lang.semantics.typesys import (
+    BorrowMode, DynamicArrayType, ReferenceType, Type, deref_type)
 
 from .compatibility import types_compatible
-from .propagation import propagate_declared_type_to_value
 
 if TYPE_CHECKING:
     from . import TypeValidator
+
+#: The type that a `peek x` or a `poke x` argument gives to the value of `x`.
+_BORROWS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
+
+
+#: The default of `typed`: the caller checked no argument.
+NOTHING_TYPED: Mapping[int, Optional[Type]] = MappingProxyType({})
+
+
+@dataclass(frozen=True)
+class Parameters:
+    """The declared mode and the name of each parameter of a callee, and the call whose
+    arguments get their conventions."""
+    call: ShirId
+    modes: Sequence[ParamMode]
+    names: Sequence[str]
 
 
 def check_arguments(
     validator: 'TypeValidator',
     callee_name: str,
     params: Sequence[Optional[Type]],
-    args: Sequence[Expr],
+    args: Sequence[e.Arg],
     loc: Any,
     *,
     mismatch_code: er.ErrorMessage,
     arity_code: er.ErrorMessage,
+    declared: Optional[Parameters] = None,
     minimum_arity: bool = False,
     stop_on_arity: bool = False,
-    walk_arguments: bool = True,
     also_accepts: Sequence[Sequence[Type]] = (),
+    field_names: Sequence[str] = (),
+    compares_nom: bool = True,
+    typed: Mapping[int, Optional[Type]] = NOTHING_TYPED,
+    tail: Optional[DynamicArrayType] = None,
+    bloom_borrows: bool = False,
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
-    `params` holds the expected types in order, one per parameter: a caller holding
-    `Param` records hands in `[p.ty for p in params]`. `loc` is the span that names the
-    callee, which is where a wrong count is reported; a wrong TYPE is reported at the
-    argument itself.
+    `params` holds the expected types in order, one per parameter, resolved. `loc` is the
+    span that names the callee, which is where a wrong count is reported; a wrong TYPE is
+    reported at the argument itself.
 
     The answer is the arity alone, for the callers that stop there. A caller that wants
-    every fault reported ignores it.
+    every fault reported ignores it. `compares_nom` False gives no CE2427: a C function
+    takes nothing from Sushi, so its `nom` marker is inert. `typed` holds, by index, the
+    answer of each argument that the caller checked to solve the parameter types. A bloom
+    into the `tail` moves its source, or with `bloom_borrows` borrows it (a stdlib row).
     """
-    arity_ok = (len(args) >= len(params) if minimum_arity
+    arity_ok = (len(args) >= len(params) if minimum_arity or tail is not None
                 else len(args) == len(params))
     if not arity_ok:
         er.emit(validator.reporter, arity_code, loc,
@@ -76,71 +119,179 @@ def check_arguments(
         if stop_on_arity:
             return False
 
-    for index, (arg, declared) in enumerate(zip(args, params, strict=False), start=1):
+    for index, (arg, expected) in enumerate(zip(args, params, strict=False), start=1):
         if reject_misplaced_spread(validator, arg):
             continue
-        if walk_arguments:
-            expected = propagate_declared_type_to_value(validator, arg, declared)
-            _retarget_generic_struct_constructor(validator, arg, expected)
-            # `validate_expression` walks the argument AND answers its type. Asking the
-            # inference a second time told the user twice about any fault an inference
-            # arm reports -- `poke geo.SIZE` read its CE2400 twice (#685).
-            actual = validator.validate_expression(arg)
-        else:
-            expected = declared
-            actual = validator.infer_expression_type(arg)
-        if expected is None or actual is None:
-            continue
         others = also_accepts[index - 1] if index <= len(also_accepts) else ()
-        if not (types_compatible(validator, actual, expected)
-                or any(types_compatible(validator, actual, other) for other in others)):
-            _emit_mismatch(validator, mismatch_code, callee_name, arg, index,
-                           expected, actual, others)
+        field = field_names[index - 1] if index <= len(field_names) else None
+        if index - 1 in typed:
+            fits = compare_argument(validator, callee_name, arg, index, typed[index - 1],
+                                    expected, mismatch_code=mismatch_code, others=others,
+                                    field=field)
+        else:
+            fits = check_argument(validator, callee_name, arg, index, expected,
+                                  mismatch_code=mismatch_code, others=others, field=field)
+        if declared is not None and index <= len(declared.modes):
+            mode = declared.modes[index - 1]
+            if compares_nom and reject_nom_marker(validator, arg, mode,
+                                                  declared.names[index - 1]):
+                fits = False
+            if fits:
+                validator.body_answers().record_convention(declared.call, index - 1,
+                                                           mode.convention)
 
-    if minimum_arity:
+    if tail is not None:
+        _check_tail(validator, callee_name, args, len(params), tail, mismatch_code,
+                    None if declared is None else declared.call, bloom_borrows)
+    if minimum_arity or tail is not None:
         return arity_ok
 
     for extra in args[len(params):]:
-        if reject_misplaced_spread(validator, extra):
-            continue
-        if walk_arguments:
-            validator.validate_expression(extra)
+        if not reject_misplaced_spread(validator, extra):
+            visit.check_expr(validator, extra.value)
     return arity_ok
 
 
-def names_a_type_pack(validator: 'TypeValidator', expr: Expr) -> bool:
-    """Is `expr` the bare name of a type pack of the instance being checked (#1109)?"""
-    func = validator.current_function
-    return (isinstance(expr, Name) and func is not None
-            and expr.id in func.pack_names and expr.id not in validator.variable_types)
+def _check_tail(validator: 'TypeValidator', callee_name: str, args: Sequence[e.Arg],
+                start: int, tail: DynamicArrayType, mismatch_code: er.ErrorMessage,
+                call: Optional[ShirId], bloom_borrows: bool) -> None:
+    """Each value of the tail at the element type of `tail`, and a bloom at `tail` itself.
+    A bloom is the sole value of the tail, and its value is a name (CE0120). A tail of
+    references is CE0114 of the collect pass, so its values take no convention."""
+    values = args[start:]
+    if isinstance(tail.base_type, ReferenceType):
+        validator.refused_before = True
+        for arg in values:
+            visit.check_expr(validator, arg.value)
+        return
+    for index, arg in enumerate(values, start=start):
+        if arg.bloom:
+            _reject_misplaced_bloom(validator, arg, len(values) == 1)
+        fits = check_argument(validator, callee_name, arg, index + 1,
+                              tail if arg.bloom else tail.base_type,
+                              mismatch_code=mismatch_code)
+        if fits and call is not None:
+            mode = ParamMode.BORROW if arg.bloom and bloom_borrows else ParamMode.NOM
+            validator.body_answers().record_convention(call, index, mode.convention)
 
 
-def reject_type_pack_value(validator: 'TypeValidator', expr: Expr) -> bool:
-    """CE0144 for a type-pack name used as a value. True when it was refused."""
-    if not isinstance(expr, Name) or not names_a_type_pack(validator, expr):
+def _reject_misplaced_bloom(validator: 'TypeValidator', arg: e.Arg, sole: bool) -> bool:
+    """CE0120 for a bloom that is not the sole value of the tail, or whose value is no
+    name."""
+    if not sole:
+        message = "bloom argument 'arr...' must be the sole, last trailing argument"
+    elif not isinstance(arg.value, (e.LocalRef, e.StorageRef, e.ConstRef)):
+        message = "bloom source must be a bare array variable, not an arbitrary expression"
+    else:
         return False
-    er.emit_with(validator.reporter, er.ERR.CE0144, expr.loc, name=expr.id).help(
-        f"walk a pack with `expand(a in {expr.id}):`; pack forwarding and pack "
-        "indexing are not supported").emit()
+    er.emit(validator.reporter, er.ERR.CE0120, arg.marker_loc or arg.value.loc,
+            message=message)
     return True
 
 
-def reject_misplaced_spread(validator: 'TypeValidator', arg: Expr) -> bool:
+def record_reads(validator: 'TypeValidator', call: ShirId, indexes: Sequence[int]) -> None:
+    """Give each argument at `indexes`, which no declared parameter takes (the variadic
+    tail of a C function), the convention of a read."""
+    answers = validator.body_answers()
+    for index in indexes:
+        answers.record_convention(call, index, ParamMode.BORROW.convention)
+
+
+def record_conventions(validator: 'TypeValidator', declared: Parameters,
+                       args: Sequence[e.Arg], *, slots: Collection[int] = ()) -> None:
+    """Give each argument of a call whose arguments a row checks one by one (an array
+    method) the convention of its declared mode, after the `nom` marker check (CE2427). A
+    container slot takes its argument by position, as a `nom` parameter does, and has no
+    marker to compare."""
+    answers = validator.body_answers()
+    for index, arg in enumerate(args):
+        if index in slots:
+            answers.record_convention(declared.call, index, ParamMode.NOM.convention)
+            continue
+        mode = declared.modes[index]
+        if not reject_nom_marker(validator, arg, mode, declared.names[index]):
+            answers.record_convention(declared.call, index, mode.convention)
+
+
+def record_builtin_conventions(validator: 'TypeValidator', call: ShirId,
+                               args: Sequence[e.Arg],
+                               conventions: Sequence[Convention]) -> None:
+    """Give each argument of a built-in method or of a container static the convention of
+    `argument_conventions` (docs/design/ir.md 8.3): an `Owned` argument is a slot, and each
+    other argument borrows, with the `nom` marker check (CE2427). A parameter has the name
+    of its position (`#1`)."""
+    declared = Parameters(call, (ParamMode.BORROW,) * len(args),
+                          [f"#{index + 1}" for index in range(len(args))])
+    record_conventions(validator, declared, args,
+                       slots=frozenset(index for index, convention in enumerate(conventions)
+                                       if convention is Convention.OWNED))
+
+
+def check_argument(validator: 'TypeValidator', callee_name: str, arg: e.Arg, index: int,
+                   expected: Optional[Type], *, mismatch_code: er.ErrorMessage,
+                   others: Sequence[Type] = (), field: Optional[str] = None,
+                   typed_by_position: bool = True) -> bool:
+    """Check ONE argument at the type of the parameter that it fills, at the position
+    `index` (from 1), and answer whether it fits. A mismatch is `mismatch_code` at the
+    argument. `typed_by_position` False checks the value with no type from its position."""
+    position = deref_type(expected) if typed_by_position else None
+    actual = marked_type(arg, visit.check_expr(validator, arg.value, position))
+    return compare_argument(validator, callee_name, arg, index, actual, expected,
+                            mismatch_code=mismatch_code, others=others, field=field)
+
+
+def compare_argument(validator: 'TypeValidator', callee_name: str, arg: e.Arg, index: int,
+                     actual: Optional[Type], expected: Optional[Type], *,
+                     mismatch_code: er.ErrorMessage, others: Sequence[Type] = (),
+                     field: Optional[str] = None) -> bool:
+    """Compare ONE argument that the pass typed, `actual`, with the type of the parameter
+    that it fills, and answer whether it fits. A mismatch is `mismatch_code` at the
+    argument. A call whose parameter types its arguments solve types them first."""
+    if actual is None or expected is None:
+        return False
+    if (types_compatible(validator, actual, expected)
+            or any(types_compatible(validator, actual, other) for other in others)):
+        return True
+    _emit_mismatch(validator, mismatch_code, callee_name, arg, index, expected, actual,
+                   others, field)
+    return False
+
+
+def marked_type(arg: e.Arg, ty: Optional[Type]) -> Optional[Type]:
+    """The type of an argument whose value has the type `ty`: a borrow of that type when
+    the argument is written `peek x` or `poke x`."""
+    borrow = None if arg.marker is None else _BORROWS.get(arg.marker)
+    if ty is None or borrow is None:
+        return ty
+    return ReferenceType(ty, borrow)
+
+
+def reject_nom_marker(validator: 'TypeValidator', arg: e.Arg, mode: ParamMode,
+                      name: str) -> bool:
+    """CE2427: the `nom` marker is written at the call site if and only if it is declared."""
+    if (arg.marker is Convention.OWNED) == mode.consumes:
+        return False
+    help_text = ("the callee takes ownership here; write `nom` at the call site too, or "
+                 "`nom <arg>.clone()` to keep your own value") if mode.consumes else (
+                 "the callee only borrows this argument, so it stays yours after the "
+                 "call; drop the `nom`")
+    er.emit_with(validator.reporter, er.ERR.CE2427, arg.marker_loc or arg.value.loc,
+                 name=name).help(help_text).emit()
+    return True
+
+
+def reject_misplaced_spread(validator: 'TypeValidator', arg: e.Arg) -> bool:
     """Refuse a bloom spread `arr...` in a position that is never variadic (CE0120).
 
-    The inner expression is still validated, so nothing downstream reads an unwalked
-    argument. Answers True when the argument was refused. A bloomed type pack is
-    CE0144 alone, which the walk of the inner name says.
+    The value is still checked, so nothing downstream reads an unwalked argument.
+    Answers True when the argument was refused.
     """
-    if not isinstance(arg, Spread):
+    if not arg.bloom:
         return False
-    if names_a_type_pack(validator, arg.value):
-        validator.validate_expression(arg)
-        return True
-    er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
+    er.emit(validator.reporter, er.ERR.CE0120, arg.marker_loc or arg.value.loc,
             message="bloom argument 'arr...' is only allowed as the last argument "
                     "of a call to a variadic '...T' function")
-    validator.validate_expression(arg)
+    visit.check_expr(validator, arg.value)
     return True
 
 
@@ -158,29 +309,59 @@ def _callee_key(code: er.ErrorMessage, callee_name: str) -> Dict[str, str]:
     return {}
 
 
-def _spell_place(arg: Expr) -> Optional[str]:
+def _field_key(code: er.ErrorMessage, field: Optional[str]) -> Dict[str, str]:
+    """The placeholder a code's registry text spells for the field that an argument fills:
+    `{field_name}` (CE2028) or `{field}` (CE2083); none when no field is given."""
+    if field is None:
+        return {}
+    for key in ("field_name", "field"):
+        if "{" + key + "}" in code.text:
+            return {key: field}
+    return {}
+
+
+def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]:
     """The source spelling of a PLACE the user can borrow, or None when there is none.
 
     The help offers the argument back to the user, so it must be text the user could type.
-    A name spells itself and a member chain spells its receiver first; anything else --
-    a call, an index, a literal -- has no spelling here and is offered no help.
+    A local spells its name, and a field chain off a local spells the local and then each
+    field (`b.inner.label`), through the one place walk. A constant or a unit variable
+    spells its root as the source writes it (`geo.ORIGIN.x`). Anything else has no spelling
+    here and is offered no help.
     """
-    walked = walk_place(arg, Step.MEMBER)
-    if walked.name is None:
+    walked = walk_place(value, Step.MEMBER)
+    if isinstance(walked.node, (e.ConstRef, e.StorageRef)):
+        root = source_text(validator.reporter.body_source(), walked.node.loc)
+    else:
+        local = None if walked.local is None else validator.body_locals.get(walked.local)
+        root = None if local is None else local.name
+    if root is None:
         return None
-    return ".".join([walked.name.id, *(step.member for step in reversed(walked.path))])
+    return ".".join([root, *(field.name for field in reversed(walked.path))])
+
+
+def argument_span(arg: e.Arg) -> Optional[Span]:
+    """Where a mismatch of an argument stands: a `peek x`, a `poke x` and a bloom from its
+    marker, any other argument at its value."""
+    if (arg.marker in _BORROWS or arg.bloom) and arg.marker_loc is not None:
+        return arg.marker_loc
+    return arg.value.loc
 
 
 def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_name: str,
-                   arg: Expr, index: int, expected_ty: Type, actual_ty: Type,
-                   others: Sequence[Type] = ()) -> None:
+                   arg: e.Arg, index: int, expected_ty: Type, actual_ty: Type,
+                   others: Sequence[Type] = (), field: Optional[str] = None) -> None:
     """Report the mismatch, and say how to borrow when the parameter wants a borrow."""
-    diag = er.emit_with(validator.reporter, code, getattr(arg, 'loc', None),
+    diag = er.emit_with(validator.reporter, code, argument_span(arg),
                         index=index, expected=display_type(expected_ty),
-                        got=display_type(actual_ty),
-                        **_callee_key(code, callee_name))
-    place = _spell_place(arg) if isinstance(expected_ty, ReferenceType) else None
-    if place is not None:
+                        got=display_type(actual_ty), actual=display_type(actual_ty),
+                        **_callee_key(code, callee_name), **_field_key(code, field))
+    place = None
+    if isinstance(expected_ty, ReferenceType) and arg.marker not in _BORROWS:
+        place = _spell_place(validator, arg.value)
+    if code is er.ERR.CE2092:
+        _help_a_value_call(validator, diag, arg, actual_ty, expected_ty)
+    elif place is not None and isinstance(expected_ty, ReferenceType):
         diag.help(f"borrow it at the call site: `{expected_ty.mutability} {place}`")
     if others:
         spelled = ", ".join(f"`{display_type(other)}`" for other in others)
@@ -188,15 +369,16 @@ def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_nam
     diag.emit()
 
 
-def _retarget_generic_struct_constructor(validator: 'TypeValidator', arg: Expr,
-                                         expected_ty: Optional[Type]) -> None:
-    """A generic struct constructor written inline takes the INSTANCE the parameter names.
-
-    `f(Box(1))` against a `Box@(i32)` parameter builds that instantiation; the
-    constructor carries the template's name until a position says which one it is.
-    """
-    if not isinstance(arg, Call) or not isinstance(expected_ty, StructType):
+def _help_a_value_call(validator: 'TypeValidator', diag: Any, arg: e.Arg, actual: Type,
+                       expected: Type) -> None:
+    """The help of a call of a function value, where the mismatch is a missing borrow of a
+    local."""
+    if (not isinstance(arg.value, e.LocalRef) or isinstance(actual, ReferenceType)
+            or not isinstance(expected, ReferenceType) or expected.referenced_type != actual):
         return
-    callee = getattr(arg, "callee", None)
-    if getattr(callee, "id", None) in validator.generic_struct_table.by_name:
-        callee.id = expected_ty.name
+    name = validator.body_locals[arg.value.local].name
+    diag.help(f"a borrow is created where it is USED, so the argument is written "
+              f"`{expected.mutability} {name}`; a reference-typed name mentioned bare is its "
+              f"referent")
+
+

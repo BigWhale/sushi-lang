@@ -1,13 +1,15 @@
-"""LLVM emission for the auto-derived struct hash() method."""
+"""The struct layout family: a struct value from its fields, and the auto-derived hash() and clone().
 
-from typing import Any, Optional
-from sushi_lang.semantics.ast import MethodCall
+A struct and a tuple are an LLVM struct of their fields in the declaration order.
+"""
+
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.generics.hashing import container_hash_kind
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
+from sushi_lang.semantics.derived_methods import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend.types.value_hash import emit_value_hash, hash_override, reject_hash_arguments
 
@@ -19,10 +21,10 @@ def _emit_struct_hash(prim_type: Type) -> Any:
 
     struct_type = prim_type
 
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for struct.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
 
@@ -77,8 +79,8 @@ register_hash_emitter_factory("struct", _emit_struct_hash)
 
 def _emit_struct_clone(target_type: Type) -> Any:
     """Create a clone() emitter for a struct type (#134)."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+                receiver_type: ir.Type) -> ir.Value:
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver_value, target_type)
 
@@ -86,3 +88,13 @@ def _emit_struct_clone(target_type: Type) -> Any:
 
 
 register_clone_emitter_factory("struct", _emit_struct_clone)
+
+
+def emit_struct_value(codegen: Any, struct_type: StructType,
+                      values: Sequence[ir.Value]) -> ir.Value:
+    """A value of `struct_type` from the value of each field, in the declaration order."""
+    builder = require_builder(codegen)
+    value: ir.Value = ir.Constant(codegen.types.ll_type(struct_type), ir.Undefined)
+    for index, field_value in enumerate(values):
+        value = builder.insert_value(value, field_value, index)
+    return value

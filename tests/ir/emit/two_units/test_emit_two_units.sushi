@@ -1,0 +1,12 @@
+# EXPECT_RUNTIME_EXIT: 42
+#
+# A program of two units goes through the per-unit module path: each unit gets its own
+# module and its own object, and the link step joins them. `main` calls a public free
+# function of the second unit by value and a second one through `poke`.
+
+use "helpers/arith"
+
+fn main() i32:
+    let i32 total = add(40, 1)
+    bump(poke total)
+    return total

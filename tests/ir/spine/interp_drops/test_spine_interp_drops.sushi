@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42!?\nkept\n"
+# EXPECT_NO_LEAKS
+#
+# a spine program whose string owns heap: an interpolation makes it. A rebind makes a new
+# string from the old one, and then drops the old one. `nom` moves the string on one path
+# only: on that path `eat` drops it, and on the other path the scope exit drops it.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn pass(i32 n, bool give) ~:
+    let string msg = "{n}!"
+    msg := "{msg}?"
+    if (give):
+        eat(nom msg)
+    else:
+        println("kept")
+
+fn main() i32:
+    pass(42, true)
+    pass(7, false)
+    return 0

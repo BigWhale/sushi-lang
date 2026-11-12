@@ -31,35 +31,52 @@ def string_method_function_type(spec: MethodSpec) -> ir.FunctionType:
     return ir.FunctionType(return_type, param_types)
 
 
+def emit_string_append(codegen: 'LLVMCodegen', address: ir.Value, piece: ir.Value) -> None:
+    """`s := s.concat(x)`, the concat peephole (docs/design/ir.md 8.9): `string_append` of
+    the value at `address` and of `piece`, into `address`. It grows a buffer that the
+    string owns in place, and copies one that it does not own."""
+    from sushi_lang.backend.functions import declare_stdlib_function
+
+    require_builder(codegen)
+    old = codegen.builder.load(address, name="appended_to")
+    append = declare_stdlib_function(codegen.module, "string_append", old.type,
+                                     [old.type, old.type])
+    codegen.builder.store(codegen.builder.call(append, [old, piece], name="appended"),
+                          address)
+
+
 def emit_stdlib_string_call(
     codegen: 'LLVMCodegen',
     method: str,
     receiver_value: ir.Value,
-    args: list,
-    to_i1: bool
+    arg_values: list[ir.Value],
 ) -> ir.Value:
-    """Emit a call to a stdlib string method.
+    """Emit a call to a built-in string method from the values of its operands.
 
-    Every argument is emitted ONCE, here, through the built-in call-argument seam (#475).
-    An aggregate argument that arrives by pointer -- a `string[]` local for `join` -- is
-    loaded to the value the generated function takes.
+    A value that arrives by pointer (a `peek` receiver, a `string[]` argument for `join`)
+    is loaded to the value that the generated function takes. `is_empty` and `clone` are
+    inline intrinsics with no row.
     """
-    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
     from sushi_lang.backend.functions import declare_stdlib_function
 
     require_builder(codegen)
+    receiver = as_param_value(codegen, Param(BuiltinType.STRING), receiver_value)
+    if method == "is_empty":
+        from sushi_lang.sushi_stdlib.src.collections.strings.compiler import (
+            emit_string_is_empty_intrinsic)
+        is_empty = emit_string_is_empty_intrinsic(codegen.module)
+        return codegen.builder.call(is_empty, [receiver], name="is_empty_result")
+    if method == "clone":
+        from sushi_lang.backend.ownership import copy_out
+        return copy_out(codegen, receiver, BuiltinType.STRING)
+
     spec = METHOD_SPECS.get(method)
     if spec is None:
         raise_internal_error("CE0077", method=method)
 
-    arg_values = [emit_borrowed_arg(codegen, arg) for arg in args]
-    call_args = [receiver_value, *(as_param_value(codegen, Param(ty), value)
-                                   for ty, value in zip(spec.arg_types, arg_values, strict=True))]
-
+    call_args = [receiver, *(as_param_value(codegen, Param(ty), value)
+                             for ty, value in zip(spec.arg_types, arg_values, strict=True))]
     function_type = string_method_function_type(spec)
     stdlib_func = declare_stdlib_function(codegen.module, f"string_{method}",
                                           function_type.return_type, list(function_type.args))
-    result = codegen.builder.call(stdlib_func, call_args, name=f"{method}_result")
-    if to_i1 and spec.returns == BuiltinType.BOOL:
-        result = codegen.utils.as_i1(result)
-    return result
+    return codegen.builder.call(stdlib_func, call_args, name=f"{method}_result")

@@ -1,0 +1,26 @@
+# A value of the tail leaves through `??` after a value that owns is already in a temporary,
+# and before a later value. The exit drops the earlier value once; the Ok path moves each
+# value into the array.
+# EXPECT_STDOUT_EXACT: "11z22\nerr\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn get(bool fail) string | StdError:
+    if (fail):
+        return Result.Err(StdError.Error)
+    return Result.Ok("z")
+
+fn mk(i32 a) string:
+    return "{a}{a}"
+
+fn three(...string xs) string:
+    return "{xs[0]}{xs[1]}{xs[2]}"
+
+fn run(bool fail) string | StdError:
+    let string x = three(mk(1), get(fail)??, mk(2))
+    return Result.Ok(x)
+
+fn main() i32:
+    println(run(false).realise("err"))
+    println(run(true).realise("err"))
+    return 0

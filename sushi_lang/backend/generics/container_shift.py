@@ -11,6 +11,7 @@ import llvmlite.ir as ir
 
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.types.arrays.bounds import emit_bounds_check, emit_checked_maybe
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def _emit_shift(codegen: Any, data_ptr: ir.Value, dest_index: ir.Value,
@@ -62,7 +63,7 @@ def emit_descriptor_insert(codegen: Any, descriptor: ir.Value, index: ir.Value,
     def on_fail() -> None:
         err_state["end"] = codegen.func.append_basic_block("insert_end")
         if needs_cleanup(codegen, element_type):
-            refused_slot = codegen.memory.entry_alloca(element_llvm_type, "insert_refused")
+            refused_slot = entry_alloca(codegen.builder, element_llvm_type, "insert_refused")
             codegen.builder.store(element_value, refused_slot)
             emit_value_destructor(codegen, refused_slot, element_type)
         std_error_llvm_type = codegen.types.ll_type(std_error)

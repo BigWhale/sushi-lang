@@ -1,0 +1,20 @@
+unit test_err_borrow_field_write_through_receiver
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))
+
+ShirBody Point.grow
+  params : [(_0 "self": Point, Inout)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_0), "x"), adopt Binary(+, Field(LocalRef(_0), "x"), Field(LocalRef(_0), "y")), is_init: false)
+
+ShirBody Point.bump
+  params : [(_0 "self": Point, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "x"), Guaranteed)]))
+    Assign(Field(LocalRef(_0), "x"), adopt Lit(1), is_init: false)

@@ -1,0 +1,21 @@
+# `first(poke it)` walks a `poke` adapter chain in place and stops at a `break`. The
+# callee destroys nothing; the caller walks the rest of the same chain and destroys the
+# chain, each closure and what it captured once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "first t0:a\nfirst t0:bb\nrest t0:ccc\nrest t0:dddd\n"
+use <collections/iter>
+
+fn first(poke Iterator@(string) it) ~:
+    foreach(s in it):
+        println("first {s}")
+        break
+
+fn main() i32:
+    let string tag = "t{0}"
+    let Iterator@(string) it = from(["a", "bb", "ccc", "dddd"]).iter().clone_each().map(nom |string s| "{tag}:{s}").filter(nom |string s| s.len() > 0)
+    first(poke it)
+    first(poke it)
+    foreach(s in it):
+        println("rest {s}")
+    return 0

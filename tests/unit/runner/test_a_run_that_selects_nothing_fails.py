@@ -16,7 +16,7 @@ from __future__ import annotations
 import ast
 import json
 
-from _harness import RUN_TESTS, ENHANCED, run_tests
+from _harness import ENHANCED, ONE_FIXTURE, RUN_TESTS, run_tests
 
 
 def test_an_empty_selection_fails():
@@ -63,7 +63,7 @@ def test_an_empty_selection_is_still_a_json_report():
 
 def test_a_real_selection_still_passes():
     """The always-fires control: the refusal above must not refuse a genuine run."""
-    done = run_tests("--skip-build", "--filter", "diagnostics/borrow_help/")
+    done = run_tests("--skip-build", "--filter", ONE_FIXTURE)
     assert done.returncode == 0, done.stdout[-3000:]
     assert "Passed: 1" in done.stdout, done.stdout[-3000:]
 
@@ -90,8 +90,8 @@ def test_the_front_end_always_reaches_the_one_runner():
 
 def test_enhanced_is_accepted_and_changes_nothing():
     """The flag stays for the CI lines and for muscle memory, and is a no-op."""
-    plain = run_tests("--skip-build", "--filter", "diagnostics/borrow_help/")
-    flagged = run_tests("--skip-build", "--enhanced", "--filter", "diagnostics/borrow_help/")
+    plain = run_tests("--skip-build", "--filter", ONE_FIXTURE)
+    flagged = run_tests("--skip-build", "--enhanced", "--filter", ONE_FIXTURE)
     assert plain.returncode == flagged.returncode == 0
     assert "Passed: 1" in flagged.stdout, flagged.stdout[-3000:]
 

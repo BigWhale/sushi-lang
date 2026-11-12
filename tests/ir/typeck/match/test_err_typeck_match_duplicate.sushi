@@ -1,0 +1,32 @@
+# EXPECT_ERROR_CODES_EXACT: CE2075, CE2075, CE2075
+# EXPECT_STDERR_CONTAINS: "value 42 is already matched by arm '0x2a'"
+# EXPECT_STDERR_CONTAINS: "value "a" is already matched by arm '"a"'"
+# EXPECT_STDERR_CONTAINS: "value 143 (0x8f) is already matched by arm '0x80..=0x8f'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_duplicate.shir
+#
+# Two arms that match one value are duplicates by VALUE: `0x2a` and `42` are one value,
+# and `"a"` and `'a'` are one value. A range that shares a value with an arm above is a
+# duplicate at the first shared value. Each one is CE2075, and it names the arm above.
+
+fn number(i32 n) string:
+    match n:
+        0x2a -> return "answer"
+        42 -> return "again"
+        _ -> return "other"
+
+fn letter(string s) i32:
+    match s:
+        "a" -> return 1
+        'a' -> return 2
+        _ -> return 0
+
+fn tag(u8 b) string:
+    match b:
+        0x80..=0x8f -> return "fixmap"
+        0x8f..=0x9f -> return "fixarray"
+        _ -> return "other"
+
+fn main() i32:
+    println(number(42))
+    println(tag(1))
+    return letter("a")

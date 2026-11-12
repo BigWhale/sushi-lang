@@ -1,0 +1,29 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\nMostly Harmless\n9\n2\n"
+# EXPECT_NO_LEAKS
+
+struct Box:
+    fn(i32) -> i32 f
+
+fn id@(T)(nom T x) T:
+    return x
+
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn call_it(fn(nom i32) -> i32 f, i32 x) i32:
+    return f(nom x)
+
+fn first_of@(T)(T[] xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let fn(nom i32) -> i32 g = id
+    println(g(nom 5))
+    let fn(nom string) -> string h = id
+    println(h(nom "Mostly Harmless".clone()))
+    println(call_it(id, 9))
+    let fn(i32[]) -> i32 k = first_of
+    let i32[] xs = from([1, 2])
+    println(k(xs))
+    return 0

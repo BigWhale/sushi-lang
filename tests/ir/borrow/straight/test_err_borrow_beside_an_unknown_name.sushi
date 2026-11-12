@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE1001, CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'text'"
+#
+# A name with no declaration is an error of the scope pass (CE1001). The error of one body
+# does not hide the errors of another: the borrow pass still checks `spend`, and its use
+# after a move is CE2405, as on the old pipeline.
+
+fn make() string:
+    return "{1} towels"
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn spend() ~:
+    let string text = make()
+    eat(nom text)
+    println(text)
+
+fn main() i32:
+    spend()
+    return nope

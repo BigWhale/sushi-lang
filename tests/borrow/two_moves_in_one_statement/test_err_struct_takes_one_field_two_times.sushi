@@ -1,0 +1,18 @@
+# Two takes of the SAME field of one local in one construction are two moves of that
+# field: CE2405 at the second take. Takes of two different fields are one take.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: cannot borrow moved variable 'w'
+struct W:
+    string a
+    string b
+
+struct P:
+    string x
+    string y
+
+fn main() i32:
+    let string base = "ab"
+    let W w = W("{base}1", "{base}2")
+    let P p = P(nom w.a, nom w.a)
+    println("{p.x} {p.y}")
+    return 0

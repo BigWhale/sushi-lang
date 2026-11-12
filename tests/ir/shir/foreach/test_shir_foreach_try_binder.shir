@@ -1,0 +1,37 @@
+unit test_shir_foreach_try_binder
+
+ShirBody first
+  params : []
+  locals : [_0 "r": BufReader@(File), _1 "seen": i32, _2: Result@(string, IoError), _3 "line": string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Static(BufReader@(File), @BufReader@(File).new), [(adopt Try(adopt Call(Method(StorageRef(@stdin), @File.share, Guaranteed), [])), Owned), (Lit(64), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Loop(Items(adopt Call(Method(move LocalRef(_0), @BufReader@(File).lines, Owned), []), _2, Bare), [Assign(LocalRef(_3), adopt Try(move LocalRef(_2)), is_init: true), ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)])), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)], in_place: false)
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_1)]))
+
+ShirBody typed
+  params : []
+  locals : [_0 "r": BufReader@(File), _1 "total": i32, _2: Result@(string, IoError), _3 "text": string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Static(BufReader@(File), @BufReader@(File).new), [(adopt Try(adopt Call(Method(StorageRef(@stdin), @File.share, Guaranteed), [])), Owned), (Lit(64), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Loop(Items(adopt Call(Method(move LocalRef(_0), @BufReader@(File).lines, Owned), []), _2, Bare), [Assign(LocalRef(_3), adopt Try(move LocalRef(_2)), is_init: true), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Call(Builtin(LocalRef(_3), "len"), [])), is_init: false)], in_place: false)
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_1)]))
+
+ShirBody skipped
+  params : []
+  locals : [_0 "r": BufReader@(File), _1 "seen": i32, _2: Result@(string, IoError), _3: string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Static(BufReader@(File), @BufReader@(File).new), [(adopt Try(adopt Call(Method(StorageRef(@stdin), @File.share, Guaranteed), [])), Owned), (Lit(64), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Loop(Items(adopt Call(Method(move LocalRef(_0), @BufReader@(File).lines, Owned), []), _2, Bare), [Assign(LocalRef(_3), adopt Try(move LocalRef(_2)), is_init: true), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)], in_place: false)
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_1)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@first), []), "realise"), [(Lit(99), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@typed), []), "realise"), [(Lit(99), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@skipped), []), "realise"), [(Lit(99), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

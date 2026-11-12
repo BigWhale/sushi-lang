@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2007
+# EXPECT_DUMP_SHIR: test_err_typeck_let_untyped.shir
+#
+# A `let` with a written type gives its local that type, and its value is checked at
+# it: `copy` takes the type of `count`. A `let` that writes no type is CE2007, and its
+# local has no type: the `locals` line shows it with none.
+
+fn main() i32:
+    let i32 count = 42
+    let i32 copy = count
+    let total = copy
+    return total

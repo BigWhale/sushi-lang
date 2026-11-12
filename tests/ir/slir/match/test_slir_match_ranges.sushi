@@ -1,0 +1,50 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n3\n3\n4\n0\n0\n1\n1\n6\n"
+# EXPECT_DUMP_SLIR: test_slir_match_ranges.slir
+#
+# A match on an integer with a range arm is a chain of tests in source order (ir.md 8.9).
+# A literal is a switch on the value with one case. A range is two compares, `>=` its low
+# bound and `<=` its high bound, each in a bool local that the switch of its block reads.
+# A failed test goes to the test of the next alternative, or of the next arm. The `_` arm
+# has no test. In `half`, two ranges cover the u8, so no `_` arm follows: after the last
+# arm is the trap RE2023, which names that arm. In `last_small`, an arm leaves the loop
+# with `continue` or with `break`.
+
+fn class(i32 n) i32:
+    let i32 code = 0
+    match n:
+        0 -> code := 1
+        1..=9 -> code := 2
+        -9..0 | 100 -> code := 3
+        _ -> code := 4
+    return code
+
+fn half(u8 b) i32:
+    match b:
+        0x00..=0x7f -> return 0
+        0x80..=0xff -> return 1
+
+fn last_small(i32 limit) i32:
+    let i32 i = 0
+    let i32 found = -1
+    while (i < limit):
+        i := i + 1
+        match i:
+            0..=2 -> continue
+            7 -> break
+            _ -> found := i
+    return found
+
+fn main() i32:
+    println(class(0))
+    println(class(9))
+    println(class(-9))
+    println(class(-1))
+    println(class(100))
+    println(class(10))
+    println(half(0))
+    println(half(127))
+    println(half(128))
+    println(half(255))
+    println(last_small(10))
+    return 0

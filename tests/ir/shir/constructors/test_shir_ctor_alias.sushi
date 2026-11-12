@@ -1,0 +1,31 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n4\nplus\n12\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_ctor_alias.shir
+#
+# the SHIR dump of the constructions behind an alias. `sh.Point(...)` is a `StructInit`
+# because the namespace holds a struct under the name, and a named construction gives the
+# declaration order there too. `sh.Sign.Plus` and `sh.Shape.Circle(2)` are an `EnumInit`
+# because the enum that the namespace holds has the variant. Each node names the
+# declaration with the alias, as a pattern does (`sh.Sign`).
+
+use "helpers/shir_shapes" as sh
+
+fn area(sh.Shape s) i32:
+    let i32 out = 0
+    match s:
+        sh.Shape.Circle(r) -> out := 3 * r * r
+        sh.Shape.Square(a) -> out := a * a
+    return out
+
+fn main() i32:
+    let sh.Point a = sh.Point(1, 2)
+    let sh.Point b = sh.Point(y: 4, x: 3)
+    let sh.Sign s = sh.Sign.Plus
+    println(a.x)
+    println(b.y)
+    match s:
+        sh.Sign.Plus -> println("plus")
+        sh.Sign.Minus -> println("minus")
+    println(area(sh.Shape.Circle(2)))
+    println("Mostly Harmless")
+    return 0

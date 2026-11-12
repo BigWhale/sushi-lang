@@ -1,0 +1,14 @@
+# A `self` in a static method is CE0134. The body goes on, so a statement after the
+# `return` is CE0140.
+# EXPECT_ERROR_CODES_EXACT: CE0134, CE0140
+# EXPECT_STDERR_CONTAINS: test_err_static_mentions_self_then_dead.sushi:10:5: error [CE0140]
+struct Vec:
+    i32 x
+
+extend Vec static at(i32 x) i32:
+    return self.x + x
+    println("never")
+
+fn main() i32:
+    println(Vec.at(1))
+    return 0

@@ -1,0 +1,13 @@
+# A parameter of a generic function is a borrow: a `return` of it is CE2411. The note
+# names the type parameter with no constraint, and no note names the parameter.
+# EXPECT_ERROR_CODES_EXACT: CE2411, CW1001
+# EXPECT_STDERR_CONTAINS: "'T' is declared here with no constraint"
+# EXPECT_STDERR_LACKS: "a method parameter borrows"
+
+fn pick@(T)(T first, T second) T:
+    return first
+
+fn main() i32:
+    let i32 v = pick(1, 2)
+    println("{v}")
+    return 0

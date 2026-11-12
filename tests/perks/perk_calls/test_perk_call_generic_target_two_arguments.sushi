@@ -1,0 +1,24 @@
+# A perk implementation on a generic target, called at two type arguments. Each instance has
+# its own copy of the method.
+# EXPECT_STDOUT_EXACT: "box 42\nbox answer\n42\nanswer\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+perk Shows:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T: Display) with Shows:
+    fn show() string:
+        return "box {self.value}"
+
+fn main() i32:
+    let Box@(i32) a = Box(42)
+    let Box@(string) b = Box("answer".concat(""))
+    println(a.show())
+    println(b.show())
+    println(a.value)
+    println(b.value)
+    return 0

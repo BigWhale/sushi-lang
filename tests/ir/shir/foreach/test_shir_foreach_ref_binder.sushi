@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "11\n21\n31\n"
+# EXPECT_DUMP_SHIR: test_shir_foreach_ref_binder.shir
+#
+# the SHIR dump of a `foreach` with a `poke` or a `peek` binder: the mode of the binder is
+# `Ref(Poke)` or `Ref(Peek)` in the `Items` source. The long form `poke i32 s` is the
+# same binder: the AST builder keeps the mode and the type `i32` apart, so the local has
+# the type `i32`. A write through the binder is a plain `Assign`.
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    foreach(poke r in xs.iter()):
+        r := r * 10
+    foreach(poke i32 s in xs.iter()):
+        s := s + 1
+    foreach(peek q in xs.iter()):
+        println(q)
+    return 0

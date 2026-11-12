@@ -1,0 +1,29 @@
+# A read through a temporary that a refusal names spells the temporary in its short form:
+# a call with arguments as `name(...)`, an array literal as `[...]`, a `from(...)` as
+# `from([...])`. The rest of the read keeps its source text.
+# EXPECT_ERROR_CODES_EXACT: CE2411, CE2411, CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'from([...]).get(0).or_err(nom StdError.Error)??'
+# EXPECT_STDERR_CONTAINS: cannot consume '[...].get(0).or_err(nom StdError.Error)??'
+# EXPECT_STDERR_CONTAINS: cannot consume 'head(...)'
+# EXPECT_STDERR_CONTAINS: `head(...).clone()`
+struct Holder:
+    i32[] part
+
+fn head(i32[] xs) peek i32[]:
+    return xs[0..1]
+
+fn keep(nom string s) string:
+    return s
+
+fn run() string | StdError:
+    let i32 k = 1
+    let string a = keep(nom from(["ford {k}", "arthur"]).get(0).or_err(nom StdError.Error)??)
+    let string b = keep(nom ["ford {k}", "arthur"].get(0).or_err(nom StdError.Error)??)
+    return Result.Ok("{a}{b}")
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    let Holder h = Holder(head(data))
+    println(h.part.len())
+    println(run().realise("none"))
+    return 0

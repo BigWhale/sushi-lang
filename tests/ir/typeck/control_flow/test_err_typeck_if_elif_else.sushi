@@ -1,0 +1,29 @@
+# EXPECT_ERROR_CODES_EXACT: CE2516
+# EXPECT_STDERR_CONTAINS: "a condition must be a bool, and 'Result@(i32, StdError)' is an unhandled Result"
+# EXPECT_DUMP_SHIR: test_err_typeck_if_elif_else.shir
+#
+# The condition of an `if` and of each `elif` is a `bool`. An `elif` is an `if` in the
+# `else` block, and a block may hold an `if` of its own. The bodies hold correct code.
+# The last `if` takes a `Result` as its condition, which is CE2516.
+
+fn grade(i32 score, Result@(i32, StdError) r) i32:
+    let i32 points = 0
+    if (score > 90):
+        points := 3
+    elif (score > 50):
+        if (score == 51):
+            points := 1
+        else:
+            points := 2
+    elif (score < 0 or score > 100):
+        points := -1
+    else:
+        points := 0
+    if (points != 0 and not (points == -1)):
+        points := points + 1
+    if (r):
+        return 0
+    return points
+
+fn main() i32:
+    return 0

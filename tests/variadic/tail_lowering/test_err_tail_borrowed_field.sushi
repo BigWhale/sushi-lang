@@ -1,0 +1,15 @@
+# A value of the tail moves into the array. A field read is a borrow, so a field that owns
+# is the consuming use of a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+struct Holder:
+    string name
+
+fn size(...string xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let Holder h = Holder("Mostly {'Harmless'}")
+    println(size(h.name))
+    println(h.name)
+    return 0

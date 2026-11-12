@@ -1,0 +1,12 @@
+unit test_err_typeck_method_string_miscount
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string, _1 "a": bool, _2 "b": bool, _3 "n": i32]
+  block  :
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "contains"), []), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "is_empty"), [Lit(1)]), is_init: true)
+    Assign(LocalRef(_3), Call(Builtin(LocalRef(_0), "len"), []), is_init: true)
+    If(Binary(and, LocalRef(_1), LocalRef(_2)), then: [Return(Lit(1))])
+    Return(LocalRef(_3))

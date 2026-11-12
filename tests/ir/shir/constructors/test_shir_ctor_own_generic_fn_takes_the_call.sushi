@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_DUMP_SHIR: test_shir_ctor_own_generic_fn_takes_the_call.shir
+#
+# The unit declares a generic function `Crate`, and another unit declares the struct
+# `Crate`. The generic function takes the bare call before the struct, as a concrete
+# function of the unit does: lowering keeps a `Call`, never a `StructInit`.
+
+use "helpers/crate_struct" as cs
+
+fn Crate@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let i32 b = Crate(nom 4)
+    println(b)
+    return 0

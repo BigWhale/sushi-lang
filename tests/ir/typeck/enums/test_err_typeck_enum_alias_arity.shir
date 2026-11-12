@@ -1,0 +1,16 @@
+unit units/compass
+
+unit test_err_typeck_enum_alias_arity
+
+ShirBody pick
+  params : [(_0 "h": Heading, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@pick), [EnumInit(@cp.Heading, "Turn", [Lit(1)])]))
+    Return(Lit(0))

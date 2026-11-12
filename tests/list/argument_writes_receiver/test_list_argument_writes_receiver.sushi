@@ -1,0 +1,37 @@
+# The argument of a List method changes the List. Each method reads the length, the
+# capacity and the data of the List after its arguments, so it sees the change.
+# EXPECT_STDOUT_EXACT: "push: len 3 last 30\nget: some false len 2\nreserve: len 2 cap 14\ncontains: false\nindex_of: -1\nindex_of_from: -1\ninsert: ok true len 3 first 3\n"
+# EXPECT_NO_LEAKS
+
+fn three() List@(i32):
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    return xs
+
+fn main() i32:
+    let List@(i32) a = three()
+    a.push(a.pop().realise(0) * 10)
+    let i32 a_last = a.last().realise(-1)
+    println("push: len {a.len()} last {a_last}")
+    let List@(i32) b = three()
+    let bool b_some = b.get(b.pop().realise(0) - 1).is_some()
+    println("get: some {b_some} len {b.len()}")
+    let List@(i32) c = three()
+    c.reserve(c.pop().realise(0) * 4)
+    println("reserve: len {c.len()} cap {c.capacity()}")
+    let List@(i32) d = three()
+    let bool found = d.contains(d.pop().realise(0))
+    println("contains: {found}")
+    let List@(i32) e = three()
+    let i32 at = e.index_of(e.pop().realise(0)).realise(-1)
+    println("index_of: {at}")
+    let List@(i32) f = three()
+    let i32 from_at = f.index_of_from(f.pop().realise(0), 0).realise(-1)
+    println("index_of_from: {from_at}")
+    let List@(i32) g = three()
+    let Result@(~, StdError) r = g.insert(0, g.pop().realise(0))
+    let i32 g_first = g.first().realise(-1)
+    println("insert: ok {r.is_ok()} len {g.len()} first {g_first}")
+    return 0

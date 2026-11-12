@@ -1,0 +1,11 @@
+unit test_typeck_stdlib_cstr_owning_row
+
+ShirBody main
+  params : []
+  locals : [_0 "key": string, _1 "value": Maybe@(string)]
+  block  :
+    ExprStmt(Call(Builtin(Call(Stdlib(<sys/env>, @setenv), [(Lit("TYPECK_STDLIB_ROW"), Guaranteed), (Lit("Mostly Harmless"), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]))
+    Assign(LocalRef(_0), adopt Lit("TYPECK_STDLIB_ROW"), is_init: true)
+    Assign(LocalRef(_1), adopt Call(Stdlib(<sys/env>, @getenv), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_1), "realise"), [(Lit("none"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

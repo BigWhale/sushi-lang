@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2102
+# EXPECT_STDERR_CONTAINS: "help: 'doubled' is an instance method here"
+# EXPECT_DUMP_SHIR: test_err_typeck_static_missing.shir
+#
+# A call on a type name whose dot holds no static of the name is CE2102. An instance
+# method of the name gets a help that says to call it on a value. The call has no callee.
+
+struct Vec:
+    i32 x
+
+extend Vec doubled() i32:
+    return self.x * 2
+
+fn main() i32:
+    let i32 n = Vec.doubled()
+    return n

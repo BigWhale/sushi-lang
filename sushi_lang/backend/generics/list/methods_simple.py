@@ -22,8 +22,9 @@ def emit_list_new(codegen: Any, list_type: StructType) -> ir.Value:
     return list_value
 
 
-def emit_list_with_capacity(codegen: Any, expr: Any, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for List<T>.with_capacity(n) - pre-allocate list."""
+def emit_list_with_capacity(codegen: Any, capacity: ir.Value, list_type: StructType) -> ir.Value:
+    """Emit LLVM IR for List<T>.with_capacity(n) - pre-allocate list. `capacity` is the i32
+    value of the count."""
     from sushi_lang.backend.expressions import memory
 
     element_type = extract_element_type(list_type, codegen)
@@ -31,15 +32,7 @@ def emit_list_with_capacity(codegen: Any, expr: Any, list_type: StructType) -> i
     list_llvm_type = get_list_llvm_type(codegen, element_type)
     element_llvm_type = list_llvm_type.elements[2].pointee
 
-    capacity_arg = codegen.expressions.emit_expr(expr.args[0])
-
-    if capacity_arg.type != codegen.types.i32:
-        if capacity_arg.type.width > 32:
-            capacity_arg = codegen.builder.trunc(capacity_arg, codegen.types.i32, name="capacity_i32")
-        elif capacity_arg.type.width < 32:
-            capacity_arg = codegen.builder.sext(capacity_arg, codegen.types.i32, name="capacity_i32")
-
-    alloc_size = memory.emit_byte_size(codegen, capacity_arg, element_llvm_type,
+    alloc_size = memory.emit_byte_size(codegen, capacity, element_llvm_type,
                                        name="alloc_size")
 
     data_void_ptr = emit_malloc(codegen, codegen.builder, alloc_size)
@@ -59,7 +52,7 @@ def emit_list_with_capacity(codegen: Any, expr: Any, list_type: StructType) -> i
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     codegen.builder.store(zero_i32, len_ptr)
-    codegen.builder.store(capacity_arg, capacity_ptr)
+    codegen.builder.store(capacity, capacity_ptr)
     codegen.builder.store(data_ptr, data_ptr_ptr)
 
     return codegen.builder.load(list_alloca, name="list_value")
@@ -85,9 +78,3 @@ def emit_list_is_empty(codegen: Any, list_ptr: ir.Value) -> ir.Value:
     is_zero = codegen.builder.icmp_signed('==', len_value, zero, name="is_empty")
 
     return codegen.builder.zext(is_zero, codegen.types.i8)
-
-
-def emit_list_clone(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit `list.clone()` -- an independent `List@(T)` with its own buffer and elements."""
-    from sushi_lang.backend.ownership import copy_out
-    return copy_out(codegen, list_ptr, list_type)

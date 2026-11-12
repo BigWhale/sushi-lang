@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "towel\nkept towel\ncrew\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_expect_owning.slir
+#
+# `expect` reads an owning payload with a `Clone`, because its receiver is a read (ir.md
+# 8.9): a named receiver keeps its value, and a temporary receiver is dropped after its
+# statement.
+
+fn named(bool ok) Maybe@(string):
+    if (ok):
+        return Maybe.Some("crew")
+    return Maybe.None
+
+fn main() i32:
+    let Maybe@(string) m = Maybe.Some("towel")
+    let string got = m.expect("no towel")
+    println(got)
+    let string again = m.expect("no towel")
+    println("kept {again}")
+    println(named(true).expect("no crew"))
+    return 0

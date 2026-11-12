@@ -1,0 +1,37 @@
+unit test_shir_call_methods
+
+ShirBody length
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(Call(Builtin(LocalRef(_0), "trim"), []), "len"), []))
+
+ShirBody sliced
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(LocalRef(_0), "s"), [(Lit(0), Guaranteed), (Lit(3), Guaranteed)]))
+
+ShirBody literal
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(Lit("Mostly Harmless"), "len"), []))
+
+ShirBody opaque
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(/, Lit(100), Call(Method(Lit(5), @i32.twice, Guaranteed), [])))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))
+
+ShirBody i32.twice
+  params : [(_0 "self": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(*, LocalRef(_0), Lit(2)))

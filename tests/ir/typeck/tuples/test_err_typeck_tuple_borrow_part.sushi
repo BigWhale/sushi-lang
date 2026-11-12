@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign peek string to string."
+# EXPECT_STDERR_CONTAINS: "  |     let (string, i32) t = (peek s, 1)\n  `                            ---+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_tuple_borrow_part.shir
+#
+# Ruling R-I: a tuple holds values, so a `peek` in a tuple part is refused. The part is
+# a `peek string` where the tuple takes a `string`: CE2002 at the part.
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let (string, i32) t = (peek s, 1)
+    return t.1

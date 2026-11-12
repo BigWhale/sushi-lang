@@ -1,0 +1,14 @@
+unit test_err_typeck_match_written_hex
+
+ShirBody f
+  params : [(_0 "b": i8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(0x7f), [Return(Lit("high"))]), Arm(Literal(0x1ff), [Return(Lit("too wide"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@f), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

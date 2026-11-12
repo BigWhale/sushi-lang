@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign Iterator@(i32) to i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_answer_printed.shir
+#
+# The dump prints the type that the typecheck pass answers for a local, not the type as
+# written. `Iterator@(peek i32)` and `Iterator@(i32)` are one type, because an `i32` item
+# owns nothing (docs/design/iteration.md), and the pass answers the one form: the written
+# `peek` of `items` and of `same` does not print. The last `let` gives the iterator to an
+# `i32`, which is CE2002.
+
+use <collections/iter>
+
+fn walk(Iterator@(peek i32) items) i32:
+    let Iterator@(peek i32) same = items
+    let i32 count = same
+    return count
+
+fn main() i32:
+    return 0

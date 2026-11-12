@@ -1,0 +1,8 @@
+# A typed operand that is no instance gives `Maybe.None` no instance.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "nothing gives"
+
+fn main() i32:
+    let i32 a = 1
+    println(a == Maybe.None)
+    return 0

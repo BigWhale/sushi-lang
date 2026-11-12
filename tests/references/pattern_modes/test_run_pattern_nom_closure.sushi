@@ -1,0 +1,32 @@
+# A `nom` pattern binding takes a capturing closure payload out of the variant whole.
+# `match nom s:` hands a local over and the arm gives the function value to a `nom`
+# parameter; a temporary scrutinee keeps it to the end of the arm. Each environment and
+# the string it captured are destroyed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate 15\nheld 25\nempty\n"
+enum Slot:
+    Full(fn(i32) -> i32)
+    Empty
+
+fn make(i32 n) Slot:
+    if (n == 0):
+        return Slot.Empty
+    let string tag = "tag {n}"
+    return Slot.Full(|i32 x| x * n + tag.len())
+
+fn eat(nom fn(i32) -> i32 f) ~:
+    println("ate {f(10)}")
+
+fn main() i32:
+    let Slot s = make(1)
+    match nom s:
+        Slot.Full(nom f) -> eat(nom f)
+        Slot.Empty -> println("empty")
+    match make(2):
+        Slot.Full(nom f) -> println("held {f(10)}")
+        Slot.Empty -> println("empty")
+    match make(0):
+        Slot.Full(nom f) -> eat(nom f)
+        Slot.Empty -> println("empty")
+    return 0

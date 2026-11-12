@@ -1,6 +1,6 @@
 """The parts of a .slib manifest that come from the AST: generic templates, and docs.
 
-Two producers write a manifest -- this module and `backend/library_manifest.py` -- and
+Two producers write a manifest -- this module and `compiler/library_manifest.py` -- and
 both build a `doc` record through `doc_record` here. One function, so the record shape
 cannot differ between a concrete symbol and a template.
 """
@@ -266,9 +266,9 @@ def method_record(method) -> dict:
 
 def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
     """Produce the manifest record for one concrete perk IMPLEMENTATION."""
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
+    from sushi_lang.semantics.passes.collect.perks import perk_type_name
 
-    type_name = _get_type_name(impl.target_type)
+    type_name = perk_type_name(impl.target_type)
     return with_doc({
         "type": type_name,
         "perk": impl.perk_name,
@@ -353,10 +353,10 @@ def serialize_generic_extension(ext: "ExtendDef", source_text: str) -> dict:
     return record
 
 
-def deserialize_extension(record: dict, label: Optional[str] = None) -> "Program":
+def deserialize_extension(record: dict) -> "Program":
     """Re-parse the source of an extension TEMPLATE record: one `extend` declaration."""
     what = f"extension method '{record.get('type')} {record.get('name')}'"
-    program = parse_one_declaration(record.get("source") or "", what, label)
+    program = parse_one_declaration(record.get("source") or "", what)
     if len(program.extensions or []) + len(program.generic_extensions or []) != 1:
         raise TemplateSourceError(f"the source of {what} is not an extension method")
     return program
@@ -373,8 +373,7 @@ _DECLARATION_LISTS = ("uses", "constants", "structs", "enums", "perks", "functio
                       "generic_perk_impls", "externals")
 
 
-def parse_one_declaration(source: str, what: str,
-                          label: Optional[str] = None) -> "Program":
+def parse_one_declaration(source: str, what: str) -> "Program":
     """Re-parse the source a manifest record carries, which must be ONE declaration.
 
     The one reader of a record's source text. `what` names the record in the reason,
@@ -387,7 +386,7 @@ def parse_one_declaration(source: str, what: str,
     from sushi_lang.internals.parser import parse_to_ast
 
     try:
-        program, _tree = parse_to_ast(source, source_label=label)
+        program, _tree = parse_to_ast(source)
     except SushiError as e:
         where = f"line {e.span.line}, column {e.span.col}: " if e.span else ""
         text = _fmt(e.code, **e.params) if e.code else str(e)

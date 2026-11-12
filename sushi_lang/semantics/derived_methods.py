@@ -84,3 +84,33 @@ class OverlayDerivedMethods(DerivedMethodTable):
         if own is not None:
             return own
         return self.base.get_method(target_type, method_name)
+
+
+# The emitter factories of the derived hash() and clone(), keyed by type kind ("struct",
+# "enum", "array"). The derive pass decides hashability and clonability and registers the
+# method, but the LLVM emitter is backend code, and semantics must not import the
+# backend. So each backend types module registers its factory here at import time, and
+# the derived method looks it up when codegen emits it. A factory takes the concrete
+# type and returns the emitter closure for it.
+_hash_emitter_factories: Dict[str, Callable[['Type'], Callable]] = {}
+_clone_emitter_factories: Dict[str, Callable[['Type'], Callable]] = {}
+
+
+def register_hash_emitter_factory(kind: str, factory: Callable[['Type'], Callable]) -> None:
+    """Register the backend factory that builds hash() emitters for a type kind."""
+    _hash_emitter_factories[kind] = factory
+
+
+def get_hash_emitter_factory(kind: str) -> Optional[Callable[['Type'], Callable]]:
+    """The hash() emitter factory for a type kind, or None if none is registered."""
+    return _hash_emitter_factories.get(kind)
+
+
+def register_clone_emitter_factory(kind: str, factory: Callable[['Type'], Callable]) -> None:
+    """Register the backend factory that builds clone() emitters for a type kind."""
+    _clone_emitter_factories[kind] = factory
+
+
+def get_clone_emitter_factory(kind: str) -> Optional[Callable[['Type'], Callable]]:
+    """The clone() emitter factory for a type kind, or None if none is registered."""
+    return _clone_emitter_factories.get(kind)

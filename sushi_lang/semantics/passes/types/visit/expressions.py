@@ -1,487 +1,261 @@
-"""Expression validation for the typecheck pass."""
+"""The expression arms of the typecheck pass over SHIR (docs/design/ir.md 7.3, 7.4).
+
+An arm takes the pass, one node and the type of its position, or None when the position
+gives no type. It answers the type of the node, or None when the node has an error or
+reads a node that has one. The dispatch (`visit.check_expr`) writes the answer as the type
+row of the node.
+
+A literal takes the type of its position when the position gives one of its kind, else
+its default (`int_literal_default`). An integer literal holds a value at that type
+(`held_value`, ir.md 8.5). A local answers the type that the table holds for it. A constant
+answers its declared type, and its value, from the constant table (Q5). A constant with no
+value is an internal error: after an error of its initializer, that error is the
+diagnostic. A `var` answers its declared type, and the symbol of its global.
+
+A struct construction is an instance of the struct that its written type names: behind an
+alias, the struct that the namespace holds. Its fields are checked at the types of the
+fields (`calls/structs.py`). A private struct of another unit behind an alias is CE3005,
+and CE6104 when it is named, as the old pipeline reports it. A type name that is no struct is CE2008, with CE6104 for a named argument. A name whose
+function the collect pass refused (CE1005) gives no second error, and the body holds that
+error (`refused_before`). A generic struct of the program, and a struct whose name the unit
+lost (D2), are not typed yet, and stop the walk of their body.
+"""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, Optional, cast
+
+from typing import TYPE_CHECKING, Optional, Union
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics import integer_ops
+from sushi_lang.semantics.library_registry import KEPT_STORAGE_KINDS
+from sushi_lang.semantics.passes.collect.constants import ConstSig
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.calls.structs import check_struct_fields
+from sushi_lang.semantics.passes.types.inference import (
+    float_literal_fits, int_literal_default, int_literal_fits)
+from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
+from sushi_lang.semantics.passes.types.utils import reject_named_argument
+from sushi_lang.semantics.passes.types.visibility import (
+    name_was_refused, reject_ambiguous_name, reject_private_kept, reject_private_name,
+    reject_private_type, type_name_is_contested)
+from sushi_lang.semantics.passes.types.visit.calls import reject_undefined_function
+from sushi_lang.semantics.passes.types.visit.constructions import (
+    Constructed, generic_struct_instance)
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
+from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
+from sushi_lang.semantics.unit_symbols import global_symbol
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Expr, Node
+    from sushi_lang.semantics.generics.types import GenericStructType
     from sushi_lang.semantics.passes.types import TypeValidator
-    from sushi_lang.semantics.typesys import Type
-from sushi_lang.semantics.passes.types.calls import (
-    validate_enum_constructor, validate_function_call, validate_method_call)
-from sushi_lang.semantics.passes.types.expressions import (
-    validate_array_literal, validate_bitwise_operation, validate_cast_expression,
-    validate_index_access, validate_try_expression)
-from sushi_lang.semantics.visitors import RecursiveVisitor
-from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
-from sushi_lang.semantics.type_predicates import is_string_convertible
-from sushi_lang.semantics.passes.types.visibility import (
-    reject_ambiguous_name, reject_private_kept, reject_private_name)
-from sushi_lang.semantics.visibility import VALUE_VERB
-from sushi_lang.semantics.passes.types.utils import reject_named_args
-from sushi_lang.semantics.ast import (
-    Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Lambda,
-    MemberAccess, TupleLiteral
-)
-from sushi_lang.semantics.passes.types.visit.helpers import (
-    infer_lambda_type, validate_fn_field_call_args)
+    from sushi_lang.semantics.stdlib_registry import StdlibFunction
+
+#: The name of a base in the text of CE2070.
+_RADIX_NAMES = {2: "binary", 8: "octal", 10: "decimal", 16: "hexadecimal"}
 
 
-class ExpressionValidator(RecursiveVisitor):
-    """Visitor for validating expressions using the Visitor Pattern."""
+def check_lit(validator: TypeValidator, node: e.Lit, expected: Optional[Type]) -> Optional[Type]:
+    match node.value:
+        case e.IntConst() as const:
+            return type_int_literal(validator, const, expected, node.loc)
+        case e.FloatConst(value):
+            return type_float_literal(validator, value, expected, node.loc)
+        case e.BoolConst():
+            return BuiltinType.BOOL
+        case e.StrConst():
+            return BuiltinType.STRING
+        case e.BlankConst():
+            return BuiltinType.BLANK
+    return None
 
-    def __init__(self, type_validator: 'TypeValidator'):
-        """Initialize with reference to the main type validator."""
-        self.type_validator = type_validator
 
-    def visit(self, node: 'Node') -> None:
-        """Validate one expression. The overflow check of a nest runs at its top.
+def type_int_literal(validator: TypeValidator, const: e.IntConst, expected: Optional[Type],
+                     loc: Span, negated: Optional[Span] = None) -> Type:
+    """An integer literal at the integer type of its position, else at its default.
 
-        Each validated expression comes here: from `validate_expression`, and from an
-        arm that visits its child. Thus no position skips the check (`operator_nest.py`).
-        """
-        from sushi_lang.semantics.passes.types.expressions import reject_overflowing_nest
-        from sushi_lang.semantics.passes.types.operator_nest import is_overflow_checked
-        expr = cast('Expr', node)
-        nests = self.type_validator.operator_nests
-        handed = nests.enter(expr)
-        try:
-            super().visit(expr)
-            if not handed and is_overflow_checked(expr):
-                reject_overflowing_nest(self.type_validator, expr)
-        finally:
-            nests.leave()
+    A value that the type of its position cannot hold is CE2073, and one that its default
+    cannot hold is CE2070. The type stays the answer: the value is wrong, not the type.
+    A negated literal is one value: `negated` is the span of its negation, and the sign is
+    part of the range check, so -128 is an `i8` and 128 is not. A negated byte literal with
+    no type of its position is CE2073 at the negation, because no negative value fits its
+    `u8`.
+    """
+    written = const.value
+    value = -written if negated is not None else written
+    radix = 10 if negated is not None else const.radix
+    if isinstance(expected, BuiltinType) and is_integer_type(expected):
+        if not int_literal_fits(value, radix, expected):
+            spelling = const.byte_spelling if negated is None else None
+            er.emit(validator.reporter, er.ERR.CE2073, loc,
+                    literal=spelling or str(value), type=expected.value)
+        return expected
+    default = int_literal_default(const)
+    if int_literal_fits(value, radix, default):
+        return default
+    if negated is not None and const.byte_spelling is not None:
+        er.emit(validator.reporter, er.ERR.CE2073, negated, literal=str(value),
+                type=default.value)
+        return default
+    value = written
+    er.emit(validator.reporter, er.ERR.CE2070, loc,
+            radix=_RADIX_NAMES.get(const.radix, "integer"), literal=str(value),
+            type=default.value)
+    return default
 
-    def visit_unaryop(self, node: UnaryOp) -> None:
-        """Validate unary operation."""
-        # A negated integer literal is range-checked as one signed value, so
-        # that i32 min (-2147483648) stays legal while the positive literal
-        # 2147483648 alone would not be. Only when it has no context type: a stamped
-        # literal was already checked against its target, and re-checking it against
-        # the i32 default made `let i64 a = -4294967303` a CE2070 -- the same shape
-        # `visit_intlit` guards against for the positive half.
-        if node.op == "neg" and isinstance(node.expr, IntLit):
-            context_typed = (getattr(node.expr, 'in_cast_context', False)
-                             or node.expr.resolved_type is not None)
-            if not context_typed and node.expr.byte_spelling is not None:
-                # A byte literal's default is u8, which no negative value fits.
-                from sushi_lang.semantics.passes.types.inference import int_literal_fits
-                value = -int(node.expr.value)
-                if not int_literal_fits(value, 10, BuiltinType.U8):
-                    er.emit(self.type_validator.reporter, er.ERR.CE2073, node.loc,
-                            literal=str(value), type=BuiltinType.U8.value)
-            elif not context_typed and -int(node.expr.value) < -(2 ** 31):
-                self._emit_literal_overflow(node.expr)
-            node.expr.range_checked = True
 
-        # The operand is validated first, so its type is read one time and not inferred
-        # again from the whole operand.
-        operand_type = self.type_validator.validate_expression(node.expr)
+def held_value(const: e.IntConst, ty: Type, wraps: bool) -> int:
+    """The value that an integer literal holds at its integer type `ty` (ir.md 8.5).
 
-        # CE5010: a foreign ptr is an opaque handle - no negation, NOT, or truthiness
-        if isinstance(operand_type, ForeignPtrType):
-            er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
-            return
+    A literal that spells bits (a radix other than 10) holds the value that its type holds,
+    and so does the operand of a cast or of a negation (`wraps`), where the range check of
+    the literal is not the range of its type. Any other literal is in the range of its type.
+    """
+    if wraps or const.radix != 10:
+        return integer_ops.cast(const.value, ty)
+    return const.value
 
-        if node.op == "~":
-            from sushi_lang.semantics.passes.types.expressions import validate_bitwise_unary
-            validate_bitwise_unary(self.type_validator, node)
 
-        # The operand of `not` is a condition, so it obeys the condition rule (#532).
-        if node.op == "not":
-            from sushi_lang.semantics.passes.types.expressions import (
-                reject_non_bool_condition)
-            reject_non_bool_condition(self.type_validator, node.expr, operand_type)
+def type_float_literal(validator: TypeValidator, value: float, expected: Optional[Type],
+                       loc: Span) -> Type:
+    if isinstance(expected, BuiltinType) and is_float_type(expected):
+        if not float_literal_fits(value, expected):
+            er.emit(validator.reporter, er.ERR.CE2073, loc, literal=str(value),
+                    type=expected.value)
+        return expected
+    return BuiltinType.F64
 
-        # Unary minus is arithmetic, so it takes a number like the binary half. Its
-        # overflow check (the smallest signed value has no positive twin) runs at the top
-        # of its nest, in `validate_expression`. `~` is width-defined and never reports.
-        if node.op == "neg":
-            from sushi_lang.semantics.passes.types.expressions import (
-                reject_non_numeric_arithmetic)
-            reject_non_numeric_arithmetic(self.type_validator, "-",
-                                          [(node.expr, operand_type)])
 
-    def visit_binaryop(self, node: BinaryOp) -> None:
-        """Validate binary operation."""
-        from sushi_lang.semantics.passes.types.expressions import (
-            ARITHMETIC_OPS, COMPARISON_OPS, DIVISION_OPS, is_string_plus,
-            reject_mixed_numeric_operands, reject_non_bool_condition,
-            reject_non_numeric_arithmetic, reject_uncomparable_operands,
-            reject_zero_divisor)
+def check_local_ref(validator: TypeValidator, node: e.LocalRef,
+                    _expected: Optional[Type]) -> Optional[Type]:
+    """The type of the local; none when its binder has an error. A value pack of a template
+    check has no type and no use outside `expand` (CE0144)."""
+    ty = validator.body_answers().local_type(node.local)
+    if ty is None and node.local in validator.value_packs:
+        name = validator.body_locals[node.local].name
+        er.emit_with(validator.reporter, er.ERR.CE0144, node.loc, name=name).help(
+            f"walk a pack with `expand(a in {name}):`; pack forwarding and pack "
+            "indexing are not supported").emit()
+    return ty
 
-        # Operand-driven literal typing: when one operand is a bare (unstamped)
-        # numeric literal and the other a concrete numeric type, stamp the literal
-        # to that type so `a + 1` (a: u8) is u8 + u8, not the mixed u8 + i32 below.
-        # The sibling is validated first, and the literal is stamped BEFORE its own
-        # validation, so the range check reads the sibling's type and not the i32
-        # default (#826). The type of the validated sibling is kept, so a nest of
-        # operators with a literal at each level is not inferred again at each level.
-        if node.op in COMPARISON_OPS:
-            self._type_enum_operand_from_sibling(node)
-        from sushi_lang.semantics.passes.types.propagation import lone_bare_literal
-        infer = self.type_validator.infer_expression_type
-        literal = lone_bare_literal(node.left, node.right)
-        if literal is None:
-            # Two bare literals, or none: the stamp infers nothing.
-            self._context_type_operand_from_sibling(node, infer)
-            self.type_validator.validate_expression(node.left)
-            self.type_validator.validate_expression(node.right)
-        else:
-            sibling = node.right if literal is node.left else node.left
-            self.type_validator.validate_expression(sibling)
-            self._context_type_operand_from_sibling(node, infer)
-            self.type_validator.validate_expression(literal)
-        self._context_type_operand_from_sibling(node, infer)
 
-        left_type = self.type_validator.infer_expression_type(node.left)
-        right_type = self.type_validator.infer_expression_type(node.right)
+def check_const_ref(validator: TypeValidator, node: e.ConstRef,
+                    _expected: Optional[Type]) -> Optional[Type]:
+    """The declared type of the constant. Another unit's private constant is CE3005, bare
+    or behind an alias, and a bare name that two imports bring is CE3012."""
+    written = validator.decl_name(node.const_id)
+    record = constant_record(validator, written)
+    if record is None:
+        if reject_private_kept(validator, written, node.loc, kinds=KEPT_STORAGE_KINDS):
+            return None
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail=f"the constant '{written}' has no record")
+    if not isinstance(record, ConstSig):
+        _record_constant_value(validator, node, record)
+        return record.get_return_type()
+    if reject_private_name(validator, "constant", record, node.loc):
+        return None
+    if "." not in written and reject_ambiguous_name(validator, "constant", written, node.loc):
+        return None
+    if record.const_type is None:
+        return None
+    _record_constant_value(validator, node, record)
+    return resolve_variable_type(validator, record.const_type, record.type_span)
 
-        # CE5010: a foreign ptr is an opaque handle - no comparison, arithmetic,
-        # bitwise, or logical operations of any kind.
-        if isinstance(left_type, ForeignPtrType) or isinstance(right_type, ForeignPtrType):
-            er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
-            return
 
-        if is_string_plus(node.op, left_type, right_type):
-            from sushi_lang.semantics.const_eval import emit_string_plus
-            emit_string_plus(self.type_validator.reporter, node.loc)
+def check_storage_ref(validator: TypeValidator, node: e.StorageRef,
+                      _expected: Optional[Type]) -> Optional[Type]:
+    """The declared type of the `var`, and the symbol of its global. Another unit's private
+    `var` is CE3005, bare or behind an alias, and a bare name that two imports bring is
+    CE3012."""
+    written = validator.decl_name(node.decl)
+    record = constant_record(validator, written)
+    if not isinstance(record, ConstSig) or not record.is_var or record.decl is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail=f"the unit variable '{written}' has no record")
+    if reject_private_name(validator, "variable", record, node.loc):
+        return None
+    if "." not in written and reject_ambiguous_name(validator, "variable", written, node.loc):
+        return None
+    if record.const_type is None:
+        return None
+    validator.body_answers().record_global(node.shir_id,
+                                           global_symbol(record.decl, record.unit_name))
+    return resolve_variable_type(validator, record.const_type, record.type_span)
 
-        if node.op in COMPARISON_OPS or node.op in ARITHMETIC_OPS:
-            reject_mixed_numeric_operands(self.type_validator, node, left_type, right_type)
 
-        # Arithmetic takes a number on every side, and a divisor it can read must not
-        # be zero -- the rule a constant has always obeyed (#709).
-        if node.op in ARITHMETIC_OPS:
-            reject_non_numeric_arithmetic(self.type_validator, node.op,
-                                          [(node.left, left_type), (node.right, right_type)])
+def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
+                           record: Union[ConstSig, StdlibFunction]) -> None:
+    """The value row of `node`. A constant with no value after an error of the program
+    (its initializer has one) gets no row: the walk goes on, and the body holds that error
+    (`refused_before`). With no error, a constant with no value is an internal error."""
+    value = validator.constant_value(record)
+    if value is None:
+        if not validator.errors_offered():
+            visit.unhandled_with_no_value(validator, node)
+        validator.refused_before = True
+        return
+    validator.body_answers().record_value(node.shir_id, value)
 
-        if node.op in DIVISION_OPS:
-            reject_zero_divisor(self.type_validator, node, left_type)
 
-        if node.op in COMPARISON_OPS:
-            reject_uncomparable_operands(self.type_validator, node, left_type, right_type)
+def constant_record(validator: TypeValidator,
+                    written: str) -> Optional[Union[ConstSig, StdlibFunction]]:
+    """The record of the constant that the written name of a `ConstRef` names in this body
+    (`NamespaceTable.constant_record`)."""
+    return validator.namespaces.constant_record(written, validator.const_table)
 
-        if node.op in ["&", "|", "^", "<<", ">>"]:
-            validate_bitwise_operation(self.type_validator, node)
 
-        # Both operands of a logical operator are conditions (#532).
-        if node.op in ["and", "or", "xor"]:
-            reject_non_bool_condition(self.type_validator, node.left, left_type)
-            reject_non_bool_condition(self.type_validator, node.right, right_type)
+def check_struct_init(validator: TypeValidator, node: e.StructInit,
+                      expected: Optional[Type]) -> Optional[Type]:
+    """The struct that the construction builds, with its fields checked; none after an
+    error of the construction or of a field."""
+    offered = validator.errors_offered()
+    built = _constructed_struct(validator, node, expected)
+    struct = built.instance
+    if isinstance(struct, StructType):
+        check_struct_fields(validator, node, struct, built.typed)
+    if struct is None or validator.errors_offered() != offered:
+        return None
+    validator.body_answers().record_instance(node.shir_id, struct)
+    return struct
 
-        # The overflow check of an arithmetic operator runs at the top of its nest, in
-        # `validate_expression`. A width-defined one cannot leave its type, so it is not
-        # asked (Ruling 1 of docs/design/compile-time-evaluation.md).
 
-    def _infer_leaving_no_trace(self, expr) -> Optional[Type]:
-        """The type of a value that is not validated yet, with no stamp and no diagnostic.
+def _constructed_struct(validator: TypeValidator, node: e.StructInit,
+                        expected: Optional[Type]) -> Constructed:
+    """The struct that the written type of a construction names, or no instance after its
+    error; a contested name is an internal error."""
+    written = validator.decl_name(node.decl)
+    alias, dot, name = written.rpartition(".")
+    if dot:
+        binding = validator.namespaces.lookup(alias, name)
+        if binding is None or binding.kind != "struct":
+            visit.unhandled(validator, node)
+        name = binding.name
+    if type_name_is_contested(validator, name):
+        visit.unhandled(validator, node)
+    generic = name in validator.generic_struct_table.by_name
+    struct = None if generic else validator.struct_table.by_name.get(name)
+    if struct is None and not generic:
+        reject_undefined_function(validator, name, node.decl_loc)
+        if node.names:
+            reject_named_argument(validator, node.names[0], node.loc)
+        if name_was_refused(validator, name):
+            validator.refused_before = True
+        for arg in node.fields:
+            visit.check_expr(validator, arg.value)
+        return Constructed(None)
+    if dot and reject_private_type(validator, name, node.decl_loc):
+        if node.named:
+            declared = struct or validator.generic_struct_table.by_name[name]
+            reject_named_argument(validator, _first_written_name(node, declared), node.loc)
+        return Constructed(None)
+    if generic:
+        return generic_struct_instance(validator, node, name, written, expected)
+    return Constructed(struct)
 
-        Validation reads the stamps inference writes, so every field under the value is
-        put back, as `ReadOnlyInferrer` does for the early passes (#806). A diagnostic
-        goes to a Reporter nobody reads: validation reports it later, for real.
-        """
-        from sushi_lang.internals.report import Reporter
-        from sushi_lang.semantics.passes.types import fields_restored_under
-        tv = self.type_validator
-        reporter, tv.reporter = tv.reporter, Reporter()
-        try:
-            with fields_restored_under(expr):
-                return tv.infer_expression_type(expr)
-        finally:
-            tv.reporter = reporter
 
-    def _type_enum_operand_from_sibling(self, node: BinaryOp) -> None:
-        """`m == Maybe.None`: a bare variant takes its enum from the other operand.
-
-        The variant spells no type argument, so it has the type of its position, as
-        in a `let`; for a comparison that position is the other operand. The
-        propagation changes only a variant spelling. Thus a comparison with no variant
-        spelling infers no operand here, and a nest of comparisons does not infer each
-        subtree again at each level.
-        """
-        from sushi_lang.semantics.passes.types.propagation import (
-            propagate_types_to_value, variant_spelling_enum)
-        from sushi_lang.semantics.typesys import EnumType, deref_type
-        tv = self.type_validator
-        if (variant_spelling_enum(tv, node.left) is None
-                and variant_spelling_enum(tv, node.right) is None):
-            return
-        left = deref_type(self._infer_leaving_no_trace(node.left))
-        right = deref_type(self._infer_leaving_no_trace(node.right))
-        if left == right:
-            return
-        if isinstance(left, EnumType):
-            propagate_types_to_value(self.type_validator, node.right, left)
-        elif isinstance(right, EnumType):
-            propagate_types_to_value(self.type_validator, node.left, right)
-
-    def _context_type_operand_from_sibling(
-            self, node: BinaryOp, infer: Callable[[Expr], Optional[Type]]) -> None:
-        """Stamp a bare numeric-literal operand with its concrete sibling's type (#448)."""
-        from sushi_lang.semantics.passes.types.propagation import type_literal_from_sibling
-        type_literal_from_sibling(self.type_validator, node.left, node.right, infer)
-
-    def visit_lambda(self, node: Lambda) -> None:
-        """Type the lambda and reject illegal captures (CE2094).
-
-        The BODY is not walked here. A lifted lambda is a function, and the `lift` pass
-        hands its body to `_validate_function` like any other -- so walking it here as
-        well checked it twice and reported every fault in it twice (#629). What is left
-        is what no lifted function carries: the capture list, which lift consumes into
-        the environment struct, and the function TYPE the enclosing expression needs.
-        """
-        tv = self.type_validator
-        infer_lambda_type(tv, node)  # fills param + capture types (idempotent)
-
-        # CE2094: capturing a peek/poke borrow is deferred to Tier 2. An owning capture
-        # is a move into the environment, and the borrow pass checks the outer name.
-        from sushi_lang.semantics.passes.types.utils import resolve_declared_type
-        from sushi_lang.semantics.typesys import ReferenceType, owns_resource
-        for cap in (node.captures or []):
-            if isinstance(cap.ty, ReferenceType):
-                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"cannot capture '{cap.name}': it is a borrow (peek/poke capture is deferred to Tier 2)")
-
-        # CE2094: an owning parameter type on a function value has no deep-copy on the
-        # indirect-call path yet, so reject it. A `string` is excluded deliberately -- its
-        # `owned` bit is cleared at entry, so it frees nothing, and including it would
-        # silently make `|string s| ...` illegal.
-        # A type that owns for every type argument is refused at the template; one that
-        # owns only for some is refused at the instance that owns (#1070, R7).
-        drops = tv.drop_type_names
-        for p in node.params:
-            if p.ty != BuiltinType.STRING and owns_resource(
-                    p.ty, drops, resolve=lambda ty: resolve_declared_type(tv, ty),
-                    opaque_owns=False):
-                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
-                               f"owning function-value parameters are deferred to Tier 2")
-
-    def visit_call(self, node: Call) -> None:
-        """Validate function call."""
-        validate_function_call(self.type_validator, node)
-        reject_named_args(self.type_validator, node)
-
-    def visit_methodcall(self, node: MethodCall) -> None:
-        """Validate method call."""
-        validate_method_call(self.type_validator, node)
-        reject_named_args(self.type_validator, node)
-
-    def visit_dotcall(self, node: DotCall) -> None:
-        """Validate dot-call expression - resolve to enum constructor or method call."""
-        self._dispatch_dotcall(node)
-        reject_named_args(self.type_validator, node)
-
-    def _dispatch_dotcall(self, node: DotCall) -> None:
-        """Send `X.Y(args)` to the rules of whatever X.Y turns out to name."""
-        from sushi_lang.semantics.passes.types.calls.dotcall import (
-            DotCallKind, copy_callee_stamps, resolve_dotcall)
-
-        target = resolve_dotcall(self.type_validator, node, report=True)
-
-        if target.kind is DotCallKind.FN_FIELD:
-            self.type_validator.validate_expression(node.receiver)
-            validate_fn_field_call_args(self.type_validator, node, target.fn_type)
-            return
-
-        if target.kind is DotCallKind.METHOD:
-            validate_method_call(self.type_validator, target.method_call)
-            copy_callee_stamps(node, target.method_call)
-
-    def visit_arrayliteral(self, node: ArrayLiteral) -> None:
-        """Validate array literal, then make sure it is stamped (#889)."""
-        validate_array_literal(self.type_validator, node)
-        if node.resolved_type is None:
-            self.type_validator.infer_expression_type(node)
-
-    def visit_tupleliteral(self, node: TupleLiteral) -> None:
-        """Validate every element, then make sure the literal is stamped."""
-        for element in node.elements:
-            self.visit(element)
-        if node.resolved_type is None:
-            self.type_validator.infer_expression_type(node)
-
-    def visit_indexaccess(self, node: IndexAccess) -> None:
-        """Validate index access."""
-        validate_index_access(self.type_validator, node)
-
-    def visit_dynamicarraynew(self, node: DynamicArrayNew) -> None:
-        """new() takes its type from its position alone. With none, it is CE2111 (#889)."""
-        if node.resolved_type is None:
-            er.emit(self.type_validator.reporter, er.ERR.CE2111, node.loc, form="new()")
-
-    def visit_dynamicarrayfrom(self, node: DynamicArrayFrom) -> None:
-        """from(array_literal) - validate the array literal, then make sure it is stamped.
-
-        Propagation stamps a declared position before validation reads it. A non-empty
-        literal in any other position takes the type inference stamps. An empty one has
-        no source for its element type, and that is CE2111 at the literal (#868).
-        """
-        self.type_validator.validate_expression(node.elements)
-        if node.resolved_type is None:
-            self.type_validator.infer_expression_type(node)
-        if node.resolved_type is None and not node.elements.elements:
-            er.emit(self.type_validator.reporter, er.ERR.CE2111, node.loc, form="from([])")
-
-    def visit_castexpr(self, node: CastExpr) -> None:
-        """Cast expression - validate the source expression and check cast validity."""
-        validate_cast_expression(self.type_validator, node)
-
-    def visit_enumconstructor(self, node: EnumConstructor) -> None:
-        """Validate enum constructor call (including Result.Ok() and Result.Err())."""
-        validate_enum_constructor(self.type_validator, node)
-
-    def visit_memberaccess(self, node: MemberAccess) -> None:
-        """A field read -- or the bare spelling of a payload-free variant (#545)."""
-        from sushi_lang.semantics.passes.types.calls.namespaced import fold_namespaced_enum
-        fold_namespaced_enum(self.type_validator, node)
-        if (isinstance(node.receiver, Name)
-                and self._validate_variant_spelling(node, node.member, [])):
-            return
-        self.visit(node.receiver)
-        from sushi_lang.semantics.passes.types.expressions import reject_unknown_field
-        reject_unknown_field(self.type_validator, node)
-
-    def _validate_variant_spelling(self, node, variant_name: str, args: list) -> bool:
-        """`Enum.Variant(...)` and the bare `Enum.Variant` -- the ladder's one home."""
-        from sushi_lang.semantics.passes.types.calls.dotcall import (
-            validate_variant_spelling)
-        return validate_variant_spelling(self.type_validator, node, variant_name, args)
-
-    def visit_tryexpr(self, node: TryExpr) -> None:
-        """Validate try expression (?? operator)."""
-        validate_try_expression(self.type_validator, node)
-
-    def visit_rangeexpr(self, node: RangeExpr) -> None:
-        """A range reached through the dispatch is a value, or in no position of its own."""
-        from sushi_lang.semantics.passes.types.expressions import (
-            refuse_range_value, validate_range_value)
-        if node.is_value:
-            validate_range_value(self.type_validator, node)
-            return
-        refuse_range_value(self.type_validator, node)
-
-    def visit_name(self, node: Name) -> None:
-        """Name expressions are terminal."""
-        tv = self.type_validator
-        if node.id in tv.variable_types:
-            return
-        from sushi_lang.semantics.passes.types.arguments import reject_type_pack_value
-        if reject_type_pack_value(tv, node):
-            return
-        const_sig = tv.const_sig(node.id)
-        if const_sig is not None:
-            # The one place a bare constant is validated, so the one place the fence
-            # sits (D3). A local of the same name shadows it and never reaches here.
-            kind = "variable" if const_sig.is_var else "constant"
-            if not reject_private_name(tv, kind, const_sig, node.loc):
-                reject_ambiguous_name(tv, kind, node.id, node.loc)
-            return
-        # A constant a binary library declares and keeps registers in no table: the
-        # manifest holds the name and the kind, and that is the whole origin (#487).
-        if reject_private_kept(tv, node.id, node.loc, kinds={"constant", "variable"}):
-            return
-        from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
-        from sushi_lang.semantics.passes.types.borrowed_returns import (
-            reject_borrowed_function_value)
-        own = own_concrete_function(tv.func_table, node.id, tv.current_unit_name)
-        if own is not None:
-            reject_borrowed_function_value(tv, own, node.id, node.loc)
-            return
-        if reject_borrowed_function_value(tv, tv.generic_sig(node.id), node.id, node.loc):
-            return
-        if tv.generic_sig(node.id) is not None:
-            # A generic-fn reference is allowed WITH an explicit expected fn type: solve
-            # the type args and rewrite to the mangled name. A bare one stays CE2093.
-            from sushi_lang.semantics.passes.types.calls.generics import (
-                GENERIC_VALUE_REFUSED, reject_unsolved_generic_value,
-                resolve_generic_fn_reference)
-            expected = getattr(node, "expected_type", None)
-            resolved = resolve_generic_fn_reference(tv, node.id, expected, loc=node.loc)
-            # A refused constraint is the one fault (#1070); CE2093 is not added to it.
-            if resolved is GENERIC_VALUE_REFUSED:
-                return
-            if resolved is not None:
-                node.id = resolved[0]  # mirror the call-site mangled-name rewrite
-                return
-            reject_unsolved_generic_value(tv, node.loc, node.id, expected)
-            return
-        # A function value of another unit's function obeys the fences its call obeys:
-        # CE3005 for a private one, CE3012 for a name two imports bring (#1013).
-        func_sig = tv.func_sig(node.id)
-        if func_sig is not None and not reject_private_name(
-                tv, "function", func_sig, node.loc, verb=VALUE_VERB):
-            if not reject_ambiguous_name(tv, "function", node.id, node.loc):
-                reject_borrowed_function_value(tv, func_sig, node.id, node.loc)
-
-    def visit_intlit(self, node: IntLit) -> None:
-        """Range-check a bare integer literal (CE2070)."""
-        if getattr(node, 'in_cast_context', False) or getattr(node, 'range_checked', False):
-            return
-        if node.resolved_type is not None:
-            return
-        value = int(node.value)
-        if node.radix == 10:
-            in_range = 0 <= value <= 2 ** 31 - 1
-        else:
-            in_range = 0 <= value <= 2 ** 32 - 1
-        if not in_range:
-            self._emit_literal_overflow(node)
-
-    def _emit_literal_overflow(self, node: IntLit) -> None:
-        """Emit CE2070 for an integer literal that cannot fit its default i32 type."""
-        radix_names = {2: "binary", 8: "octal", 10: "decimal", 16: "hexadecimal"}
-        er.emit(self.type_validator.reporter, er.ERR.CE2070, node.loc,
-                radix=radix_names.get(node.radix, "integer"),
-                literal=str(node.value), type="i32")
-
-    def visit_floatlit(self, node: FloatLit) -> None:
-        """Float literals are terminal."""
-        pass
-
-    def visit_boollit(self, node: BoolLit) -> None:
-        """Boolean literals are terminal."""
-        pass
-
-    def visit_stringlit(self, node: StringLit) -> None:
-        """String literals are terminal."""
-        pass
-
-    def visit_interpolatedstring(self, node: InterpolatedString) -> None:
-        """Each hole is walked once, and a hole that cannot be printed is CE2035 (#885).
-
-        The check is here and not in the inference, because the inference runs more than
-        once over one expression and reported one fault once for each run.
-        """
-        from sushi_lang.semantics.generics.contracts import DISPLAY
-        from sushi_lang.semantics.passes.types.expressions import top_level_contract
-        from sushi_lang.semantics.passes.types.utils import names_no_type
-        from sushi_lang.semantics.typesys import deref_type
-        stamps = []
-        for part in node.parts:
-            stamps.append(None)
-            if isinstance(part, str):
-                continue
-            self.visit(part)
-            part_type = self.type_validator.infer_expression_type(part)
-            if (part_type is None or is_string_convertible(part_type)
-                    or names_no_type(self.type_validator, deref_type(part_type))):
-                continue
-            refused: list = []
-            printable, reason = top_level_contract(self.type_validator, part_type, DISPLAY,
-                                                   refused)
-            if printable:
-                stamps[-1] = deref_type(part_type)
-                continue
-            report = er.emit_with(self.type_validator.reporter, er.ERR.CE2035, part.loc,
-                                  type=display_type(part_type))
-            if reason is not None:
-                report = report.note(f"no derived Display: {reason}")
-            from sushi_lang.semantics.generics.opaque import explain_unpromised
-            explain_unpromised(report, DISPLAY, refused).emit()
-        node.display_types = stamps if any(stamps) else None
-
+def _first_written_name(node: e.StructInit, struct: StructType | GenericStructType) -> str:
+    """The name of the field that a named construction writes first."""
+    if node.names is not None:
+        return node.names[0]
+    return struct.fields[node.written_order[0]][0]

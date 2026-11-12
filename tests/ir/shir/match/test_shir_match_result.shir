@@ -1,0 +1,17 @@
+unit test_shir_match_result
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@Bad, "Odd", [])]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody main
+  params : []
+  locals : [_0 "v": i32, _1 "v": i32]
+  block  :
+    Match(Call(Free(@half), [(Lit(8), Guaranteed)]), [Arm(Variant(@Result, "Ok", [(_0, Bare)]), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))]), Arm(Variant(@Result, "Err", [Wildcard]), [ExprStmt(Call(Intrinsic("println"), [(Lit("odd"), Guaranteed)]))])], consumes: false)
+    Match(Call(Free(@half), [(Lit(3), Guaranteed)]), [Arm(Variant(@Result, "Ok", [(_1, Bare)]), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))]), Arm(Variant(@Result, "Err", [Variant(@Bad, "Odd", [])]), [ExprStmt(Call(Intrinsic("println"), [(Lit("odd"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

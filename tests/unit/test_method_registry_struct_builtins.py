@@ -14,13 +14,13 @@ def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
     """The derived struct/enum family's claim, asked through the one table (#751).
 
     The claim used to be a checker function of its own. It is a row of
-    `METHOD_TYPE_REGISTRY` now, which the validation half reads too; every case below
-    asks the same question of the same predicate.
+    `METHOD_TYPE_REGISTRY` now, which the typecheck pass reads; every case below asks the
+    same question of the same predicate. The answer is the family that claims the call.
     """
     family = METHOD_TYPE_REGISTRY.claim(receiver_type, method_name, validator)
     if family is None or family.name not in _DERIVED:
         return None
-    return family.infer(receiver_type, method_name, validator)
+    return family
 
 
 class _FakeValidator:

@@ -1,0 +1,13 @@
+unit test_err_typeck_cast_conversion_calls_itself
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))
+
+ShirBody LowError.as
+  params : [(_0 "self": LowError, Owned)]
+  locals : []
+  block  :
+    Return(Cast(LocalRef(_0), AppError))

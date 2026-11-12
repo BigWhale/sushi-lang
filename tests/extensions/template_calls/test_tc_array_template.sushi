@@ -1,0 +1,18 @@
+# `extend T[]` at two element types, one that owns, and through a method-level parameter.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n2\n5\n"
+extend T[] count_of() i32:
+    return self.len()
+
+extend T[] sized@(U)(nom U seed) U:
+    return seed
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let string[] ys = from(["a", "b"])
+    println(xs.count_of())
+    println(ys.count_of())
+    println(xs.sized(nom 5))
+    return 0
+

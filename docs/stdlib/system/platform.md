@@ -113,7 +113,6 @@ sushi_stdlib/src/_platform/
 │   ├── process.py     # getcwd/chdir/exit/getpid/getuid/tmpfile/fileno/waitpid/
 │   │                  #   posix_spawnp + file_actions helpers/environ
 │   ├── random.py      # random/srandom
-│   ├── stdio.py       # FILE* type + parameterized stdin/stdout/stderr declarations
 │   └── time.py        # nanosleep, clock_gettime
 ├── darwin/            # macOS
 │   ├── env.py         # re-exports posix/env.py
@@ -121,7 +120,7 @@ sushi_stdlib/src/_platform/
 │   ├── net.py         # macOS socket constants and structure layouts
 │   ├── process.py     # re-exports posix/process.py
 │   ├── random.py      # re-exports posix/random.py
-│   ├── stdio.py       # __stdinp/__stdoutp/__stderrp handle names
+│   ├── stdio.py       # the __stderrp handle name
 │   └── time.py        # re-exports posix/time.py, plus the macOS clock ids
 └── linux/             # Linux: the same seven files
     ├── env.py
@@ -129,7 +128,7 @@ sushi_stdlib/src/_platform/
     ├── net.py         # Linux socket constants and structure layouts
     ├── process.py
     ├── random.py
-    ├── stdio.py       # stdin/stdout/stderr handle names
+    ├── stdio.py       # the stderr handle name
     └── time.py        # re-exports posix/time.py, plus the Linux clock ids
 ```
 
@@ -139,7 +138,7 @@ Each of `darwin/` and `linux/` has one file per platform module. Most of them ar
 re-export shims over `posix/`, because those calls are identical POSIX libc functions on
 both operating systems: `env.py`, `process.py` and `random.py` re-export `posix/`
 unchanged, and `time.py` adds only the clock ids of the platform. Four modules have real,
-distinct darwin/linux content: `stdio` (the stdin/stdout/stderr global symbol names),
+distinct darwin/linux content: `stdio` (the stderr global symbol name),
 `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`), `net` (the socket
 constants and structure layouts) and the clock ids in `time`.
 
@@ -358,8 +357,8 @@ error rather than silently picking a wrong platform's bitcode.
 - Process control: `getcwd`/`chdir`/`exit`/`getpid`/`getuid`/`tmpfile`/`fileno`/
   `waitpid`/`posix_spawnp` (+ file-action helpers)/`environ` (via `posix/process.py`)
 - `random()`/`srandom()` (via `posix/random.py`)
-- stdio handles exposed as `__stdinp`/`__stdoutp`/`__stderrp` (macOS's double-underscore
-  libc symbol names, distinct from Linux — `darwin/stdio.py`)
+- the stderr handle named `__stderrp` (macOS's double-underscore libc symbol name,
+  distinct from Linux — `darwin/stdio.py`)
 - BSD semantics for system calls
 
 ### Linux
@@ -377,8 +376,8 @@ error rather than silently picking a wrong platform's bitcode.
   `posix/` implementations macOS uses (identical libc surface on both)
 - Linux-specific `O_CREAT`/`O_TRUNC` bit values (`linux/files.py` — the numeric flag
   values differ from macOS's even though the function signatures match)
-- stdio handles exposed as plain `stdin`/`stdout`/`stderr` (glibc/musl symbol names,
-  no double-underscore prefix — `linux/stdio.py`)
+- the stderr handle named plain `stderr` (the glibc/musl symbol name, no
+  double-underscore prefix — `linux/stdio.py`)
 - GNU/Linux semantics
 
 ### Windows
@@ -411,7 +410,7 @@ Most new functionality should start as a single implementation in
 `sushi_stdlib/src/_platform/posix/myfeature.py` — the same function signature is a
 correct declaration on both macOS and Linux for nearly everything in libc. Only create
 separate `darwin/myfeature.py` and `linux/myfeature.py` files if the two operating
-systems genuinely disagree (as `stdio.py`'s handle names and `files.py`'s `O_CREAT`/
+systems genuinely disagree (as `stdio.py`'s stderr handle name and `files.py`'s `O_CREAT`/
 `O_TRUNC` bit values do):
 
 ```

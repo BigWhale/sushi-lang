@@ -1,0 +1,34 @@
+# EXPECT_ERROR_CODES_EXACT: CE2427
+# EXPECT_STDERR_CONTAINS: "argument mode does not match the declared mode of parameter 'text'"
+# EXPECT_DUMP_SHIR: test_err_typeck_call_conventions.shir
+#
+# A free call gives each argument the convention of its parameter: an unmarked parameter
+# is `Guaranteed`, a `nom` parameter is `Owned`, a `peek` parameter is `InGuaranteed` and
+# a `poke` parameter is `Inout`. The marker is written at both ends or at neither. A
+# `poke` argument for a `peek` parameter is a safe downgrade: its convention is the
+# `InGuaranteed` of the parameter. The last call gives a `nom` parameter an argument with
+# no marker, which is CE2427.
+
+fn twice(i32 n) i32:
+    return n * 2
+
+fn length(nom string text) i32:
+    println(text)
+    return 1
+
+fn read(peek i32 n) i32:
+    return n + 1
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn main() i32:
+    let i32 a = twice(4)
+    let i32 b = read(peek a)
+    bump(poke a)
+    let i32 c = read(poke a)
+    let string s = "Mostly Harmless"
+    let i32 d = length(nom s)
+    let string t = "So long"
+    let i32 e = length(t)
+    return a + b + c + d + e

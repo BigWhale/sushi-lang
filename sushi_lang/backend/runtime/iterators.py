@@ -30,8 +30,6 @@ from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.memory.heap import emit_free, emit_malloc
 from sushi_lang.backend.runtime.closures import build_closure_value
-from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.iterators import CURSOR, LENT, OWNED, state_on_heap
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -169,41 +167,21 @@ class OwnedContainer:
     slots: Callable[['LLVMCodegen', ir.Value], tuple[ir.Value, ir.Value]]
 
 
-def emit_cursor_iterator(codegen: 'LLVMCodegen', call, source: CursorSource,
-                         length: ir.Value, data: ir.Value,
-                         owned: Optional[Callable[[], OwnedContainer]] = None) -> ir.Value:
-    """What a producer call answers, by the state the borrow pass chose for it.
-
-    CURSOR: the bare cursor, for a direct walk. LENT: a value over a stack cursor, or over a
-    heap cursor when it leaves through a `peek` return (#1229). OWNED: a value that takes
-    the container (`owned()` takes the receiver and gives it) and keeps it with the cursor
-    on the heap.
-    """
-    b = codegen.builder
+def emit_lent_cursor(codegen: 'LLVMCodegen', source: CursorSource, length: ir.Value,
+                     data: ir.Value, heap: bool) -> ir.Value:
+    """A value that borrows its slots: its cursor is a stack slot, or a heap block when it
+    leaves through a `peek` return (#1229)."""
     cursor_type = source.cursor_type(codegen)
-    state = getattr(call, "iterator_state", None)
-    if state == CURSOR:
-        cursor = ir.Constant(cursor_type, ir.Undefined)
-        cursor = b.insert_value(cursor, ir.Constant(codegen.types.i32, 0), _INDEX)
-        cursor = b.insert_value(cursor, length, _LENGTH)
-        return b.insert_value(cursor, b.bitcast(data, ir.PointerType(source.data_type)),
-                              _DATA, name="cursor")
-    if state == LENT and state_on_heap(call):
+    zero = ir.Constant(codegen.types.i32, 0)
+    if heap:
         raw, cursor = _heap_state(codegen, cursor_type)
-        _store_cursor(codegen, cursor, ir.Constant(codegen.types.i32, 0), length, data,
-                      source)
+        _store_cursor(codegen, cursor, zero, length, data, source)
         return iterator_value(codegen, _cursor_next(codegen, source), raw,
                               _free_state(codegen), _lent_cursor_clone(codegen, source))
-    if state == LENT:
-        slot = entry_alloca(b, cursor_type, name="iter_cursor")
-        _store_cursor(codegen, slot, ir.Constant(codegen.types.i32, 0), length, data,
-                      source)
-        return iterator_value(codegen, _cursor_next(codegen, source), slot, None,
-                              _lent_cursor_clone(codegen, source))
-    if state == OWNED and owned is not None:
-        return _owned_cursor_iterator(codegen, source, owned())
-    raise_internal_error("CE0015", message=f"an iterator producer `.{call.method}()` "
-                                           f"reached the backend with no state")
+    slot = entry_alloca(codegen.builder, cursor_type, name="iter_cursor")
+    _store_cursor(codegen, slot, zero, length, data, source)
+    return iterator_value(codegen, _cursor_next(codegen, source), slot, None,
+                          _lent_cursor_clone(codegen, source))
 
 
 def _store_cursor(codegen: 'LLVMCodegen', cursor_ptr: ir.Value, index: ir.Value,
@@ -281,8 +259,8 @@ def _owned_state_type(codegen: 'LLVMCodegen', source: CursorSource,
                                  codegen.types.ll_type(container_type)])
 
 
-def _owned_cursor_iterator(codegen: 'LLVMCodegen', source: CursorSource,
-                           container: OwnedContainer) -> ir.Value:
+def emit_owned_cursor(codegen: 'LLVMCodegen', source: CursorSource,
+                      container: OwnedContainer) -> ir.Value:
     """A cursor that owns its container: both on the heap, the container after the cursor."""
     b = codegen.builder
     state_type = _owned_state_type(codegen, source, container.semantic_type)
@@ -362,16 +340,15 @@ def array_source(codegen: 'LLVMCodegen', element_type: 'Type') -> CursorSource:
 _RANGE_K, _RANGE_COUNT, _RANGE_FIRST, _RANGE_STEP = 0, 1, 2, 3
 
 
-def emit_range_iterator(codegen: 'LLVMCodegen', range_expr) -> ir.Value:
-    """A range as a value: its plan (`emit_range`, the one formula) in a heap state."""
-    from sushi_lang.backend.ranges import emit_range
-    span = emit_range(codegen, range_expr)
+def emit_range_iterator(codegen: 'LLVMCodegen', first: ir.Value, count: ir.Value,
+                        step: int) -> ir.Value:
+    """A range as a value: its first value, its count and its step in a heap state."""
     i32 = codegen.types.i32
     state_type = _range_state_type(codegen)
     raw, state = _heap_state(codegen, state_type)
     b = codegen.builder
-    for field, value in ((_RANGE_K, ir.Constant(i32, 0)), (_RANGE_COUNT, span.count),
-                         (_RANGE_FIRST, span.first), (_RANGE_STEP, span.step)):
+    for field, value in ((_RANGE_K, ir.Constant(i32, 0)), (_RANGE_COUNT, count),
+                         (_RANGE_FIRST, first), (_RANGE_STEP, ir.Constant(i32, step))):
         b.store(value, gep_utils.gep_struct_field(codegen, state, field, "range_field"))
     return iterator_value(codegen, _range_next(codegen), raw, _free_state(codegen),
                           _range_clone(codegen))

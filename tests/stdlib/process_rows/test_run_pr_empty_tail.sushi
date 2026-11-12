@@ -1,0 +1,10 @@
+# `run` with an empty tail: the array of the tail is the empty array.
+# EXPECT_STDOUT_EXACT: "ok 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn main() i32:
+    let i32 code = run("true").realise(ProcessOutput(9, "", "")).exit_code
+    println("ok {code}")
+    return 0

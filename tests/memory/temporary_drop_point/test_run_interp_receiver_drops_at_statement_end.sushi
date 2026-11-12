@@ -1,0 +1,34 @@
+# A temporary receiver of a method call in an interpolation hole drops at the end of its
+# statement, after the print, as every temporary does: `drop()` prints after the line that
+# reads it. The AST backend dropped it before the print (a stated change, ruling R-AU).
+# `err()` of an `Ok` temporary drops the `Ok` payload at the read, because nothing takes
+# it, so `drop ok` comes before `B true`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "A true\ndrop m\ndrop ok\nB true\nC true\ndrop err\ndrop err\nD true\nend\n"
+struct H:
+    string n
+
+extend H with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.n}")
+
+error E:
+    Bad(H)
+
+fn mk() Maybe@(H):
+    return Maybe.Some(H("m"))
+
+fn made(bool ok) H | E:
+    if (ok):
+        return Result.Ok(H("ok"))
+    return Result.Err(E.Bad(H("err")))
+
+fn main() i32:
+    println("A {mk().is_some()}")
+    println("B {made(true).err().is_none()}")
+    println("C {made(false).err().is_some()}")
+    let bool c = made(false).err().is_some()
+    println("D {c}")
+    println("end")
+    return 0

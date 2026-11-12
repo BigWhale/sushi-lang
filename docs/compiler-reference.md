@@ -61,6 +61,8 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--dump-parse`      | Print the raw Lark parse tree                      |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
+| `--dump-shir PATH`  | Write the SHIR of each body to `PATH` (`-` prints it); the compile goes on as usual |
+| `--dump-slir PATH`  | Write the SLIR of each body to `PATH` (`-` prints it); the compile goes on as usual |
 | `--write-ll`        | Write LLVM IR to `<output>.ll` file                |
 | `--no-incremental`  | Force full rebuild, ignoring cached object files   |
 | `--clean-cache`     | Remove `__sushi_cache__/` directory and exit       |
@@ -511,6 +513,66 @@ Print the abstract syntax tree:
 - Understanding parsing
 - Debugging grammar issues
 - Compiler development
+
+### Dump SHIR
+
+Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a file:
+
+```bash
+./sushic --dump-shir program.shir program.sushi
+./sushic --dump-shir - program.sushi    # print the dump on the terminal
+```
+
+**Output includes:**
+- Each unit of the program, then each body of the unit: a function, a method, the initializer of a constant, a template, and each instance of a template
+- The parameters of each body, with the convention of each (`Owned`, `Guaranteed`, `InGuaranteed`, `Inout`), and its other locals
+- The block of each body, one statement on each line
+- A hole, `<hole: AstClass>`, for each construct that lowering does not handle yet. The name is the AST class of the construct, for example `<hole: Name>` for a name with no declaration
+- The answers of the typecheck pass, in place, where its table holds a row: the resolved callee in place of the written one (`Call(Free(@decorate), ...)`, `Intrinsic("println")`), each argument of a call as `(value, Convention)` with its resolved convention, and the type of each local
+- The answers of the borrow pass, in place, where its table holds a row: the ownership of each consuming use as a word before the node (`move LocalRef(_0)`, `adopt Lit(2)`, `reject ...`), the conditionally moved locals on a `cond_moved : [_5]` line after the `locals` line, `iterator: lent` or `iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator call, and `in_place: true` or `in_place: false` after the body of a loop
+- The answers of the lift pass, in place, where its table holds a row: `symbol: "<symbol>"` and `env: [(adopt _4, Copy), ...]` after the fields of a lambda
+- With no row, the text is the written form: a body that a pass refused or did not reach prints no answer of that pass
+
+**Rules:**
+- The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SHIR`, `tests/TEST_METADATA_GUIDE.md`)
+- A unit of the bundled stdlib and a unit of a source library are not in the dump
+- A template as written (a generic function, a generic extension, a method with a type parameter, a method of a perk implementation on a generic target) is the body of its template check: its header shows `(TemplateCheck("<unit>.<template>"))`, and its type parameters stay as written. An `expand` in it is one `Expand` statement, never unrolled
+- An instance is a body of the unit that declares its template, with the name of the instance (`keep__i32`, `Box@(i32).show`, `i32.pick@(string)`). An `expand` in an instance is unrolled: the instance holds one copy of the body for each element of the pack
+- The bodies that the source writes come first: the constants, the functions, the extension methods, then the perk methods, each kind in the source order. The instances come after them, in the order of their names
+- The dump is written when the semantic analysis ends, before the compile stops (see the next paragraph). A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
+- With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
+
+**The new pipeline on every compile:** the compiler lowers each body to SHIR on every compile, also with no `--dump-shir`, the typecheck pass walks the SHIR body of each declaration, the lift pass walks each body that the typecheck pass finished with no error, the borrow pass walks each body that the lift pass finished, and the SLIR lowering lowers each body that the borrow pass finished and that is not a template check or the initializer of a constant or a `var` (see [Dump SLIR](#dump-slir)). The backend emits each function from its SLIR. A construct that a stage does not handle is an internal error ([CE0000](error-catalog.md#ce0000)), and no output is written. The dumps are written when the analysis ends.
+
+A hole of lowering does not stop the compile. Set the variable `SUSHI_SHIR_STRICT=1` to stop the compile at the first hole with the internal error CE0000:
+
+```bash
+SUSHI_SHIR_STRICT=1 ./sushic program.sushi
+```
+
+The variable does not stop the compile at a name with no declaration: the program always has an error then ([CE1001](error-catalog.md#ce1001), [CE1002](error-catalog.md#ce1002), or [CE0144](error-catalog.md#ce0144) for a type pack name), and that error is the diagnostic. The variable does not stop the compile at a form that the language always refuses either: a named argument outside a struct construction ([CE6104](error-catalog.md#ce6104)), written type arguments after a dot or on a struct construction ([CE6102](error-catalog.md#ce6102)), a slice with a reversed range ([CE2122](error-catalog.md#ce2122)), a call of a name that the namespace does not hold ([CE2008](error-catalog.md#ce2008)), a member of a type that is no variant ([CE2045](error-catalog.md#ce2045)), and a `break` or a `continue` outside a loop ([CE1003](error-catalog.md#ce1003)). The variable does not stop the compile of a unit in which the scope pass reported an error either: a type name written as a value is a hole there, and the error of the scope pass ([CE2105](error-catalog.md#ce2105)) is the diagnostic.
+
+Each of those forms is an error hole: `--dump-shir` prints it with the codes of its error (`<hole: IndexAccess, error: CE2122 | CE2404>`). The error hole of a member of a type that is no variant also prints the member as written (`<hole: MemberAccess, error: CE2045 | CE2105 | CE2007 | CE2008, member: Sign.Nope>`). On every compile, an error hole whose codes no error offered stops the compile with the internal error CE0000 when the program has no error: lowering and the typecheck pass then disagree, and the hole could hide a fault in a correct program. In a constant or a `var` initializer an error hole also accepts [CE0108](error-catalog.md#ce0108), and a slice with a reversed range also accepts [CE2404](error-catalog.md#ce2404), because those errors come first.
+
+The variable is for the work on the new pipeline. The test runner (`tests/run_tests.py`) sets it to `1` for every compile that it starts, and no flag of the runner turns it off. A compile that you start by hand does not get it.
+
+### Dump SLIR
+
+Write the SLIR (the Sushi Low-level IR, `docs/design/ir.md` section 8) of each body to a file:
+
+```bash
+./sushic --dump-slir program.slir program.sushi
+./sushic --dump-slir - program.sushi    # print the dump on the terminal
+```
+
+**Output includes:**
+- Each unit of the program, then each function of the unit: a header with each parameter, its type and its convention (`@owned`, `@guaranteed`, `@in_guaranteed`, `@inout`), and the return type; one `let` line for the return slot `_0` and for each other local; then each basic block with its statements and its terminator
+
+**Rules:**
+- The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SLIR`, `tests/TEST_METADATA_GUIDE.md`)
+- The units and the functions are those of the SHIR dump, in the same order. A template check, the initializer of a constant or a `var`, and a body that has an error, do not reach the SLIR lowering and do not print. The global of a constant or a `var` takes the value of the constant evaluator
+- The dump is written when the semantic analysis ends, before the backend runs or the compile stops. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
+- With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
 
 ### Print LLVM IR
 

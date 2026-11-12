@@ -1,0 +1,32 @@
+# a fixed array literal whose parts read its target through a `peek` or a `poke` parameter:
+# every part is read before a slot of the target changes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 1 2\n3 1 2\n3 1 2\n"
+var i32[32][3] G = [[1; 32], [2; 32], [3; 32]]
+
+fn by_peek(peek i32[32][3] x) ~:
+    G := [x[2], x[0], x[1]]
+
+fn by_poke(poke i32[32][3] x) ~:
+    G := [x[2], x[0], x[1]]
+
+fn into_poke(poke i32[32][3] x) ~:
+    x := [G[2], G[0], G[1]]
+
+fn reset() ~:
+    G := [[1; 32], [2; 32], [3; 32]]
+
+fn show() ~:
+    println("{G[0][0]} {G[1][0]} {G[2][0]}")
+
+fn main() i32:
+    by_peek(peek G)
+    show()
+    reset()
+    by_poke(poke G)
+    show()
+    reset()
+    into_poke(poke G)
+    show()
+    return 0

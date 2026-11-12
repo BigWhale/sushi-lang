@@ -1,0 +1,16 @@
+unit test_err_error_hole_named_argument
+
+ShirBody diff
+  params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(-, LocalRef(_0), LocalRef(_1)))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": Shape, _1 "t": string]
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(<hole: Call, error: CE6104, named: b>, Guaranteed)]))
+    Assign(LocalRef(_0), <hole: DotCall, error: CE6104, named: w>, is_init: true)
+    Assign(LocalRef(_1), Lit(5), is_init: true)
+    Return(Lit(0))

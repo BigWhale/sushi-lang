@@ -1,0 +1,169 @@
+unit test_slir_tuple_destructure
+
+fn pair() -> (i32, i32) {
+    let _0: (i32, i32)
+
+  bb0:
+    _0 = (const 6_i32, const 7_i32)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: (i32, i32)
+    let _2: i32                            // a
+    let _3: i32                            // b
+    let _4: string
+    let _5: ~
+    let _6: (i32, i32)
+    let _7: ((i32, i32), u8)
+    let _8: i32                            // c
+    let _9: i32                            // d
+    let _10: u8                            // e
+    let _11: string
+    let _12: ~
+    let _13: (i32, i32)                    // t
+    let _14: i32                           // f
+    let _15: (i32, i32)
+    let _16: i32                           // g
+    let _17: i32
+    let _18: string
+    let _19: ~
+    let _20: (i32, i32)
+    let _21: string
+    let _22: ~
+    let _23: Point                         // p
+    let _24: (i32, i32)
+    let _25: string
+    let _26: ~
+    let _27: (i32, i32)
+    let _28: ((i32, i32), i32)
+    let _29: string
+    let _30: ~
+    let _31: (i32, i32)
+    let _32: (i32, i32)
+    let _33: string
+    let _34: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = (const 1_i32, const 2_i32)
+    StorageLive(_2)
+    _2 = copy (_1.0)
+    StorageLive(_3)
+    _3 = copy (_1.1)
+    StorageDead(_1)
+    StorageLive(_4)
+    _4 = call builtin interp@(i32, string, i32)(copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    StorageDead(_5)
+    Drop(_4)
+    StorageDead(_4)
+    StorageLive(_6)
+    _6 = (const 3_i32, const 4_i32)
+    StorageLive(_7)
+    _7 = (move _6, const 5_u8)
+    StorageLive(_8)
+    _8 = copy ((_7.0).0)
+    StorageLive(_9)
+    _9 = copy ((_7.0).1)
+    StorageLive(_10)
+    _10 = copy (_7.1)
+    StorageDead(_7)
+    StorageDead(_6)
+    StorageLive(_11)
+    _11 = call builtin interp@(i32, string, i32, string, u8)(copy _8 @guaranteed, const " " @guaranteed, copy _9 @guaranteed, const " " @guaranteed, copy _10 @guaranteed)
+    StorageLive(_12)
+    _12 = call builtin println@(string)(copy _11 @guaranteed)
+    StorageDead(_12)
+    Drop(_11)
+    StorageDead(_11)
+    StorageLive(_13)
+    _13 = call @pair()
+    StorageLive(_14)
+    _14 = copy (_13.0)
+    StorageLive(_15)
+    _15 = call @pair()
+    StorageLive(_16)
+    _16 = copy (_15.1)
+    StorageDead(_15)
+    StorageLive(_17)
+    _17 = copy _16 + const 1_i32
+    StorageLive(_18)
+    _18 = call builtin interp@(i32, string, i32)(copy _14 @guaranteed, const " " @guaranteed, copy _17 @guaranteed)
+    StorageLive(_19)
+    _19 = call builtin println@(string)(copy _18 @guaranteed)
+    StorageDead(_19)
+    Drop(_18)
+    StorageDead(_18)
+    StorageDead(_17)
+    StorageLive(_20)
+    _20 = (copy _3, copy _2)
+    _2 = copy (_20.0)
+    _3 = copy (_20.1)
+    StorageDead(_20)
+    StorageLive(_21)
+    _21 = call builtin interp@(i32, string, i32)(copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_22)
+    _22 = call builtin println@(string)(copy _21 @guaranteed)
+    StorageDead(_22)
+    Drop(_21)
+    StorageDead(_21)
+    StorageLive(_23)
+    _23 = Point(const 0_i32, const 0_i32)
+    StorageLive(_24)
+    _24 = (const 9_i32, copy _3)
+    (_23.0) = copy (_24.0)
+    (_23.1) = copy (_24.1)
+    StorageDead(_24)
+    StorageLive(_25)
+    _25 = call builtin interp@(i32, string, i32)(copy (_23.0) @guaranteed, const " " @guaranteed, copy (_23.1) @guaranteed)
+    StorageLive(_26)
+    _26 = call builtin println@(string)(copy _25 @guaranteed)
+    StorageDead(_26)
+    Drop(_25)
+    StorageDead(_25)
+    StorageLive(_27)
+    _27 = (const 4_i32, const 3_i32)
+    StorageLive(_28)
+    _28 = (move _27, const 0_i32)
+    _2 = copy ((_28.0).0)
+    _3 = copy ((_28.0).1)
+    _8 = copy (_28.1)
+    StorageDead(_28)
+    StorageDead(_27)
+    StorageLive(_29)
+    _29 = call builtin interp@(i32, string, i32, string, i32)(copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy _8 @guaranteed)
+    StorageLive(_30)
+    _30 = call builtin println@(string)(copy _29 @guaranteed)
+    StorageDead(_30)
+    Drop(_29)
+    StorageDead(_29)
+    StorageLive(_31)
+    _31 = call @pair()
+    StorageLive(_32)
+    _32 = (copy (_31.1), const 8_i32)
+    _2 = copy (_32.0)
+    _3 = copy (_32.1)
+    StorageDead(_32)
+    StorageDead(_31)
+    StorageLive(_33)
+    _33 = call builtin interp@(i32, string, i32)(copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_34)
+    _34 = call builtin println@(string)(copy _33 @guaranteed)
+    StorageDead(_34)
+    Drop(_33)
+    StorageDead(_33)
+    _0 = const 0_i32
+    StorageDead(_23)
+    StorageDead(_16)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageDead(_10)
+    StorageDead(_9)
+    StorageDead(_8)
+    StorageDead(_3)
+    StorageDead(_2)
+    return
+}

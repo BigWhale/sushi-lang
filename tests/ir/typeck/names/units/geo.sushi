@@ -1,0 +1,2 @@
+const i32 HIDDEN = 3
+public const i32 SHOWN = 4

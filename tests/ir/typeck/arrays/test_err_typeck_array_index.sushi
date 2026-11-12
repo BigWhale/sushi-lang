@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2121
+# EXPECT_STDERR_CONTAINS: "an array index is i32, got i64"
+# EXPECT_DUMP_SHIR: test_err_typeck_array_index.shir
+#
+# An index reads an element of a `T[N]` or a `T[]`, or a `u8` of a string; a byte
+# literal index is an i32. An index write and a chained index write take the value at
+# the element type. A slice is a `T[]` view of either array kind. An index is an i32
+# position (CE2121).
+
+fn main() i32:
+    let i32[2][2] grid = [[1, 2], [3, 4]]
+    let i32[] xs = from([5, 6, 7])
+    let string s = "Mostly Harmless"
+    let u8 first = s[a'\x00']
+    grid[1][0] := xs[2]
+    xs[0] := grid[0][1]
+    let i32[] view = xs[0..2]
+    let i32[] part = grid[1][0..=1]
+    let i64 big = 1
+    println(xs[big])
+    return view[0] + part[1] + (first as i32)

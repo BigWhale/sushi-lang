@@ -1,0 +1,21 @@
+unit test_err_borrow_poke_of_a_peek
+
+ShirBody read
+  params : [(_0 "n": i32, InGuaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(+, LocalRef(_0), Lit(1)))
+
+ShirBody pass_on
+  params : [(_0 "n": i32, InGuaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Free(@read), [(LocalRef(_0), InGuaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(1), is_init: true)
+    Assign(LocalRef(_1), adopt Call(Free(@read), [(LocalRef(_0), InGuaranteed)]), is_init: true)
+    Return(adopt Call(Free(@pass_on), [(LocalRef(_1), InGuaranteed)]))

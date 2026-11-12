@@ -1,0 +1,17 @@
+# The receiver of a contract call is read before its argument runs.
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+struct Point:
+    i32 x
+
+var Point g = Point(1)
+
+fn bump() Point:
+    g := Point(9)
+    return Point(1)
+
+fn main() i32:
+    println(g.eq(bump()))
+    g := Point(1)
+    println(g.compare(bump()) == 0)
+    return 0

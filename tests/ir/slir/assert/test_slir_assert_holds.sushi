@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_assert_holds.slir
+#
+# An assert switches on its condition: a zero goes to the failing block, and any other
+# value goes on to the next block (ir.md 8.9). The failing block evaluates the message and
+# ends in the trap RE2026, with two operands: the position of the assert, and the message.
+# A bare assert gives the empty string as its message, and its position has no `: `. The
+# message `"n is {n}"` is an interpolation that only the failing block builds, and the
+# trap drops nothing. A condition local ends at the top of the two blocks.
+
+fn check(bool ok, i32 n) ~:
+    assert(ok)
+    assert(n > 0, "n is {n}")
+    assert(n < 10, "n is small")
+
+fn main() i32:
+    check(true, 3)
+    println("Mostly Harmless")
+    return 0

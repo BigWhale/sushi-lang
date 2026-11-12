@@ -1,0 +1,16 @@
+# The caller of the instance lowers after the copy is placed, and a second caller after it
+# names the same instance through a type that only `typecheck` knows (a range binder).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "<0>\n<1>\n<8>\n"
+fn inst_wrap@(T: Display)(T x) string:
+    return "<{x}>"
+
+fn main() i32:
+    foreach(i in 0..2):
+        println(inst_wrap(i))
+    println(inst_later())
+    return 0
+
+fn inst_later() string:
+    return inst_wrap(8)

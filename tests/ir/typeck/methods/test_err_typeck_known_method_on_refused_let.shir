@@ -1,0 +1,10 @@
+unit test_err_typeck_known_method_on_refused_let
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32, _1 "s": string]
+  block  :
+    Assign(LocalRef(_0), Lit("text"), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "to_str"), [Lit(1)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(Lit(0))

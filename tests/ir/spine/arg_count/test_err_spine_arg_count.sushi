@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_STDERR_CONTAINS: 11:13: error [CE2009]
+#
+# a spine program that calls a free function with too few arguments. The `typecheck`
+# pass refuses the call.
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main() i32:
+    println(add(1))
+    return 0

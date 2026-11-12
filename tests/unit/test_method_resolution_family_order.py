@@ -1,19 +1,14 @@
-"""Validation and codegen resolve the built-in method families in ONE order.
+"""The typecheck pass resolves the built-in method families in ONE order.
 
-Issue #273: the two layers ordered the primitive and auto-derived families
-oppositely, and the function-value clone joined each layer in a different
-relative place. The receiver kinds are disjoint today, so nothing dispatches
-differently -- but the two files stated the invariant in opposite order, and a
-type that ever satisfies two families would diverge silently. The canonical
-order below is arbitrary where the kinds are disjoint; what matters is that
-both layers state the SAME one (docs/design/method-resolution.md).
+Issue #273: two places ordered the primitive and the auto-derived families in opposite
+orders. The receiver kinds are disjoint, so the order below is arbitrary where the kinds
+are disjoint. It must be stated once (docs/design/method-resolution.md).
 
-Since #751 the typecheck pass states its half in ONE place: the family table in
-`semantics/passes/types/method_registry.py`, which the inference half and the
-validation half both read. So the validation order below is the table's, and the two
-rungs that are the LADDER's and not a family's -- the perk implementation and the
-extension -- are read from `calls/methods.py`, where `beats_perk` puts the perk rung
-between the two halves of the table.
+Since #751 the order of the families is in ONE place: the family table in
+`semantics/passes/types/method_registry.py`. So the order below is the order of the
+table. The two rungs that are the rungs of the ladder and not of a family -- the perk
+implementation and the extension -- are read from `calls/dotcall.py:resolve_dotted`,
+where the claim of the table puts the perk rung between the two halves of the table.
 """
 from __future__ import annotations
 
@@ -23,8 +18,7 @@ from pathlib import Path
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
-VALIDATION = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "methods.py"
-CODEGEN = SOURCE_ROOT / "backend" / "expressions" / "calls" / "dispatcher.py"
+DOTCALL_LADDER = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "dotcall.py"
 
 # The canonical family order, highest priority first.
 CANONICAL_ORDER = [
@@ -40,7 +34,7 @@ CANONICAL_ORDER = [
 
 # The family table's row name for each step it carries. The rungs that are not a
 # family -- the perk implementation and the extension -- are the ladder's, and the
-# markers below find them in the dispatcher's own body.
+# markers below find them in the body of `resolve_dotted`.
 TABLE_ROWS = {
     "array_hash": "ARRAY_HASH",
     "derived_hash": "DERIVED_HASH",
@@ -50,36 +44,15 @@ TABLE_ROWS = {
     "primitive": "PRIMITIVE",
 }
 
-# How each ladder rung is recognised. The marker is the step itself (the probe call),
-# never a comment.
-LADDER_MARKERS = {
-    "PERK": r"_validate_perk_method\(validator",
-    "FAMILIES_AFTER_PERK": r"beats_perk=False",
-    "EXTENSION": r"resolve_extension_method\(validator",
-}
-
-# The validation side is measured inside the DISPATCHER's body and not over the whole
-# file: the extension rungs live in `resolve_extension_method`, a shared helper declared
-# above the dispatcher, so a first-occurrence scan of the file reads the helper's
-# definition rather than the step that calls it.
-VALIDATION_SCOPE = "def validate_method_call("
-CODEGEN_MARKERS = {
-    "PERK": r"try_emit_perk_method",
-    "ARRAY_HASH": r"try_emit_array_hash",
-    "DERIVED_HASH": r"try_emit_struct_hash",
-    "DERIVED_CLONE": r"try_emit_struct_clone",
-    "CONTRACT": r"try_emit_contract_method",
-    "FUNCTION_CLONE": r"try_emit_function_clone",
-    "PRIMITIVE": r"try_emit_primitive_method",
-    "EXTENSION": r"Extension method not found",
-}
-
-
-def _family_order(path: Path, markers: dict[str, str], scope: str | None = None) -> list[str]:
+def _family_order(path: Path, markers: dict[str, str], scope: str | None = None, *,
+                  one_function: bool = False) -> list[str]:
     text = path.read_text(encoding="utf-8")
     if scope is not None:
         start = text.index(scope)
         text = text[start:]
+        if one_function:
+            end = text.find("\ndef ", len(scope))
+            text = text if end == -1 else text[:end]
     positions = {}
     for family, marker in markers.items():
         match = re.search(marker, text)
@@ -97,11 +70,17 @@ def test_validation_resolves_families_in_the_canonical_order():
     assert order == CANONICAL_ORDER
 
 
-def test_the_dispatcher_asks_the_rungs_in_that_order():
-    """And the dispatcher reads them so: perk, the table's second half, extension."""
-    assert _family_order(VALIDATION, LADDER_MARKERS, scope=VALIDATION_SCOPE) == [
-        "PERK", "FAMILIES_AFTER_PERK", "EXTENSION"]
+# The ladder of `resolve_dotted` (docs/design/ir.md 7.3): the claim of the table, which puts
+# a perk implementation between the two halves of the table, then the perk rung, then the
+# extension rung.
+RUNG_MARKERS = {
+    "FAMILIES": r"METHOD_TYPE_REGISTRY\.claim\(",
+    "PERK": r"perk_impl_table\.get_method\(",
+    "EXTENSION": r"declaring_units\(",
+}
 
 
-def test_codegen_resolves_families_in_the_canonical_order():
-    assert _family_order(CODEGEN, CODEGEN_MARKERS) == CANONICAL_ORDER
+def test_resolve_dotted_asks_the_rungs_in_that_order():
+    """`resolve_dotted` reads the same order: the table, the perk, the extension."""
+    assert _family_order(DOTCALL_LADDER, RUNG_MARKERS, scope="def resolve_dotted(",
+                         one_function=True) == ["FAMILIES", "PERK", "EXTENSION"]

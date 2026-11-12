@@ -1,0 +1,7 @@
+public fn twice(i32 x) i32:
+    return x + x
+
+fn secret(i32 x) i32:
+    return x
+
+public const i32 LIMIT = 10

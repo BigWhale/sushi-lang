@@ -1,0 +1,19 @@
+# The refusals of a call of a perk method: a wrong argument type, a wrong count, and a write
+# through a read-only receiver read the same errors as an extension method.
+# EXPECT_ERROR_CODES_EXACT: CE2006, CE2009
+
+perk Adds:
+    fn add(i32 x) i32
+
+struct A:
+    i32 n
+
+extend A with Adds:
+    fn add(i32 x) i32:
+        return self.n + x
+
+fn main() i32:
+    let A a = A(1)
+    println(a.add("no"))
+    println(a.add(1, 2))
+    return 0

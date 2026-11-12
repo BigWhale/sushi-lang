@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, AbstractSet, Callable, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, List, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.interned import interned_name
@@ -12,14 +12,13 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import TUPLE_BASE
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
-    ReferenceType, ForeignPtrType, IteratorType)
+    ReferenceType, IteratorType)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
     built_in_generic_unreachable, name_was_refused, reject_private_kept,
     reject_private_type)
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Param, Expr
     from . import TypeValidator
 
 
@@ -373,54 +372,6 @@ def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,
     return True
 
 
-def read_constant_index(validator: 'TypeValidator', expr: 'Expr') -> Optional[int]:
-    """The value of an index the compiler can read, or None.
-
-    A literal, a named constant and an expression of them (`-1`, `K`, `K + 1`) are read
-    through the one constant evaluator, silently (#1137). An index that names a local is
-    not read at all: a local of the same name shadows a constant, and the evaluator knows
-    no locals, so it would answer with the constant. An index of another type is CE2121's
-    fault, and this answers None for it.
-    """
-    from sushi_lang.semantics.ast import Name
-    from sushi_lang.semantics.ast_walk import walk_nodes
-    from sushi_lang.semantics.const_eval import ScalarConstant
-
-    names_a_local = False
-
-    def visit(node) -> bool:
-        nonlocal names_a_local
-        if isinstance(node, Name) and node.id in validator.variable_types:
-            names_a_local = True
-        return not names_a_local
-
-    walk_nodes(expr, visit)
-    if names_a_local:
-        return None
-    value = validator.constant_evaluator().evaluate(expr, BuiltinType.I32, expr.loc)
-    if not isinstance(value, ScalarConstant) or value.semantic_type != BuiltinType.I32:
-        return None
-    return value.value if isinstance(value.value, int) else None
-
-
-def validate_constant_array_index(validator: 'TypeValidator', expr: 'Expr',
-                                  array_size: int) -> None:
-    """Report an index the compiler can read that cannot be in range.
-
-    One reader and one pair of codes for every indexing form -- `a[i]`, `a.get(i)` --
-    so a new form cannot inherit half the rule.
-    """
-    index_value = read_constant_index(validator, expr)
-    if index_value is None:
-        return
-
-    if index_value < 0:
-        er.emit(validator.reporter, er.ERR.CE2056, expr.loc, index=index_value)
-    elif index_value >= array_size:
-        er.emit(validator.reporter, er.ERR.CE2012, expr.loc, index=index_value,
-                size=array_size)
-
-
 def intern_signature(validator: 'TypeValidator', *types) -> None:
     """Intern every instantiation a call-site substituted signature names (risk 1).
 
@@ -550,95 +501,8 @@ def intern_declared_wrapper(validator: 'TypeValidator',
     return None
 
 
-def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
-    """Validate parameter types and register them in the variable_types table."""
-    for param in params:
-        validate_type_name(validator, param.ty, param.type_span)
-
-        # Blank type cannot be used for parameters
-        if param.ty == BuiltinType.BLANK:
-            er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
-            continue
-
-        if isinstance(param.ty, ReferenceType):
-            # The REFERENT gets the same resolution as a by-value parameter of that type
-            # (#305). A borrow of a type is not a different type.
-            resolved_ref = ReferenceType(
-                referenced_type=resolve_declared_type(validator, param.ty.referenced_type),
-                mutability=param.ty.mutability
-            )
-            validator.variable_types[param.name] = resolved_ref
-            continue
-
-        from sushi_lang.semantics.typesys import FunctionType
-        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
-            # A container spelling: the WRAPPER is concrete but its members may not be.
-            # A function type binds its implicit UnknownType("StdError"); an array binds
-            # its element, which `P[]` leaves unresolved (#284).
-            validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
-            continue
-
-        from sushi_lang.semantics.generics.types import TypeParameter
-        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType,
-                                 TypeParameter)):
-            # A type parameter here is the opaque one of a template check (#1070).
-            validator.variable_types[param.name] = param.ty
-        elif isinstance(param.ty, UnknownType):
-            resolved_type = resolve_declared_type(validator, param.ty)
-            if resolved_type != param.ty:
-                validator.variable_types[param.name] = resolved_type
-        else:
-            from sushi_lang.semantics.generics.types import GenericTypeRef
-            if isinstance(param.ty, GenericTypeRef):
-                resolved_type = resolve_declared_type(validator, param.ty)
-                if isinstance(resolved_type, GenericTypeRef):
-                    resolved_type = None
-
-                if resolved_type is not None:
-                    validator.variable_types[param.name] = resolved_type
-                    param.ty = resolved_type  # Update AST node for backend
-
-                    # A check copy writes no signature of the program (#1070).
-                    func_sig = (validator.func_sig(validator.current_function.name)
-                                if validator.current_function
-                                and not validator.in_template_check else None)
-                    if func_sig is not None:
-                        for sig_param in func_sig.params:
-                            if sig_param.name == param.name:
-                                sig_param.ty = resolved_type
-                                break
-
-
-def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
-    """Reject any bloom spread `arr...` argument in a context that is never variadic."""
-    from sushi_lang.semantics.ast import Spread
-    found = False
-    from .arguments import names_a_type_pack
-    for arg in args:
-        if isinstance(arg, Spread) and names_a_type_pack(validator, arg.value):
-            validator.validate_expression(arg)
-            found = True
-        elif isinstance(arg, Spread):
-            er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
-                    message="bloom argument 'arr...' is only allowed as the last argument "
-                            "of a call to a variadic '...T' function")
-            validator.validate_expression(arg)
-            found = True
-    return found
-
-
-def reject_named_args(validator: 'TypeValidator', node) -> None:
-    """Refuse a named argument on a call that is not a struct construction (CE6104).
-
-    One rule, read after the call is validated, because only then is the callee known.
-    A struct construction SPENDS its names -- the field matcher puts the arguments in
-    declaration order and clears them -- so names that are still here belong to a
-    callee that has no field names to match (#563).
-    """
-    names = getattr(node, "field_names", None)
-    if not names:
-        return
-    er.emit_with(validator.reporter, er.ERR.CE6104, node.loc, name=names[0]) \
+def reject_named_argument(validator: 'TypeValidator', name: str, loc: Any) -> None:
+    """CE6104 for the named argument `name` of a callee that is not a struct."""
+    er.emit_with(validator.reporter, er.ERR.CE6104, loc, name=name) \
         .help("pass the arguments in declaration order") \
         .emit()
-    node.field_names = None

@@ -1,0 +1,7 @@
+use "helpers/inst_lib"
+
+public fn inst_number() i32:
+    return inst_echo(nom 6)
+
+public fn inst_text() string:
+    return inst_echo(nom "user")

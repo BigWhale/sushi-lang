@@ -28,14 +28,38 @@ each named for the stage it runs.
 | `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
 | `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)), or with a perk method that a binary or hybrid library ships ([CE4007](../error-catalog.md#ce4007)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
-| `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
-| `scope` | scope and variable analysis | `semantics/passes/scope.py` |
-| `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque | `semantics/passes/types/` |
-| `lift` | each lambda becomes a top-level function plus an environment | `semantics/passes/lift.py` |
-| `borrow` | borrow checking | `semantics/passes/borrow/` |
+| `effects` | which functions destroy a `poke` parameter, transitively; on the AST | `semantics/passes/effects.py` |
+| `scope` | scope and variable analysis; on the AST | `semantics/passes/scope.py` |
+| `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque; on SHIR, into `TypeckResults` | `semantics/passes/types/` |
+| `lift` | the symbol and the environment of each lambda; on SHIR, into `LiftResults` | `semantics/passes/lift.py` |
+| `borrow` | borrow checking; on SHIR, into `OwnershipResults` | `semantics/passes/borrow/` |
 
 The last four run per unit, in one loop, so the whole-program passes above them see every
-unit before any function body is walked.
+unit before any function body is walked. Lowering to SHIR runs in the loop too, after
+`scope`; it is not a pass. [The SHIR reference](shir.md) and [the SLIR reference](slir.md)
+describe the two IRs as built.
+
+**The move to SHIR** ([the IR design](../design/ir.md), 7.9). The compiler lowers each body
+to SHIR after `scope`, and the three SHIR passes walk the SHIR body of each declaration in
+the order `typecheck`, `lift`, `borrow`. `typecheck` walks it through one table of arms
+keyed on the SHIR class (`types/visit/__init__.py`) and gives each body that it finished
+with no error to `lift`. `lift` gives each body that it finished to `borrow`, which walks
+the body through a table of its own (`borrow/arms.py`); both tables read one dispatch
+(`shir/dispatch.py`). The declaration half of `typecheck` (the signatures, the declared types,
+the constraints, the header of each body, the mode of each parameter) still reads the AST,
+in 8 modules that a gate pins (`tests/unit/test_body_passes_import_no_ast.py`). `borrow` and
+`lift` read no AST. `scope` and `effects` stay on the AST; `effects` runs
+before the loop, because `borrow` reads its summary. A construct that a pass does not
+handle is an internal error; after an error of the program, the walk of the body ends
+there, and the error is the diagnostic. `borrow` gives each body that
+it finished to the SLIR lowering (`semantics/slir/lower.py`), which is not a pass: it makes
+one `SlirFunction` for each body; a construct that it cannot lower is an internal error. The SLIR verifier (`semantics/slir/verify.py`) checks each function that the
+lowering finished; a broken rule is the internal error
+[CE0158](../error-catalog.md#ce0158). The backend emits each function from its SLIR
+(`backend/slir/`), and a SLIR shape that the emitter does not handle is an internal error.
+After the last pass, `codegen_for` makes the `DeclTable` (`semantics/decl_table.py`): the one
+frozen table of the declarations that the backend reads (the signatures, the symbols, the folded
+value of each constant and `var`). No backend module imports the AST.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a
@@ -522,20 +546,17 @@ cuts an extension copy"), so the pass records the SUBSTITUTED signature of every
 call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
 -- through the same type walk a concrete declaration gets.
 
-The typecheck pass's inferrer types a generic call through its monomorphized copy, which does
-not exist yet, so it answers nothing for one here. A `match` over a generic call therefore
-types its arm bindings from that substituted signature, and a generic called with such a
-binding is collected like any other.
+A `match` over a generic call with explicit type arguments types its arm bindings from that
+substituted signature.
 
-### The inferrer reads the unit's scope
+### The early passes do not infer
 
-This pass and the `monomorphize` pass type the arguments of a generic call with
-`ReadOnlyInferrer`. Each inferrer gets the namespace table of the unit that holds the call,
-the same table the typecheck pass gives that unit. For a monomorphized copy, that unit is
-the home unit of the template. Thus `sh.Pt(0)` and `sh.Mark.Off()` behind `use "shapes" as
-sh` have the type that `Pt(0)` and `Mark.Off()` have under a flat import, and the argument
-solves the type parameter in every pass (#1147). An inferrer with no unit (a copy of an
-extension or of a perk implementation) reads only the FFI namespaces.
+This pass and the `monomorphize` pass type no expression (ruling E4). They collect what the
+program writes: an explicit type argument, a written type, and a generic function value
+against the type of its position. A call that only its arguments solve is cut late, when the
+typecheck pass asks for its instance (`docs/design/ir.md`, "A late instance"). Name
+resolution reads the program tables (`SymbolTables`) directly. The gate is
+`tests/unit/test_early_passes_do_not_infer.py`.
 
 ### Where a type names an instantiation
 
@@ -695,8 +716,8 @@ argument (`v + 1` on a `T`) is the template's: it is reported one time, at the t
 It is not a general de-duplicator. A repeat anywhere else is a bug to be fixed where it is
 made, and stays visible.
 
-A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
-`instance_of` onto what it lifts. The `borrow` pass checks a template on its check copy
+A lambda in a generic body is cut once for each instance, with the symbol of the instance
+as its prefix. The `borrow` pass checks a template on its check copy
 (see "The template check"), and its per-unit walk skips a written template that the
 `typecheck` pass checked (`BorrowChecker.run(..., skip=)` reads `checked_template_ids`). A
 written template that the driver did not check (a constraint that names no perk, a
@@ -884,9 +905,10 @@ a field or a payload may be), and `operand_contract` applies the TOP-LEVEL rule 
 operator, a constraint or a hole may take). The typecheck pass asks them for `==`, `<`, an
 interpolation hole, `print`, `println`, the methods `eq`, `compare` and `to_str`, the
 constraints `@(T: Eq)`, `@(T: Ord)` and `@(T: Display)`, and the HashMap key rule. It
-stamps the answer on the AST (`BinaryOp.operand_type`, `InterpolatedString.display_types`,
-`Print`/`PrintLn.display_type`), so the backend never re-derives it. `contract_walk.py` holds
-the walk mechanics that `hashing.py` shares. An `extend T with Eq` implementation is read
+records the answer in `TypeckResults` (the type of each operand node, and a display-type row
+for each interpolation part and each `print` argument), and SLIR lowering writes it into
+SLIR, so the backend never derives it again. `contract_walk.py` holds the walk mechanics
+that `hashing.py` shares. An `extend T with Eq` implementation is read
 first and wins. See [Derived contracts](../design/derived-contracts.md).
 
 ### Algorithm
@@ -1014,7 +1036,7 @@ not import is [`CE3022`](../error-catalog.md#ce3022), and two imported public on
 
 ## The `effects` pass: the destroy-effect summary
 
-**File:** `semantics/passes/borrow/destroy_effects.py`
+**File:** `semantics/passes/effects.py`
 
 Which functions destroy a `poke` parameter, transitively. The `borrow` pass reads
 the summary to decide whether a call invalidates the caller's value.
@@ -1076,16 +1098,12 @@ fn main() i32:
 
 Ensure all expressions and statements are type-correct.
 
-### Three phases per statement
+### Expected types
 
-The pass checks each statement in three phases, in this order:
-
-1. **resolution** (`types/resolution.py`): a written type becomes a resolved type.
-2. **propagation** (`types/propagation.py`): a declared type goes down into the value,
-   and the pass stamps `resolved_enum_type` and `resolved_struct_type` for the backend.
-   Propagation MUST run before validation.
-3. **validation** (`types/compatibility.py`, `types/expressions.py`,
-   `types/result_validation.py`): the value is checked against the type.
+The pass walks each SHIR body once. A written type becomes a resolved type
+(`types/resolution.py`), and each arm checks its node against the type of its position:
+the expected type goes down into the value through the arm itself, and no pass stamps the
+AST (`types/compatibility.py`, `types/expressions.py`, `types/result_validation.py`).
 
 ### Modules
 
@@ -1093,15 +1111,16 @@ All paths are under `semantics/passes/`.
 
 | Module | What it holds |
 |---|---|
-| `types/__init__.py` | `TypeValidator`, the entry of the pass; `ReadOnlyInferrer` for the early passes |
-| `types/visit/` | the three visitors, one module each: `statements.py`, `expressions.py`, `inference.py` (what an expression yields), and `helpers.py` |
-| `types/visitor.py` | a facade that re-exports the visitors for the modules outside the pass |
-| `types/arguments.py` | `check_arguments`: the one argument check (the count, then each argument) |
+| `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body |
+| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `results.py`: the arm of an `EnumInit` (a `Result` variant at the `Result` type of its position, a variant of an enum that is not generic); `lambdas.py`: the arm of a lambda; `helpers.py`: the function type of a signature and the fn-typed-field call |
+| `types/fold.py` | `Folder`: the readable fold of a SHIR sub-expression at the type of its position, over the integer operator kernel ([the IR design](../design/ir.md), 7.4) |
+| `types/arguments.py` | `check_arguments`: the one argument check over the SHIR arguments of a call (the count, then each argument: its type, its `nom` marker against the declared mode, and its convention) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
-| `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
-| `types/expressions.py` | operators, and the three closed operand rules: `reject_non_bool_condition`, `reject_non_numeric_arithmetic`, `reject_uncomparable_operands` |
-| `types/statements.py` | `let`, rebind, `if`, `while`, `foreach`, `return` |
-| `types/control_flow.py`, `types/signatures.py` | the return paths ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) and the declaration signatures |
+| `types/calls/` | call helpers: `dotcall.py` (`resolve_dotted`, what `X.Y(args)` names), `statics.py`, `namespaced.py` (the refusal of a name that a namespace does not hold), `methods.py` (the resolution of a user-written method), `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
+| `types/expressions.py` | `check_try`, the arm of `??` (the channel, the operand, the two error types, the facts of the `??`), and the rules of the operands of an operator, on SHIR nodes: the three closed operand rules `reject_non_bool_condition`, `reject_non_numeric_arithmetic` and `reject_uncomparable_operands`, the mixed widths, the integer operands of a bitwise operator, the divisor and the shift count that the fold reads, and the overflow of an operation (`reject_overflow`) |
+| `types/statements.py` | the AST statement helpers that a later construct group moves to SHIR: a destructure, a reference `let`, a rebind of a field, an element or a unit variable, `foreach`; and `reject_unspelled_result`, [CE2030](../error-catalog.md#ce2030) |
+| `types/result_validation.py` | the `Result` constructor that a `return` of a body with a channel spells: `spells_a_result`, and the payload against the channel ([CE2031](../error-catalog.md#ce2031), [CE2039](../error-catalog.md#ce2039)) |
+| `types/control_flow.py`, `types/signatures.py` | the path faults of a SHIR body ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) over the one path predicate `semantics/shir/paths.py`, which the borrow pass reads too, and the declaration signatures |
 | `types/matching.py` | patterns: each arm checked against the scrutinee, the rows for the checker, [CE2040](../error-catalog.md#ce2040) / [CE2074](../error-catalog.md#ce2074) / [CE2118](../error-catalog.md#ce2118) |
 | `types/exhaustiveness.py` | the one exhaustiveness checker for every match: usefulness over a pattern matrix (missing patterns, dead arms) |
 | `types/arrays.py` | the built-in array methods, and `reject_non_i32` for an index, a count or a range bound |
@@ -1110,16 +1129,16 @@ All paths are under `semantics/passes/`.
 | `types/visibility.py` | the pass's view of the visibility seam |
 | `types/qualified.py` | a type name behind an alias (`geo.Vec`) |
 | `types/externals.py` | the FFI checks (the `externs` and `ffi-clash` passes also run from here) |
-| `types/perks.py`, `types/field_matcher.py`, `types/inference.py`, `types/utils.py` | perk checks, named struct arguments, inference helpers, shared helpers |
+| `types/perks.py`, `types/inference.py`, `types/utils.py` | perk checks, inference helpers, shared helpers |
 
 The type predicates (`is_numeric_type`, `is_integer_type`, `is_float_type` and the others)
 are in `semantics/type_predicates.py`.
 
-**FFI call-site resolution.** `TypeValidator._resolve_external_call` asks the namespace
-table (`resolve_namespaced`) for the name behind the dot. When the binding is an extern,
-it stamps `external_ref = (provider origin, name)` on the node for the backend and gives
-back the `ExternalSig`. The call yields the raw C type, with no Result around it, so `??`
-on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
+**FFI call-site resolution.** The `typecheck` pass types the call of an extern behind the
+alias of its block in `passes/types/visit/extern_calls.py`. It asks the namespace table
+for the name behind the dot, and the SHIR `Extern` callee carries
+the link name of the C function. The call yields the raw C type, with no Result around it,
+so `??` on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
 
 ### Error types, `??` and conversions
 
@@ -1129,11 +1148,12 @@ on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
 written-type walk (`validate_type_name` → `reject_non_error_channels`,
 `passes/types/utils.py`), the spelled `| E` of a signature (`validate_error_channel`,
 `passes/types/signatures.py`), and each generic instance whose template writes a type
-parameter in an `E` position (the monomorphizer, and `resolve_method_generic_extension`
-for a method-level type parameter), with a note at the template. A type with no span
+parameter in an `E` position (the monomorphizer, and the arm of a method-generic call,
+`visit/method_templates.py`, for a method-level type parameter), with a note at the
+template. A type with no span
 came from inference and is not judged.
 
-**What `??` takes.** `validate_try_expression` (`passes/types/expressions.py`) asks for the
+**What `??` takes.** `check_try` (`passes/types/expressions.py`) asks for the
 enclosing channel first ([`CE0131`](../error-catalog.md#ce0131) in a bare lambda, [`CE2508`](../error-catalog.md#ce2508) outside every body; a bare
 written body was refused by the `collect` pass), and then for the operand:
 `_unwrapped_arms` accepts a `Result` instance by type identity (`is_instance_of`) and
@@ -1143,10 +1163,14 @@ nothing else, so a `Maybe` and a user enum with `Ok`/`Err` variants are [`CE2507
 channel's. The same type propagates unchanged; otherwise `find_conversion`
 (`semantics/conversions.py`, the one reader of the table, gate
 `tests/unit/test_conversion_lookup_is_one.py`) answers the declared conversion, or the
-`??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is stamped on the node
-(`TryExpr.inferred_conversion`), and the backend calls the conversion before the scope
-cleanup of the propagation path. `validate_cast_expression` asks the same question for
-`e as T` (`CastExpr.inferred_conversion`, else [`CE2014`](../error-catalog.md#ce2014)). In the check of a template, an
+`??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is the conversion
+row of the `Try` in `TypeckResults`, beside its facts (the tag of `Ok`, the two payload
+types, the `Result` of the channel); a `??` across two error types that a conversion joins
+has the row of that conversion. The backend calls the
+conversion before the scope cleanup of the propagation path. `check_cast` asks the same question for
+`e as T`: a numeric cast and an identity cast have the conversion row `NoConversion`, a cast
+that a conversion joins has the row of that conversion, and any other pair is
+[`CE2014`](../error-catalog.md#ce2014). In the check of a template, an
 opaque `E` has no conversion: `??` propagates the same `E` and no other ([`CE2511`](../error-catalog.md#ce2511) with a
 note at `E`, ruling R8). Each instance asks again on its own copy of the node, where E3
 also stays.
@@ -1187,11 +1211,11 @@ Each check:
 4. checks the check copy with a `TemplateValidator`, whose `in_template_check` flag stops
    every writer that cuts or queues a program copy
    (`tests/unit/test_template_check_writes_no_copy.py`);
-5. runs `lift` on the check copy, into a scratch program;
-6. runs the `borrow` pass on the check copy and its lifted functions
-   (`BorrowChecker.check_template_copy`, handed to the `TypeValidator` as
-   `borrow_check_copy`), over the overlay tables: an opaque `T` always moves (R5), so a
-   borrowed `T` that is returned, stored or passed on is [CE2411](../error-catalog.md#ce2411), at the template;
+5. gives the SHIR body of the check copy, when `typecheck` finished it with no error, to
+   `lift`;
+6. and `lift` gives it to the `borrow` pass (`next_stage`), over the overlay tables: an
+   opaque `T` always moves (R5), so a borrowed `T` that is returned, stored or passed on
+   is [CE2411](../error-catalog.md#ce2411), at the template;
 7. adds the template to `checked_templates`, and to `refused_templates` when the error
    count grew.
 
@@ -1289,31 +1313,36 @@ let i32 y = get_value().realise(0)
 
 **File:** `semantics/passes/lift.py`
 
-Each lambda literal becomes a top-level function plus a captured environment. It runs
-BETWEEN `typecheck` and `borrow`, per unit: the lifted body needs the types `typecheck`
-stamped, and the lifted function must be borrow-checked like any other.
+**On SHIR** ([the IR design](../design/ir.md), 7.9, ruling Q8), `LiftPass` runs between
+`typecheck` and `borrow`, per body. It rewrites no node: the symbol of each lambda and its
+environment layout are rows of the `LiftResults` of the body, and SLIR lowering cuts the
+function from them. The pass stops at nothing. A body has its table checked (`check_lift`,
+[CE0157](../error-catalog.md#ce0157)), and goes on to `borrow`.
 
-**This pass owns the lambda BODY.** A lifted lambda is a function, so its body goes
-through `_validate_function` -- the `annotate` hook -- like every other function's, and
-the `typecheck` pass does not descend into a lambda body at all. `visit_lambda` keeps
-only what no lifted function carries: the function TYPE the enclosing expression needs,
-and the capture rules ([CE2094](../error-catalog.md#ce2094)), because lift consumes the capture list into the
-environment struct. So the body is checked once, and a fault in it is reported once.
-
-The annotation of one lifted body comes BEFORE the search for a lambda nested in it. The
-hook is what types a `Lambda` node, so a nested lambda lifted first would carry no parameter
-types, no captures and no channel, and its own body would not be checked.
-
-The environment parameter is a `poke` borrow, never a `peek` one. See
+`typecheck` and `borrow` walk the body of a lambda where the lambda stands, and SLIR lowering
+cuts one function for it. The environment is `_1`, and a capture is a field of it. See
 `docs/design/closures.md`.
 
 ## The `borrow` pass: borrow checking
 
-**File:** `semantics/passes/borrow/` (`__init__.py` holds `BorrowChecker`)
+**File:** `semantics/passes/borrow/` (`__init__.py` holds `BorrowChecker`, `arms.py` the
+table of arms)
 
 ### Purpose
 
-Enforce memory safety rules for references.
+Enforce memory safety rules for references, and decide the ownership of each consuming
+use.
+
+The pass walks the SHIR body of each declaration that `typecheck` finished with no error,
+with its `TypeckResults` ([the IR design](../design/ir.md), 7.9). Each answer is a row of
+the `OwnershipResults` of the body: the `Ownership` of each consuming use, which
+`classify()` decides one time (`consume.decide`), and the conditionally moved locals. The
+convention of each call argument is the `TypeckResults` row of the call, and the pass does
+not derive it again. When the walk of a body ends with no error, `check_ownership` finds
+each consuming use with no row ([CE0157](../error-catalog.md#ce0157)). A construct
+that the pass does not check is an internal error. The rules below are
+the rules of the language, and each group of the move brings the rules of its constructs
+to SHIR.
 
 ### Rules
 
@@ -1325,7 +1354,7 @@ let poke i32 r = x       # a pointer into x's slot, block-scoped
 r := r + 1               # x is 43
 ```
 
-`bind_let_reference` (`passes/borrow/bindings.py`) registers the binding with its full
+`check_let_reference` (`passes/borrow/references.py`) registers the binding with its full
 `ReferenceType`, freezes the owner ([CE2412](../error-catalog.md#ce2412) on a later mutation), and refuses a second
 `poke` of the same owner ([CE2403](../error-catalog.md#ce2403)) or a `peek`/`poke` mix ([CE2407](../error-catalog.md#ce2407)). A write through a
 `peek` binding is [CE2408](../error-catalog.md#ce2408).
@@ -1433,37 +1462,54 @@ reference binding adds the WRITE path -- a store through it reaches the owner.
 
 6. **A loop body is checked in rounds, and `break` / `continue` end a path**
 
-`check_loop_body` (`passes/borrow/statements.py`) checks a `while` or `foreach` body in two
-rounds and returns a `LoopFlow` (`passes/borrow/flow.py`):
+`check_loop_body` (`passes/borrow/statements.py`) checks the body of a `while` loop in two
+rounds. The condition is read once, at the entry.
 
 - `entry`: the facts before the loop.
-- `fixed_point`: `entry` joined with the facts that reach the back edge after round 1. Round 2,
-  the reporting round, starts here, so a move in one round is seen by the next.
-- `back_edge`: the facts on the paths that reach the next round -- the end of the body and every
-  `continue`. A `foreach` reads its iterator's invalidation ([CE2412](../error-catalog.md#ce2412)) from these paths only.
-- `exit`: `fixed_point` joined with every `break` path. This is the state after the loop, so a
-  move before a `break` is still seen after the loop.
+- Round 1 is a discovery round: it reports no error, writes no row of `OwnershipResults` and
+  records no exit (`discovery_rounds`).
+- `fixed_point`: `entry` joined with the facts that reach the back edge after round 1 -- the end
+  of the body and every `continue`. Round 2, the reporting round, starts here, so a move in one
+  round is seen by the next.
+- The exit: `fixed_point` joined with every `break` path of round 2. This is the state after the
+  loop, so a move before a `break` is still seen after the loop.
 
-A `break` or a `continue` ends its path for the joins of an `if` or a `match` inside the body
-(`terminates(..., leaves_round=True)`). A `foreach` over an owned temporary (`a.clone().iter()`)
-freezes nothing (`walks_a_temporary`). When the iterator reports a move of its container that
-came round the back edge, the owner's state records it (`move_reported_by`), and the move gives
-no second [CE2405](../error-catalog.md#ce2405) in round 2.
+A `break` or a `continue` ends its path for the joins of an `if` inside the body
+(`terminates(..., leaves_round=True)`, the one path predicate of SHIR, `semantics/shir/paths.py`).
+The `foreach` loop comes with the iterators group: the back edge of a view of a container
+(`LoopFlow.back_edge`), the item of each round (`FlowFacts.without`) and the move that the
+iterator reports (`move_reported_by`) come back with it.
+
+7. **A local moved on some paths is conditionally moved**
+
+`FlowFacts` joins `moved` by union (moved on some path) and `moved_on_every_path` by
+intersection. At each EXIT of a scope -- the end of a block that the path reaches, a `return`,
+the error path of a `??`, and a `break` or a `continue` for the blocks of its loop body -- the
+pass records each local of the scope that is not moved on every path there
+(`flow.record_exit`). A rebind drops the old value of its local, so it is an exit of that
+value: a local moved on some paths only before a rebind is recorded too
+(`flow.record_rebind`). A local that is moved on some path and that an exit sees not moved on
+every path is a row of the conditionally moved locals: SLIR lowering gives it a drop flag. A
+local moved in each arm of an `if`, or before every exit, has no row and gets no drop.
 
 ### Borrow Tracking
 
-`BorrowChecker` (`passes/borrow/__init__.py`) keeps the state of one callable:
+`BorrowChecker` (`passes/borrow/__init__.py`) keeps the state of one body:
 
-- `borrow_state: Dict[str, BorrowState]`: one record for each name
-  (`passes/borrow/state.py`). A record holds the `peek` and `poke` counts, `is_moved`,
-  `is_destroyed`, the owner a `let`-borrow reads out of (`borrows_from`), where the name
-  was moved or invalidated, and the kind of the name (a `let`-borrow, a borrow parameter,
-  a unit variable, main's `args`).
-- `active_borrows: Set[str]`: the names that a call borrows in the current statement. It
-  is cleared for each statement.
+- `borrow_state: Dict[LocalId, BorrowState]`: one record for each local, keyed by its
+  `LocalId` (`passes/borrow/state.py`), because a hidden local has no source name. A
+  record holds the source name for a diagnostic, the `peek` and `poke` counts, `is_moved`,
+  `is_destroyed`, the owners a `let`-borrow reads out of (`borrows_from`), where the local
+  was moved or invalidated, and the kind of the local (a `let`-borrow, a borrow parameter,
+  main's `args`).
+- `active_borrows: Set[LocalId]`: the locals that a call borrows in the current statement.
+  It is cleared for each statement.
 - `_scope_binding_borrows`: one frame for each open block, so a `let`-borrow ends with its
   block.
-- `callee_modes`: the parameter modes of each callee, from `semantics/param_modes.py`.
+- `block_locals`: the locals that each open block declared, the parameters in the first, for
+  the exits of rule 7; `loop_frames`: the `break` and `continue` paths of each loop that the walk
+  is in; `moved_locals` and `kept_at_an_exit`, whose intersection is the row of the
+  conditionally moved locals.
 
 The checker does not raise. Each finding goes through the reporter as a registered code
 (`self.err.emit(...)`), so one run reports every fault.
@@ -1479,14 +1525,14 @@ whole program, once:
 
 then per unit, in one loop:
 
-  scope → typecheck → lift → borrow
+  scope (AST) → lowering → typecheck → lift → borrow (the three on SHIR)
 ```
 
 Each turn of that loop reports into a reporter of its own, and `_merge_unit` drains it
 into the program reporter through `in_source_order` (`internals/report.py`). The four
 passes each walk the unit whole, so what they emit is in PASS order and a reader wants
-the FILE: a fault the `lift` pass found in a lambda body would otherwise stand behind
-every fault the `typecheck` pass found. A file keeps the place its first
+the FILE: a fault the `borrow` pass found would otherwise stand behind every fault the
+`typecheck` pass found. A file keeps the place its first
 diagnostic gave it -- the order the passes reached the files in is information, and
 alphabetical is not -- and the sort is stable, so two findings on one caret keep pass
 order.
@@ -1514,8 +1560,9 @@ order.
 - `scope` needs `collect` (function signatures), and runs AFTER every whole-program pass,
   because the body walks need concrete, monomorphized types
 - `typecheck` needs `resolve` and `scope`
-- `lift` needs `typecheck` (the lifted body reads its stamps)
-- `borrow` needs `typecheck` (the stamps) and `effects` (the cross-unit summary)
+- `lift` needs `typecheck` (it gets each body that `typecheck` finished with no error)
+- `borrow` needs `typecheck` (`TypeckResults`), `lift` (it gets each body that `lift`
+  finished, and reads `LiftResults`) and `effects` (the cross-unit summary)
 
 ## Error Examples by Pass
 

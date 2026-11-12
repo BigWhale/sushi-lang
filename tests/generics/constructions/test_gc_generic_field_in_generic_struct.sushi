@@ -1,0 +1,22 @@
+# A generic field in a generic struct: the outer instance names the inner instance, and
+# the arguments solve the outer one through it. Each owning part drops once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\nMostly Harmless\n5\nfive\n"
+
+struct Inner@(T):
+    T value
+
+struct Outer@(T):
+    Inner@(T) inner
+    Maybe@(T) extra
+
+fn main() i32:
+    let Outer@(i32) a = Outer(Inner(4), Maybe.None)
+    println(a.inner.value)
+    let string s = "Mostly Harmless"
+    println(Outer(Inner(s.clone()), Maybe.None).inner.value)
+    println(Outer(Inner(5), Maybe.Some(5)).extra.realise(0))
+    let Inner@(Inner@(string)) d = Inner(Inner("five"))
+    println(d.value.value)
+    return 0

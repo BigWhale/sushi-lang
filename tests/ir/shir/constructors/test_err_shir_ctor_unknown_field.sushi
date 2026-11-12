@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2080
+# EXPECT_DUMP_SHIR: test_err_shir_ctor_unknown_field.shir
+#
+# the SHIR dump of a named construction with a name that the struct does not declare.
+# The names are not the fields of the struct, so lowering cannot put the arguments in the
+# declaration order. `StructInit` keeps the arguments in the written order, with the
+# written names in `names`, and `written_order` is the identity. The typecheck pass
+# reports the unknown name (CE2080) after lowering.
+
+struct Vec:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Vec v = Vec(x: 1, z: 2)
+    return v.x

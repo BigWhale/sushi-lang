@@ -142,6 +142,10 @@ def _borrowed_return(func_info: dict, params: list, receiver: bool):
     return record_of(None, params, receiver=receiver)
 
 
+#: The kinds of a kept record that a bare name reads: a `const` and a unit `var`.
+KEPT_STORAGE_KINDS = frozenset({"constant", "variable"})
+
+
 @dataclass
 class LibraryMetadata:
     """Pre-parsed library metadata with typed objects."""

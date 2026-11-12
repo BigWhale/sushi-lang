@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+
+fn id@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    println(id)
+    return 0

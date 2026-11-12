@@ -1,0 +1,13 @@
+# The unit that `test_shir_ctor_alias` binds behind an alias: a struct, an enum with
+# unit variants and an enum with a payload.
+public struct Point:
+    i32 x
+    i32 y
+
+public enum Sign:
+    Plus
+    Minus
+
+public enum Shape:
+    Circle(i32)
+    Square(i32)

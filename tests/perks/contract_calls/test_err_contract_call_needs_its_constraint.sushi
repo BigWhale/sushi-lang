@@ -1,0 +1,19 @@
+# A contract call on a type parameter needs the constraint that promises it, one error for
+# each call.
+# EXPECT_ERROR_CODES_EXACT: CE2008, CE2008, CE2008, CE2008
+
+fn a@(T)(T x) u64:
+    return x.hash()
+
+fn b@(T)(T x, T y) bool:
+    return x.eq(y)
+
+fn c@(T)(T x, T y) i32:
+    return x.compare(y)
+
+fn d@(T)(T x) string:
+    return x.to_str()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

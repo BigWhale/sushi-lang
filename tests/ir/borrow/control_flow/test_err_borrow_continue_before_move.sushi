@@ -1,0 +1,37 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'msg'"
+# EXPECT_DUMP_SHIR: test_err_borrow_continue_before_move.shir
+#
+# A `continue` before a move leaves the round with the local not moved: `line` of `skip`
+# leaves its scope at the `continue` with its value, and at the end of the body moved. So
+# `line` is in the row of the conditionally moved locals. In `last`, the path of the
+# `continue` goes to the next round with `msg` not moved, and the path of the `break`
+# leaves the loop with `msg` moved: a use of `msg` after the loop is CE2405.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn skip(i32 n) ~:
+    let i32 i = 0
+    while (i < n):
+        let string line = "{i}"
+        i := i + 1
+        if (i == 2):
+            continue
+        eat(nom line)
+
+fn last(i32 n) ~:
+    let string msg = "{n} towels"
+    let i32 i = 0
+    while (i < n):
+        i := i + 1
+        if (i < 2):
+            continue
+        eat(nom msg)
+        break
+    println(msg)
+
+fn main() i32:
+    skip(3)
+    last(3)
+    return 0

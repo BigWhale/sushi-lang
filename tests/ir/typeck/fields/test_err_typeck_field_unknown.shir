@@ -1,0 +1,33 @@
+unit test_err_typeck_field_unknown
+
+ShirBody make
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Point, [adopt Lit(5), adopt Lit(6)], written_order: [0, 1]))
+
+ShirBody keep
+  params : [(_0 "v": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody width
+  params : [(_0 "s": Seg, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(-, Field(Field(LocalRef(_0), "b"), "x"), Field(Field(LocalRef(_0), "a"), "x")))
+
+ShirBody main
+  params : []
+  locals : [_0 "p": Point, _1 "s": Seg]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Point, [Lit(1), Lit(2)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), StructInit(@Seg, [LocalRef(_0), StructInit(@Point, [Lit(3), Lit(4)], written_order: [0, 1])], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Free(@keep), [(Field(LocalRef(_0), "x"), Guaranteed)]))
+    ExprStmt(Call(Free(@keep), [(Field(Field(LocalRef(_1), "a"), "y"), Guaranteed)]))
+    ExprStmt(Call(Free(@keep), [(Field(Call(Free(@make), []), "y"), Guaranteed)]))
+    ExprStmt(Call(Free(@keep), [(Field(StructInit(@Point, [Lit(7), Lit(8)], written_order: [0, 1]), "x"), Guaranteed)]))
+    ExprStmt(Call(Free(@keep), [(Call(Free(@width), [(LocalRef(_1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Free(@keep), [Field(LocalRef(_0), "z")]))
+    Return(Lit(0))

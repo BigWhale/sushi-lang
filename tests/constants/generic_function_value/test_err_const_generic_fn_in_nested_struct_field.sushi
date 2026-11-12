@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_STDERR_CONTAINS: test_err_const_generic_fn_in_nested_struct_field.sushi:14:17: error [CE2093]
+#
+# A generic function is no value in a field of a struct that a struct constant holds.
+fn id@(T)(nom T x) T:
+    return x
+
+struct H:
+    fn(nom i32) -> i32 f
+
+struct W:
+    H h
+
+const W C = W(H(id))
+
+fn main() i32:
+    let i32 v = C.h.f(nom 7)
+    println(v)
+    return 0

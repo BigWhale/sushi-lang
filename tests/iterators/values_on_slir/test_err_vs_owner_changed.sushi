@@ -1,0 +1,11 @@
+# The owner of a lent iterator is frozen until the last use of the iterator.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1])
+    let Iterator@(i32) it = xs.iter()
+    xs.push(2)
+    foreach(x in it):
+        println(x)
+    return 0

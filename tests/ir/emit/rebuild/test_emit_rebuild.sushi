@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 42
+# EXPECT_REBUILT: count
+# EXPECT_CACHED: scale, test_emit_rebuild
+#
+# The per-unit module path keeps the per-unit object cache (docs/design/ir.md 11.6). The
+# first build makes an object for each of the three units. `v2/` changes the body of
+# `base` in `count` and not its signature, so the second build makes the object of
+# `count` again, and takes the objects of `scale` and of this unit from the cache: the
+# interface of `count` is the same. The program then answers 2 * 41 - 40.
+
+use "count"
+use "scale"
+
+fn main() i32:
+    return twice(base()) - 40

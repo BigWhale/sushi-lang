@@ -1,0 +1,11 @@
+# A call of a name that a namespace does not hold, with a named argument, has two faults:
+# the name (CE2008), then the named argument (CE6104), in that order.
+# EXPECT_ERROR_CODES_EXACT: CE2008, CE6104
+# EXPECT_STDERR_CONTAINS: undefined function 'm.missing'
+# EXPECT_STDERR_CONTAINS: the named argument 'a:' is only supported in a struct construction
+use <math> as m
+
+fn main() i32:
+    let i32 z = m.missing(a: 2)
+    println(z)
+    return 0

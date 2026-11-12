@@ -178,7 +178,7 @@ statement was wrong for a template.
 
 Every `.slib` kind records its marked functions, each with its `because`: a source library
 as text, a binary or hybrid library as a manifest record beside `reexports` and
-`conversions` (`backend/library_manifest.py`). `--lib-info` lists them in both halves, the
+`conversions` (`compiler/library_manifest.py`). `--lib-info` lists them in both halves, the
 Python fallback (`compiler/lib_info.py`) and the `slib-info` tool (`toolchain/src/`). A
 reviewer sees the unchecked code and its proof before the first build.
 
@@ -241,8 +241,8 @@ the `sushi-omakase-api` and `sushi-omakase-front` repositories.
 
 ## 11. Build choices
 
-- **The stamp.** The stamp is one `bool` field on `IndexAccess`, `unchecked`, beside
-  `reads_a_string_byte` (`semantics/ast.py`). The AST builder sets it on each index node
+- **The stamp.** The stamp is one `bool` field on `IndexAccess`, `unchecked`
+  (`semantics/ast.py`). The AST builder sets it on each index node
   in a marked function. It stops at a `Lambda`. The monomorphizer copies the node with
   `copy.copy` (`generics/monomorphize/transformer.py`), so an instance keeps the stamp.
   The consumer parses the text of a source library again, so the stamp is set again there.

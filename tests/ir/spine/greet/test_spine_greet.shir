@@ -1,0 +1,33 @@
+unit test_spine_greet
+
+ShirBody decorate
+  params : [(_0 "name": string, Owned)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt Interp(["", LocalRef(_0), "!"])]))
+
+ShirBody shout
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody greet
+  params : [(_0 "name": string, Owned), (_1 "loud": bool, Guaranteed)]
+  locals : [_2 "msg": string]
+  cond_moved : [_2]
+  block  :
+    Assign(LocalRef(_2), adopt Try(adopt Call(Free(@decorate), [(move LocalRef(_0), Owned)])), is_init: true)
+    If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(move LocalRef(_2), Owned)]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@greet), [(adopt Lit("So long"), Owned), (Lit(false), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("quiet"), Guaranteed)]))
+    ExprStmt(Call(Free(@greet), [(adopt Lit("Mostly Harmless"), Owned), (Lit(true), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("loud"), Guaranteed)]))
+    Return(adopt Lit(0))

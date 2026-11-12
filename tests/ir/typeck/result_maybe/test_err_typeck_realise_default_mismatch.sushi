@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2503, CE2503
+# EXPECT_STDERR_CONTAINS: "realise() default type mismatch: expected 'i32', got 'string'"
+# EXPECT_STDERR_CONTAINS: "realise() default type mismatch: expected 'string', got 'bool'"
+# EXPECT_DUMP_SHIR: test_err_typeck_realise_default_mismatch.shir
+#
+# The default of `realise` has the payload type `T` of the receiver, for a `Result` and
+# for a `Maybe`. A default of another type is CE2503 at the default, and the call still
+# yields `T`.
+
+fn parse(i32 n) i32 | StdError:
+    return Result.Ok(n)
+
+fn name(i32 n) Maybe@(string):
+    if (n == 0):
+        return Maybe.None()
+    return Maybe.Some("Mostly Harmless")
+
+fn main() i32:
+    let i32 a = parse(3).realise("zero")
+    let string s = name(1).realise(true)
+    return a + s.len()

@@ -1,0 +1,12 @@
+# The template check refuses the template. The instance reports nothing more and never
+# lowers: the one error is the error of the template.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+fn inst_want_i32(i32 v) i32:
+    return v
+
+fn inst_refused@(T)(T x) i32:
+    return inst_want_i32(x)
+
+fn main() i32:
+    println(inst_refused(1))
+    return 0

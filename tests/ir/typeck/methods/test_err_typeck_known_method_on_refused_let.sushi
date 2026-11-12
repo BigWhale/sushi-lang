@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002, CE2009
+# EXPECT_DUMP_SHIR: test_err_typeck_known_method_on_refused_let.shir
+#
+# A refused `let` keeps its written type. A known method on it is still typed, so a wrong
+# argument count is a second error of its own.
+
+fn main() i32:
+    let i32 x = "text"
+    let string s = x.to_str(1)
+    println(s)
+    return 0

@@ -1,0 +1,14 @@
+unit test_err_typeck_match_written_bound
+
+ShirBody f
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0x80, 0x100, inclusive: true), [Return(Lit("high"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@f), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

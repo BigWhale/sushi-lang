@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE0131
+# EXPECT_DUMP_SHIR: test_err_typeck_try_in_a_bare_body.shir
+#
+# A bare body has no channel, so a `??` in it has nothing to propagate into: the collect
+# pass refuses it (CE0131), and typecheck adds nothing. The call under the `??` is typed.
+
+fn half(i32 n) i32 | StdError:
+    if (n % 2 == 1):
+        return Result.Err(StdError.Error)
+    return Result.Ok(n / 2)
+
+fn twice(i32 n) i32:
+    let i32 h = half(n)??
+    return h * 2
+
+fn main() i32:
+    return twice(4)

@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import TypeClass, type_class_of
@@ -23,11 +22,6 @@ from .state import BorrowState
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
-
-
-# The containers a `push` / `insert` fills and a `.get()` reads an element out of.
-# An `Own@(T)` holds one value and is not one of them.
-_ELEMENT_CONTAINERS = frozenset(CONTAINER_BASES) - {"Own"}
 
 
 def _generic_parts(ty: Optional[Type]) -> tuple[Optional[str], tuple]:
@@ -89,15 +83,6 @@ class TypeQueries:
             if isinstance(value_field, PointerType):
                 return value_field.pointee_type
         return None
-
-    def is_container(self, ty: Optional[Type]) -> bool:
-        """Is `ty` a `List@(T)`, `HashMap@(K, V)` or a dynamic array `T[]`?"""
-        ty = self.resolve_named(ty)
-        if isinstance(ty, ReferenceType):
-            ty = ty.referenced_type
-        if isinstance(ty, DynamicArrayType):
-            return True
-        return _generic_parts(ty)[0] in _ELEMENT_CONTAINERS
 
     def element_type(self, ty: Optional[Type]) -> Optional[Type]:
         """What a `.get()` on a receiver of type `ty` reads out."""

@@ -1,0 +1,124 @@
+unit test_slir_drop_impl
+
+fn eat(_1: Res @owned) -> ~ {
+    let _0: ~
+    let _2: string
+    let _3: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin interp@(string, i32)(const "eat " @guaranteed, copy (_1.1) @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin println@(string)(copy _2 @guaranteed)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    _0 = const ~
+    Drop(_1)
+    return
+}
+
+fn fail() -> Result@(i32, Bad) {
+    let _0: Result@(i32, Bad)
+    let _1: string
+    let _2: Res
+    let _3: Bad
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin interp@(string, i32)(const "a " @guaranteed, const 1_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = Res(move _1, const 1_i32)
+    StorageLive(_3)
+    _3 = Bad::Gone(move _2)
+    _0 = Result::Err(move _3)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string
+    let _2: Res                            // a
+    let _3: string
+    let _4: Res                            // b
+    let _5: ~
+    let _6: Result@(i32, Bad)
+    let _7: i32
+    let _8: i32
+    let _9: i32
+    let _10: i32
+    let _11: ~
+    let _12: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin interp@(string, i32)(const "a " @guaranteed, const 1_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = Res(move _1, const 1_i32)
+    StorageDead(_1)
+    StorageLive(_3)
+    _3 = call builtin interp@(string, i32)(const "b " @guaranteed, const 2_i32 @guaranteed)
+    StorageLive(_4)
+    _4 = Res(move _3, const 2_i32)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = call @eat(move _4 @owned)
+    StorageDead(_5)
+    StorageLive(_6)
+    _6 = call @fail()
+    StorageLive(_7)
+    _7 = neg const 1_i32
+    StorageLive(_8)
+    _9 = discriminant(_6)
+    switchInt(copy _9) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    _8 = copy ((_6 as Ok).0)
+    Drop(_6)
+    goto -> bb3
+
+  bb2:
+    _8 = copy _7
+    Drop(_6)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_10)
+    _10 = copy _8
+    StorageLive(_11)
+    _11 = call builtin println@(i32)(copy _10 @guaranteed)
+    StorageDead(_11)
+    StorageDead(_10)
+    StorageDead(_8)
+    StorageDead(_7)
+    StorageDead(_6)
+    StorageLive(_12)
+    _12 = call builtin println@(string)(const "Mostly Harmless" @guaranteed)
+    StorageDead(_12)
+    _0 = copy (_2.1) - const 1_i32
+    StorageDead(_4)
+    Drop(_2)
+    StorageDead(_2)
+    return
+}
+
+fn Res.drop(_1: Res @inout) -> ~ {
+    let _0: ~
+    let _2: string
+    let _3: ~
+
+  bb0:
+    (_1.1) = copy (_1.1) + const 0_i32
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(const "drop " @guaranteed, copy (_1.0) @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin println@(string)(copy _2 @guaranteed)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    _0 = const ~
+    return
+}

@@ -1,0 +1,33 @@
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: "cannot modify 'p' through peek reference (read-only)"
+# EXPECT_STDERR_CONTAINS: "'p' is declared here as a read-only borrow"
+# EXPECT_STDERR_CONTAINS: ":24:9"
+# EXPECT_DUMP_SHIR: test_err_borrow_poke_field_of_a_peek.shir
+#
+# A `peek` and a `poke` borrow of a field borrow the root of the field. A `peek` of a field
+# of a `peek` parameter is legal, and a `poke` of a field of a `poke` parameter is legal. A
+# `poke` of a field of a `peek` parameter is CE2408 at the argument, with a note at the
+# parameter.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn inc(poke i32 v) ~:
+    v := v + 1
+
+fn show(peek i32 v) ~:
+    println(v)
+
+fn set(peek Point p) ~:
+    show(peek p.y)
+    inc(poke p.x)
+
+fn bump(poke Point p) ~:
+    inc(poke p.x)
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    bump(poke p)
+    set(peek p)
+    return 0

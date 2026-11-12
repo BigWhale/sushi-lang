@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from sushi_lang.backend.library_errors import LibraryError
-from sushi_lang.backend.library_manifest import resolve_library_version
+from sushi_lang.compiler.library_manifest import resolve_library_version
 from sushi_lang.packager.archive import ArchiveError, PackageArchive
 from sushi_lang.packager.manifest import load_manifest_from_string
 from sushi_lang.packager.paths import find_project_root

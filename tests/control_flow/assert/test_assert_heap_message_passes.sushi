@@ -1,0 +1,10 @@
+# The message of an assert that holds is never built, so a heap message leaks nothing.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32 n = 2
+    assert(n == 2, "Mostly Harmless".upper())
+    assert(n == 2, "n is {n}")
+    println("Mostly Harmless")
+    return 0

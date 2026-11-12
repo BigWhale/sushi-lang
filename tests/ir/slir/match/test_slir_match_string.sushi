@@ -1,0 +1,41 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n1\n2\n9\n10\n20\n30\nnom write\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_match_string.slir
+#
+# A match on a string is a chain of tests in source order (ir.md 8.9). Each test calls the
+# intrinsic `eq`, the value equality, into a bool local, and a switch reads that local in
+# the same block. A failed test goes to the test of the next alternative, or of the next
+# arm. The `_` arm has no test. A borrowed string is read in each test. A new value (the
+# interpolation in `code_of`) and a scrutinee that the match takes (`match nom taken`) go
+# into a temporary of the match statement: each test reads it, and the statement drops it
+# at its end, and before the `return` of an arm.
+
+fn verb(string word) i32:
+    match word:
+        "get" | 'fetch' -> return 1
+        "put" -> return 2
+        _ -> return 9
+
+fn code_of(i32 n) i32:
+    let i32 code = 0
+    match "{n}":
+        "1" -> return 10
+        "2" -> code := 20
+        _ -> code := 30
+    return code
+
+fn main() i32:
+    println(verb("get"))
+    println(verb("fetch"))
+    println(verb("put"))
+    println(verb("drop"))
+    println(code_of(1))
+    println(code_of(2))
+    println(code_of(3))
+    let string base = "wri"
+    let string taken = "{base}te"
+    match nom taken:
+        "write" -> println("nom write")
+        _ -> println("nom other")
+    return 0

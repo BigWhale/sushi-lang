@@ -1,0 +1,52 @@
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "cannot write to binding 'y': a match/foreach binding is a read-only view."
+# EXPECT_STDERR_CONTAINS: "'y' is bound here, as a read-only view"
+# EXPECT_STDERR_CONTAINS: ":46:13"
+# EXPECT_DUMP_SHIR: test_err_borrow_tuple_match_binds_plain_parts.shir
+#
+# A match on a tuple of plain values reads its scrutinee: a local, a parameter, a call, or
+# a tuple literal whose parts the match takes as copies (`adopt`). A bare binder of a tuple
+# part is a read-only view of the part. A position that takes it takes a copy. A variant in
+# a tuple and a tuple in a variant bind their parts too. `match nom t:` takes a plain tuple
+# as a copy. A rebind of a binder of a tuple part is CE2414, with a note at the tuple
+# pattern that binds it.
+
+fn pair(i32 n) (i32, i32):
+    return (n, n + 1)
+
+fn first((i32, i32) t) i32:
+    match t:
+        (0, y) -> return y
+        (x, 1 | 2) -> return x
+        (x, _) -> return x + 1
+
+fn both(i32 a, i32 b) i32:
+    match (a, b):
+        (0, 0) -> return 0
+        (x, y) -> return x * y
+
+fn inner(Maybe@((i32, i32)) m) i32:
+    match m:
+        Maybe.Some((x, y)) -> return x + y
+        Maybe.None -> return 0
+
+fn outer((Maybe@(i32), i32) t) i32:
+    match t:
+        (Maybe.Some(v), k) -> return v + k
+        (Maybe.None, k) -> return k
+
+fn taken(i32 n) i32:
+    let (i32, i32) t = pair(n)
+    match nom t:
+        (x, y) -> return x - y
+
+fn pick((i32, i32) t) i32:
+    match t:
+        (1, y) ->
+            y := 2
+            return y
+        _ -> return 0
+
+fn main() i32:
+    let i32 a = first(pair(1)) + both(2, 3) + inner(Maybe.Some((1, 2)))
+    return a + outer((Maybe.Some(1), 2)) + taken(3) + pick((1, 2))

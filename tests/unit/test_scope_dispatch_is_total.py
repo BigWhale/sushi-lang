@@ -5,7 +5,8 @@ Statements dispatch through `scope._STATEMENT_HANDLERS` and expressions through
 located CE0130 backstop. Until #686 the statement side built a method name from the
 lowercased class name and asked `hasattr`, so a class RENAME moved every statement of
 that kind to the backstop in silence and a lowercased-name COLLISION ran the wrong arm
-with no signal -- the shape #639 closed in `semantics/visitors.py`. The expression side
+with no signal -- the shape #639 closed in the AST visitor of the early passes, which is
+gone (ruling E4). The expression side
 was a 24-arm `match` whose gate read the SOURCE of the method; it reads the table now,
 so both halves answer the same question the same way.
 """

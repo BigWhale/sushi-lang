@@ -168,6 +168,22 @@ class GenericTypeRef:
                 self.type_args == other.type_args)
 
 
+def type_param_names(type_params) -> tuple[str, ...]:
+    """The names of the type parameters of a template, written or bounded."""
+    return tuple(getattr(param, "name", str(param)) for param in type_params)
+
+
+def template_type_param_names(template, span=None) -> tuple[str, ...]:
+    """The names of the type parameters of a generic type. A template with no table row,
+    or with no type parameter, is an internal error."""
+    names = type_param_names(getattr(template, "type_params", ()))
+    if not names:
+        from sushi_lang.internals.errors import raise_internal_error
+        raise_internal_error("CE0000", span=span,
+                             detail="a generic type with no type parameter reached a help text")
+    return names
+
+
 def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     """Recursively put a type argument in the place of each type parameter it names.
 

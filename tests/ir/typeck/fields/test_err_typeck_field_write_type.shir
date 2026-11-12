@@ -1,0 +1,14 @@
+unit test_err_typeck_field_write_type
+
+ShirBody main
+  params : []
+  locals : [_0 "o": Outer, _1 "t": (i32, string)]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Outer, [StructInit(@Inner, [Lit(3)], written_order: [0]), Lit(1)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), TupleInit([Lit(1), Lit("a")]), is_init: true)
+    Assign(Field(LocalRef(_0), "weight"), Lit(2), is_init: false)
+    Assign(Field(Field(LocalRef(_0), "inner"), "depth"), Lit(4), is_init: false)
+    Assign(Field(LocalRef(_1), "0"), Lit(5), is_init: false)
+    Assign(Field(LocalRef(_1), "1"), Lit("b"), is_init: false)
+    Assign(Field(LocalRef(_0), "weight"), Lit(true), is_init: false)
+    Return(Lit(0))

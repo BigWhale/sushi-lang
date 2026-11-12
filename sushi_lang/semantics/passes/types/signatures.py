@@ -1,10 +1,14 @@
 """Declaration signature validation for type validation (the typecheck pass)."""
 from __future__ import annotations
 
+from typing import Collection
+
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, Lambda, PerkDef, Return
-from sushi_lang.semantics.ast_walk import is_template_copy, walk_nodes
-from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, Param, PerkDef
+from sushi_lang.semantics.ast_walk import is_template_copy
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, IteratorType,
+    ReferenceType, StructType, UnknownType)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.channel import callable_text, has_channel
 from sushi_lang.semantics.generics.results import signature_result_arms
@@ -15,13 +19,14 @@ from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
 from .borrowed_returns import reject_borrowed_return_faults
-from .control_flow import block_always_returns, reject_dead_statements
-from .utils import validate_type_name, validate_and_register_parameters
+from .control_flow import reject_dead_statements, reject_fall_off
+from .utils import resolve_declared_type, validate_type_name
 from .perks import (
     check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
     validate_perk_implementation,
 )
 from sushi_lang.semantics.namespaces import in_body_scope
+from sushi_lang.semantics.shir.ids import ShirId
 
 
 # The positions `run()`'s per-declaration loop never reaches. A function, an
@@ -95,19 +100,19 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     """The state every body validates under: a function, a method and a lifted lambda.
 
     `channel_result` is the interned Result the body answers, or None for a BARE body
-    (docs/design/error-channel.md). `validate_return_statement` and the `??` check read
-    this state and nothing else, so the three kinds of body have one rule.
+    (docs/design/error-channel.md). The `Return` arm (`visit/statements.py`) and the `??`
+    check read this state and nothing else, so the three kinds of body have one rule.
     """
-    from .resolution import channel_result
+    from sushi_lang.semantics.channel import channel_result
     self.body_name = callable_text(name, kind)
     self.in_template_copy = is_template_copy(node)
     self.body_return_type = ret
     validate_error_channel(self, ret, err_type, err_span)
-    self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
+    self.channel_result = (channel_result(self.struct_table, self.enum_table, ret, err_type)
+                           if has_channel(node) else None)
     self.body_conversion = getattr(node, "declared_conversion", None)
     self.body_instance_key = getattr(node, "instance_key", None)
     self.variable_types = {}
-    self.refused_bindings = set()
 
 
 def _leave_body(self) -> None:
@@ -125,87 +130,28 @@ def unit_tables(self):
     return getattr(getattr(self, "tables", None), "namespaces", None)
 
 
-def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
-    """CE0107: a body that answers a value or a Result reaches its end with no `return`.
+def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozenset()) -> None:
+    """CE0140, then CE0107, for the SHIR body of one function or method, and the faults
+    of a borrowed return of its declaration. `uncovered` holds the matches of the body
+    whose arms miss a value.
 
-    A bare `~` body answers nothing, so it may end (#824, #845).
-    """
-    if (ret != BuiltinType.BLANK or channel) and not block_always_returns(self, body):
-        self.err.emit(er.ERR.CE0107, span, callable=self.body_name)
-
-
-def _reject_path_faults(self, node) -> None:
-    """CE0140, then CE0107, for one function or method body.
-
-    Neither rule reads a type, so a template takes both once, as written, and a copy of
-    it takes neither (#1070).
+    Neither path rule reads a type, so a template takes both once, as written, and a copy
+    of it takes neither (#1070).
     """
     if self.in_template_copy:
         return
-    reject_dead_statements(self, node.body)
-    _reject_fall_off(self, node.body, node.ret, has_channel(node), node.name_span)
+    reject_dead_statements(self, body, uncovered)
+    reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span)
     reject_borrowed_return_faults(self, node)
 
 
-def check_template_statements(self, program, checked) -> None:
-    """The statement rules that need no type, on each template body AS WRITTEN (#1070).
-
-    A generic function, a generic extension (a `T[]` template included) and each method
-    of a perk implementation on a generic target. The body is read once, whether a call
-    instantiates the template or not, and a copy of it repeats none of these rules: a
-    statement after the path ends (CE0140), a fall off the end (CE0107), and a `return`
-    in a channel body that spells no constructor (CE2030). A rule that needs the type of
-    an expression waits for the copy.
-
-    `checked` holds the templates that a check copy read (#1070): the copy takes these
-    rules with the stamps of the typecheck pass, so a `match` that is not exhaustive is
-    its own fault and makes no statement after it dead.
-    """
-    bodies = [(func, "function") for func in program.functions
-              if func.type_params and id(func) not in checked]
-    bodies += [(ext, "method") for ext in program.generic_extensions
-               if id(ext) not in checked]
-    bodies += [(method, "method")
-               for impl in program.generic_perk_impls if id(impl) not in checked
-               for method in impl.methods]
-    for node, kind in bodies:
-        self.reporter.leave_body()
-        self.body_name = callable_text(node.name, kind)
-        self.in_template_copy = False
-        _reject_path_faults(self, node)
-        if has_channel(node):
-            _reject_unspelled_returns(self, node.body)
-        _leave_body(self)
-
-
-def _reject_unspelled_returns(self, body) -> None:
-    """CE2030 at each `return` of a channel body that spells no `Result` constructor.
-
-    A lambda is a callable of its own, with the channel of its own type, so the walk does
-    not enter one.
-    """
-    from .result_validation import spells_a_result
-    from .statements import reject_unspelled_result
-
-    def visit(node) -> bool:
-        if isinstance(node, Lambda):
-            return False
-        if isinstance(node, Return) and node.value is not None \
-                and not spells_a_result(node.value):
-            reject_unspelled_result(self, node.value)
-        return True
-
-    walk_nodes(body, visit)
-
-
 def validate_function(self, func: FuncDef) -> None:
-    """Validate types within a function, or within a lambda the lift pass made one."""
+    """Validate the header of a function, then walk its SHIR body (`check_body`)."""
     with in_body_scope(self, "namespaces", func, unit_tables(self)):
         _validate_function_body(self, func)
 
 
 def _validate_function_body(self, func: FuncDef) -> None:
-    from sushi_lang.semantics.passes.lift import is_lifted_lambda
     self.current_function = func
     self.in_library_body = (self.in_library_unit
                             or bool(getattr(func, "is_library_template", False)))
@@ -214,16 +160,16 @@ def _validate_function_body(self, func: FuncDef) -> None:
     # of many copies of one source (#648). Set on every entry, so an ordinary body
     # clears what a transplanted or copied one set.
     self.reporter.enter_body(func)
-    kind = "lambda" if is_lifted_lambda(func) else "function"
-    _enter_body(self, func, func.name, kind, func.ret, func.err_type,
+    header = self.errors_offered()
+    _enter_body(self, func, func.name, "function", func.ret, func.err_type,
                 func.err_span or func.ret_span)
 
     validate_and_register_parameters(self, func.params)
 
     validate_type_name(self, func.ret, func.ret_span)
 
-    self._validate_block(func.body)
-    _reject_path_faults(self, func)
+    self.check_body(func, lambda body, uncovered: _reject_path_faults(
+        self, func, body, uncovered), offered=header)
 
     self.current_function = None
     _leave_body(self)
@@ -301,6 +247,7 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
     if getattr(method, "is_conversion", False):
         name = f"{display_type(target_type)} as {display_type(method.ret)}"
         kind = "conversion"
+    header = self.errors_offered()
     _enter_body(self, method, name, kind, method.ret, method.err_type,
                 method.err_span or method.name_span)
 
@@ -310,14 +257,14 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
     validate_type_name(self, method.ret, method.ret_span)
 
-    self._validate_block(method.body)
-    _reject_path_faults(self, method)
+    self.check_body(method, lambda body, uncovered: _reject_path_faults(
+        self, method, body, uncovered), offered=header)
 
     _leave_body(self)
 
 
 def validate_perk_template_bodies(self, target_type, impl: ExtendWithDef) -> None:
-    """The bodies of the check copy of a perk template (#1070): the target, then each method.
+    """The bodies of the check of a perk template (#1070): the target, then each method.
 
     The header is not judged here: `validate_template_header` judged it on the written
     template, one time.
@@ -369,3 +316,61 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
 
     for method in impl.methods:
         _validate_method_body(self, resolved_type, method, synthesized)
+
+
+def validate_and_register_parameters(validator, params: list[Param]) -> None:
+    """Validate parameter types and register them in the variable_types table."""
+    for param in params:
+        validate_type_name(validator, param.ty, param.type_span)
+
+        # Blank type cannot be used for parameters
+        if param.ty == BuiltinType.BLANK:
+            er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
+            continue
+
+        if isinstance(param.ty, ReferenceType):
+            # The REFERENT gets the same resolution as a by-value parameter of that type
+            # (#305). A borrow of a type is not a different type.
+            resolved_ref = ReferenceType(
+                referenced_type=resolve_declared_type(validator, param.ty.referenced_type),
+                mutability=param.ty.mutability
+            )
+            validator.variable_types[param.name] = resolved_ref
+            continue
+
+        from sushi_lang.semantics.typesys import FunctionType
+        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
+            # A container spelling: the WRAPPER is concrete but its members may not be.
+            # A function type binds its implicit UnknownType("StdError"); an array binds
+            # its element, which `P[]` leaves unresolved (#284).
+            validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
+            continue
+
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType,
+                                 TypeParameter)):
+            # A type parameter here is the opaque one of a template check (#1070).
+            validator.variable_types[param.name] = param.ty
+        elif isinstance(param.ty, UnknownType):
+            resolved_type = resolve_declared_type(validator, param.ty)
+            if resolved_type != param.ty:
+                validator.variable_types[param.name] = resolved_type
+        else:
+            from sushi_lang.semantics.generics.types import GenericTypeRef
+            if isinstance(param.ty, GenericTypeRef):
+                resolved_type = resolve_declared_type(validator, param.ty)
+                if isinstance(resolved_type, GenericTypeRef):
+                    resolved_type = None
+
+                if resolved_type is not None:
+                    validator.variable_types[param.name] = resolved_type
+
+                    # A check copy writes no signature of the program (#1070).
+                    func_sig = (validator.func_sig(validator.current_function.name)
+                                if validator.current_function
+                                and not validator.in_template_check else None)
+                    if func_sig is not None:
+                        for sig_param in func_sig.params:
+                            if sig_param.name == param.name:
+                                sig_param.ty = resolved_type
+                                break

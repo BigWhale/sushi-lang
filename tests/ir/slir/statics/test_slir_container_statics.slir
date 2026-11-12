@@ -1,0 +1,86 @@
+unit test_slir_container_statics
+
+fn hold(_1: List@(i32) @guaranteed, _2: HashMap@(string, i32[]) @guaranteed, _3: Own@(i32[]) @guaranteed, _4: i32 @guaranteed) -> i32 {
+    let _0: i32
+    let _5: bool
+    let _6: i32
+
+  bb0:
+    StorageLive(_5)
+    _5 = copy _4 == const 0_i32
+    switchInt(copy _5) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_5)
+    _0 = const 0_i32
+    return
+
+  bb2:
+    StorageDead(_5)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_6)
+    _6 = copy _4 - const 1_i32
+    _0 = call @hold(copy _1 @guaranteed, copy _2 @guaranteed, copy _3 @guaranteed, copy _6 @guaranteed)
+    StorageDead(_6)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: List@(i32)                     // a
+    let _2: HashMap@(string, i32[])        // b
+    let _3: i32[]                          // xs
+    let _4: Own@(i32[])                    // c
+    let _5: ~
+    let _6: i32
+    let _7: List@(i32)
+    let _8: HashMap@(string, i32[])
+    let _9: i32[]
+    let _10: Own@(i32[])
+    let _11: i32
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin List.new()
+    StorageLive(_2)
+    _2 = call builtin HashMap.new()
+    StorageLive(_3)
+    _3 = [const 1_i32, const 2_i32, const 3_i32]
+    StorageLive(_4)
+    _4 = call builtin Own.alloc@(i32[])(move _3 @owned)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(const "Mostly Harmless" @guaranteed)
+    StorageDead(_5)
+    StorageLive(_6)
+    _6 = call @hold(copy _1 @guaranteed, copy _2 @guaranteed, copy _4 @guaranteed, const 1_i32 @guaranteed)
+    StorageLive(_7)
+    _7 = call builtin List.with_capacity@(i32)(const 4_i32 @guaranteed)
+    StorageLive(_8)
+    _8 = call builtin HashMap.new()
+    StorageLive(_9)
+    _9 = [const 4_i32]
+    StorageLive(_10)
+    _10 = call builtin Own.alloc@(i32[])(move _9 @owned)
+    StorageLive(_11)
+    _11 = call @hold(copy _7 @guaranteed, copy _8 @guaranteed, copy _10 @guaranteed, const 0_i32 @guaranteed)
+    _0 = copy _6 + copy _11
+    StorageDead(_11)
+    Drop(_10)
+    StorageDead(_10)
+    StorageDead(_9)
+    Drop(_8)
+    StorageDead(_8)
+    Drop(_7)
+    StorageDead(_7)
+    StorageDead(_6)
+    Drop(_4)
+    StorageDead(_4)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

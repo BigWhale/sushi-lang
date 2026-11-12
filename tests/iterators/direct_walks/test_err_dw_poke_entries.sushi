@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2423
+# An entry of `.entries()` is a value that the walk makes, so it has no storage for a `poke`.
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    foreach(poke e in m.entries()):
+        println(e.key)
+    m.free()
+    return 0

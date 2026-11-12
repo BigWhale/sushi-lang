@@ -1,0 +1,79 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'msg'"
+# EXPECT_DUMP_SHIR: test_err_borrow_match_move_in_one_arm.shir
+#
+# The arms of a match are exclusive paths. Each arm starts from the state after the
+# scrutinee, and the paths that reach the code after the match join. The arms cover each
+# value, so no path skips the arms.
+# - `maybe` moves `msg` in one arm of an integer match: `msg` is in the row of the
+#   conditionally moved locals.
+# - `every` moves `msg` in each arm of a string match: `msg` is moved on every path, and
+#   it has no row.
+# - `leaves` moves `msg` in an arm that returns: that path does not join, so the read of
+#   `msg` after the match is legal, and `msg` has a row.
+# - `looped` moves `msg` in an arm that breaks: the path joins the code after the loop.
+# - `scoped` declares `t` in an arm and moves it in one block of an `if`: the end of the
+#   arm is an exit of `t`, and `t` has a row.
+# - `reuse` moves `msg` in a range arm and reads it after the match: CE2405.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn maybe(i32 n) ~:
+    let string msg = "{1} towels"
+    match n:
+        0 -> eat(nom msg)
+        _ -> println("kept")
+    println("done")
+
+fn every(string word) ~:
+    let string msg = "{2} towels"
+    match word:
+        "get" | 'fetch' -> eat(nom msg)
+        _ -> eat(nom msg)
+    println("done")
+
+fn leaves(u8 b) i32:
+    let string msg = "{3} towels"
+    match b:
+        a'0'..=a'9' ->
+            eat(nom msg)
+            return 1
+        _ -> println("kept")
+    println(msg)
+    return 0
+
+fn looped(i32 n) ~:
+    let string msg = "{4} towels"
+    let i32 i = 0
+    while (i < n):
+        match i:
+            3 ->
+                eat(nom msg)
+                break
+            _ -> i := i + 1
+    println("done")
+
+fn scoped(i32 n) ~:
+    match n:
+        0 ->
+            let string t = "{5} towels"
+            if (n > 0):
+                eat(nom t)
+        _ -> println("kept")
+
+fn reuse(i32 n) ~:
+    let string msg = "{6} towels"
+    match n:
+        0x10..=0x1f -> eat(nom msg)
+        _ -> println("kept")
+    println(msg)
+
+fn main() i32:
+    maybe(0)
+    every("get")
+    println(leaves(a'5'))
+    looped(5)
+    scoped(0)
+    reuse(0x15)
+    return 0

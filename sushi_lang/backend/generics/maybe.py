@@ -4,61 +4,56 @@ from typing import Any, Optional, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
 
 def emit_builtin_maybe_method(
     codegen: Any,
-    call: MethodCall | DotCall,
+    method: str,
     maybe_value: ir.Value,
-    maybe_type: EnumType,
-    to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM code for Maybe<T> built-in methods."""
-    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
+    """A method of `Maybe@(T)` that reads its receiver, over the value of its receiver
+    (docs/design/ir.md 8.6). `expect` and `realise` are no call: SLIR lowering makes a
+    switch on the tag of each one."""
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
 
-    if call.method == "is_some":
-        return codegen.utils.bool_answer(
-            emit_enum_tag_check(codegen, maybe_value, 0, "is_some"), to_i1)
-    elif call.method == "is_none":
-        return codegen.utils.bool_answer(
-            emit_enum_tag_check(codegen, maybe_value, 1, "is_none"), to_i1)
-    elif call.method == "realise":
-        return emit_enum_realise(codegen, call, maybe_value, maybe_type, "Some")
-    elif call.method == "expect":
-        return _emit_maybe_expect(codegen, call, maybe_value, maybe_type)
-    else:
-        raise_internal_error("CE0094", method=call.method)
+    if method == "is_some":
+        return codegen.utils.as_i8(emit_enum_tag_check(codegen, maybe_value, 0, "is_some"))
+    if method == "is_none":
+        return codegen.utils.as_i8(emit_enum_tag_check(codegen, maybe_value, 1, "is_none"))
+    raise_internal_error("CE0094", method=method)
 
 
 def emit_maybe_signature_method(
     codegen: Any,
-    call: MethodCall | DotCall,
+    method: str,
     maybe_value: ir.Value,
     maybe_type: EnumType,
-    args: list[ir.Value],
+    argument: ir.Value,
+    argument_type: Type,
+    answer_type: EnumType,
 ) -> ir.Value:
-    """Emit a `Maybe@(T)` method that has a signature (design 8.3).
-
-    The caller settled the receiver and the arguments by their stamped modes. The return
-    type is the stamp of the typecheck pass, because a method-level type parameter makes
-    it depend on an argument.
-    """
-    if call.method == "or_err":
-        return _emit_maybe_or_err(codegen, call, maybe_value, maybe_type, args[0])
-    raise_internal_error("CE0094", method=call.method)
+    """A `Maybe@(T)` method that has a signature (docs/design/ir.md 8.3, 8.6), over the
+    value of its receiver and of its argument. The method takes both (`Owned`). The answer
+    type is the type of the destination of the call, because a method-level type parameter
+    makes it depend on the argument."""
+    if method == "or_err":
+        return _emit_maybe_or_err(codegen, maybe_value, maybe_type, argument, argument_type,
+                                  answer_type)
+    raise_internal_error("CE0094", method=method)
 
 
 def _emit_maybe_or_err(
     codegen: Any,
-    call: MethodCall | DotCall,
     maybe_value: ir.Value,
     maybe_type: EnumType,
     error_value: ir.Value,
+    err_type: Type,
+    result_type: EnumType,
 ) -> ir.Value:
     """Emit `m.or_err(nom e)`: `Some(v)` gives `Ok(v)`, and `None` gives `Err(e)`.
 
@@ -69,22 +64,17 @@ def _emit_maybe_or_err(
     from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
     from sushi_lang.backend.generics.result_builder import (
-        build_err_from_return_type, build_ok_variant, stamped_result_return)
-    from sushi_lang.backend.memory.allocas import entry_alloca
+        build_err_from_return_type, build_ok_variant)
     from sushi_lang.semantics.generics.results import result_ok_err
     from sushi_lang.semantics.typesys import BuiltinType
 
-    result_type = stamped_result_return(call)
     some_index = maybe_type.get_variant_index("Some")
     if some_index is None:
         raise_internal_error("CE0092", enum=maybe_type.name)
-    ok_type, err_type = result_ok_err(result_type)
+    ok_type, _err = result_ok_err(result_type)
     builder = codegen.builder
 
-    error_ll = codegen.types.ll_type(err_type)
-    if isinstance(error_value.type, ir.PointerType) and error_value.type.pointee == error_ll:
-        error_value = builder.load(error_value, name="or_err_error_arg")
-    error_slot = entry_alloca(builder, error_ll, name="or_err_error")
+    error_slot = entry_alloca(builder, codegen.types.ll_type(err_type), name="or_err_error")
     builder.store(error_value, error_slot)
     result_slot = entry_alloca(builder, codegen.types.ll_type(result_type),
                                name="or_err_result")
@@ -106,19 +96,6 @@ def _emit_maybe_or_err(
                           result_slot)
 
     return builder.load(result_slot, name="or_err_value")
-
-
-def _emit_maybe_expect(
-    codegen: Any,
-    call: MethodCall | DotCall,
-    maybe_value: ir.Value,
-    maybe_type: EnumType
-) -> ir.Value:
-    """Emit `maybe.expect(message)` -- Some payload, or "ERROR: msg" to stderr and exit(1)."""
-    from sushi_lang.backend.generics.enum_methods_base import emit_enum_expect
-    return emit_enum_expect(codegen, call, maybe_value, maybe_type,
-                            success_variant_name="Some", label="maybe",
-                            missing_variant_code="CE0092", assoc_count_code="CE0093")
 
 
 def ensure_maybe_type_exists(codegen: 'LLVMCodegen', value_type: Type) -> Optional[EnumType]:
@@ -153,7 +130,7 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
 
     data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
     # ENTRY block: a Maybe built inside a loop must not grow the frame (BUGS.md B1).
-    temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
+    temp_alloca = entry_alloca(codegen.builder, data_array_type, "enum_data_temp")
 
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 

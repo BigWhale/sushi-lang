@@ -1,0 +1,7 @@
+public enum Heading:
+    North
+    East(i32)
+    Turn(i32, i32)
+
+enum Secret:
+    Hidden(i32)

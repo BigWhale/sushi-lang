@@ -1,0 +1,16 @@
+unit test_err_typeck_realise_nom_marker
+
+ShirBody name
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(adopt EnumInit(@Maybe, "None", []))])
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Lit("Mostly Harmless")]))
+
+ShirBody main
+  params : []
+  locals : [_0 "fallback": string, _1 "s": string]
+  block  :
+    Assign(LocalRef(_0), Lit("nobody"), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(Call(Free(@name), [(Lit(1), Guaranteed)]), "realise"), [(LocalRef(_0), Owned)]), is_init: true)
+    Return(Call(Builtin(LocalRef(_1), "len"), []))

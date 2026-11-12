@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2523
+# EXPECT_STDERR_CONTAINS: "the conversion is declared here"
+# EXPECT_DUMP_SHIR: test_err_typeck_cast_conversion_calls_itself.shir
+#
+# In the body of a conversion, a cast of a value of the source to the target calls the
+# same conversion again, and that call never ends. The cast is CE2523, with a note at the
+# declaration of the conversion.
+
+error LowError:
+    Bad
+
+error AppError:
+    Low
+
+extend LowError as AppError:
+    return self as AppError
+
+fn main() i32:
+    return 0

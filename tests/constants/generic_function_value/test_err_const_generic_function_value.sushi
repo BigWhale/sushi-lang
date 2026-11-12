@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_STDERR_CONTAINS: "cannot take a function value of 'id'"
+#
+# A constant holds no instance of a generic function, so a generic function is no value in
+# a constant initializer, also at a function type that solves its type arguments.
+fn id@(T)(nom T x) T:
+    return x
+
+const fn(nom i32) -> i32 F = id
+
+fn main() i32:
+    println(1)
+    return 0

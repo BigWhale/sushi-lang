@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign string to i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_rebind.shir
+#
+# A rebind checks its value at the type of its local: a literal takes that type, and so
+# does a parameter, whose type is its written type with no `peek` or `poke` (the
+# convention holds the mode). The last rebind gives a `string` to an `i32` local, which
+# is CE2002.
+
+fn reset(poke i32 counter) ~:
+    counter := 0
+    return ~
+
+fn main() i32:
+    let i32 count = 1
+    count := 2
+    let u8 small = 1
+    small := 255
+    let string name = "Arthur"
+    name := "Ford"
+    let bool flag = true
+    flag := false
+    count := "three"
+    return count

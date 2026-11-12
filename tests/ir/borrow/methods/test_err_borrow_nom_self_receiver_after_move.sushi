@@ -1,0 +1,34 @@
+# EXPECT_ERROR_CODES_EXACT: CE2435
+# EXPECT_STDERR_CONTAINS: "cannot use 'b': 'finish' consumed it"
+# EXPECT_DUMP_SHIR: test_err_borrow_nom_self_receiver_after_move.shir
+#
+# The receiver of a user method has the convention of its `self`: a plain `self` and a
+# `peek self` read it, a `poke self` writes it, and a `nom self` takes it. The receiver of
+# a `nom self` method is a consuming use, so a later use of the local names the method.
+# A static has no receiver.
+
+struct Bag:
+    string label
+
+extend Bag static named(nom string label) Bag:
+    return Bag(label)
+
+extend Bag size() i32:
+    return self.label.len()
+
+extend Bag seen(peek self) i32:
+    return self.label.len()
+
+extend Bag relabel(poke self, nom string label) ~:
+    self.label := label
+
+extend Bag finish(nom self) string:
+    return self.label.clone()
+
+fn main() i32:
+    let Bag b = Bag.named(nom "Mostly")
+    b.relabel(nom "Harmless")
+    let i32 n = b.size() + b.seen()
+    let string s = b.finish()
+    println(s)
+    return n + b.size()

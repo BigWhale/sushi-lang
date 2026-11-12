@@ -2,32 +2,19 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, TYPE_CHECKING, cast
+from typing import Callable, Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import (
-    ArrayLiteral,
-    BinaryOp,
-    Call,
-    DotCall,
-    DynamicArrayFrom,
-    DynamicArrayNew,
-    Expr,
-    IndexAccess,
-    IntLit,
-    MemberAccess,
-    MethodCall,
-    Name,
-    RangeExpr,
-    TryExpr,
-)
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
+from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.source_text import source_text
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .reads import read_type, root_owner
+from .reads import borrow_owner, read_type
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -47,6 +34,11 @@ class BorrowKind:
 # order IS precedence: a row whose span is missing falls through to the next one, which
 # is how a reference parameter with no span still gets the `is_borrow_param` sentence.
 BORROW_KINDS: tuple[BorrowKind, ...] = (
+    BorrowKind(
+        matches=lambda state: state.is_capture and state.declared_at_span is not None,
+        note_span=lambda state: state.declared_at_span,
+        note="the closure owns this value and still frees it",
+    ),
     BorrowKind(
         matches=lambda state: state.bound_at_span is not None,
         note_span=lambda state: state.bound_at_span,
@@ -122,7 +114,8 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
     `by_the_change` is the use that IS an argument of the change: the call reads it while
     it changes the owner (#888), so the use is not later and the escape is a clone.
     """
-    owner, what = state.invalidated_by
+    owner_local, what = state.invalidated_by
+    owner = checker.name_of(owner_local)
     diag = checker.err.emit_with(er.ERR.CE2412, state.invalidated_at,
                                  owner=owner, name=name)
     if state.bound_at_span is not None:
@@ -151,39 +144,30 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
-def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
-                               iterable: Expr, header: Optional[Span]) -> None:
-    """Report CE2412 at a change of the container a `foreach` still walks (#956).
-
-    `change` is the span of the change and its cause, as `FlowFacts.invalidation_of`
-    answers them.
-    """
-    span, (owner, what) = change
-    text = expr_to_string(iterable)
-    diag = checker.err.emit_with(er.ERR.CE2412, span,
-                                 owner=owner, name=text)
+def emit_change_under_iterator(checker: 'BorrowChecker', walk: BorrowState,
+                               iterable: e.ShirExpr, header: Optional[Span]) -> None:
+    """Report CE2412 at a change of the container that a walk still walks (#956). A lent
+    iterator that is no producer has no container to clone."""
+    owner, what = walk.invalidated_by
+    text = spelled(checker, iterable)
+    diag = checker.err.emit_with(er.ERR.CE2412, walk.invalidated_at,
+                                 owner=checker.name_of(owner), name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    if (not isinstance(iterable, MethodLikeNodes)
-            or iterable.method not in CONTAINER_ITERATORS):
-        # A lent iterator held by a `let` (#1259), or a lent value such as an adapter
-        # chain (#1228): the change is to one of its owners.
+    target = iterable.target if isinstance(iterable, e.Call) else None
+    if not (isinstance(target, e.Dotted) and target.name in CONTAINER_ITERATORS):
         diag.help(f"{what} after the loop")
         diag.emit()
         return
-    walked = cast(MethodCall, iterable).receiver
-    receiver = expr_to_string(walked)
-    receiver_type = read_type(checker, walked)
+    receiver = spelled(checker, target.recv)
+    receiver_type = read_type(checker, target.recv)
     if refuses_clone(checker, receiver_type):
         diag.help(f"{what} after the loop: "
                   f"{no_clone_reason(checker, receiver, receiver_type)}")
     else:
         diag.help(f"{what} after the loop, or walk an independent value: "
-                  f"`{receiver}.clone().{iterable.method}()`")
+                  f"`{receiver}.clone().{target.name}()`")
     diag.emit()
-
-
-MethodLikeNodes = (MethodCall, DotCall)
 
 
 def refuses_clone(checker: 'BorrowChecker', ty) -> bool:
@@ -340,32 +324,30 @@ def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
     return " -- otherwise " + escape_help(checker, text, ty, handover=False)
 
 
-def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
+def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
                          use_of_copy: Optional[CopyUse] = None) -> None:
-    """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`).
-
-    The owner can be a temporary (`give().get(0)??`), so the read is spelled with the
-    temporary in its short form.
-    """
-    text = expr_to_string(expr, temporaries=True)
+    """Report CE2411 for a read through a live owner (`r??` over a borrowed `r`), with the
+    read spelled as the user wrote it, with a temporary in its short form (`read_spelled`)."""
+    text = read_spelled(checker, expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
-    owner = root_owner(expr)
+    from .iterators import lent_source
+    owner = borrow_owner(checker, lent_source(checker, expr))
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None and state.declared_at_span is not None:
-        diag.note_at(f"'{owner}' owns this value and still frees it",
+        diag.note_at(f"'{state.name}' owns this value and still frees it",
                      state.declared_at_span)
     # The OWNER's type answers the escape question: a read through it can only be
     # refused when what is read owns something, and it is the owner that holds it.
     owner_type = state.var_type if state is not None else None
-    # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
-    # defect rather than a reason to word around it. The three RED `test_own_get_*` files
-    # hold the branch honest until it is fixed.
+    # ONE branch, on purpose: a get-out `.clone()` was a real defect (an internal error of
+    # the deleted AST emitter), not a reason to word around it. The three RED
+    # `test_own_get_*` files hold the branch honest until it is fixed.
     value_type = read_type(checker, expr)
     _note_opaque_mover(checker, diag, value_type)
     from .iterators import lent_iterator_help, lent_owners
     owners = lent_owners(checker, expr)
     if owners is not None:
-        diag.help(lent_iterator_help(owners)).emit()
+        diag.help(lent_iterator_help(checker, owners)).emit()
         return
     diag.help(escape_help(checker, text, owner_type, value_type,
                           use_of_copy=use_of_copy,
@@ -388,7 +370,7 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
     _note_opaque_mover(checker, diag, state.var_type)
     if state.is_lent_iterator:
         from .iterators import lent_iterator_help
-        diag.help(lent_iterator_help(state.borrows_from)).emit()
+        diag.help(lent_iterator_help(checker, state.borrows_from)).emit()
         return
     diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy,
                           through_receiver=state.is_method_receiver))
@@ -402,52 +384,53 @@ def _note_opaque_mover(checker: 'BorrowChecker', diag, ty) -> None:
         note_opaque(diag, param)
 
 
-def expr_to_string(expr: Expr, *, temporaries: bool = False) -> str:
-    """Render an expression back to source text, for a message the user can paste.
+#: The stand-in of an expression whose source text the pass cannot read.
+NO_TEXT = "<expression>"
 
-    With `temporaries`, a receiver that makes a new value is spelled in a short form
-    (`give()`, `[...]`, `from([...])`, `new()`). A read through a temporary then has a
-    spelling, and the placeholder does not reach the user.
-    """
-    t = temporaries
-    match expr:
-        case Name():
-            return expr.id
-        case IntLit():
-            return str(expr.value)
-        case BinaryOp():
-            return (f"({expr_to_string(expr.left, temporaries=t)} {expr.op} "
-                    f"{expr_to_string(expr.right, temporaries=t)})")
-        case MethodCall() | DotCall():
-            # Both spellings reach here, arguments included, so the text matches what the
-            # user wrote.
-            args = ", ".join(_argument_text(a) for a in (expr.args or []))
-            return f"{expr_to_string(expr.receiver, temporaries=t)}.{expr.method}({args})"
-        case MemberAccess():
-            return f"{expr_to_string(expr.receiver, temporaries=t)}.{expr.member}"
-        case IndexAccess():
-            return (f"{expr_to_string(expr.array, temporaries=t)}"
-                    f"[{expr_to_string(expr.index, temporaries=t)}]")
-        case TryExpr():
-            return f"{expr_to_string(expr.expr, temporaries=t)}??"
-        case RangeExpr():
-            operator = "..=" if expr.inclusive else ".."
-            text = (f"{expr_to_string(expr.start, temporaries=t)}{operator}"
-                    f"{expr_to_string(expr.end, temporaries=t)}")
-            return f"({text}).rev()" if expr.reverse else text
-        case Call() if temporaries and isinstance(expr.callee, Name):
-            return f"{expr.callee.id}({'...' if expr.args else ''})"
-        case ArrayLiteral() if temporaries:
+
+def spelled(checker: 'BorrowChecker', node) -> str:
+    """The source text of `node`, as the user wrote it (`semantics/source_text.py`)."""
+    return source_text(checker.source, node.loc) or NO_TEXT
+
+
+def read_spelled(checker: 'BorrowChecker', expr: e.ShirExpr) -> str:
+    """The text of a read through an owner: its source text, where a root that makes a new
+    value takes its short form (`head(...)`, `[...]`, `from([...])`, `new()`). The root is
+    at the end of the chain of fields, elements, method receivers and `??` operands."""
+    root = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL | Step.TRY).node
+    short = _short_temporary(checker, root) if isinstance(root, e.ExprNode) else None
+    if root is None or short is None:
+        return spelled(checker, expr)
+    rest = source_text(checker.source, Span(root.loc.end_line, root.loc.end_col,
+                                            expr.loc.end_line, expr.loc.end_col))
+    return short + (rest or "")
+
+
+def _short_temporary(checker: 'BorrowChecker', root: e.ShirExpr) -> Optional[str]:
+    """The short form of a root that makes a new value, or None for any other root."""
+    if isinstance(root, e.ArrayInit):
+        if isinstance(root.kind, e.Fixed):
             return "[...]"
-        case DynamicArrayFrom() if temporaries:
-            return "from([...])"
-        case DynamicArrayNew() if temporaries:
-            return "new()"
-        case _:
-            return "<expression>"
+        return "new()" if root.kind.new else "from([...])"
+    if isinstance(root, e.Call) and isinstance(root.target, e.Named):
+        name = source_text(checker.source, root.target.ref.loc)
+        if name is not None and name.isidentifier():
+            return f"{name}({'...' if root.args else ''})"
+    return None
 
 
-def _argument_text(arg: Expr) -> str:
-    """An argument as written: the `nom` marker is part of the call (`f(nom x)`)."""
-    text = expr_to_string(arg)
-    return f"nom {text}" if arg.nom_marked else text
+def temporary_spelled(checker: 'BorrowChecker', place: e.ShirExpr) -> str:
+    """The text of a borrow of a temporary (CE2404): each field of the place, after a root
+    that a call of a function or a construction gives is the stand-in (`<expression>.x`).
+    An integer literal spells its value; any other root spells its source text."""
+    walked = walk_place(place, Step.MEMBER)
+    root = walked.node
+    if isinstance(root, e.Lit) and isinstance(root.value, e.IntConst):
+        text = str(root.value.value)
+    elif isinstance(root, e.Call) and isinstance(root.target, e.Dotted):
+        text = spelled(checker, root)
+    elif isinstance(root, (e.Lit, e.Call, e.StructInit, e.EnumInit, e.TupleInit, e.ArrayInit)):
+        text = NO_TEXT
+    else:
+        text = spelled(checker, root)
+    return ".".join([text, *(field.name for field in reversed(walked.path))])

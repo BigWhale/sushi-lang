@@ -182,14 +182,14 @@ resource. A `Lines@(R)` owns a `BufReader@(R)` that owns a `File`, so the loop h
 resource, three levels deep.
 
 The iterator therefore lives in a local of its own in a scope that closes after the loop's
-end block, registered through `register_owning_value` — the complete registry router, not
-`create_local`'s default, which does not know a dynamic array, a `List@(T)` or an `Own@(T)`.
-Every exit path destroys it: the end of the input, a `break`, a `return` from the
-body, and the propagation path a `??` binder takes.
+end block, and drop placement (`docs/design/ir.md` 8.10) drops it on every exit path: the end
+of the input, a `break`, a `return` from the body, and the propagation path a `??` binder
+takes.
 
-The move into that local is a consuming position, the same as `let T x = it`: it goes
-through the ownership seam (`consume`), and the borrow pass consumes the iterable the same
-way. So the loop destroys the iterator and nothing else does (#1145):
+The move into that local is a consuming position, the same as `let T x = it`: the borrow
+pass decides it as it decides that `let`, and SLIR lowering writes the answer as a `Move`
+into the hidden local (`docs/design/ir.md` 8.10, rules 3 and 7). So the loop destroys the
+iterator and nothing else does (#1145):
 
 - a named local or a `nom` parameter is marked moved, so its scope exit skips it, and a
   later mention of it is **[CE2405](../error-catalog.md#ce2405)**;
@@ -215,10 +215,10 @@ fn first(poke Words w) ~:
         break
 ```
 
-The caller then continues the walk where `first` stopped. The typecheck pass decides it
-once and stamps `Foreach.walks_in_place`; the borrow pass and the backend read that stamp.
-The borrow pass also sets the stamp for a `let` that holds a LENT iterator (ruling 10): that
-`let` cannot give its value away, so the loop walks it in place and does not take it.
+The caller then continues the walk where `first` stopped. The borrow pass decides it once
+and stamps `Foreach.walks_in_place`; the backend reads that stamp. The borrow pass also sets
+the stamp for a `let` that holds a LENT iterator (ruling 10): that `let` cannot give its
+value away, so the loop walks it in place and does not take it.
 In the borrow pass the walk is a change of the walked value, the same as a call of
 `next()` on it, so a `let`-borrow that reads out of the same owner and is used after the
 loop is **[CE2412](../error-catalog.md#ce2412)**. In the backend the loop's hidden slot is a
@@ -377,15 +377,17 @@ null. A producer over a TEMPORARY (`from([1, 2]).iter()`, `make_map().keys()`) m
 OWNED iterator: the iterator takes the temporary, and its state holds the cursor and the
 container on the heap. A range and `Iterator.new` are owned too. The `drop_fn` of an owned
 state destroys the container or the value it holds, and then frees the state. A `drop_fn`
-never frees a stack slot. The borrow pass chooses, and stamps the producer with
-`MethodCall.iterator_state` (`CURSOR`, `LENT` or `OWNED`, `semantics/generics/iterators.py`).
+never frees a stack slot. The borrow pass chooses, and writes LENT or OWNED for the
+producer and its heap decision in `OwnershipResults` (`passes/borrow/iterators.py`). SLIR
+lowering puts the heap decision in the `heap` field of `AggIterator` (`ir.md` 8.7).
 
 **The walk.** A `foreach` over an iterator VALUE calls `next_fn` until it answers `None`. A
 `foreach` over a source the compiler can read keeps its DIRECT walk, with no call through
 `next_fn` and no allocation: `foreach(x in xs.iter())`, `foreach(i in 0..n)`,
-`foreach(k in m.keys())`, `foreach(poke r in xs.iter())`. The typecheck pass decides it:
-it stamps the producer of a direct walk `CURSOR`, so the producer answers its bare cursor,
-and it stamps `Foreach.value_iterator` for a walk of a value. The loop owns the item of an
+`foreach(k in m.keys())`, `foreach(poke r in xs.iter())`. The typecheck pass decides it,
+and it stamps `Foreach.value_iterator` for a walk of a value. The borrow pass reads that
+choice and stamps the producer of a direct walk `CURSOR`, so the producer answers its bare
+cursor. The loop owns the item of an
 `Iterator@(T)` (it is the payload of a fresh `Maybe`, as for a protocol walk), and it
 borrows the item of an `Iterator@(peek T)`, as it borrows an array element.
 
@@ -394,8 +396,10 @@ frozen until the last use of the iterator (**[CE2412](../error-catalog.md#ce2412
 the iterator cannot be given with `nom`, returned, stored in a field or a container, or
 captured (**[CE2411](../error-catalog.md#ce2411)**). It is still DESTROYED at scope exit,
 because it owns its value: "it borrows its source" and "it owns its value" are two facts,
-and `ownership.bind` keeps them apart (`borrow-model.md` §10g). A write through a lent
-`let` is legal: `count(poke it)` moves its own cursor, and a `foreach` walks it in place.
+and the borrow pass keeps them apart (`borrow-model.md` §10g): the source is a borrow, and
+the local of the iterator is an owning local of drop placement (`ir.md` 8.10, rule 7). A
+write through a lent `let` is legal: `count(poke it)` moves its own cursor, and a `foreach`
+walks it in place.
 An owned iterator owns everything it walks, and it moves freely.
 
 **A returned iterator.** A lent iterator leaves its function in one form: a function or a
@@ -415,10 +419,10 @@ fn main() i32:
 ```
 
 Its state cannot stay in a stack slot of the function, so it moves to the HEAP at that
-return. The two facts stay apart: `iterator_state` says what the value borrows (`LENT`),
-and `state_on_heap` (`semantics/generics/iterators.py`) says where its state is. The borrow
-pass stamps `iterator_leaves` on each link of the chain that the return gives (a producer
-and each lazy adapter, through each `let` that held a link), so EVERY link moves: an
+return. The two facts stay apart: LENT says what the value borrows, and the heap decision
+says where its state is (two rows of `OwnershipResults`). The borrow pass puts each link of
+the chain that the return gives on the heap (`lend_to_the_caller`: a producer and each lazy
+adapter, through each `let` that held a link), so EVERY link moves: an
 adapter state holds its inner iterator by value, and the state pointer of that inner value
 must not point into the frame. A heap lent cursor frees its block in its `drop_fn`, and a
 heap adapter state destroys what it holds and frees its block. The caller holds a lent
@@ -522,7 +526,7 @@ freezes its owners for the whole loop, as a direct walk freezes its container.
 
 **The state.** A lazy adapter over a lent input is LENT: its state is a stack slot of the
 function, as the state of its input is. Over owned inputs it is OWNED: its state is on the
-heap. The borrow pass stamps `MethodCall.iterator_state`. The state holds the inner iterator
+heap. The borrow pass writes the answer in `OwnershipResults`. The state holds the inner iterator
 and the function (`map`, `filter`), the count (`enumerate`) or the second iterator (`zip`).
 Its `next_fn` asks the inner iterator for an item and changes it. Its `drop_fn` destroys the
 inner iterator and the function, and frees the state only when it is on the heap. Its
@@ -559,9 +563,9 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | piece | file |
 |---|---|
 | the `??` binder's desugar, and the `_` binder | `semantics/ast_builder/statements/loops.py` |
-| the protocol's resolution, and the call it builds | `resolve_protocol_iterator`, `semantics/passes/types/statements.py` |
+| the protocol's resolution, and the call it builds | `protocol_item_type`, `semantics/passes/types/statements.py`; `next_call`, `semantics/passes/types/visit/iterator_methods.py` |
 | the method ladder it resolves through | `resolve_method`, `semantics/passes/types/calls/methods.py` |
-| the loop arm | `_emit_protocol_foreach`, `backend/statements/loops.py` |
+| the loop arm | SHIR-to-SLIR lowering of the `Loop` (`docs/design/ir.md` 8.9), which the iterators group C3 builds |
 | `Lines@(R)` and `lines()` | `sushi_stdlib/src_sushi/io/buf.sushi` |
 | the written `Iterator@(...)` and its item mode | `semantics/ast_builder/types/iterators.py` |
 | the item mode: the written item, the manifest string, one type for a plain item | `semantics/generics/iterators.py` |
@@ -569,12 +573,12 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the plain-item rule where an instance is interned | `settle_in_tables` over `EnumTable.item_owner`, `semantics/generics/iterators.py` |
 | the reserved name | `_compiler_type_names`, `semantics/passes/collect/utils.py` |
 | the choice of the walk (direct, or a value) | `_choose_the_walk`, `semantics/passes/types/statements.py` |
-| the range value | `propagate_types_to_value`, `semantics/passes/types/propagation.py` |
-| `Iterator.new` | `_validate_iterator_new`, `semantics/passes/types/calls/methods.py`; `try_emit_iterator_new`, `backend/expressions/calls/intrinsics.py` |
+| the range value | `check_range`, `semantics/passes/types/visit/ranges.py` |
+| `Iterator.new` | `check_iterator_new`, `semantics/passes/types/visit/iterator_methods.py`; `emit_new_iterator`, `backend/runtime/iterators.py` |
 | the lent and the owned iterator in the borrow pass | `semantics/passes/borrow/iterators.py` |
 | the value, the state and the three functions of each source | `backend/runtime/iterators.py` |
 | the HashMap cursor | `bucket_source`, `backend/generics/hashmap/methods/iterators.py` |
-| the walk of a value | `_emit_value_foreach`, `backend/statements/loops.py` |
+| the walk of a value | SHIR-to-SLIR lowering of the `Loop`, with the C3 group |
 | the adapter signatures and the item mode of `enumerate` and `zip` | `ITERATOR_METHOD_SIGNATURES`, `enumerated`, `zipped`, `semantics/generics/iterators.py` |
 | the result of an adapter, and CE2129 | `adapter_result`, `semantics/passes/types/iterator_adapters.py` |
 | an adapter that takes a lent iterator | `take_lent_iterator`, `semantics/passes/borrow/iterators.py` |

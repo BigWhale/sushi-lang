@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 256 out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_range_fit.shir
+#
+# Each bound of a range arm is read at the type of the scrutinee. On an i8,
+# `0x80..=0xff` is -128 to -1 and goes up. On a u8, the bound 256 does not fit: CE2073.
+
+fn high(i8 b) string:
+    match b:
+        0x80..=0xff -> return "negative"
+        _ -> return "other"
+
+fn any(u8 b) string:
+    match b:
+        0..256 -> return "any"
+        _ -> return "other"
+
+fn main() i32:
+    println(high(1))
+    println(any(1))
+    return 0

@@ -1,0 +1,41 @@
+unit test_borrow_takes_and_destructures
+
+ShirBody eat
+  params : [(_0 "s": string, Owned)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+
+ShirBody captain
+  params : [(_0 "c": Crew, Owned)]
+  locals : []
+  block  :
+    Return(move Take(Field(LocalRef(_0), "name")))
+
+ShirBody show
+  params : [(_0 "pair": (string, string), InGuaranteed)]
+  locals : [_2 "first": string, _3 "last": string]
+  regions : [_2: {_0} until #3, _3: {_0} until #3]
+  block  :
+    Destructure([_2, _3], reject LocalRef(_0))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_2), " ", LocalRef(_3), ""]), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "seed": string, _1 "a": Crew, _2 "name": string, _3 "b": Crew, _4 "arthur": (string, string), _5 "pair": (string, string), _7 "first": string, _8 "last": string, _9 "m": Maybe@(string), _10 "who": string]
+  block  :
+    Assign(LocalRef(_0), adopt Lit("f"), is_init: true)
+    Assign(LocalRef(_1), adopt StructInit(@Crew, [adopt Interp(["", LocalRef(_0), "ord"]), adopt Interp(["", LocalRef(_0), "hog"]), adopt Lit(1)], written_order: [0, 1, 2]), is_init: true)
+    Assign(LocalRef(_2), move Take(Field(LocalRef(_1), "name")), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    Assign(LocalRef(_3), adopt StructInit(@Crew, [adopt Interp(["", LocalRef(_0), "enchurch"]), adopt Lit("x"), adopt Lit(2)], written_order: [0, 1, 2]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@eat), [(move Field(LocalRef(_3), "name"), Owned)]), Guaranteed)]))
+    Assign(LocalRef(_4), adopt TupleInit([adopt Lit("arthur"), adopt Lit("dent")]), is_init: true)
+    ExprStmt(Call(Free(@show), [(LocalRef(_4), InGuaranteed)]))
+    Assign(LocalRef(_5), adopt TupleInit([adopt Lit("zaphod"), adopt Lit("beeblebrox")]), is_init: true)
+    Destructure([_7, _8], move LocalRef(_5))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_7), " ", LocalRef(_8), ""]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@captain), [(adopt StructInit(@Crew, [adopt Lit("heart of gold"), adopt Interp(["", LocalRef(_0), ""]), adopt Lit(3)], written_order: [0, 1, 2]), Owned)]), Guaranteed)]))
+    Assign(LocalRef(_9), adopt EnumInit(@Maybe, "Some", [adopt Lit("trillian")]), is_init: true)
+    Match(move LocalRef(_9), [Arm(Variant(@Maybe, "Some", [(_10, Nom)]), [ExprStmt(Call(Intrinsic("println"), [(Interp(["took ", LocalRef(_10), ""]), Guaranteed)]))]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("none"), Guaranteed)]))])], consumes: true)
+    Return(adopt Lit(0))

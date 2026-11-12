@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2518
+# EXPECT_STDERR_CONTAINS: "operator '+' takes a numeric operand, and 'poke i32' is not one"
+# EXPECT_DUMP_SHIR: test_err_typeck_borrow_operand.shir
+#
+# A borrow outside a call argument is a value of a reference type. An arithmetic operand
+# is a number, and a reference is not one: CE2518.
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn main() i32:
+    let i32 y = 3
+    bump(poke y)
+    let i32 z = (poke y) + 1
+    return z

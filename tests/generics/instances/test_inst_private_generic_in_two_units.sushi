@@ -1,0 +1,12 @@
+# Each of two units declares a private generic of one name, at one type argument. The
+# identity of an instance is its unit, its name and its type arguments: two symbols.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "left 1\nright 2\n"
+use "helpers/inst_left"
+use "helpers/inst_right"
+
+fn main() i32:
+    println(inst_call_left())
+    println(inst_call_right())
+    return 0

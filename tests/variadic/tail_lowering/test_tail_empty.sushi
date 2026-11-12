@@ -1,0 +1,20 @@
+# An empty tail is the empty array, after a fixed prefix and with no prefix, for an owning
+# and for a plain element type.
+# EXPECT_STDOUT_EXACT: "0\n0\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn count(...string xs) i32:
+    return xs.len()
+
+fn label(string head, ...i32 xs) string:
+    if (xs.len() == 0):
+        return "{head}"
+    return "{head}{xs[0]}"
+
+fn main() i32:
+    println(count())
+    let i32[] none = from([])
+    println(none.len() + count())
+    println(label("Mostly {'Harmless'}"))
+    return 0

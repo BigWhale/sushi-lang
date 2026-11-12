@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODES_EXACT: CE2441
+
+fn first(string[] xs) peek string:
+    return xs[0]
+
+fn main() i32:
+    let fn(string[]) -> string f = first
+    let string[] xs = from(["a"])
+    println(f(xs))
+    return 0

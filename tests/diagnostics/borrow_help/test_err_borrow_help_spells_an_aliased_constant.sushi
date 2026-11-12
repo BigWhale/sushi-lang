@@ -1,0 +1,12 @@
+# A constant behind an alias spells the alias, the constant and each field, as the source
+# writes them.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek geo.ORIGIN.x`
+use "borrow_help_geo" as geo
+
+fn look(peek i32 v) i32:
+    return v
+
+fn main() i32:
+    println(look(geo.ORIGIN.x))
+    return 0

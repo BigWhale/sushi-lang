@@ -1,0 +1,14 @@
+# A `let` of a `let` that holds a lent iterator moves it (ruling R-BA): a later use of the
+# first `let` is a use after a move.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1])
+    let Iterator@(i32) a = xs.iter()
+    let Iterator@(i32) b = a
+    foreach(x in a):
+        println(x)
+    foreach(y in b):
+        println(y)
+    return 0

@@ -2,12 +2,13 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, AbstractSet, Callable, Optional, Dict, Tuple, List
+from typing import TYPE_CHECKING, AbstractSet, Callable, Optional, Dict, Sequence, Tuple, List
 import importlib
 import re
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program
+    from sushi_lang.semantics.typesys import Type
     from sushi_lang.sushi_stdlib.src.signatures import Signature
 
 
@@ -86,6 +87,12 @@ BUILTIN_TYPE_METHOD_MODULES = frozenset({
     "collections/iter", "collections/sort", "collections/strings", "encoding/binary",
     "text/ascii",
 })
+
+
+def stdlib_imports(program: 'Program') -> tuple[str, ...]:
+    """The stdlib module of each `use <...>` of one unit, as written and in order. The
+    parent directory of a path is not an import of it (#501)."""
+    return tuple(use_stmt.path for use_stmt in program.uses if use_stmt.is_stdlib)
 
 
 def named_methods(program: 'Program') -> frozenset:
@@ -302,6 +309,57 @@ def _family_resolver(family: Callable, name: str) -> Callable:
 def stdlib_signature(module_path: str, name: str) -> Optional["Signature"]:
     """The row of one registry stdlib function, or None for a module with no table."""
     return signature_tables().get(module_path, {}).get(name)
+
+
+def _is_family(module_path: str, name: str) -> bool:
+    return any(name in names for names in family_tables().get(module_path, {}).values())
+
+
+def stdlib_row(module_path: str, name: str,
+               arg_types: Sequence[Optional["Type"]]) -> Optional["Signature"]:
+    """The row of one call of a registry stdlib function (docs/design/ir.md 7.6, 8.6).
+
+    A member of a family has a row for each type: the row at the type of the first
+    argument, or None when that argument has no type or the family has no row for it.
+    """
+    if not _is_family(module_path, name):
+        return stdlib_signature(module_path, name)
+    from sushi_lang.sushi_stdlib.src.math import family_row
+    first = arg_types[0] if arg_types else None
+    return None if first is None else family_row(name, first)
+
+
+def stdlib_arity(module_path: str, name: str) -> Optional[int]:
+    """The number of parameters of a registry stdlib function, or None for no function."""
+    if _is_family(module_path, name):
+        from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
+        return MATH_FAMILIES[name][0]
+    row = stdlib_signature(module_path, name)
+    return None if row is None else row.arity
+
+
+#: The modules whose generated functions carry the name of their layer.
+_SYMBOL_PREFIXES = {"io/files": "sushi_io_files_", "net/socket": "sushi_net_"}
+
+
+def stdlib_symbol(module_path: str, name: str, arg_types: Sequence["Type"]) -> str:
+    """The symbol of the generated function that a call of a registry stdlib function
+    calls: the ONE derivation (docs/design/ir.md 8.6). It is `sushi_<name>`
+    (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers), and
+    `sushi_<name>_<type>` for a member of a family, at the type of its first argument: an
+    LLVM integer has no sign, so `min` of two u8 is `sushi_min_u8` (#817)."""
+    if _is_family(module_path, name):
+        return f"sushi_{name}_{arg_types[0]}"
+    return f"{_SYMBOL_PREFIXES.get(module_path, 'sushi_')}{name}"
+
+
+#: The registry functions whose call never returns.
+_NEVER_RETURNS = frozenset({("sys/process", "exit")})
+
+
+def stdlib_never_returns(module_path: str, name: str) -> bool:
+    """Whether a call of a registry stdlib function never returns (`exit`, ir.md 8.6)."""
+    return (module_path, name) in _NEVER_RETURNS
 
 
 class StdlibRegistry:

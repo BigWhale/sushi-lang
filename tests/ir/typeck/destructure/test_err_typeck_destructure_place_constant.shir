@@ -1,0 +1,15 @@
+unit test_err_typeck_destructure_place_constant
+
+ShirBody ORIGIN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Point, [adopt Lit(0), adopt Lit(0)], written_order: [0, 1]))
+
+ShirBody main
+  params : []
+  locals : [_0 "b": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(0), is_init: true)
+    Destructure([Place(Field(ConstRef(@ORIGIN), "x")), Place(LocalRef(_0))], TupleInit([Lit(1), Lit(2)]))
+    Return(LocalRef(_0))

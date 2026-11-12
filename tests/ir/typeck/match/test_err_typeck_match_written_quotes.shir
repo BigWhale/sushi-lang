@@ -1,0 +1,14 @@
+unit test_err_typeck_match_written_quotes
+
+ShirBody f
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal("a"), [Return(Lit("first"))]), Arm(Literal("a"), [Return(Lit("again"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@f), [(Lit("a"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

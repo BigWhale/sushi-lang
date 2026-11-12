@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def emit_array_eq_range(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
                         start: ir.Value, other_data: ir.Value, other_len: ir.Value,
-                        element_semantic_type: 'Type', to_i1: bool) -> ir.Value:
+                        element_semantic_type: 'Type') -> ir.Value:
     """Whether `data[start .. start + other_len)` equals `other_data[0 .. other_len)`.
 
     `starts_with` is the call with `start` 0. A range outside `0 .. count` answers false
@@ -58,6 +58,4 @@ def emit_array_eq_range(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Va
     answer = builder.phi(ir.IntType(1), name="eq_range_result")
     answer.add_incoming(ir.Constant(ir.IntType(1), 0), outside_pred)
     answer.add_incoming(equal_all, compare_pred)
-    if to_i1:
-        return answer
     return builder.zext(answer, codegen.types.i8, name="eq_range_bool")

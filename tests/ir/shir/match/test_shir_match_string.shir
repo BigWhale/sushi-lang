@@ -1,0 +1,20 @@
+unit test_shir_match_string
+
+ShirBody verb
+  params : [(_0 "word": string, Guaranteed)]
+  locals : [_1 "code": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Or([Literal("get"), Literal("fetch")]), [Assign(LocalRef(_1), adopt Lit(1), is_init: false)]), Arm(Literal("put"), [Assign(LocalRef(_1), adopt Lit(2), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), adopt Lit(9), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("get"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("fetch"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("put"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("drop"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

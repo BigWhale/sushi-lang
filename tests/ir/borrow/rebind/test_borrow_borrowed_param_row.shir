@@ -1,0 +1,36 @@
+unit test_borrow_borrowed_param_row
+
+ShirBody pick
+  params : [(_0 "s": string, Guaranteed), (_1 "fresh": bool, Guaranteed)]
+  locals : []
+  cond_moved : [_0]
+  block  :
+    If(LocalRef(_1), then: [Assign(LocalRef(_0), adopt Call(Builtin(Lit("new"), "concat"), [(Lit(""), Guaranteed)]), is_init: false)])
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody again
+  params : [(_0 "s": string, Guaranteed), (_1 "fresh": bool, Guaranteed)]
+  locals : []
+  cond_moved : [_0]
+  block  :
+    If(LocalRef(_1), then: [Assign(LocalRef(_0), adopt Call(Builtin(Lit("new"), "concat"), [(Lit(""), Guaranteed)]), is_init: false)])
+    Assign(LocalRef(_0), adopt Call(Builtin(LocalRef(_0), "concat"), [(Lit("!"), Guaranteed)]), is_init: false)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody each
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Assign(LocalRef(_0), adopt Call(Builtin(LocalRef(_0), "concat"), [(Lit(""), Guaranteed)]), is_init: false)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "c": string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Builtin(Lit("Mostly"), "concat"), [(Lit(""), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Free(@pick), [(LocalRef(_0), Guaranteed), (Lit(true), Guaranteed)]))
+    ExprStmt(Call(Free(@pick), [(LocalRef(_0), Guaranteed), (Lit(false), Guaranteed)]))
+    ExprStmt(Call(Free(@again), [(LocalRef(_0), Guaranteed), (Lit(false), Guaranteed)]))
+    ExprStmt(Call(Free(@each), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt Lit(0))

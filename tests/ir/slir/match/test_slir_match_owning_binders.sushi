@@ -1,0 +1,24 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "q!\nfalse\na! b!\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_match_owning_binders.slir
+#
+# A bare binder of an owning payload is a view local of the arm, written with the `Copy` of
+# its payload place, in a region over the root of the scrutinee to its last use. A tuple
+# literal that owns, as the scrutinee, builds no tuple: each part is a root of its own.
+
+fn word(string s) string:
+    return "{s}!"
+
+fn main() i32:
+    let Maybe@(string) m = Maybe.Some(word("q"))
+    match m:
+        Maybe.Some(s) ->
+            println(s)
+            m := Maybe.None
+        Maybe.None -> println("none")
+    println(m.is_some())
+    let string a = word("a")
+    match (a, word("b")):
+        (x, y) -> println("{x} {y}")
+    return 0

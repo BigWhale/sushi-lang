@@ -1,0 +1,32 @@
+unit test_shir_expr_cast
+
+ShirBody code
+  params : [(_0 "e": AppError, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@AppError, "Parse", [Wildcard]), [Return(adopt Lit(7))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "wide": i64, _2 "low": u8, _3 "half": f64, _4 "app": AppError]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(300), is_init: true)
+    Assign(LocalRef(_1), adopt Cast(adopt LocalRef(_0), i64), is_init: true)
+    Assign(LocalRef(_2), adopt Cast(adopt LocalRef(_0), u8), is_init: true)
+    Assign(LocalRef(_3), adopt Binary(/, Cast(adopt LocalRef(_0), f64), Lit(120.0)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(/, Lit(100), Cast(adopt Lit(4), i32)), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(/, Lit(200), Cast(adopt Lit(300), u8)), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(/, Lit(1), Cast(adopt Cast(adopt LocalRef(_0), i64), i32)), Guaranteed)]))
+    Assign(LocalRef(_4), adopt Cast(adopt EnumInit(@ParseError, "Empty", []), AppError), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@code), [(LocalRef(_4), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))
+
+ShirBody ParseError.as
+  params : [(_0 "self": ParseError, Owned)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@AppError, "Parse", [adopt LocalRef(_0)]))

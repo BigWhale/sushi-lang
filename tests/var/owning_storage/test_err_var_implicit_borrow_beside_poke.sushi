@@ -1,0 +1,13 @@
+# A plain borrowed argument of an owning `var` is a shared borrow, so a `poke` of the same
+# `var` in the same call is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+var i32[] buf = from([])
+
+fn both(i32[] a, poke i32[] b) ~:
+    b.push(a.len())
+
+fn main() i32:
+    buf.push(1)
+    both(buf, poke buf)
+    return 0

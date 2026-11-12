@@ -1,0 +1,23 @@
+unit test_err_borrow_consume_an_owning_field
+
+ShirBody show
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody name_of
+  params : [(_0 "b": Box, Guaranteed)]
+  locals : [_1 "n": i32]
+  block  :
+    ExprStmt(Call(Free(@show), [(Field(LocalRef(_0), "name"), Guaranteed)]))
+    Assign(LocalRef(_1), adopt Field(LocalRef(_0), "n"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(reject Field(LocalRef(_0), "name"))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@name_of), [(StructInit(@Box, [adopt Lit("Mostly Harmless"), adopt Lit(42)], written_order: [0, 1]), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

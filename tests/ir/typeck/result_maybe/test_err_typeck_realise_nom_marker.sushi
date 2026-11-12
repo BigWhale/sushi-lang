@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2427
+# EXPECT_DUMP_SHIR: test_err_typeck_realise_nom_marker.shir
+#
+# The default of `realise` borrows, so a `nom` marker on it is CE2427 at the argument.
+
+fn name(i32 n) Maybe@(string):
+    if (n == 0):
+        return Maybe.None()
+    return Maybe.Some("Mostly Harmless")
+
+fn main() i32:
+    let string fallback = "nobody"
+    let string s = name(1).realise(nom fallback)
+    return s.len()

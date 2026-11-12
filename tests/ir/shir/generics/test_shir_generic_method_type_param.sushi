@@ -1,0 +1,16 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_method_type_param.shir
+#
+# the SHIR dump of a method with a type parameter on a concrete type. The template is the
+# body of its template check, and its parameter has the written type `U`. A call solves
+# `U` from its argument, and the copy fixpoint places one copy for each solution after the
+# per-unit loop. The name of a copy has its type arguments after the method name.
+
+extend i32 pick@(U)(nom U other) U:
+    return other
+
+fn main() i32:
+    println((7).pick(nom 2))
+    println((7).pick(nom "Mostly Harmless"))
+    return 0

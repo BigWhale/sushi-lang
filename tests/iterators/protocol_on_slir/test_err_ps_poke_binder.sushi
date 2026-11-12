@@ -1,0 +1,19 @@
+# A `poke` binder over a walk of a type with `next()` is CE2423: the item has no storage in
+# a container.
+# EXPECT_ERROR_CODES_EXACT: CE2423
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        return Maybe.None
+    let i32 now = self.at
+    self.at := self.at - 1
+    return Maybe.Some(now)
+
+fn main() i32:
+    let Countdown c = Countdown(3)
+    foreach(poke n in c):
+        n := 0
+    return 0

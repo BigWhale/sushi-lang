@@ -1,0 +1,41 @@
+unit test_slir_declaration_kinds
+
+fn main() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = call @keep__i32(const 0_i32 @owned)
+    return
+}
+
+fn Dog.paws(_1: Dog @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 4_i32
+    return
+}
+
+fn Small.as(_1: Small @owned) -> Large {
+    let _0: Large
+
+  bb0:
+    _0 = Large::Huge(copy _1)
+    return
+}
+
+fn Dog.label(_1: Dog @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 3_i32
+    return
+}
+
+fn keep__i32(_1: i32 @owned) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy _1
+    return
+}

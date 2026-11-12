@@ -1,0 +1,36 @@
+unit helpers/shir_generic_fns
+
+ShirBody nothing (TemplateCheck("helpers/shir_generic_fns.nothing"))
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Maybe, "None", []))
+
+ShirBody identity (TemplateCheck("helpers/shir_generic_fns.identity"))
+  params : [(_0 "x": T, Owned)]
+  locals : []
+  block  :
+    Return(move LocalRef(_0))
+
+ShirBody identity__string
+  params : [(_0 "x": string, Owned)]
+  locals : []
+  block  :
+    Return(move LocalRef(_0))
+
+ShirBody nothing__i32
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Maybe, "None", []))
+
+unit test_shir_call_namespace_type_args
+
+ShirBody main
+  params : []
+  locals : [_0 "m": Maybe@(i32)]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Free(@nothing__i32), []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "is_some"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@identity__string), [(adopt Lit("Mostly Harmless"), Owned)]), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,15 @@
+unit test_err_typeck_answer_printed
+
+ShirBody walk
+  params : [(_0 "items": Iterator@(i32), Guaranteed)]
+  locals : [_1 "same": Iterator@(i32), _2 "count": i32]
+  block  :
+    Assign(LocalRef(_1), LocalRef(_0), is_init: true)
+    Assign(LocalRef(_2), LocalRef(_1), is_init: true)
+    Return(LocalRef(_2))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

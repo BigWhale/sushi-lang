@@ -393,7 +393,8 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     The receiver is `poke self`, so it arrives by pointer and `value_ptr` is already
     the right shape. The method was emitted through the extension path, so its symbol
     is the extension symbol -- one authority for the name, shared with the declaration
-    and every ordinary call site.
+    and every ordinary call site. A type of the `Drop` set with no declared `drop` symbol
+    is an internal error: a silent return would leak the resource with no diagnostic.
     """
     from sushi_lang.backend.ownership import drops_of
 
@@ -401,44 +402,22 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     if name is None or name not in drops_of(codegen):
         return
 
+    from sushi_lang.internals.errors import raise_internal_error
     from sushi_lang.semantics.generics.name_mangling import extension_symbol
-    fn = codegen.funcs.lookup(extension_symbol(name, "drop"), codegen.emitting_unit)
+    symbol = extension_symbol(name, "drop")
+    fn = codegen.funcs.lookup(symbol, codegen.emitting_unit)
     if fn is None:
-        return
+        raise_internal_error("CE0000", detail=f"the type '{name}' implements Drop, and no "
+                                              f"function '{symbol}' is declared")
     codegen.builder.call(fn, [value_ptr])
-
-
-def emit_struct_fields_except(codegen: LLVMCodegen, value_ptr: ir.Value,
-                              value_type: Type, keep_field: str) -> None:
-    """Destroy every owning field of a struct but one -- the marked field take (R28).
-
-    `drop()` is deliberately NOT called, and that is the ruling rather than an omission:
-    a destructor is written for a value that goes away WHOLE, and here one field
-    survives it, so a `drop()` that flushed into the taken handle or closed it would be
-    told it still owns what the caller is taking. The method performing the take does
-    the finishing work itself, which is what `into_inner()` spells.
-
-    Field order matches `_emit_struct_destructor`'s, because it is the same walk with
-    one slot held back.
-    """
-    resolved = resolve_named_type(codegen, value_type)
-    if not isinstance(resolved, StructType):
-        return
-    builder = codegen.builder
-    for i, (field_name, field_type) in enumerate(resolved.fields):
-        if field_name == keep_field or not needs_cleanup(codegen, field_type):
-            continue
-        field_ptr = builder.gep(value_ptr, [ZERO_I32, make_i32_const(i)],
-                                name=f"take_rest_{field_name}_ptr")
-        emit_value_destructor(codegen, field_ptr, field_type)
 
 
 def needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
     """Does a value of this type own something RAII must release?
 
     ONE backend cleanup predicate (ruling R2a). It used to be two -- a table-free
-    `needs_cleanup` and a resolving `field_needs_cleanup` -- and a third walk in
-    `memory/dynamic_arrays.py` answered the same question a third way. One gated
+    `needs_cleanup` and a resolving `field_needs_cleanup` -- and a third walk in the
+    array manager of the old backend answered the same question a third way. One gated
     RECURSION and another gated REGISTRATION, and the two disagreeing is exactly what
     #162 and #183 were.
 

@@ -1,0 +1,38 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n15\n8\n-1\nMostly Harmless\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_borrow_nom_self_wrapper_receivers.shir
+#
+# The receiver of `or_err` is `nom self`: a consuming use. A named owning `Maybe` moves
+# into the call, and a plain one is copied. Over a borrowed owning `Maybe`, the call is
+# the operand of a `??`: its receiver is a borrowed view with a `reject` row, the `let` of
+# the payload is a view with the `Maybe` as its owner, and so is the `let` of `r????` over
+# a borrowed nested `Result`.
+
+fn owned() string | StdError:
+    let Maybe@(string) m = Maybe.Some("Mostly Harmless")
+    let string s = m.or_err(nom StdError.Error)??
+    return Result.Ok(s)
+
+fn plain(Maybe@(i32) m) i32 | StdError:
+    let i32 v = m.or_err(nom StdError.Error)??
+    return Result.Ok(v * 2)
+
+fn through(Maybe@(string) m) i32 | StdError:
+    let string s = m.or_err(nom StdError.Error)??
+    return Result.Ok(s.len())
+
+fn nested(Result@(Result@(string, StdError), StdError) r) i32 | StdError:
+    let string s = r????
+    println(s)
+    return Result.Ok(s.len())
+
+fn main() i32:
+    println(owned().realise("none"))
+    let Maybe@(string) m = Maybe.Some("Mostly Harmless")
+    println(through(m).realise(-1))
+    println(plain(Maybe.Some(4)).realise(-1))
+    println(plain(Maybe.None()).realise(-1))
+    let Result@(Result@(string, StdError), StdError) r = Result.Ok(Result.Ok("Mostly Harmless"))
+    let i32 n = nested(r).realise(-1)
+    return n - 15

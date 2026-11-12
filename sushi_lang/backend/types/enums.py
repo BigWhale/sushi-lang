@@ -1,13 +1,12 @@
 """LLVM emission for the auto-derived enum hash() method."""
 
-from typing import Any, Optional
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
+from sushi_lang.semantics.derived_methods import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
 from sushi_lang.backend import enum_utils
@@ -19,10 +18,10 @@ def _emit_enum_hash(enum_type: Type) -> Any:
     if not isinstance(enum_type, EnumType):
         raise_internal_error("CE0032", type=type(enum_type).__name__)
 
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for enum.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -84,37 +83,20 @@ def _emit_enum_hash(enum_type: Type) -> Any:
 
 def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, initial_hash: ir.Value) -> ir.Value:
     """Emit code to hash the associated data for a specific enum variant."""
-
     builder = require_builder(codegen)
-    builder = codegen.builder
 
     data_array = enum_utils.extract_enum_data(codegen, enum_value, name="enum_data")
-
-    data_array_type = enum_value.type.elements[1]  # [N x i8]
-    temp_alloca = entry_alloca(builder, data_array_type, name="data_temp")
+    temp_alloca = entry_alloca(builder, data_array.type, name="data_temp")
     builder.store(data_array, temp_alloca)
-
     data_ptr = builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
-    # Unpack and hash each associated value, at the offsets the ONE layout authority
-    # gives (#300 phase 2). Natural alignment throughout: the payload base is 8-aligned
-    # and the offsets are naturally aligned, so the `align=1` workaround (#145) is gone.
+    # Each payload value is read at the offset of the ONE layout authority, through the
+    # helper that every payload read uses.
+    values = enum_utils.unpack_all_variant_fields(
+        codegen, data_ptr, list(variant.associated_types), name_prefix="assoc")
     hash_value = initial_hash
-    field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
-
-    for assoc_idx, (assoc_type, field_offset) in enumerate(
-            zip(variant.associated_types, field_offsets, strict=True)):
-        llvm_type = codegen.types.ll_type(assoc_type)
-
-        value_ptr_i8 = builder.gep(data_ptr, [ir.Constant(codegen.types.i32, field_offset)], name=f"assoc{assoc_idx}_ptr")
-        value_ptr_typed = builder.bitcast(value_ptr_i8, ir.PointerType(llvm_type), name=f"assoc{assoc_idx}_ptr_typed")
-
-        value = builder.load(value_ptr_typed, name=f"assoc{assoc_idx}_value")
-
-        value_hash = emit_value_hash(codegen, value, assoc_type)
-
-        hash_value = emit_fnv1a_combine(codegen, hash_value, value_hash)
-
+    for value, assoc_type in zip(values, variant.associated_types, strict=True):
+        hash_value = emit_fnv1a_combine(codegen, hash_value, emit_value_hash(codegen, value, assoc_type))
     return hash_value
 
 
@@ -123,8 +105,8 @@ register_hash_emitter_factory("enum", _emit_enum_hash)
 
 def _emit_enum_clone(target_type: Type) -> Any:
     """Create a clone() emitter for an enum type (#134)."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+                receiver_type: ir.Type) -> ir.Value:
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver_value, target_type)
 

@@ -1,0 +1,13 @@
+unit test_err_typeck_match_enum_literal_payload
+
+ShirBody small
+  params : [(_0 "m": Maybe@(u8), Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Or([Literal(1), Literal(2)])]), [Return(Lit(1))]), Arm(Variant(@Maybe, "Some", [Literal(300)]), [Return(Lit(2))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@small), [(EnumInit(@Maybe, "None", []), Guaranteed)]))

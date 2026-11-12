@@ -1,0 +1,17 @@
+# A template method reached from a generic function: the copy that a copy asks for.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\nsix\n"
+struct Wrap@(T):
+    T v
+
+extend Wrap@(T) inner(nom self) T:
+    return nom self.v
+
+fn unwrap@(T)(nom Wrap@(T) w) T:
+    return w.inner()
+
+fn main() i32:
+    println(unwrap(nom Wrap(6)))
+    println(unwrap(nom Wrap("six")))
+    return 0
+

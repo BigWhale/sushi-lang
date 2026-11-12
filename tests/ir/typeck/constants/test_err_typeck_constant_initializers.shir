@@ -1,0 +1,62 @@
+unit test_err_typeck_constant_initializers
+
+ShirBody ANSWER (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(42))
+
+ShirBody WRAPPED (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Cast(adopt Lit(300), u8))
+
+ShirBody SMALLEST (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Unary(neg, Lit(128)))
+
+ShirBody ALL_BITS (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0xff))
+
+ShirBody NEXT (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, ConstRef(@ANSWER), Lit(1)))
+
+ShirBody GREETING (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit("Mostly Harmless"))
+
+ShirBody READY (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(true))
+
+ShirBody HALF (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0.5))
+
+ShirBody WORD (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit("Mostly Harmless"))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(ConstRef(@NEXT), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign i32 to string."
+# EXPECT_STDERR_CONTAINS: "  |     let string s = p.y\n  `                    -+-\n"
+# EXPECT_STDERR_CONTAINS: "= note: declared here"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_read_type.shir
+#
+# A field read has the type of its field, so a `let` of another type is CE2002 at the
+# read. A field of a `peek` parameter and an element of a tuple read in the same way.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn first(peek Point p) i32:
+    return p.x
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let (i32, bool) t = (3, true)
+    let i32 a = first(peek p)
+    let bool b = t.1
+    let string s = p.y
+    println(s)
+    if (b):
+        return 1
+    return a

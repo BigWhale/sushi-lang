@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE3005
+# EXPECT_STDERR_CONTAINS: "cannot use private enum 'Hidden' from unit 'test_err_typeck_match_enum_alias_private' (enum is defined in 'units/rose')"
+# EXPECT_STDERR_CONTAINS: "declared here, without `public`"
+# EXPECT_STDERR_CONTAINS: "  |         rs.Hidden.Secret(n) -> return n\n  `            ---+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_alias_private.shir
+#
+# A pattern that names a private enum of another unit behind an alias is CE3005, as a
+# construction of its variant is.
+
+use "units/rose" as rs
+
+fn peek_secret(rs.Wind w) i32:
+    match w:
+        rs.Hidden.Secret(n) -> return n
+        _ -> return 0
+
+fn main() i32:
+    return peek_secret(rs.Wind.Calm)

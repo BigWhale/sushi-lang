@@ -1,0 +1,61 @@
+# A `nom` binder takes the variant whole, and a plain binder beside it in the same
+# pattern reads a part that the take does not move: a plain part after the taken one,
+# before it, one level deeper, and a plain payload of the same variant. In a tuple
+# literal each part is a scrutinee of its own, so a plain binder of an owning part borrows.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "peer 7\nw1\npeer 8\nw2\n3 true\nw3\nn 4\nw4\nw6\nw5\nw7\nw8\n"
+fn word(i32 k) string:
+    return "w{k}"
+
+fn after() (string, i32) | StdError:
+    return Result.Ok((word(1), 7))
+
+fn before() (i32, string) | StdError:
+    return Result.Ok((8, word(2)))
+
+enum Msg:
+    Two(string, i32)
+    Empty
+
+fn msg(i32 n) Msg:
+    if (n == 0):
+        return Msg.Empty
+    return Msg.Two(word(n), n)
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    match after():
+        Result.Ok((nom a, b)) ->
+            println("peer {b}")
+            eat(nom a)
+        Result.Err(_) ->
+            println("err")
+    match before():
+        Result.Ok((b, nom a)) ->
+            println("peer {b}")
+            eat(nom a)
+        Result.Err(_) ->
+            println("err")
+    let Maybe@((string, (i32, bool))) m = Maybe.Some((word(3), (3, true)))
+    match nom m:
+        Maybe.Some((nom a, (k, f))) ->
+            println("{k} {f}")
+            eat(nom a)
+        Maybe.None -> println("none")
+    match msg(4):
+        Msg.Two(nom s, n) ->
+            println("n {n}")
+            eat(nom s)
+        Msg.Empty -> println("empty")
+    match (word(5), word(6)):
+        (nom x, y) ->
+            println(y)
+            eat(nom x)
+    match (word(7), word(8)):
+        (x, nom y) ->
+            println(x)
+            eat(nom y)
+    return 0

@@ -1,0 +1,14 @@
+fn secret(i32 x) i32:
+    return x + 41
+
+fn hidden(i32 x) i32:
+    return x + 1
+
+public const fn(i32) -> i32 PICK = secret
+const fn(i32) -> i32 KEPT = hidden
+
+public fn through_kept(i32 x) i32:
+    return call_it(KEPT, x)
+
+fn call_it(fn(i32) -> i32 f, i32 x) i32:
+    return f(x)

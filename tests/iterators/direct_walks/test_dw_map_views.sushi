@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\none7\n1 one7\n1 one7\n"
+# EXPECT_NO_LEAKS
+# Each view of a `HashMap@(K, V)`, over a map with one entry, so the order is fixed.
+use <collections/hashmap>
+
+fn main() i32:
+    let i32 n = 7
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one{n}")
+    foreach(k in m.keys()):
+        println(k)
+    foreach(v in m.values()):
+        println(v)
+    foreach(entry in m.entries()):
+        println("{entry.key} {entry.value}")
+    foreach(pair in m.pairs()):
+        println("{pair.0} {pair.1}")
+    m.free()
+    return 0

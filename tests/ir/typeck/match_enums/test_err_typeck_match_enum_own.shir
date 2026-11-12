@@ -1,0 +1,13 @@
+unit test_err_typeck_match_enum_own
+
+ShirBody depth
+  params : [(_0 "n": Node, Guaranteed)]
+  locals : [_1 "v": i32, _2 "v"]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Node, "Branch", [Own(Variant(@Node, "Leaf", [(_1, Bare)]))]), [Return(LocalRef(_1))]), Arm(Variant(@Node, "Leaf", [Own((_2, Bare))]), [Return(LocalRef(_2))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@depth), [(EnumInit(@Node, "Leaf", [adopt Lit(1)]), Guaranteed)]))

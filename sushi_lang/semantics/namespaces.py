@@ -466,6 +466,22 @@ class NamespaceTable:
         bound = self._bound.get(alias)
         return None if bound is None else bound.loc
 
+    def constant_record(self, written: str, constants: Any) -> Any:
+        """What the written name of a constant names in this unit, or None. The one lookup
+        of the typecheck pass and the borrow pass.
+
+        Behind an alias (`geo.SIZE`), what the namespace holds. A bare name, the constant
+        or `var` of `constants` that the scope reaches, else the stdlib constant that a flat
+        import brings.
+        """
+        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+        alias, dot, name = written.rpartition(".")
+        if dot:
+            binding = self.lookup(alias, name)
+            return None if binding is None else binding.record
+        record = constants.lookup(written, scope=self.scope)
+        return record if record is not None else lookup_stdlib_constant(written, self.scope)
+
 
 def body_namespaces(node: Any,
                     tables: Optional[Mapping[str, NamespaceTable]]) -> Optional[NamespaceTable]:

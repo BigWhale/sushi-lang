@@ -1,0 +1,26 @@
+# EXPECT_DUMP_SHIR: test_typeck_container_statics.shir
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+#
+# A static of a built-in container is a `BuiltinStatic` callee at the instance that its
+# position gives: a `let` or an argument. `List.with_capacity` borrows its count
+# (`Guaranteed`), and `Own.alloc` takes its value by position (`Owned`), so an owning
+# local is a move. `HashMap.new` is the same callee bare and behind an alias.
+use <collections/hashmap>
+use <collections/hashmap> as hm
+
+fn hold(List@(i32) a, List@(string) b, HashMap@(i32, string) c, hm.HashMap@(string, i32) d, Own@(string) e, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return hold(a, b, c, d, e, depth - 1)
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    let List@(string) b = List.with_capacity(8)
+    let HashMap@(i32, string) c = HashMap.new()
+    let hm.HashMap@(string, i32) d = hm.HashMap.new()
+    let string s = "Mostly ".concat("Harmless")
+    let Own@(string) e = Own.alloc(s)
+    println("Mostly Harmless")
+    return hold(a, b, c, d, e, 1) + hold(List.new(), List.with_capacity(2), HashMap.new(), hm.HashMap.new(), Own.alloc("x".concat("y")), 0)

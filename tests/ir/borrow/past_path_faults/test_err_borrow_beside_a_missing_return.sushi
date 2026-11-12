@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405, CE0107
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+#
+# The body can reach its end with no `return` (CE0107). The walk of typecheck has no
+# error, so the borrow pass walks the body: the second `nom s` is CE2405.
+
+fn eat(nom string s) i32:
+    return s.len()
+
+fn show(nom string s, bool first) i32:
+    let i32 z = eat(nom s)
+    if (first):
+        return eat(nom s) + z
+
+fn main() i32:
+    let string s = "Mostly Harmless {42}"
+    println(show(nom s, true))
+    return 0

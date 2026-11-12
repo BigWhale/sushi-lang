@@ -1,0 +1,15 @@
+# A field chain off a unit variable spells the variable first.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `poke SPOT.y`
+struct Point:
+    i32 x
+    i32 y
+
+var Point SPOT = Point(3, 4)
+
+fn bump(poke i32 v) ~:
+    v := v + 1
+
+fn main() i32:
+    bump(SPOT.y)
+    return 0

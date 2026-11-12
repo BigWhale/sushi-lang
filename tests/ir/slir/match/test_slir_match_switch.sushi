@@ -1,0 +1,51 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n2\n3\n9\n1\n2\n0\nkept\nmoved 1\nkept\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_match_switch.slir
+#
+# A match on an integer with only literal arms is ONE switch on the value (ir.md 8.9). Each
+# literal alternative is one case of its arm, at the value that the type of the scrutinee
+# reads: `0xff` on an i8 is -1. The `_` arm is the `otherwise` target. The blocks: one for
+# each arm in source order, then the join. Each arm is a scope of its own, and each arm
+# starts from the state after the scrutinee. In `letter`, each arm returns, so no join
+# block is made. In `pick`, one arm moves `word`, so `word` gets a drop flag at the join.
+
+fn take(nom string s) ~:
+    println("moved {s}")
+
+fn kind(i8 n) i32:
+    let i32 code = 0
+    match n:
+        0 -> code := 1
+        1 | 2 | 3 -> code := 2
+        0xff -> code := 3
+        _ -> code := 9
+    return code
+
+fn letter(u8 b) i32:
+    match b:
+        a'a' -> return 1
+        a'b' | a'c' -> return 2
+        _ -> return 0
+
+fn pick(i32 n) ~:
+    let string word = "{n}"
+    match n:
+        1 -> take(nom word)
+        _ ->
+            let string note = "kept"
+            println(note)
+
+fn main() i32:
+    println(kind(0))
+    println(kind(1))
+    println(kind(3))
+    println(kind(-1))
+    println(kind(100))
+    println(letter(a'a'))
+    println(letter(a'c'))
+    println(letter(a'z'))
+    pick(0)
+    pick(1)
+    pick(2)
+    return 0

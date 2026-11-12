@@ -1,0 +1,19 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n3\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_shir_lambda_captures.shir
+#
+# the SHIR dump of a lambda that captures: `base` is a plain value and `xs` owns its
+# elements. The captures are not in the `Lambda` node: the scope pass keeps them in
+# `Bindings`, by name and local (ruling Q8). In the body, a captured name is a
+# `LocalRef` of the local of the enclosing body, `_0` and `_1`. Whether a capture copies
+# or moves is an answer of the lift pass and of the borrow pass.
+
+fn main() i32:
+    let i32 base = 40
+    let i32[] xs = from([1, 2, 3])
+    let fn(i32) -> i32 add = |i32 x| x + base
+    let fn() -> i32 size = |~| xs.len()
+    println(add(2))
+    println(size())
+    return 0

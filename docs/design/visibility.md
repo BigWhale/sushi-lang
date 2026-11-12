@@ -563,7 +563,7 @@ Only four Sushi sources cross a unit boundary with a type, and all four are mark
 | `collections/iter.sushi` | — | declares no types |
 
 `.slib` production carries the gate. `_extract_public_types` (structs and enums) and
-`_extract_public_bindings` (constants and variables), in `backend/library_manifest.py`,
+`_extract_public_bindings` (constants and variables), in `compiler/library_manifest.py`,
 read the marker, as `_extract_public_functions` does, and the constant extractor reads the
 library's own units alone. The `not_exported` list (`_extract_not_exported`) has a
 `struct`, an `enum` and a `constant` kind, so a consumer naming a library-private type

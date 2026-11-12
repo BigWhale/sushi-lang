@@ -1,0 +1,24 @@
+unit test_err_typeck_range_loop
+
+ShirBody TOP (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(6))
+
+ShirBody total
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "sum": i32, _2 "i": i32, _3 "i": i32, _5 "i": i32]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Loop(Items(Range(Lit(0), LocalRef(_0), inclusive: false, reverse: false), _2, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), LocalRef(_2)), is_init: false)])
+    Loop(Items(Range(Lit(1), ConstRef(@TOP), inclusive: true, reverse: true), _3, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), LocalRef(_3)), is_init: false)])
+    Loop(Items(Range(Lit(a'a'), Binary(+, Unary(neg, Lit(3)), LocalRef(_0)), inclusive: false, reverse: false), _, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Loop(Items(Range(Lit(9), Lit(3), inclusive: true, reverse: true), _5, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), LocalRef(_5)), is_init: false)])
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

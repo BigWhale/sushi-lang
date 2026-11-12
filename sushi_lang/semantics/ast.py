@@ -2,7 +2,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Origin, Span
-from sushi_lang.semantics.typesys import FunctionType, Type
+from sushi_lang.semantics.operators import BinOp, UnOp
+from sushi_lang.semantics.conversions import CONVERSION_METHOD
+from sushi_lang.semantics.typesys import Type
 
 from lark import Token
 
@@ -15,18 +17,11 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.generics.types import TemplateId
-    from sushi_lang.semantics.namespaces import NamespaceRef
-    from sushi_lang.semantics.param_modes import ParamMode
 
 
 @dataclass(slots=True)
 class Node:
     loc: Optional[Span]
-    # The `borrow` pass records here what it proved about this node's ownership, and
-    # `backend/ownership.py` acts on it. A DECLARED field rather than an attribute
-    # written on in passing: see IR.md section 5. kw_only, because `loc` carries no
-    # default and every subclass adds positional fields after it.
-    ownership_provenance: Optional["Provenance"] = field(default=None, kw_only=True)
     # `f(nom x)` is a call-site MARKER, not an operator: the builder flags the argument
     # rather than wrapping it in a node every pass would dispatch on. It can land on any
     # expression, which is why it is declared here and not per class.
@@ -164,11 +159,6 @@ class Param:
                                       # mode bit the type cannot carry -- peek/poke ride on
                                       # ReferenceType. See docs/design/borrow-model.md S6.
     nom_span: Optional[Span] = None   # the `nom` marker itself, for diagnostics
-    # A lambda's captures are Params, and the `borrow` pass stamps each one.
-    ownership_provenance: Optional["Provenance"] = None
-    # A capture of a name that the enclosing lambda captures is a read off the
-    # environment of that lambda; the `lift` pass sets it (#1127). None reads the name.
-    capture_source: Optional["Expr"] = None
 
 
 @dataclass(slots=True)
@@ -372,11 +362,6 @@ class EnumDef(Node):
     # Written `error`, not `enum`: the type may be the `E` of a `Result`.
     is_error: bool = False
 
-# The method name of a conversion, `extend Source as Target:` (docs/design/error-conversion.md
-# section 8.2). `as` is a reserved word, so no written method has this name.
-CONVERSION_METHOD = "as"
-
-
 @dataclass(slots=True)
 class ExtendDef(Node):
     target_type: Optional[Type]  # Type being extended (int, bool, string)
@@ -499,12 +484,6 @@ class ExtendWithDef(Node):
     target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
 
 @dataclass(slots=True)
-class TypeConstraint:
-    """Perk constraint on a type parameter (T: Hashable)."""
-    perk_name: str
-    loc: Optional[Span] = None
-
-@dataclass(slots=True)
 class ExternalDecl(Node):
     """A single foreign function declaration inside an unsafe external block."""
     name: str                    # Sushi-visible name (e.g., "strlen")
@@ -546,9 +525,6 @@ class ExternalBlock(Node):
 class Block(Node):
     statements: List[Stmt]
     doc: Optional[DocBlock] = None
-    # Set on a CALLABLE's body block: the locals whose every move does not dominate the
-    # scope exit, so each needs a run-time drop flag (#414).
-    conditional_move_names: Optional[frozenset] = None
 
 
 @dataclass(slots=True)
@@ -556,8 +532,7 @@ class DestructureTarget:
     """One element of a `let` destructure: a binder, a `_`, or a nested destructure.
 
     A binder has a `name`, and `ty` is its written type or None for a bare binder. A `_`
-    has neither a name nor `nested`. The typecheck pass stamps `element_type`, and
-    `place_type` on a hidden binder of a destructuring rebind: the type of its place.
+    has neither a name nor `nested`.
     """
     name: Optional[str] = None
     ty: Optional[Type] = None
@@ -565,8 +540,6 @@ class DestructureTarget:
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
     loc: Optional[Span] = None
-    element_type: Optional[Type] = None
-    place_type: Optional[Type] = None
 
 
 def destructure_binders(targets: Optional[List[DestructureTarget]]):
@@ -608,23 +581,16 @@ class Return(Stmt):
 @dataclass(slots=True)
 class Print(Stmt):
     value: "Expr"
-    # The struct, enum, array or container the value prints through `Display`, stamped
-    # by the typecheck pass; the backend reads it.
-    display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class PrintLn(Stmt):
     value: "Expr"
-    display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Assert(Stmt):
     """`assert(cond)` / `assert(cond, message)`: a trap when `cond` is false."""
     cond: "Expr"
     message: Optional["Expr"] = None
-    # The file name a diagnostic in this unit shows, stamped by the AST builder: the
-    # backend prints it with `loc` when the condition is false.
-    source_label: str = "<input>"
 
 @dataclass(slots=True)
 class If(Stmt):
@@ -655,20 +621,9 @@ class Foreach(Stmt):
     # field is an ALIAS and the node walk does not descend it (#1174).
     item_try_let: "Optional[Let]" = field(default=None, metadata=ALIAS)
     item_try_span: Optional[Span] = None
-    # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
-    # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
-    # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
-    protocol_next: "Optional[MethodCall]" = None
-    protocol_iter_name: Optional[str] = None
-    # The typecheck pass sets it for a `next()` walk of a place reached through a `poke`
-    # reference: the loop calls `next()` on the caller's storage and does not take the
-    # value (#1258). The borrow pass and the backend read this one stamp. The borrow pass
-    # also sets it for an iterator value that a `let` borrows (#1259).
-    walks_in_place: bool = False
-    # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
-    # the value's `next_fn` (#1259). None for a range, for a built-in producer that the
-    # loop walks directly (`xs.iter()`, `m.keys()`), and for a `next()` protocol walk.
-    value_iterator: Optional[Type] = None
+    # The binder is `_` with no `??`: the loop binds nothing that the body can read. The
+    # AST builder sets it from the source; `item_name` is then a hidden name.
+    item_discarded: bool = False
 
 @dataclass(slots=True)
 class Expand(Stmt):
@@ -725,9 +680,9 @@ class RangePattern(Node):
 
     The two bounds are literal patterns, in every form an integer arm takes. `inclusive`
     is the `..=` form. The values the range matches depend on the type at its position,
-    because a non-decimal bound is a bit pattern of that type: the typecheck pass and the
-    backend both read them from `semantics/integer_patterns.py`. A string bound parses,
-    and the typecheck pass refuses it (CE2072).
+    because a non-decimal bound is a bit pattern of that type: the readers of the SHIR
+    pattern that lowering makes of it read them from `semantics/integer_patterns.py`. A
+    string bound parses, and the typecheck pass refuses it (CE2072).
     """
     low: LiteralPattern
     high: LiteralPattern
@@ -791,13 +746,6 @@ PatternItem = Union[str, Pattern, OwnPattern, RefBinding, NomBinding, LiteralPat
                     RangePattern, TuplePattern, OrPattern]
 
 
-def alternatives_of(item: object) -> list:
-    """The alternatives of a pattern item: its own list for `|` alternatives, else itself."""
-    if isinstance(item, OrPattern):
-        return list(item.alternatives)
-    return [item]
-
-
 def pattern_bindings(item: object, parent: "Optional[Node]" = None,
                      every_alternative: bool = False):
     """(name, owner, span) for each name that a pattern item binds, in source order.
@@ -828,36 +776,6 @@ def pattern_bindings(item: object, parent: "Optional[Node]" = None,
         yield item.name, parent, item.loc or (parent.loc if parent else None)
 
 
-def pattern_source(item: object) -> str:
-    """A pattern as it is written, for a diagnostic: `(Color.Red, nom s)`."""
-    if isinstance(item, Pattern):
-        head = f"{item.enum_name}.{item.variant_name}"
-        if item.namespace is not None:
-            head = f"{item.namespace}.{head}"
-        if not item.bindings:
-            return head
-        return f"{head}({', '.join(pattern_source(b) for b in item.bindings)})"
-    if isinstance(item, TuplePattern):
-        return f"({', '.join(pattern_source(e) for e in item.elements)})"
-    if isinstance(item, OwnPattern):
-        inner = pattern_source(item.inner_pattern)
-        if item.inner_borrow is not None:
-            inner = f"{item.inner_borrow} {inner}"
-        return f"Own({inner})"
-    if isinstance(item, RefBinding):
-        return f"{item.mode} {item.name}"
-    if isinstance(item, NomBinding):
-        return f"nom {item.name}"
-    if isinstance(item, LiteralPattern):
-        return item.display
-    if isinstance(item, RangePattern):
-        return f"{item.low.display}{'..=' if item.inclusive else '..'}{item.high.display}"
-    if isinstance(item, OrPattern):
-        return " | ".join(pattern_source(alt) for alt in item.alternatives)
-    if isinstance(item, str):
-        return item
-    return "_"
-
 @dataclass(slots=True)
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
@@ -870,42 +788,20 @@ class Match(Stmt):
     """Match statement: match expr: pattern -> body"""
     scrutinee: "Expr"
     arms: List[MatchArm]
-    # Concrete monomorphized enum type of the scrutinee, resolved by the type
-    # checker (the typecheck pass) and consumed by the backend. Stored here because the
-    # backend cannot always re-derive it from the scrutinee expression alone
-    # (e.g. an indexed element, a fn-field call, or a user method returning
-    # Maybe/Result), and a miss would otherwise silently drop pattern bindings.
-    resolved_scrutinee_type: Optional[Type] = None
-    # An INTEGER scrutinee instead (#415). The backend dispatches on this; an EnumType
-    # scrutinee uses `resolved_scrutinee_type` above.
-    integer_match_type: Optional[Type] = None
     # `match nom r:` (ruling R11). The match CONSUMES a scrutinee that names storage,
     # which is what makes a `nom` payload binding legal on it. A temporary scrutinee is
     # owned by construction and needs no marker.
     consumes_scrutinee: bool = False
-    # The typecheck pass refused the arms as not exhaustive (CE2040 / CE2074, #886).
-    not_exhaustive: bool = False
 
 
 @dataclass(slots=True)
 class Name(Node):
     id: str
-    # A bare name in a fn-typed position gets the expected FunctionType, so a reference
-    # to a generic function can solve its type arguments. `Lambda` carries the same
-    # field for the same reason.
-    expected_type: Optional[Type] = None
 
 @dataclass(slots=True)
 class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
-    resolved_type: Optional[Type] = None
-    # Set once the literal's range has been checked against its context type, so a
-    # second look does not report CE2049 twice.
-    range_checked: bool = False
-    # `x as i64` gives the literal the cast's target as its context, so its range is
-    # judged against that and not against the default i32.
-    in_cast_context: bool = False
     # The source spelling of a byte literal (`a'/'`), or None for a number literal. A
     # byte literal defaults to u8, and a diagnostic names it by this spelling.
     byte_spelling: Optional[str] = None
@@ -913,8 +809,6 @@ class IntLit(Node):
 @dataclass(slots=True)
 class FloatLit(Node):
     value: float
-    resolved_type: Optional[Type] = None
-    range_checked: bool = False
 
 @dataclass(slots=True)
 class BoolLit(Node):
@@ -933,9 +827,6 @@ class StringLit(Node):
 class InterpolatedString(Node):
     """Represents a string with interpolated expressions like "Hello, {name}!" """
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
-    # For each hole that prints through `Display` (a struct, an enum, an array or a
-    # container), its type; None elsewhere. Stamped by the typecheck pass; the backend reads it.
-    display_types: Optional[List[Optional["Type"]]] = None
 
 @dataclass(slots=True)
 class ArrayElement(Node):
@@ -945,23 +836,11 @@ class ArrayElement(Node):
 @dataclass(slots=True)
 class ArrayLiteral(Node):
     elements: List["ArrayElement"]
-    # The `T[N]` this literal is, stamped by the typecheck pass: the declared type of its
-    # position, else the type inferred from its elements (#889). The backend reads it.
-    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
-    # The type the access yields, inferred by the typecheck pass: the element, or the
-    # `T[]` of a slice.
-    inferred_element_type: Optional["Type"] = None
-    reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
-                                            # The backend reads the typecheck pass's stamp rather than
-                                            # re-deriving; with none, `rows[0].hash()` died
-                                            # as CE0019 (#286). Siblings:
-                                            # `inferred_return_type`,
-                                            # `inferred_unwrapped_type`.
     # In the body of a `dont_panic` function, and not in a lambda there: the backend
     # emits no bounds check (docs/design/dont-panic.md). Stamped by the AST builder.
     unchecked: bool = False
@@ -971,31 +850,21 @@ class IndexAccess(Node):
         """`data[a..b]`: a range in the index position is a slice (docs/design/slices.md)."""
         return isinstance(self.index, RangeExpr)
 
-UnOp =Literal["neg", "not", "~"]
 @dataclass(slots=True)
 class UnaryOp(Node):
     op: UnOp
     expr: "Expr"
 
-BinOp = Literal["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "and", "or", "xor", "&", "|", "^", "<<", ">>"]
 @dataclass(slots=True)
 class BinaryOp(Node):
     op: BinOp
     left: "Expr"
     right: "Expr"
-    # The struct or enum a comparison compares, stamped by the typecheck pass when the
-    # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
-    operand_type: Optional["Type"] = None
-    # The builtin type of an arithmetic or bitwise operator, stamped by the typecheck
-    # pass when it infers the node. The backend reads it through `stamped_semantic_type`.
-    inferred_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class TupleLiteral(Node):
     """A tuple literal: two or more expressions in parentheses, `(1, "a")`."""
     elements: List["Expr"]
-    # The interned tuple type, stamped by the typecheck pass; the backend reads it.
-    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Spread(Node):
@@ -1014,16 +883,7 @@ class Lambda(Node):
     body: Union["Expr", "Block"]
     ret: Optional[Type] = None
     err_type: Optional[Type] = None
-    captures: Optional[List["Param"]] = None
-    lifted_name: Optional[str] = None
-    # Filled by the type pass: the lambda's resolved FunctionType (params + captures
-    # typed, ok/err resolved). `expected_type` is a FunctionType propagated from the
-    # binding/argument context, used to infer bare-param types (`|x|`).
-    resolved_type: Optional[FunctionType] = None
-    expected_type: Optional[Type] = None
-    env_struct: Optional[Type] = None
-    # A `peek T` return written on a lambda: refused (CE2439), and kept so that the lifted
-    # body is not judged again.
+    # A `peek T` return written on a lambda: refused (CE2439).
     borrowed_return: Optional["BorrowedReturn"] = None
 
 
@@ -1042,33 +902,6 @@ class Call(Node):
     # Span of the `@(...)` type-arg list, for diagnostics (CE2062 arity, constraint
     # failures) that must underline the type args rather than the callee.
     type_args_loc: Optional["Span"] = None
-    # Set by the type checker when `callee` is a non-Name expression resolving to a
-    # FunctionType: the backend uses it to emit the fat-pointer indirect call without
-    # re-inferring the callee's signature.
-    callee_fn_type: Optional[Type] = None
-    # Set by the type checker when it found no callee at all (CE2008, CE2092). The passes
-    # after it then know there is no signature, and say nothing about the arguments.
-    callee_unresolved: bool = False
-    # What the typecheck pass resolved about the callee's parameters. The borrow pass
-    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_names: Optional[List[str]] = None
-    callee_param_types: Optional[Tuple[Type, ...]] = None
-    # An extern variadic call's promoted argument types (CE5005 checks them).
-    variadic_arg_types: Optional[List] = None
-    # The rest of what the typecheck pass resolves about a call. Every call node
-    # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_self_mode: Optional[str] = None  # "peek"/"poke"; see MethodCall
-    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
-    inferred_return_type: Optional["Type"] = None  # Return type inferred by the typecheck pass
-    namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
-    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type
-    # The callee has a borrowed return (#1229): where its sources stand in the call (an
-    # argument index, or -1 for the receiver). None for an owned return. See MethodCall.
-    callee_borrows: Optional[Tuple[int, ...]] = None
-    # LENT when the answer is an iterator that borrows the sources; see MethodCall.
-    iterator_state: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -1076,53 +909,9 @@ class MethodCall(Node):
     receiver: "Expr"    # The object/expression being called (x in x.add(5))
     method: str
     args: List["Expr"]
-    inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
-    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
-    # A call through a `use ... as` alias; see DotCall for what the triple carries.
-    namespace_ref: Optional["NamespaceRef"] = None
-    callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `poke self` (#327); stamped by the typecheck pass, read
-                                            # by the borrow pass (a poke call is a receiver WRITE)
-                                            # and the backend (pass a pointer)
-    # The built-in method family that answered the call ("array", "list", ...), or None
-    # for a user method. The borrow pass reads a method-effect row only for its family.
-    callee_builtin_family: Optional[str] = None
-    # What the typecheck pass resolved about the callee's parameters. The borrow pass
-    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_names: Optional[List[str]] = None
-    callee_param_types: Optional[Tuple[Type, ...]] = None
-    # Where the trailing arguments collect into a `...T` array, for a call behind a namespace.
-    callee_variadic_at: Optional[int] = None
-    # The rest of what the typecheck pass resolves about a call. Every call node
-    # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
-    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
-    variadic_arg_types: Optional[List] = None  # an extern variadic call's promoted arg types
-    # The SOLVED method-level type arguments of a method-generic extension call
-    # (`name@(U)`); the backend composes them into the callee symbol.
-    callee_method_type_args: Optional[Tuple] = None
-    # The unit that declares the extension method the call resolved to; the backend
-    # composes it into the callee symbol (`docs/design/extension-visibility.md` C5).
-    callee_extension_unit: Optional[str] = None
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
-    # How a built-in iterator producer keeps its state (`generics/iterators.py`, #1259):
-    # the bare cursor of a direct walk, a lent value, or an owned value.
-    iterator_state: Optional[str] = None
-    # A LENT iterator that leaves its function through a `peek` return (#1229): its state
-    # is on the heap. Stamped by the borrow pass on each link of the chain.
-    iterator_leaves: bool = False
-    # `Iterator.new(nom x)`: the `next()` call on the value, built and checked by the
-    # typecheck pass. The backend reads its stamps; no pass walks it as code.
-    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)
-    # The callee has a borrowed return (#1229): where its sources stand in the call (an
-    # argument index, or -1 for the receiver). None for an owned return. The answer is a
-    # borrow of the owners of those arguments.
-    callee_borrows: Optional[Tuple[int, ...]] = None
 
 
 @dataclass(slots=True)
@@ -1131,27 +920,6 @@ class DotCall(Node):
     receiver: "Expr"    # The receiver expression (variable, type name, etc.)
     method: str
     args: List["Expr"]
-    inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
-    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
-    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
-    # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
-    # kind of producer answered, the unit or module it named, and the declared name.
-    # The back end resolves through the origin, so a shadowed name reaches the right
-    # declaration (`docs/design/unit-namespaces.md` section 5).
-    namespace_ref: Optional["NamespaceRef"] = None
-    callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `poke self` (#327); see MethodCall
-    callee_builtin_family: Optional[str] = None  # see MethodCall
-    # What the typecheck pass resolved about the callee's parameters. The borrow pass
-    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
-    callee_param_names: Optional[List[str]] = None
-    callee_param_types: Optional[Tuple[Type, ...]] = None
-    # Where the trailing arguments collect into a `...T` array, for a call behind a namespace.
-    callee_variadic_at: Optional[int] = None
-    # An extern variadic call's promoted argument types (CE5005 checks them).
-    variadic_arg_types: Optional[List] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
     # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
     # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a
@@ -1159,25 +927,6 @@ class DotCall(Node):
     # states is unharmed and only the parse shape changed (unit-namespaces.md 5.1).
     type_args: Optional[List["Type"]] = None
     type_args_loc: Optional["Span"] = None
-    # The rest of what the typecheck pass resolves about a call. Every call node
-    # carries the whole set, so a pass never has to ask which call shape it has.
-    callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
-    # The SOLVED method-level type arguments of a method-generic extension call; see
-    # MethodCall.
-    callee_method_type_args: Optional[Tuple] = None
-    callee_extension_unit: Optional[str] = None  # see MethodCall
-    iterator_state: Optional[str] = None  # see MethodCall
-    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall
-    iterator_leaves: bool = False  # see MethodCall
-    callee_borrows: Optional[Tuple[int, ...]] = None  # see MethodCall
-    # True when the callee is a STATIC method (#542): no receiver crosses, and the
-    # backend emits the symbol with the argument list alone. Stamped by the typecheck
-    # pass, exactly as the receiver mode beside it is.
-    callee_is_static: bool = False
-    # The type a static call was written on, interned. The backend needs it to spell
-    # the symbol, and the receiver `Name` is not a value it could infer one from.
-    callee_static_target: Optional["Type"] = None
 
 
 @dataclass(slots=True)
@@ -1185,11 +934,6 @@ class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
-    namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
-    # `libc.environ`: the (namespace, name) of an external variable (#1090).
-    external_var_ref: Optional[Tuple[str, str]] = None
-    resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
-    expected_type: Optional[Type] = None  # a generic fn behind an alias solves from it (#1017)
     member_span: Optional[Span] = None  # the `.member` postfix; `loc` is the whole read
 
 @dataclass(slots=True)
@@ -1200,29 +944,19 @@ class EnumConstructor(Node):
     args: List["Expr"]  # Arguments for associated data (empty for unit variants)
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
-    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
 
 @dataclass(slots=True)
 class DynamicArrayNew(Node):
-    resolved_type: Optional["Type"] = None  # The `T[]` this empty array is (typecheck pass)
+    pass
 
 @dataclass(slots=True)
 class DynamicArrayFrom(Node):
     elements: ArrayLiteral  # from([1, 2, 3]) -> holds the array literal
-    # The `T[]` the position expects, stamped by the typecheck pass (#544). An EMPTY
-    # literal has no other source for its element type, and every position that has a
-    # declared type -- a `let`, a field, a payload, a parameter, a `.realise()` default,
-    # a bare extension's return -- hands it over through one propagation arm.
-    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class CastExpr(Node):
     expr: "Expr"
     target_type: Type
-    source_type: Optional[Type] = None  # Operand's semantic type, stamped by the typecheck pass (signedness for codegen)
-    # The declared conversion `as` calls between two error types (`semantics/conversions.py`),
-    # stamped by the typecheck pass. None for a numeric cast and an identity cast.
-    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class Borrow(Node):
@@ -1235,15 +969,6 @@ class TryExpr(Node):
     """Try expression: expr??"""
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
 
-    inferred_inner_type: "Optional[Type]" = None
-    inferred_unwrapped_type: "Optional[Type]" = None
-    inferred_success_tag: "Optional[int]" = None
-    inferred_error_type: "Optional[Type]" = None
-    inferred_func_return_type: "Optional[Type]" = None
-    # The declared conversion the propagate path calls when the two error types differ
-    # (`semantics/conversions.py`). None when the error propagates unchanged.
-    inferred_conversion: Optional["Conversion"] = None
-
 @dataclass(slots=True)
 class RangeExpr(Node):
     """Range expression: start..end or start..=end, and `(start..end).rev()`.
@@ -1255,15 +980,9 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
     reverse: bool = False   # True after an odd number of `.rev()` calls
-    # The typecheck pass sets it where the position expects `Iterator@(i32)`: the range is
-    # then a VALUE, an owned iterator (#1259).
-    is_value: bool = False
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
-# The three call shapes; each carries the whole set of callee stamps.
-CallLike = Union[Call, MethodCall, DotCall]
 # The two call shapes with a receiver and a method name.
-MethodLike = Union[MethodCall, DotCall]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """Accepts either a Token (from the parser) or a str (already a lexeme). Returns one of:
@@ -1303,16 +1022,8 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "DontPanicMarker", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
-    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
+    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
-
-
-# `Provenance` annotates Node.ownership_provenance. It lands at the BOTTOM because
-# `ownership` reaches back into this module (through generics.cloning) for MethodCall,
-# so the import can only run once every class above exists. The totality gates resolve
-# the annotation through this module's globals, which is why it must be a real name here
-# and not a TYPE_CHECKING-only one.
-from sushi_lang.semantics.ownership import Provenance  # noqa: E402

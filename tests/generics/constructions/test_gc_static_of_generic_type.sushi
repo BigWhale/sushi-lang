@@ -1,0 +1,36 @@
+# The static of a generic type takes its instance from an argument, from the position,
+# or from both, and the value drops at scope end.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n0\n5 0\n"
+
+struct Cat:
+    i32 n
+
+struct Box@(T):
+    T value
+
+struct Cage@(T):
+    T[] items
+
+struct Pair@(A, B):
+    A first
+    B[] rest
+
+extend Box@(T) static holding(nom T x) Box@(T):
+    return Box(nom x)
+
+extend Cage@(T) static empty() Cage@(T):
+    return Cage(from([]))
+
+extend Pair@(A, B) static of_first(nom A a) Pair@(A, B):
+    return Pair(a, from([]))
+
+fn main() i32:
+    let Box@(Cat) b = Box.holding(nom Cat(4))
+    println(b.value.n)
+    let Cage@(string) c = Cage.empty()
+    println(c.items.len())
+    let Pair@(i32, string) p = Pair.of_first(nom 5)
+    println("{p.first} {p.rest.len()}")
+    return 0

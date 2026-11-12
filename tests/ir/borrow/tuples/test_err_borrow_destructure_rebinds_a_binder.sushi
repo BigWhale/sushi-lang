@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "cannot write to binding 'x': a match/foreach binding is a read-only view."
+# EXPECT_STDERR_CONTAINS: "'x' is bound here, as a read-only view"
+# EXPECT_STDERR_CONTAINS: ":15:27"
+# EXPECT_DUMP_SHIR: test_err_borrow_destructure_rebinds_a_binder.shir
+#
+# A bare binder of a match is a view of the payload and has no storage of its own. A place
+# of a destructure that rebinds it is CE2414 at the place, with a note at the name of the
+# variant that binds it.
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(3)
+    let i32 b = 0
+    match m:
+        Maybe.Some(x) -> (x, b) := (1, 2)
+        Maybe.None -> b := 1
+    return b

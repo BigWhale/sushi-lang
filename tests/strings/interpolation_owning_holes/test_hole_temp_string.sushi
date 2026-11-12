@@ -1,0 +1,14 @@
+# A hole holds a temporary string and a call that answers a string.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "MOSTLY HARMLESS and n3\nMOSTLY HARMLESS!\n"
+# EXPECT_NO_LEAKS: true
+
+fn make(i32 n) string:
+    return "n{n}"
+
+fn main() i32:
+    let string s = "mostly harmless"
+    println("{s.upper()} and {make(3)}")
+    let string t = "{s.upper()}!"
+    println(t)
+    return 0

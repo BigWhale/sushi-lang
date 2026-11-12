@@ -14,7 +14,7 @@ from sushi_lang.semantics.ffi_boundary import (
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
+    from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl, ExternalVar
     from sushi_lang.semantics.visibility import VisibilityTable
 
 
@@ -51,6 +51,10 @@ class ExternalTable:
     """Namespace-keyed table of foreign function signatures and C global variables."""
     by_namespace: Dict[str, Dict[str, ExternalSig]] = field(default_factory=dict)
     variables: Dict[str, Dict[str, ExternalVarSig]] = field(default_factory=dict)
+    # The link name of each declaration that writes it as a string constant (#1089), by
+    # the namespace, the name and the span of the name of the declaration, which a copy of
+    # the node keeps. `fold_link_names` is the one writer (`fold`).
+    folded: Dict[Tuple[str, str, Optional[Tuple[int, int]]], str] = field(default_factory=dict)
 
     def is_namespace(self, ns: str) -> bool:
         """True if `ns` is a registered external namespace."""
@@ -64,6 +68,22 @@ class ExternalTable:
         """Look up a C global variable by namespace and Sushi-visible name."""
         return self.variables.get(ns, {}).get(name)
 
+    def by_link_name(self, link_name: str, name: str) -> Optional[ExternalSig]:
+        """The C function whose link name and name these are: the `Direct` callee of a
+        call of it in SLIR (docs/design/ir.md 8.6)."""
+        for decls in self.by_namespace.values():
+            sig = decls.get(name)
+            if sig is not None and sig.link_name == link_name:
+                return sig
+        return None
+
+    def fold(self, namespace: str, decl: 'ExternalDecl | ExternalVar', link_name: str) -> None:
+        self.folded[_folded_key(namespace, decl)] = link_name
+
+    def link_name_of(self, namespace: str, decl: 'ExternalDecl | ExternalVar') -> str:
+        """The C symbol of an extern declaration: the written string, or the folded constant."""
+        return self.folded.get(_folded_key(namespace, decl), decl.link_name)
+
     def add(self, sig: ExternalSig) -> None:
         self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
 
@@ -76,6 +96,12 @@ class ExternalTable:
             for name_space, decls in table.items():
                 if ns is None or name_space == ns:
                     yield from decls.values()
+
+
+def _folded_key(namespace: str, decl: 'ExternalDecl | ExternalVar'
+                ) -> Tuple[str, str, Optional[Tuple[int, int]]]:
+    at = decl.name_span
+    return namespace, decl.name, None if at is None else (at.line, at.col)
 
 
 class ExternalCollector:
@@ -215,16 +241,18 @@ def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
     for block in program.externals:
         for decl in block.decls:
             record = externals.lookup(block.namespace, decl.name)
-            if (decl.link_name and _collected(record, decl, filename)
+            link_name = externals.link_name_of(block.namespace, decl)
+            if (link_name and _collected(record, decl, filename)
                     and _crosses(decl)):
                 shape = function_shape([p.ty for p in decl.params], decl.ret, decl.is_variadic)
-                link_names.admit(reporter, decl.link_name, shape,
+                link_names.admit(reporter, link_name, shape,
                                  decl.name_span or decl.loc, filename)
         for var in block.variables:
             record = externals.lookup_variable(block.namespace, var.name)
-            if (var.link_name and _collected(record, var, filename)
+            link_name = externals.link_name_of(block.namespace, var)
+            if (link_name and _collected(record, var, filename)
                     and is_c_abi_variable(var.ty)):
-                link_names.admit(reporter, var.link_name, ("var", c_type(var.ty)),
+                link_names.admit(reporter, link_name, ("var", c_type(var.ty)),
                                  var.name_span or var.loc, filename)
 
 

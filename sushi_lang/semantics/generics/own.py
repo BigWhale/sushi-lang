@@ -1,9 +1,9 @@
 """Validation and pure helpers for the built-in Own<T> methods."""
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Mapping, Optional
 
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type, PointerType
@@ -18,25 +18,13 @@ OWN_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
 
 
 #: The parameter modes of the `Own@(T)` methods (#1173). `Own.alloc(x)` stores its
-#: argument into the new allocation, a slot that takes ownership by position (the
-#: OWN_ALLOC consuming use).
-OWN_METHOD_MODES = BuiltinModes(slots=frozenset({"alloc"}))
+#: argument into the new allocation, a slot that takes ownership by position.
+OWN_METHOD_MODES = BuiltinModes(slots=CONTAINER_INSERT_METHODS & OWN_METHOD_ARITY.keys())
 
 
 def is_builtin_own_method(method_name: str) -> bool:
     """Check if a method name is a builtin Own<T> method."""
     return method_name in OWN_METHOD_ARITY
-
-
-def validate_own_method_with_validator(
-    call: MethodCall,
-    own_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate an Own<T> method call whose count is correct. The count is the whole rule."""
-    if call.method not in OWN_METHOD_ARITY:
-        raise_internal_error("CE0080", method=call.method)
 
 
 def get_own_element_type(own_type: StructType) -> Type:

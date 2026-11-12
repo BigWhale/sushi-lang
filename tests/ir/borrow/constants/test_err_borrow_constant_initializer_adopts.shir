@@ -1,0 +1,39 @@
+unit test_err_borrow_constant_initializer_adopts
+
+ShirBody BASE (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(40))
+
+ShirBody ANSWER (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, ConstRef(@BASE), Lit(2)))
+
+ShirBody GREETING (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit("Mostly Harmless"))
+
+ShirBody ALIAS (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt ConstRef(@GREETING))
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(ConstRef(@ALIAS), Guaranteed)]))
+    ExprStmt(Call(Free(@eat), [(move ConstRef(@GREETING), Owned)]))
+    Return(adopt ConstRef(@ANSWER))

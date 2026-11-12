@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2117
+# EXPECT_STDERR_CONTAINS: "cannot destructure 'i32': it is not a tuple."
+# EXPECT_STDERR_CONTAINS: "  |     let ((a, b), c) = (1, 2)\n  `          ---+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_destructure_nested_not_a_tuple.shir
+#
+# A nested level splits a tuple element: an element that is no tuple is CE2117 at the
+# nested target. Its binders then have no type, and a later use of one adds no diagnostic.
+
+fn main() i32:
+    let ((a, b), c) = (1, 2)
+    return a + b + c

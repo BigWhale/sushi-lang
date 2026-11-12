@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_STDERR_CONTAINS: test_err_const_generic_fn_in_enum_payload.sushi:11:17: error [CE2093]
+#
+# A generic function is no value in the payload of an enum constant.
+fn id@(T)(nom T x) T:
+    return x
+
+enum E:
+    F(fn(nom i32) -> i32)
+
+const E C = E.F(id)
+
+fn main() i32:
+    println(1)
+    return 0

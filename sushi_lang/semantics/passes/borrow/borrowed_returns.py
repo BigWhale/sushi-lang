@@ -1,312 +1,252 @@
-"""The borrow half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S10h).
+"""The borrow half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S10h,
+docs/design/ir.md 7.9).
 
 Two sides of one rule. In the BODY of a `peek` function, each returned value must be a
-borrow whose owner is a source of the function (CE2443). At a CALL, the answer is a
-let-borrow of the owners of every argument in the source set (`callee_borrows`, which the
-typecheck pass stamps): each owner is frozen while the answer lives, and a temporary
-source argument is legal in one statement and refused in a `let` (CE2444).
-
-A lent iterator that leaves through a `peek` return keeps its state on the heap: each link
-of its chain is stamped `iterator_leaves`, the `let`s it was bound through included.
+borrow whose owner is a source of the function (CE2443), and the `return` gives the view to
+the caller as it is: the value gets an `adopt` row, and nothing is moved. At a CALL, the
+answer is a view of the owner of each argument at a position of the source row of the call
+(ir.md 7.3): each owner is frozen while the answer lives, also when the answer is of a plain
+type, and a temporary source argument is legal in one statement and refused in a `let`
+(CE2444).
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import (
-    Borrow, Call, DotCall, Expr, MethodCall, Name, StringLit, TryExpr)
 from sushi_lang.semantics.borrowed_return import (
-    RECEIVER_POSITION, BorrowedReturn, is_borrowed_call, sources_in)
-from sushi_lang.semantics.generics.iterators import LENT
-from sushi_lang.semantics.ownership import Provenance
-from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.typesys import IteratorType
+    RECEIVER_POSITION, BorrowedReturn, borrowed_return_of, sources_in)
+from sushi_lang.semantics.ownership import Provenance, TypeClass
+from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
+from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.body import Instance, ShirBody
+from sushi_lang.semantics.shir.callee import Method
 
-from .diagnostics import expr_to_string
-from .reads import borrow_owner, names_kept_storage
+from . import arms
+from .diagnostics import read_spelled, spelled
+from .reads import borrow_owner, names_an_owner, read_type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
+    from .state import Owner
 
 
 @dataclass(frozen=True)
 class BodyReturn:
-    """The borrowed return of the body being checked: its record, sources and parameters.
+    """The borrowed return of the body that the pass walks: its record, its source set by
+    name and by local, and the locals of its parameters.
 
-    `template_copy` is True for a copy of a template that the template check read. A value
-    that owns nothing in the copy may be a value of a type parameter in the template, and
-    the template check judged it there.
+    `template_copy` is True for a monomorphized copy of a template. A value that owns
+    nothing in the copy may be a value of a type parameter in the template, and the
+    template check judged it there.
     """
     record: BorrowedReturn
     sources: tuple[str, ...]
-    params: frozenset[str]
+    source_locals: frozenset[LocalId]
+    params: frozenset[LocalId]
     template_copy: bool = False
 
 
-def body_return(checker: 'BorrowChecker', record: Optional[BorrowedReturn],
-                params, template_copy: bool = False) -> Optional[BodyReturn]:
-    """The borrowed return of a body, with its source set judged over the tables."""
+def body_return(checker: 'BorrowChecker', decl: object,
+                body: ShirBody) -> Optional[BodyReturn]:
+    """The borrowed return of `body`, with its source set judged over the tables, or None."""
+    record = borrowed_return_of(decl)
     if record is None:
         return None
-    return BodyReturn(record, sources_in(record, checker.tables),
-                      frozenset(param.name for param in params), template_copy)
+    sources = sources_in(record, checker.tables)
+    by_name = {checker.name_of(param.local): param.local for param in body.params}
+    return BodyReturn(record, sources,
+                      frozenset(by_name[name] for name in sources if name in by_name),
+                      frozenset(by_name.values()),
+                      isinstance(decl, GenericFuncDef) and isinstance(body.origin, Instance))
 
 
 # ---------------------------------------------------------------------------------------
 # The call side
 
 
-def _strip(expr: Expr) -> Expr:
-    """The argument under a `peek` / `poke` marker, and the call under a `??`."""
-    while isinstance(expr, (Borrow, TryExpr)):
-        expr = expr.expr
-    return expr
+def borrowed_call(checker: 'BorrowChecker', node: object) -> Optional[e.Call]:
+    """The call of a callable with a `peek` return that `node` is, under each `??`, or
+    None."""
+    node = walk_place(node, Step.TRY).node
+    if isinstance(node, e.Call) and checker.answers().sources_of(node.shir_id) is not None:
+        return node
+    return None
 
 
-def call_sources(call: Expr) -> tuple[Expr, ...]:
-    """The arguments of a borrowed call that stand in the source set of its callee."""
-    call = _strip(call)
-    out: list[Expr] = []
-    for position in getattr(call, "callee_borrows", None) or ():
+def call_sources(checker: 'BorrowChecker', call: e.Call) -> tuple[e.ShirExpr, ...]:
+    """The arguments of a borrowed call at the positions of its source row: the receiver of
+    a method, and each source argument."""
+    answers = checker.answers()
+    resolved = answers.callee_of(call.shir_id)
+    out: list[e.ShirExpr] = []
+    for position in answers.sources_of(call.shir_id) or ():
         if position == RECEIVER_POSITION:
-            receiver = getattr(call, "receiver", None)
-            if receiver is not None:
-                out.append(receiver)
+            if resolved is not None and isinstance(resolved.callee, Method):
+                out.append(resolved.callee.recv)
         elif position < len(call.args):
-            out.append(call.args[position])
+            out.append(call.args[position].value)
     return tuple(out)
 
 
-def owners_of_place(checker: 'BorrowChecker', owner: str) -> tuple[str, ...]:
-    """The owners a view of the place rooted at `owner` freezes.
-
-    A view through a `let`-borrow reads the storage of its owners too, and a lent
-    iterator borrows its owners and keeps nothing to read.
-    """
-    state = checker.borrow_state.get(owner)
-    if state is not None and state.is_lent_iterator:
-        return state.borrows_from
-    if state is not None and state.is_let_borrow:
-        return (owner, *state.borrows_from)
-    return (owner,)
-
-
-def source_owners(checker: 'BorrowChecker',
-                  source: Expr) -> tuple[tuple[str, ...], Optional[Expr]]:
-    """The owners one source argument lends, and the temporary it is, if it is one."""
-    from .iterators import lent_owners
-    while isinstance(source, Borrow):
-        source = source.expr
-    if is_borrowed_call(source):
-        return call_owners(checker, source)
-    lent = lent_owners(checker, source)
-    if lent is not None:
-        return lent, None
-    if isinstance(source, StringLit):
-        # A literal is storage the program keeps: it has no owner, and it is never freed.
-        return (), None
-    if names_kept_storage(checker, source):
-        owner = borrow_owner(source)
-        return (owners_of_place(checker, owner) if owner is not None else ()), None
-    return (), source
-
-
 def call_owners(checker: 'BorrowChecker',
-                call: Expr) -> tuple[tuple[str, ...], Optional[Expr]]:
-    """The owners the answer of a borrowed call borrows, and its first temporary source."""
-    owners: tuple[str, ...] = ()
-    temporary: Optional[Expr] = None
-    for source in call_sources(call):
-        found, temp = source_owners(checker, source)
+                call: e.Call) -> tuple[tuple[Owner, ...], Optional[e.ShirExpr]]:
+    """The owners that the answer of a borrowed call views, and its first temporary source.
+
+    A source that is the answer of a borrowed call views the owners of that call. A literal
+    is storage that the program keeps: it has no owner. A place views its root and the
+    owners of the root (`view_owners`). Any other source is a temporary.
+    """
+    from .consume import view_owners
+    owners: tuple[Owner, ...] = ()
+    temporary: Optional[e.ShirExpr] = None
+    for source in call_sources(checker, call):
+        inner = borrowed_call(checker, source)
+        found: tuple[Owner, ...] = ()
+        if inner is not None:
+            found, temp = call_owners(checker, inner)
+            temporary = temporary or temp
+        elif names_an_owner(checker, source):
+            owner = borrow_owner(checker, source)
+            found = view_owners(checker, owner) if owner is not None else ()
+        elif not isinstance(source, e.Lit):
+            temporary = temporary or source
         owners += tuple(owner for owner in found if owner not in owners)
-        temporary = temporary or temp
     return owners, temporary
 
 
-def settle_borrowed_call(checker: 'BorrowChecker', expr: Call | MethodCall | DotCall) -> None:
-    """A borrowed call that answers an iterator makes a LENT iterator: it owns its state
-    and borrows the owners of its sources, as a producer over a place does. A `Result`
-    whose `Ok` holds the iterator is one too, and so is the payload that `??` gives."""
-    if not is_borrowed_call(expr):
-        return
-    answer = checker.types.resolve_named(expr.inferred_return_type)
-    ok = checker.types.variant_payload_types(answer, "Ok") if is_instance_of(
-        answer, "Result") else ()
-    if isinstance(answer, IteratorType) or any(
-            isinstance(checker.types.resolve_named(arm), IteratorType) for arm in ok):
-        expr.iterator_state = LENT
-
-
-def reject_view_of_temporary(checker: 'BorrowChecker', expr: Expr) -> bool:
-    """CE2444 for a `let` of the answer of a borrowed call over a temporary. True when refused."""
-    if not is_borrowed_call(expr):
+def reject_view_of_temporary(checker: 'BorrowChecker', value: e.ShirExpr) -> bool:
+    """CE2444 for a `let` of the answer of a borrowed call over a temporary. True when
+    refused."""
+    call = borrowed_call(checker, value)
+    if call is None:
         return False
-    _owners, temporary = call_owners(checker, expr)
+    _owners, temporary = call_owners(checker, call)
     if temporary is None:
         return False
-    call = _strip(expr)
-    checker.err.emit_with(er.ERR.CE2444, expr.loc, callee=_callee_text(call)) \
+    callee = (call.target.name if isinstance(call.target, e.Dotted)
+              else checker.decl_name(call.target.ref.decl).rpartition(".")[2]
+              if isinstance(call.target, e.Named) and isinstance(call.target.ref, e.GlobalRef)
+              else spelled(checker, call))
+    checker.err.emit_with(er.ERR.CE2444, value.loc, callee=callee) \
         .note_at("this argument is a temporary", temporary.loc) \
         .help("bind the argument first and give the binding, or copy the answer with "
               "`.clone()`").emit()
     return True
 
 
-def _callee_text(call: Expr) -> str:
-    if isinstance(call, Call):
-        return expr_to_string(call.callee)
-    return getattr(call, "method", "the callee")
-
-
 # ---------------------------------------------------------------------------------------
 # The body side
 
 
-def check_borrowed_return(checker: 'BorrowChecker', value: Expr) -> None:
+def check_borrowed_return(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
     """A `return` in a `peek` body: the value, or the payload of `Result.Ok(...)`, must be a
     borrow whose owner is a source (CE2443). `Result.Err(...)` is an ordinary return."""
-    from .consume import consume
-    from .expressions import check_expr
+    from .consume import consume, consume_named, decide, source_class
+    from .iterators import is_lent_name, lend_to_the_caller
 
-    spelled = _result_variant(value)
-    if spelled == "Err":
-        check_expr(checker, value)
+    variant = _result_variant(checker, value)
+    if variant == "Err":
+        arms.check(checker, value)
         consume(checker, value)
         return
-    if spelled == "Ok":
-        value.ownership_provenance = Provenance.FRESH
-        if not value.args:
+    if variant == "Ok":
+        decide(checker, value, Provenance.FRESH, source_class(checker, value))
+        if not value.payload:
             return
-        value = value.args[0]
-    check_expr(checker, value)
+        value = value.payload[0].value
+    arms.check(checker, value)
     returned = checker.borrowed_return
-    if returned is None or not returned.sources:
-        # A refused position or an empty source set was reported at the declaration.
-        _hand_over(checker, value)
+    if returned is not None and returned.sources:
+        reason = _why_not_a_view(checker, returned, value)
+        if reason is not None and not (returned.template_copy and _owns_nothing(checker, value)):
+            _emit_not_a_view(checker, returned, value, reason)
+    if is_lent_name(checker, value):
+        # The `let` owns the iterator value, so it is spent.
+        lend_to_the_caller(checker, value)
+        consume_named(checker, value, Provenance.OWNED, value.loc)
         return
-    reason = _why_not_a_view(checker, returned, value)
-    if reason is not None and not (returned.template_copy and _owns_nothing(checker, value)):
-        _emit_not_a_view(checker, returned, value, reason)
-    _hand_over(checker, value)
+    # The view goes to the caller as it is: nothing here frees it, and nothing moves.
+    lend_to_the_caller(checker, value)
+    decide(checker, value, Provenance.FRESH, source_class(checker, value))
 
 
-def _owns_nothing(checker: 'BorrowChecker', value: Expr) -> bool:
+def _result_variant(checker: 'BorrowChecker', value: e.ShirExpr) -> Optional[str]:
+    """`Ok` or `Err` when `value` constructs a variant of a `Result`."""
+    from sushi_lang.semantics.type_predicates import is_instance_of
+    if not isinstance(value, e.EnumInit) or value.variant not in ("Ok", "Err"):
+        return None
+    return value.variant if is_instance_of(read_type(checker, value), "Result") else None
+
+
+def _owns_nothing(checker: 'BorrowChecker', value: e.ShirExpr) -> bool:
     """Is `value` of a type that owns nothing? A copy of it can dangle from nothing."""
-    from sushi_lang.semantics.ownership import TypeClass
-    from .reads import read_type
     ty = read_type(checker, value)
     return ty is not None and checker.types.type_class(ty) is TypeClass.PLAIN
 
 
-def _result_variant(value: Expr) -> Optional[str]:
-    """`Ok` or `Err` when `value` is written `Result.Ok(...)` / `Result.Err(...)`."""
-    if (isinstance(value, (DotCall, MethodCall)) and isinstance(value.receiver, Name)
-            and value.receiver.id == "Result" and value.method in ("Ok", "Err")):
-        return value.method
-    return None
-
-
 def _why_not_a_view(checker: 'BorrowChecker', returned: BodyReturn,
-                    value: Expr) -> Optional[str]:
+                    value: e.ShirExpr) -> Optional[str]:
     """Why `value` is not a borrow of a source, or None when it is one."""
     from .iterators import lent_owners
-    if is_borrowed_call(value):
-        owners, temporary = call_owners(checker, value)
+    call = borrowed_call(checker, value)
+    if call is not None:
+        owners, temporary = call_owners(checker, call)
         return _TEMPORARY if temporary is not None else _outside(checker, returned, owners)
     lent = lent_owners(checker, value)
     if lent is not None:
         return _outside(checker, returned, lent)
-    if names_kept_storage(checker, value):
-        owner = borrow_owner(value)
-        if owner is None or owner in returned.sources:
+    if names_an_owner(checker, value):
+        owner = borrow_owner(checker, value)
+        if owner is None or owner in returned.source_locals:
             return None
         state = checker.borrow_state.get(owner)
-        if state is not None and (state.is_let_borrow or state.is_lent_iterator):
-            return _TEMPORARY if not state.borrows_from else _outside(
-                checker, returned, state.borrows_from)
+        if state is not None and state.is_let_borrow:
+            return (_outside(checker, returned, state.borrows_from) if state.borrows_from
+                    else _TEMPORARY)
         if state is not None and state.borrows_from:
             # A plain copy of an answer still holds the freeze of its sources, so a
             # template judges it alike at every type argument.
             return _outside(checker, returned, state.borrows_from)
-        if isinstance(value, Name) and owner not in returned.params:
+        if isinstance(value, e.LocalRef) and owner not in returned.params:
             return _OWNED
         return _outside(checker, returned, (owner,))
-    return _TEMPORARY if _reads_a_temporary(value) else _OWNED
+    return _TEMPORARY if isinstance(value, (e.Field, e.Index, e.Slice)) else _OWNED
 
 
 _TEMPORARY = "it borrows a temporary, which is freed at the end of the statement"
 _OWNED = "it is an owned value, not a borrow of a source"
 
 
-def _reads_a_temporary(value: Expr) -> bool:
-    """Is `value` a read through a temporary: an index, a slice or a field of one?"""
-    from sushi_lang.semantics.ast import IndexAccess, MemberAccess
-    return isinstance(value, (IndexAccess, MemberAccess))
-
-
 def _outside(checker: 'BorrowChecker', returned: BodyReturn,
-             owners: tuple[str, ...]) -> Optional[str]:
+             owners: tuple[Owner, ...]) -> Optional[str]:
     """The reason for the first owner that is not a source, or None when all are."""
     for owner in owners:
-        if owner in returned.sources or _is_a_view(checker, owner):
+        if owner in returned.source_locals or _is_a_view(checker, owner):
             continue
+        name = checker.name_of(owner)
         if owner in returned.params:
-            return f"it borrows '{owner}', which is not a source of the answer"
-        return f"it borrows the local '{owner}', which the function frees"
+            return f"it borrows '{name}', which is not a source of the answer"
+        return f"it borrows the local '{name}', which the function frees"
     return None if owners else _TEMPORARY
 
 
-def _is_a_view(checker: 'BorrowChecker', name: str) -> bool:
-    """Is `name` a `let` of a view whose owners are known? Its owners are judged instead."""
-    state = checker.borrow_state.get(name)
+def _is_a_view(checker: 'BorrowChecker', owner: Owner) -> bool:
+    """Is `owner` a `let` of a view whose owners are known? Its owners are judged instead."""
+    state = checker.borrow_state.get(owner)
     return (state is not None and state.is_let_borrow and not state.is_lent_iterator
             and bool(state.borrows_from))
 
 
-def _emit_not_a_view(checker: 'BorrowChecker', returned: BodyReturn, value: Expr,
+def _emit_not_a_view(checker: 'BorrowChecker', returned: BodyReturn, value: e.ShirExpr,
                      reason: str) -> None:
     sources = ", ".join(f"'{source}'" for source in returned.sources) or "nothing"
     checker.err.emit_with(er.ERR.CE2443, value.loc,
-                          value=expr_to_string(value, temporaries=True), reason=reason) \
+                          value=read_spelled(checker, value), reason=reason) \
         .note_at(f"the answer is declared a borrow of {sources} here", returned.record.span) \
         .help(f"return a view of {sources}, or drop `peek` and return an owned value") \
         .emit()
-
-
-def _hand_over(checker: 'BorrowChecker', value: Expr) -> None:
-    """Give the returned view to the caller: nothing here frees it.
-
-    A `let` that holds a lent iterator owns the value, so it is spent; every other view
-    owns nothing, and the position adopts it as it is. A lent iterator moves its state to
-    the heap.
-    """
-    from .consume import consume_named
-    from .iterators import is_lent_name
-    if isinstance(value, Name) and is_lent_name(checker, value):
-        value.ownership_provenance = Provenance.OWNED
-        consume_named(checker, value.id, Provenance.OWNED, value.loc)
-    else:
-        value.ownership_provenance = Provenance.FRESH
-    lend_to_the_caller(checker, value)
-
-
-def lend_to_the_caller(checker: 'BorrowChecker', value: Optional[Expr]) -> None:
-    """Stamp each link of a lent iterator chain that leaves the function: its state goes
-    on the heap. A `let` is followed to the value it was bound to; a clone keeps its own
-    heap state, and a borrowed call already gives one."""
-    from .iterators import adapter_inputs, is_adapter, is_producer
-    if isinstance(value, Name):
-        state = checker.borrow_state.get(value.id)
-        if state is not None and state.lent_value is not None:
-            lend_to_the_caller(checker, state.lent_value)
-        return
-    if not isinstance(value, (MethodCall, DotCall)) or value.iterator_state != LENT:
-        return
-    if is_producer(value):
-        value.iterator_leaves = True
-    elif is_adapter(value):
-        value.iterator_leaves = True
-        for source in adapter_inputs(value):
-            lend_to_the_caller(checker, source)

@@ -70,8 +70,8 @@ def contract_override(codegen: 'LLVMCodegen', ty: Type, contract: str) -> Option
     Read by the PERK name: a user perk that happens to provide `compare` is not the
     order `<` reads.
     """
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
-    type_name = _get_type_name(ty)
+    from sushi_lang.semantics.passes.collect.perks import perk_type_name
+    type_name = perk_type_name(ty)
     if type_name is None or not codegen.perk_impl_table.implements(type_name, contract):
         return None
     from sushi_lang.semantics.library_templates import impl_method_symbol
@@ -95,14 +95,6 @@ def call_override(codegen: 'LLVMCodegen', fn: ir.Function, values: list) -> ir.V
         else:
             args.append(codegen.utils.cast_for_param(value, param_type))
     return builder.call(fn, args)
-
-
-def load_operand(codegen: 'LLVMCodegen', value: ir.Value, ty: Type) -> ir.Value:
-    """A borrowed operand arrives as the address of its value; the seams read values."""
-    llvm_type = codegen.types.ll_type(ty)
-    if isinstance(value.type, ir.PointerType) and value.type.pointee == llvm_type:
-        return codegen.builder.load(value, name="contract_operand")
-    return value
 
 
 # --- primitives --------------------------------------------------------------------

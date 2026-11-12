@@ -1,0 +1,47 @@
+unit test_err_borrow_move_in_both_arms
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody keep
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["kept ", LocalRef(_0), ""]), Guaranteed)]))
+
+ShirBody both
+  params : [(_0 "give": bool, Guaranteed)]
+  locals : [_1 "msg": string]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(1), " towels"]), is_init: true)
+    If(LocalRef(_0), then: [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))], otherwise: [ExprStmt(Call(Free(@keep), [(move LocalRef(_1), Owned)]))])
+    ExprStmt(Call(Intrinsic("println"), [(Lit("done"), Guaranteed)]))
+
+ShirBody early
+  params : [(_0 "give": bool, Guaranteed)]
+  locals : [_1 "msg": string]
+  cond_moved : [_1]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(2), " towels"]), is_init: true)
+    If(LocalRef(_0), then: [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)])), Return(adopt Lit(1))])
+    Return(adopt Lit(0))
+
+ShirBody spent
+  params : [(_0 "give": bool, Guaranteed)]
+  locals : [_1 "msg": string]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(3), " towels"]), is_init: true)
+    If(LocalRef(_0), then: [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))], otherwise: [ExprStmt(Call(Free(@keep), [(move LocalRef(_1), Owned)]))])
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@both), [(Lit(true), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@early), [(Lit(false), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Free(@spent), [(Lit(false), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: "expected signed integer or float, got u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_stdlib_family_type.shir
+#
+# A member of a `<math>` family takes a type of its family. `abs` has no row for an
+# unsigned type, so a u8 argument is CE2006 at the argument. The call then has no type,
+# and the `let` that takes it says nothing more. A call of a row of the module with a
+# fitting argument is a `Stdlib` callee with the use path of its module.
+use <math>
+
+fn main() i32:
+    let u8 v = 3
+    let u8 w = abs(v)
+    let f64 r = sqrt(2.0)
+    println("{w} {r}")
+    return 0

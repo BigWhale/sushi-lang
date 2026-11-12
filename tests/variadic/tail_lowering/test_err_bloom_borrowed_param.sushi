@@ -1,0 +1,14 @@
+# A bloom moves its array. A parameter with no `nom` borrows the value of the caller, so its
+# bloom is the consuming use of a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn total(...i32 xs) i32:
+    return xs.len()
+
+fn forward(i32[] xs) i32:
+    return total(xs...)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(forward(xs))
+    return 0

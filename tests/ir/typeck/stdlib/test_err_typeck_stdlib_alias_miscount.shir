@@ -1,0 +1,10 @@
+unit test_err_typeck_stdlib_alias_miscount
+
+ShirBody main
+  params : []
+  locals : [_0 "slept": i32, _1 "now": i64]
+  block  :
+    Assign(LocalRef(_0), Call(Builtin(Call(Stdlib(<time>, @t.sleep), [(Cast(Lit(1), i64), Guaranteed), Cast(Lit(2), i64)]), "realise"), [(Lit(1), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), Call(Stdlib(<time>, @t.now), []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_0), " ", Binary(>, LocalRef(_1), Lit(0)), ""]), Guaranteed)]))
+    Return(Lit(0))

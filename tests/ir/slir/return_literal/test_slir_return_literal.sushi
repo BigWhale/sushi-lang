@@ -1,0 +1,9 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SLIR: test_slir_return_literal.slir
+#
+# The SLIR of the smallest program: the return slot `_0`, the entry block, the value of
+# the `return` in `_0`, and the `return` terminator. The emitter makes `user_main` from it,
+# and the program runs.
+
+fn main() i32:
+    return 0

@@ -1,0 +1,37 @@
+# A `peek` or a `poke` receiver and a reference `let` read the value that they point at.
+# EXPECT_STDOUT_EXACT: "true\nNamed(name: "x")\ntrue\n0\nNamed(name: "x")\ntrue\nNamed(name: "x")\ntrue\n"
+# EXPECT_NO_LEAKS
+
+struct Named:
+    string name
+
+fn by_borrow(Named a) u64:
+    return a.hash()
+
+fn by_peek(peek Named a) u64:
+    return a.hash()
+
+fn by_poke(poke Named a) string:
+    return a.to_str()
+
+fn eq_peek(peek Named a, Named b) bool:
+    return a.eq(b)
+
+fn cmp_ref(peek Named a, peek Named b) i32:
+    return b.compare(a)
+
+fn print_peek(peek Named a) ~:
+    println(a)
+
+fn main() i32:
+    let Named n = Named("x")
+    println(by_borrow(n) == by_peek(peek n))
+    println(by_poke(poke n))
+    println(eq_peek(peek n, n))
+    println(cmp_ref(peek n, peek n))
+    print_peek(peek n)
+    let peek Named r = n
+    println(r.hash() == n.hash())
+    println(r)
+    println(r.eq(n))
+    return 0

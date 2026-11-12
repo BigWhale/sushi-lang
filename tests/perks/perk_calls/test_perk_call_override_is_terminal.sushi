@@ -1,0 +1,41 @@
+# An override of Hashable, Eq, Ord and Display is terminal: a `print`, an interpolation, a `==`,
+# a `<` and a `.hash()` call the implementation, also when a struct holds the type.
+# EXPECT_STDOUT_EXACT: "shown\nshown\ntrue\nfalse\ntrue\n7\n7\ntrue\nshown\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct K:
+    i32 n
+
+struct Outer:
+    K k
+
+extend K with Display:
+    fn to_str() string:
+        return "shown"
+
+extend K with Eq:
+    fn eq(K other) bool:
+        return other.n == other.n
+
+extend K with Ord:
+    fn compare(K other) i32:
+        return other.n - other.n - 1
+
+extend K with Hashable:
+    fn hash() u64:
+        return 7 as u64
+
+fn main() i32:
+    let K a = K(1)
+    let K b = K(2)
+    println(a)
+    println("{a}")
+    println(a == b)
+    println(a != b)
+    println(a < b)
+    println(a.hash())
+    println(a.hash())
+    println(Outer(a) == Outer(b))
+    println(a.to_str())
+    return 0

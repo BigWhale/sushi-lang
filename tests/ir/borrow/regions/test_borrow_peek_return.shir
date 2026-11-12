@@ -1,0 +1,27 @@
+unit test_borrow_peek_return
+
+ShirBody first
+  params : [(_0 "xs": i32[], InGuaranteed)]
+  locals : []
+  block  :
+    Return(adopt Index(LocalRef(_0), Lit(0), unchecked: false))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": Store, _1 "f": i32[], _2 "x": i32]
+  regions : [_1: {_0} until #13]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@Store, [adopt ArrayInit(Dynamic, [Single(adopt Lit(7)), Single(adopt Lit(8)), Single(adopt Lit(9))])], written_order: [0]), is_init: true)
+    Assign(LocalRef(_1), reject Call(Method(LocalRef(_0), @Store.front, Guaranteed), [(Lit(2), Guaranteed)], borrows: [-1]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_1), "len"), []), Guaranteed)]))
+    Assign(LocalRef(_2), adopt Call(Free(@first), [(Field(LocalRef(_0), "data"), InGuaranteed)], borrows: [0]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Builtin(Field(LocalRef(_0), "data"), "push"), [(adopt Lit(1), Owned)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Method(LocalRef(_0), @Store.front, Guaranteed), [(Lit(3), Guaranteed)], borrows: [-1]), "len"), []), Guaranteed)]))
+    Return(adopt Lit(0))
+
+ShirBody Store.front
+  params : [(_0 "self": Store, Guaranteed), (_1 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Slice(Field(LocalRef(_0), "data"), Lit(0), LocalRef(_1), inclusive: false))

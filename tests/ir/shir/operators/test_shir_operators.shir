@@ -1,0 +1,43 @@
+unit test_shir_operators
+
+ShirBody arithmetic
+  params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(-, Binary(*, Binary(+, LocalRef(_0), LocalRef(_1)), Lit(2)), Unary(neg, LocalRef(_0))))
+
+ShirBody division
+  params : [(_0 "a": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(+, Binary(/, LocalRef(_0), Binary(*, Lit(2), Lit(3))), Binary(%, LocalRef(_0), Lit(4))))
+
+ShirBody bits
+  params : [(_0 "a": u32, Guaranteed), (_1 "b": u32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(|, Binary(&, LocalRef(_0), Lit(0xff)), Binary(^, Binary(<<, LocalRef(_1), Lit(3)), Binary(>>, Unary(~, LocalRef(_0)), Lit(1)))))
+
+ShirBody compare
+  params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(or, Binary(<, LocalRef(_0), LocalRef(_1)), Binary(xor, Binary(and, Binary(<=, LocalRef(_0), LocalRef(_1)), Binary(>, LocalRef(_0), LocalRef(_1))), Binary(>=, LocalRef(_0), LocalRef(_1)))))
+
+ShirBody equal
+  params : [(_0 "a": i32, Guaranteed), (_1 "p": bool, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(or, Binary(and, Binary(==, LocalRef(_0), Lit(4)), Unary(not, LocalRef(_1))), Binary(xor, Binary(!=, LocalRef(_0), Lit(5)), Unary(not, LocalRef(_1)))))
+
+ShirBody folded
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Binary(*, Lit(2), Lit(3)), Lit(1)))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

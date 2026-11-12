@@ -1,0 +1,225 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "70\n"
+# EXPECT_NO_LEAKS
+# A finite chain of 70 different generic functions. Each link makes a new type, and the
+# chain has an end, so the program compiles.
+
+struct Box@(T):
+    T v
+
+fn chain1@(T)(nom T x) i32:
+    return chain2(nom Box(nom x)) + 1
+
+fn chain2@(T)(nom T x) i32:
+    return chain3(nom Box(nom x)) + 1
+
+fn chain3@(T)(nom T x) i32:
+    return chain4(nom Box(nom x)) + 1
+
+fn chain4@(T)(nom T x) i32:
+    return chain5(nom Box(nom x)) + 1
+
+fn chain5@(T)(nom T x) i32:
+    return chain6(nom Box(nom x)) + 1
+
+fn chain6@(T)(nom T x) i32:
+    return chain7(nom Box(nom x)) + 1
+
+fn chain7@(T)(nom T x) i32:
+    return chain8(nom Box(nom x)) + 1
+
+fn chain8@(T)(nom T x) i32:
+    return chain9(nom Box(nom x)) + 1
+
+fn chain9@(T)(nom T x) i32:
+    return chain10(nom Box(nom x)) + 1
+
+fn chain10@(T)(nom T x) i32:
+    return chain11(nom Box(nom x)) + 1
+
+fn chain11@(T)(nom T x) i32:
+    return chain12(nom Box(nom x)) + 1
+
+fn chain12@(T)(nom T x) i32:
+    return chain13(nom Box(nom x)) + 1
+
+fn chain13@(T)(nom T x) i32:
+    return chain14(nom Box(nom x)) + 1
+
+fn chain14@(T)(nom T x) i32:
+    return chain15(nom Box(nom x)) + 1
+
+fn chain15@(T)(nom T x) i32:
+    return chain16(nom Box(nom x)) + 1
+
+fn chain16@(T)(nom T x) i32:
+    return chain17(nom Box(nom x)) + 1
+
+fn chain17@(T)(nom T x) i32:
+    return chain18(nom Box(nom x)) + 1
+
+fn chain18@(T)(nom T x) i32:
+    return chain19(nom Box(nom x)) + 1
+
+fn chain19@(T)(nom T x) i32:
+    return chain20(nom Box(nom x)) + 1
+
+fn chain20@(T)(nom T x) i32:
+    return chain21(nom Box(nom x)) + 1
+
+fn chain21@(T)(nom T x) i32:
+    return chain22(nom Box(nom x)) + 1
+
+fn chain22@(T)(nom T x) i32:
+    return chain23(nom Box(nom x)) + 1
+
+fn chain23@(T)(nom T x) i32:
+    return chain24(nom Box(nom x)) + 1
+
+fn chain24@(T)(nom T x) i32:
+    return chain25(nom Box(nom x)) + 1
+
+fn chain25@(T)(nom T x) i32:
+    return chain26(nom Box(nom x)) + 1
+
+fn chain26@(T)(nom T x) i32:
+    return chain27(nom Box(nom x)) + 1
+
+fn chain27@(T)(nom T x) i32:
+    return chain28(nom Box(nom x)) + 1
+
+fn chain28@(T)(nom T x) i32:
+    return chain29(nom Box(nom x)) + 1
+
+fn chain29@(T)(nom T x) i32:
+    return chain30(nom Box(nom x)) + 1
+
+fn chain30@(T)(nom T x) i32:
+    return chain31(nom Box(nom x)) + 1
+
+fn chain31@(T)(nom T x) i32:
+    return chain32(nom Box(nom x)) + 1
+
+fn chain32@(T)(nom T x) i32:
+    return chain33(nom Box(nom x)) + 1
+
+fn chain33@(T)(nom T x) i32:
+    return chain34(nom Box(nom x)) + 1
+
+fn chain34@(T)(nom T x) i32:
+    return chain35(nom Box(nom x)) + 1
+
+fn chain35@(T)(nom T x) i32:
+    return chain36(nom Box(nom x)) + 1
+
+fn chain36@(T)(nom T x) i32:
+    return chain37(nom Box(nom x)) + 1
+
+fn chain37@(T)(nom T x) i32:
+    return chain38(nom Box(nom x)) + 1
+
+fn chain38@(T)(nom T x) i32:
+    return chain39(nom Box(nom x)) + 1
+
+fn chain39@(T)(nom T x) i32:
+    return chain40(nom Box(nom x)) + 1
+
+fn chain40@(T)(nom T x) i32:
+    return chain41(nom Box(nom x)) + 1
+
+fn chain41@(T)(nom T x) i32:
+    return chain42(nom Box(nom x)) + 1
+
+fn chain42@(T)(nom T x) i32:
+    return chain43(nom Box(nom x)) + 1
+
+fn chain43@(T)(nom T x) i32:
+    return chain44(nom Box(nom x)) + 1
+
+fn chain44@(T)(nom T x) i32:
+    return chain45(nom Box(nom x)) + 1
+
+fn chain45@(T)(nom T x) i32:
+    return chain46(nom Box(nom x)) + 1
+
+fn chain46@(T)(nom T x) i32:
+    return chain47(nom Box(nom x)) + 1
+
+fn chain47@(T)(nom T x) i32:
+    return chain48(nom Box(nom x)) + 1
+
+fn chain48@(T)(nom T x) i32:
+    return chain49(nom Box(nom x)) + 1
+
+fn chain49@(T)(nom T x) i32:
+    return chain50(nom Box(nom x)) + 1
+
+fn chain50@(T)(nom T x) i32:
+    return chain51(nom Box(nom x)) + 1
+
+fn chain51@(T)(nom T x) i32:
+    return chain52(nom Box(nom x)) + 1
+
+fn chain52@(T)(nom T x) i32:
+    return chain53(nom Box(nom x)) + 1
+
+fn chain53@(T)(nom T x) i32:
+    return chain54(nom Box(nom x)) + 1
+
+fn chain54@(T)(nom T x) i32:
+    return chain55(nom Box(nom x)) + 1
+
+fn chain55@(T)(nom T x) i32:
+    return chain56(nom Box(nom x)) + 1
+
+fn chain56@(T)(nom T x) i32:
+    return chain57(nom Box(nom x)) + 1
+
+fn chain57@(T)(nom T x) i32:
+    return chain58(nom Box(nom x)) + 1
+
+fn chain58@(T)(nom T x) i32:
+    return chain59(nom Box(nom x)) + 1
+
+fn chain59@(T)(nom T x) i32:
+    return chain60(nom Box(nom x)) + 1
+
+fn chain60@(T)(nom T x) i32:
+    return chain61(nom Box(nom x)) + 1
+
+fn chain61@(T)(nom T x) i32:
+    return chain62(nom Box(nom x)) + 1
+
+fn chain62@(T)(nom T x) i32:
+    return chain63(nom Box(nom x)) + 1
+
+fn chain63@(T)(nom T x) i32:
+    return chain64(nom Box(nom x)) + 1
+
+fn chain64@(T)(nom T x) i32:
+    return chain65(nom Box(nom x)) + 1
+
+fn chain65@(T)(nom T x) i32:
+    return chain66(nom Box(nom x)) + 1
+
+fn chain66@(T)(nom T x) i32:
+    return chain67(nom Box(nom x)) + 1
+
+fn chain67@(T)(nom T x) i32:
+    return chain68(nom Box(nom x)) + 1
+
+fn chain68@(T)(nom T x) i32:
+    return chain69(nom Box(nom x)) + 1
+
+fn chain69@(T)(nom T x) i32:
+    return chain70(nom Box(nom x)) + 1
+
+fn chain70@(T)(nom T x) i32:
+    let Maybe@(T) m = Maybe.Some(nom x)
+    if (m.is_some()):
+        return 1
+    return 0
+
+fn main() i32:
+    println(chain1(nom 0))
+    return 0

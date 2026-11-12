@@ -1,0 +1,23 @@
+# A `return` leaves a loop body that holds a `Maybe@(string)` local with a heap string
+# in its payload. The exit destroys the payload once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "none at 0\nsome item 1\nsome item 2\nreturn at 2\n"
+fn pick(i32 i) Maybe@(string):
+    if (i == 0):
+        return Maybe.None
+    return Maybe.Some("item {i}")
+
+fn find() i32:
+    foreach(i in 0..10):
+        let Maybe@(string) m = pick(i)
+        match m:
+            Maybe.Some(s) -> println("some {s}")
+            Maybe.None -> println("none at {i}")
+        if (i == 2):
+            println("return at {i}")
+            return i
+    return 0
+
+fn main() i32:
+    return find() - 2

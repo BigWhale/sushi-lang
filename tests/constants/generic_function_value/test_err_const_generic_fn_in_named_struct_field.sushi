@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_STDERR_CONTAINS: test_err_const_generic_fn_in_named_struct_field.sushi:11:18: error [CE2093]
+#
+# A generic function is no value in a named field of a struct constant.
+fn id@(T)(nom T x) T:
+    return x
+
+struct H:
+    fn(nom i32) -> i32 f
+
+const H C = H(f: id)
+
+fn main() i32:
+    println(1)
+    return 0

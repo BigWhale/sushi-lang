@@ -1,0 +1,45 @@
+# A plain parameter of a `Drop` handle is a borrow. The callee uses a `File` and a user
+# `Drop` type and destroys neither; the caller closes the file once and runs `drop()`
+# once, at its own scope exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "name res 1\nname res 1\nback in main\nMostly Harmless\nok\ndrop res 1\n"
+use <io/fs>
+
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn show(Res r) i32:
+    println("name {r.name}")
+    return r.name.len()
+
+fn head_of(File f) i32 | IoError:
+    let u8[] head = f.read_at(0 as i64, 6)??
+    if (f.is_open()):
+        return Result.Ok(head.len())
+    return Result.Ok(0)
+
+fn run() ~ | IoError:
+    let File w = open("/tmp/sushi_drop_handle_plain_param.txt", FileMode.Write())??
+    w.write("Mostly Harmless\n")??
+    let File f = open("/tmp/sushi_drop_handle_plain_param.txt", FileMode.Read())??
+    let i32 n = head_of(f)??
+    let i32 m = head_of(f)??
+    if (n + m == 12):
+        print(f.read_all()??)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Res r = Res("res {1}")
+    let i32 a = show(r)
+    let i32 b = show(r)
+    println("back in main")
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return a + b - 10

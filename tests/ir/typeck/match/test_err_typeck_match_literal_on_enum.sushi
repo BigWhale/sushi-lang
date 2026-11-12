@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2076
+# EXPECT_STDERR_CONTAINS: "match arm does not fit the scrutinee: integer range arm on a 'Color' scrutinee"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_literal_on_enum.shir
+#
+# An enum scrutinee takes enum pattern arms. A range arm on an enum scrutinee is CE2076.
+
+enum Color:
+    Red
+    Green
+
+fn first(Color c) string:
+    match c:
+        0..=1 -> return "first"
+        _ -> return "other"
+
+fn main() i32:
+    println(first(Color.Red))
+    return 0

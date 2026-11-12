@@ -1,14 +1,16 @@
-"""Validation and table-building for the built-in Result<T, E> methods."""
+"""The rows and the table-building of the built-in Result<T, E> methods.
+
+The typecheck arm of the family is `passes/types/visit/calls.py:_check_result_method`.
+"""
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Optional
 
 from sushi_lang.semantics.generics.interned import interned_name
-from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import EnumType, Type
-from sushi_lang.internals import errors as er
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
+from sushi_lang.semantics.generics.maybe import (
+    WrapperMethodRow, ensure_maybe_type_in_table, payload_method_row)
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
 from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
 from sushi_lang.semantics.passes.derive import derive_for_enum
@@ -44,86 +46,20 @@ def is_builtin_result_method(method_name: str) -> bool:
     return method_name in RESULT_METHOD_ARITY
 
 
-def validate_result_method_with_validator(
-    call: MethodCall,
-    result_type: EnumType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate Result<T, E> method calls."""
-    # The backend reads the receiver's Result type from this stamp.
-    call.resolved_enum_type = result_type
+def result_method_row(result_type: EnumType, method_name: str, enum_table: Any,
+                      struct_table: Optional[dict] = None) -> Optional[WrapperMethodRow]:
+    """The row of a `Result@(T, E)` method with no signature row.
 
-    if call.method not in RESULT_METHOD_ARITY:
-        raise_internal_error("CE0094", method=call.method)
-    check = _CHECKS.get(call.method)
-    if check is not None:
-        check(call, result_type, reporter, validator)
-
-
-def _validate_result_expect(
-    call: MethodCall,
-    result_type: EnumType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate Result<T, E>.expect(message): the message is a string."""
-    message_arg = call.args[0]
-
-    validator.validate_expression(message_arg)
-
-    from sushi_lang.semantics.typesys import BuiltinType
-    arg_type = validator.infer_expression_type(message_arg)
-    if arg_type is not None and arg_type != BuiltinType.STRING:
-        er.emit(reporter, er.ERR.CE2503, message_arg.loc,
-               expected="string", got=display_type(arg_type))
-
-
-def validate_result_realise_method_with_validator(
-    call: MethodCall,
-    result_type: EnumType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate Result<T>.realise(default): the default's type matches T."""
-    # Extract T from Result<T> by getting the Ok variant's associated type
-    # Result<T> has two variants: Ok(T) and Err()
-    # We need to find the Ok variant and extract its associated type
-    ok_variant = result_type.get_variant("Ok")
-    if ok_variant is None:
-        raise_internal_error("CE0089", enum=result_type.name)
-
-    if len(ok_variant.associated_types) != 1:
-        # Ok variant should have exactly one associated type (T)
-        raise_internal_error("CE0090", got=len(ok_variant.associated_types))
-
-    t_type = ok_variant.associated_types[0]
-
-    from sushi_lang.semantics.typesys import BuiltinType
-    if t_type == BuiltinType.BLANK:
-        er.emit(reporter, er.ERR.CE2506, call.loc, ty=display_type(result_type))
-        return
-
-    default_arg = call.args[0]
-
-    from sushi_lang.semantics.type_resolution import TypeResolver
-    type_resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
-    resolved_t_type = type_resolver.resolve_generic_type_ref(t_type)
-
-    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    propagate_types_to_value(validator, default_arg, resolved_t_type)
-
-    validator.validate_expression(default_arg)
-
-    arg_type = validator.infer_expression_type(default_arg)
-    if arg_type is not None and not validator._types_compatible(arg_type, t_type):
-        er.emit(reporter, er.ERR.CE2503, default_arg.loc,
-               expected=display_type(t_type), got=display_type(arg_type))
-
-
-#: The methods that check more than their count.
-_CHECKS = {"realise": validate_result_realise_method_with_validator,
-           "expect": _validate_result_expect}
+    `is_ok` and `is_err` yield a bool, and `err` a `Maybe@(E)`; `realise` and `expect` are
+    the rows that a `Maybe` shares.
+    """
+    if method_name in ("is_ok", "is_err"):
+        return WrapperMethodRow((), BuiltinType.BOOL)
+    ok, err = result_ok_err(result_type)
+    if method_name == "err":
+        return WrapperMethodRow((), ensure_maybe_type_in_table(enum_table, err,
+                                                               struct_table=struct_table))
+    return payload_method_row(ok, method_name)
 
 
 def is_result_enum(t: Any) -> bool:

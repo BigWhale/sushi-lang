@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2049
+# EXPECT_STDERR_CONTAINS: "expected 'i32', got 'string'"
+# EXPECT_DUMP_SHIR: test_err_typeck_enum_alias_payload.shir
+#
+# A variant behind an alias is a variant of the enum that the namespace holds. The bare
+# `cp.Heading.North` and `cp.Heading.Turn(1, 2)` are typed. A string payload where the
+# variant holds an `i32` is CE2049, as with a bare enum name.
+
+use "units/compass" as cp
+
+fn pick(cp.Heading h) cp.Heading:
+    return h
+
+fn main() i32:
+    pick(cp.Heading.North)
+    pick(cp.Heading.Turn(1, 2))
+    pick(cp.Heading.East("Mostly Harmless"))
+    return 0

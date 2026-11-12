@@ -1,0 +1,32 @@
+unit test_err_typeck_match_enum_bindings
+
+ShirBody agree
+  params : [(_0 "v": Value, Guaranteed)]
+  locals : [_1 "x": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Value, "Int", [(_1, Bare)]), Variant(@Value, "Wide", [(_1, Bare)])]), [Return(adopt LocalRef(_1))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody name
+  params : [(_0 "v": Value, Guaranteed)]
+  locals : [_1 "x", _2 "y"]
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Value, "Int", [(_1, Bare)]), Variant(@Value, "Pair", [(_2, Bare), Wildcard])]), [Return(LocalRef(_1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody kind
+  params : [(_0 "v": Value, Guaranteed)]
+  locals : [_1 "x"]
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Value, "Int", [(_1, Bare)]), Variant(@Value, "Float", [(_1, Bare)])]), [Return(LocalRef(_1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody mode
+  params : [(_0 "v": Value, Guaranteed)]
+  locals : [_1 "x"]
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Value, "Int", [(_1, Bare)]), Variant(@Value, "Wide", [(_1, Ref(Peek))])]), [Return(LocalRef(_1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "v": Value]
+  block  :
+    Assign(LocalRef(_0), adopt EnumInit(@Value, "Int", [adopt Lit(2)]), is_init: true)
+    Return(adopt Binary(+, Binary(+, Binary(+, Call(Free(@agree), [(LocalRef(_0), Guaranteed)]), Call(Free(@name), [(LocalRef(_0), Guaranteed)])), Call(Free(@kind), [(LocalRef(_0), Guaranteed)])), Call(Free(@mode), [(LocalRef(_0), Guaranteed)])))

@@ -1,0 +1,39 @@
+unit test_slir_primitive_statics
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: f32                            // w
+    let _2: u8[]                           // bytes
+    let _3: string                         // s
+    let _4: u32
+    let _5: f32
+    let _6: string
+    let _7: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 2.25_f32
+    StorageLive(_2)
+    _2 = [const 111_u8, const 107_u8]
+    StorageLive(_3)
+    _3 = call builtin string.from_bytes@(u8[])(move _2 @owned)
+    StorageLive(_4)
+    _4 = call builtin primitive.to_bits(copy _1 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin f32.from_bits@(u32)(copy _4 @guaranteed)
+    StorageLive(_6)
+    _6 = call builtin interp@(f32, string, string)(copy _5 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_7)
+    _7 = call builtin println@(string)(copy _6 @guaranteed)
+    StorageDead(_7)
+    Drop(_6)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageDead(_4)
+    _0 = const 0_i32
+    Drop(_3)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}

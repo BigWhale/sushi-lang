@@ -1,0 +1,39 @@
+# A cast into i16, u16 and u32 keeps the low bits, a compare reads the sign of the width,
+# and a print shows the value at the width.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1234\n-31072\n34464\n65525\ntrue\nfalse\n40000\n-5\n4294967291\ntrue\ntrue\nfalse\n1\n4294967295\n3000000000\ntrue\n4464\n-25536\n705032704\nfalse\n"
+
+fn main() i32:
+    let i32 big = 100000
+    let i32 minus = -5
+    let i16 a = 1234 as i16
+    let i16 b = big as i16
+    let u16 c = big as u16
+    let u16 d = (minus as u16) + (65530 as u16)
+    println(a)
+    println(b)
+    println(c)
+    println(d)
+    println(a > b)
+    println(a < b)
+    let u16 e = 40000 as u16
+    let i16 f = -5 as i16
+    let u32 g = minus as u32
+    println(e)
+    println(f)
+    println(g)
+    println(e > c)
+    println(e > (1 as u16))
+    println(f > 0 as i16)
+    let u32 h = 1 as u32
+    let u32 i = (minus as u32) + (4 as u32)
+    let u32 j = 3000000000 as u32
+    println(h)
+    println(i)
+    println(j)
+    println(j > h)
+    println(70000 as u16)
+    println(40000 as i16)
+    println(5000000000 as u32)
+    println(i < h)
+    return 0

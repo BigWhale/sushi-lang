@@ -1,0 +1,14 @@
+unit test_err_typeck_match_range_string_bound
+
+ShirBody letter
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange("a", "z", inclusive: false), [Return(Lit("letter"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@letter), [(Lit("a"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

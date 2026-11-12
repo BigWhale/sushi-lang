@@ -1,0 +1,44 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ford\n9\narthur dent\nzaphod beeblebrox\nheart of gold\ntook trillian\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_borrow_takes_and_destructures.shir
+#
+# The rows of a take. A marked field take one step off a local that the body owns has a
+# `move` row on its `Take`, in a `let`, a `return` and a `nom` argument. A destructure of an
+# owned value has a `move` row on its value, and of a borrowed value a `reject` row, with a
+# region row for each binder of an owning part. `match nom r:` has a `move` row on its
+# scrutinee, and a `nom` binder is an owned local with no region.
+
+struct Crew:
+    string name
+    string ship
+    i32 count
+
+fn eat(nom string s) i32:
+    return s.len()
+
+fn captain(nom Crew c) string:
+    return nom c.name
+
+fn show(peek (string, string) pair) ~:
+    let (string first, string last) = pair
+    println("{first} {last}")
+
+fn main() i32:
+    let string seed = "f"
+    let Crew a = Crew("{seed}ord", "{seed}hog", 1)
+    let string name = nom a.name
+    println(name)
+    let Crew b = Crew("{seed}enchurch", "x", 2)
+    println(eat(nom b.name))
+    let (string, string) arthur = ("arthur", "dent")
+    show(peek arthur)
+    let (string, string) pair = ("zaphod", "beeblebrox")
+    let (string first, string last) = pair
+    println("{first} {last}")
+    println(captain(nom Crew("heart of gold", "{seed}", 3)))
+    let Maybe@(string) m = Maybe.Some("trillian")
+    match nom m:
+        Maybe.Some(nom who) -> println("took {who}")
+        Maybe.None -> println("none")
+    return 0

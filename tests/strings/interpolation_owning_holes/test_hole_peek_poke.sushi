@@ -1,0 +1,22 @@
+# A hole over a peek parameter and a poke parameter of an owning type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Box(label: "box", xs: [])\nBox(label: "box", xs: [9]) box\n[9]\n"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    string label
+    List@(i32) xs
+
+fn show(peek Box b) string:
+    return "{b}"
+
+fn grow(poke Box b) string:
+    b.xs.push(9)
+    return "{b} {b.label}"
+
+fn main() i32:
+    let Box b = Box("box", List.new())
+    println(show(peek b))
+    println(grow(poke b))
+    println("{b.xs}")
+    return 0

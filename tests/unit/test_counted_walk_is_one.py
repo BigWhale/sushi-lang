@@ -8,8 +8,8 @@ wrong block). So such a function is refused outside `container_walk.py` and the 
 below.
 
 KNOWN_HAND_LOOPS may only get SHORTER. It holds the loops that cannot be a walk, each with
-its reason above its row (#852): a loop with no count, a decoder with a stride other than one
-element, and a user loop body that needs `break` / `continue` targets.
+its reason above its row (#852): a loop with no count, and a decoder with a stride other than
+one element.
 """
 from __future__ import annotations
 
@@ -23,8 +23,6 @@ WALK_MODULE = "generics/container_walk.py"
 KNOWN_HAND_LOOPS = {
     # Not a walk: it stops at the NUL byte of a C string, and no count is known.
     ("runtime/strings.py", "_declare_and_define_utf8_char_count"),
-    # A user loop body: `break`/`continue` need loop blocks that the walk does not expose.
-    ("statements/loops.py", "_emit_hashmap_foreach"),
     # Not a walk: it steps by the byte count of each code point and stops at the first bad one.
     ("types/arrays/methods/utf8_validate.py", "get_or_emit_utf8_validate"),
 }

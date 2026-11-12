@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\nanswer\n2\ntrue\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_DUMP_SHIR: test_shir_ctor_tuple.shir
+#
+# the SHIR dump of a tuple literal: a `TupleInit` with its parts in the written order. A
+# nested tuple is a `TupleInit` in a part. An element read `t.0` is a `Field` whose name
+# is the index, and `n.0.1` is a `Field` of a `Field`.
+
+fn pair() (i32, string):
+    return (42, "answer")
+
+fn main() i32:
+    let (i32, string) t = pair()
+    let ((i32, i32), bool) n = ((1, 2), true)
+    println(t.0)
+    println(t.1)
+    println(n.0.1)
+    println(n.1)
+    println("Mostly Harmless")
+    return 0

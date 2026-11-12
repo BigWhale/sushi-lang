@@ -1,0 +1,8 @@
+unit test_err_shir_name_extern_variable_write
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Assign(GlobalRef(@libc.optind), Lit(1), is_init: false)
+    Return(Lit(0))

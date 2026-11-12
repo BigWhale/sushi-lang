@@ -1,0 +1,15 @@
+unit test_err_typeck_field_of_maybe
+
+ShirBody find
+  params : [(_0 "hit": bool, Guaranteed)]
+  locals : []
+  block  :
+    If(LocalRef(_0), then: [Return(adopt EnumInit(@Maybe, "Some", [adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1])]))])
+    Return(adopt EnumInit(@Maybe, "None", []))
+
+ShirBody main
+  params : []
+  locals : [_0 "v": i32]
+  block  :
+    Assign(LocalRef(_0), Field(Call(Free(@find), [(Lit(true), Guaranteed)]), "x"), is_init: true)
+    Return(LocalRef(_0))

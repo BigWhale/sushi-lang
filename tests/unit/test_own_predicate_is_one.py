@@ -55,14 +55,6 @@ def test_the_match_rule_reads_the_seam():
     assert "is_own_type(" in source, "the Own pattern rule must read the seam"
 
 
-def test_the_backend_reads_the_seam():
-    from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
-
-    assert not hasattr(DynamicArrayManager, "is_own_type"), (
-        "the back end keeps a fourth answer to the same question"
-    )
-
-
 def test_the_payload_is_read_the_same_way_from_either_spelling():
     """One reader for `Own@(T)`'s `T`: the pattern rule asks twice, and must agree."""
     from sushi_lang.semantics.generics.own import own_payload_type

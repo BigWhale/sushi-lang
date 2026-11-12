@@ -1,0 +1,10 @@
+# A bulk write into an owning `var` may not read the same `var`: the growth can move the
+# buffer that the copy reads.
+# EXPECT_ERROR_CODES_EXACT: CE2430
+
+var i32[] buf = from([])
+
+fn main() i32:
+    buf.push(1)
+    buf.extend(buf[0..1])
+    return 0

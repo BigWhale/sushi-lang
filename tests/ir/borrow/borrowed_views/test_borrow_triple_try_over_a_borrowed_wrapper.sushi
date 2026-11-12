@@ -1,0 +1,15 @@
+# Three `??` levels over a borrowed wrapper are a correct program too. Each level
+# reads the wrapper through, and the payload is a view of it.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn pick(Result@(Result@(Result@(string, StdError), StdError), StdError) r) i32 | StdError:
+    let string got = r??????
+    println(got)
+    return Result.Ok(0)
+
+fn main() i32:
+    let Result@(Result@(Result@(string, StdError), StdError), StdError) r = Result.Ok(Result.Ok(Result.Ok("Mostly Harmless")))
+    let i32 code = pick(r).realise(1)
+    return code

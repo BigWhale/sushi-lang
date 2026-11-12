@@ -1,0 +1,27 @@
+# A place operand is read before a later operand of the same statement moves its root into
+# a call: the read comes first, and the moved value drops one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+# EXPECT_STDOUT_EXACT: 5\n7\n5\n
+struct Wrap:
+    string out
+    i32 n
+
+fn take(nom Wrap w) i32:
+    return w.out.len()
+
+fn rest(nom string s) i32:
+    return s.len()
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main() i32:
+    let string base = "ab"
+    let Wrap v = Wrap("{base}e", 2)
+    println(v.n + take(nom v))
+    let Wrap u = Wrap("{base}ef", 3)
+    println(add(u.n, take(nom u)))
+    let Wrap w = Wrap("{base}e", 2)
+    println(w.n + rest(nom w.out))
+    return 0

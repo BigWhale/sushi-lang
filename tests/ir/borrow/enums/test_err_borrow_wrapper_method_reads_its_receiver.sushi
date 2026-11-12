@@ -1,0 +1,44 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'm'"
+# EXPECT_STDERR_CONTAINS: "'m' was moved here"
+# EXPECT_DUMP_SHIR: test_err_borrow_wrapper_method_reads_its_receiver.shir
+#
+# A method of a Result or a Maybe that does not declare `nom self` reads its receiver:
+# `is_ok`, `is_err`, `err`, `is_some`, `is_none`, `realise` and `expect`. A named wrapper
+# that owns stays usable after each call. A read of the receiver after a move of its
+# local is CE2405, with a note at the move.
+# - `reads` calls each of the seven methods on two named wrappers that own a string.
+# - `moved` calls `is_some` on a wrapper after it gives the wrapper away: CE2405.
+
+fn make(i32 n) Maybe@(string):
+    return Maybe.Some("{n} towels")
+
+fn parse(i32 n) string | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok("{n}")
+
+fn eat(nom Maybe@(string) m) ~:
+    println(m.is_some())
+
+fn reads(i32 n) i32:
+    let Maybe@(string) m = make(n)
+    let string a = m.realise("none")
+    let string b = m.expect("Mostly Harmless")
+    let Result@(string, StdError) r = parse(n)
+    let string c = r.realise("bad")
+    let string d = r.expect("Mostly Harmless")
+    let Maybe@(StdError) e = r.err()
+    if (m.is_some() and not m.is_none() and r.is_ok() and not r.is_err() and e.is_none()):
+        return a.len() + b.len() + c.len() + d.len()
+    return 0
+
+fn moved(i32 n) bool:
+    let Maybe@(string) m = make(n)
+    eat(nom m)
+    return m.is_some()
+
+fn main() i32:
+    println(reads(42))
+    println(moved(1))
+    return 0

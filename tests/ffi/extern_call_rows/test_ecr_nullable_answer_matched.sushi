@@ -1,0 +1,22 @@
+# A nullable `char*` answer is `Maybe@(string)`. `strchr` answers a pointer into the C
+# copy of its argument, so the emitter copies the answer before it frees that copy. A
+# null pointer is `Maybe.None`.
+# EXPECT_STDOUT_EXACT: "found: Harmless 42\nmissing: none\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a search in a C string":
+    fn strchr(string s, i32 c) Maybe@(string) = "strchr"
+
+fn find(string label, string text, i32 c) i32:
+    match libc.strchr(text, c):
+        Maybe.Some(rest) -> println("{label}: {rest}")
+        Maybe.None -> println("{label}: none")
+    return 0
+
+fn main() i32:
+    let i32 n = 72
+    let i32 answer = 42
+    let string text = "Mostly Harmless {answer}"
+    let i32 a = find("found", text, n)
+    let i32 b = find("missing", text, 90)
+    return a + b

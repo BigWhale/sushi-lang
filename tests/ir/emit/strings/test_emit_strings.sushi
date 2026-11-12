@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "x=-42 on=true\nx=-42 on=true\n7\nfalse\nMostly Harmless\n"
+# EXPECT_NO_LEAKS
+#
+# the string shapes of the SLIR emitter: an interpolation with an integer, a bool and a
+# string hole; an interpolation of one string hole, which must make a new owned string
+# (both strings drop, so a shared buffer is a double free); the print of a string, an
+# integer and a bool; `print` with no newline.
+
+fn label(i32 n, bool on, string name) string:
+    return "{name}={n} on={on}"
+
+fn copy_of(string s) string:
+    return "{s}"
+
+fn main() i32:
+    let string a = label(-42, true, "x")
+    println(a)
+    let string b = copy_of(a)
+    println(b)
+    println(7)
+    println(false)
+    print("Mostly ")
+    println("Harmless")
+    return 0

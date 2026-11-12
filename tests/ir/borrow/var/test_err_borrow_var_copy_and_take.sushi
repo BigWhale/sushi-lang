@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE2436
+# EXPECT_STDERR_CONTAINS: "cannot move 'table': it is a unit variable"
+# EXPECT_DUMP_SHIR: test_err_borrow_var_copy_and_take.shir
+#
+# A `var` is storage that the program keeps, so the borrow pass reads a use of it as a use
+# of an owner that never hands its value away. A plain `var` copies out: the `let` and the
+# argument take a copy. A `var` that owns a resource is never moved out of: a `let` bound
+# from it is CE2436.
+
+var i32 counter = 5
+var i32[] table = from([])
+
+fn twice(i32 n) i32:
+    return n * 2
+
+fn main() i32:
+    let i32 copy = counter
+    let i32 more = twice(counter)
+    let i32[] mine = table
+    return copy + more + mine.len()

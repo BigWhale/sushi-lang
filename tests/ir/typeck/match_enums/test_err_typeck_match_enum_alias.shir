@@ -1,0 +1,21 @@
+unit units/rose
+
+unit test_err_typeck_match_enum_alias
+
+ShirBody blow
+  params : [(_0 "w": Wind, Guaranteed)]
+  locals : [_1 "n": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@rs.Wind, "Gust", [(_1, Bare)]), [Return(adopt LocalRef(_1))]), Arm(Variant(@rs.Wind, "Calm", []), [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody still
+  params : [(_0 "w": Wind, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@rs.Breeze, "Calm", []), [Return(Lit(0))]), Arm(Wildcard, [Return(Lit(1))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@blow), [(EnumInit(@rs.Wind, "Gust", [adopt Lit(3)]), Guaranteed)]), Call(Free(@still), [(EnumInit(@rs.Wind, "Calm", []), Guaranteed)])))

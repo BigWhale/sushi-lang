@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SLIR: test_slir_and_or.slir
+#
+# `and` and `or` are control flow, never an rvalue (ir.md 8.9). The left operand goes into
+# the place that takes the value, a switch on it skips the right operand, and the right
+# operand writes the same place in a block of its own. A nested `and` makes its two blocks
+# inside the right block of the `or`.
+
+fn both(bool a, bool b) bool:
+    return a and b
+
+fn either(bool a, bool b) bool:
+    let bool c = a or b
+    return c
+
+fn nested(bool a, bool b, bool c) bool:
+    return a or b and c
+
+fn main() i32:
+    return 0

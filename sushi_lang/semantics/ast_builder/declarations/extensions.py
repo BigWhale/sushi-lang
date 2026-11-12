@@ -2,7 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
-from sushi_lang.semantics.ast import CONVERSION_METHOD, ExtendDef
+from sushi_lang.semantics.ast import ExtendDef
+from sushi_lang.semantics.conversions import CONVERSION_METHOD
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.declarations.signatures import (
     mark_body, read_signature_types)

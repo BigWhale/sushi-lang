@@ -4,6 +4,148 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-11
+
+The compiler has a new pipeline. The semantic passes and the backend now work on two
+typed intermediate representations, SHIR (high level, after name and type resolution)
+and SLIR (low level, where the control flow, each move and each drop are explicit),
+where they worked on the syntax tree before. A language rule did not change, and every
+program of the test corpus compiles to the same result, with the exceptions that the lists
+below name. Most of these exceptions are faults of the old pipeline that the new one does
+not have. A program does not need a change. A `.slib` built by 0.16 needs a rebuild: it
+requires the compiler minor version that built it, so 0.17 refuses it with `CE3503`
+(`--ignore-compiler-version` skips the check).
+
+### Added
+
+- **`--dump-shir PATH` and `--dump-slir PATH`.** Write the SHIR or the SLIR of each body
+  to `PATH` (`-` prints it). The text is the same on every run, and the compile goes on
+  as usual. With `--lib-info` the flags have no effect (`CW0003`), and a dump that cannot
+  be written is `CW0005`. See `docs/compiler-reference.md`.
+- **A SLIR verifier.** Each SLIR function is checked on every compile: types of places,
+  no read after a move, one terminator for each block, one move or one drop of each owning
+  value on each path, the convention of each argument of a call. A rule that the compiler
+  breaks is the internal error `CE0158`, with the function and the rule. A compiler fault
+  is now an internal error with a code and a message, and no wrong program is written.
+  The internal errors `CE0156` and `CE0157` name a type, a callee or an ownership fact that
+  the compiler did not record for a node of a body.
+
+### Changed
+
+- **The text of a failed `expect`** is `Runtime Error RE2029: expect failed at
+  <file:line:col>: <msg>`. The program stops with exit code 1.
+- **A temporary drops at the end of its statement.** This holds for each temporary: a
+  discarded call result and a method receiver in an interpolation hole too. A program
+  sees it only through a `drop()` that prints. For example, in
+  `println("{mk().is_some()}")` the value of `mk()` now drops after the print. A discarded
+  `pop` result now drops at the end of its statement, where it dropped at the end of the
+  scope.
+- **Written type arguments on a struct construction are `CE6102`**, with no alias
+  (`Pair@(i32, i32)(1, 2)`) and behind an alias (`geo.Box@(i32)(1)`). The old compiler
+  accepted them. Write the type in the `let`, or let the arguments solve it.
+- **A bare variant at a position of a different declared type is a type error.** At an
+  `i32` position, `let i32 y = Maybe.None` and `y := Maybe.None` are `CE2002`,
+  `id(Maybe.None)` is `CE2006`, and `return Maybe.None` is `CE2003`. The old compiler gave
+  the internal error `CE0056` ("cannot determine type for variable"), or no diagnostic when
+  the body had another error.
+- **A constraint that a generic template breaks is `CE4006` at the template.** The text
+  names the type parameter (`type T`) with a note at its declaration and a help. The old
+  text named the type of the instance and the note "this instance is required by the call
+  here". The warning `CW1001` for an unused parameter of a template can come beside the
+  error.
+- **The caret of `CE4006` at a generic call that only its arguments solve** covers the whole
+  call.
+- **A lambda with the wrong number of parameters for a function-typed parameter of a
+  generic** is `CE2006` with the two function types, where it was `CE2060`.
+- **A call with no `nom` marker at a `nom` parameter** (`eat(s)`) is `CE2427`, and the
+  argument stays alive. A later `eat(nom s)` is no `CE2405`, and the note of the next
+  `CE2405` is at the first `nom` use.
+- **The expression in `CE2411` and `CE2412`** (an adapter chain, the receiver of a `nom self`
+  call) is the text as the source writes it. The old text was `<expression>` for each form
+  outside a closed set.
+- **`CE0052` for an array of `ptr`** names `ptr[]` as the type that cannot hash, where it
+  named `ptr`. The code is the same.
+- **A closure rule is stricter, where the old compiler built a program that crashed.** A use
+  of a closure after `let g = f`, a second capture of one owning local, and a rebind to a
+  capturing lambda in a branch that may not run are `CE2405`. A store into one capture slot
+  (`n := n + 1` in a lambda) stays legal.
+- **A range given to the `zip` adapter** (`xs.iter().zip(0..3)`) is `CE2122`, where it was
+  `CE2427`. The free `zip` of `<collections/iter>` adds `CE2060`, because no argument solves
+  its type argument.
+- **A repeat count of a fixed literal that the compiler cannot read, in an argument position,
+  is `CE2017`**, where it was the internal error `CE0042`. A static that the type does not
+  have is `CE2102`, where it was an internal error or no diagnostic.
+- **A chain of perk copies that grows without end** is `CE0151`, where it was `CE0149`
+  at the template. A wrong count of a static adds no `CE2427` for a parameter that does not
+  exist.
+
+### Documentation
+
+- **Reference pages for the two intermediate representations**: `docs/internals/shir.md`
+  and `docs/internals/slir.md` list each node, each table and each verifier rule, and show
+  how to read a dump. `docs/design/ir.md` is the design.
+
+### Fixed
+
+- **A function value of a variadic function is refused.** `let fn(i32[]) -> i32 f = sum`,
+  where `sum` takes `...i32`, is now `CE2093` at the name. Before, it compiled to a binary
+  that freed the array two times or read two integers as an array.
+- **A call that gives one owning local to two positions of a variadic tail** (`tot2(w, w)`
+  with an owning `w`) is `CE2405` at the second `w`. Before, it compiled to a binary that
+  freed the string two times (exit 133).
+- **A change of the owner of a view on a path that leaves the loop of the view** is `CE2412`.
+  So is a change of the owner in a walk in place through a `poke` reference
+  (`let poke Words r = w`, then `foreach(s in r):` with `w.items.clear()` in the body).
+  Before, the program compiled and read freed storage.
+- **`let b = a` of an iterator that borrows its source (from `.iter()`) moves it.**
+  `return b` from a `peek` function works, and a later use of `a` is `CE2405`. Before, the
+  copy compiled and crashed at run time.
+- **A perk method on an instance that only the return type of a generic call names**
+  (`extend Box@(Pt) with Named`) compiles. Before, it was `CE2008`, or the internal error
+  `CE0024`.
+- **An override of `Display`, `Eq` or `Hashable` runs on such an instance.** Before, the
+  compiler used the derived form with no diagnostic, so the output was wrong.
+- **The receiver of a perk method with `peek self` or `poke self` is evaluated one time.**
+  Before, it was evaluated two times, and its side effects ran two times.
+- **Two perk implementations on a generic target that give one method to one type** give
+  `CE4015` at the second implementation and no false `CE2008` at the call.
+- **A `bool` that the program reads through a `peek` reference** prints `true` or `false`,
+  where it printed `1` or `0` (#1275).
+- **A method call on a `var` of type `T[]` behind a `use ... as` alias** (`st.names.len()`)
+  compiles. Before, it was the internal error `CE0042`.
+- **A `var` of a function type given as an argument** compiles and runs. Before, it was an
+  internal error.
+- **An interpolation that reads an owning `var` that a call in the same string rebinds**
+  (`"{text}{bump()}"`) reads `text` when it is printed and shows the new value. Before, it
+  showed the old value.
+- **A public constant of a binary or hybrid library that names a private function** compiles
+  and runs in a consumer. Before, each consumer got `CE1001`. A consumer of a private `var`
+  of such a library gets `CE3005` alone, where it also got `CE1001`.
+- **A valid program that the old compiler stopped with an internal error now compiles:**
+  a function value in a constant, in a payload or a field of a constant; `.clone()` of a
+  named function; `alloc` called on an `Own` value; `destroy` of an `Own` field;
+  `starts_with` and `eq_range` with a `T[N]` or an empty `new()`; a `Box@(peek i32)` instance.
+- **A private constant of another unit behind an alias** is `CE3005` one time, where it was
+  reported three times. A constant of a wrong type in a `let` is `CE2002`, where it was the
+  internal error `CE0000`.
+- **`poke from([0; 4])` into a `poke u8[]` parameter** is `CE2404` alone, with no false
+  `CE2006`.
+- **A `let peek` of a value that is no place** is `CE2404` alone, with no `CE2412` at a later
+  change of the owner.
+- **A `foreach` binder of type `ptr` in a unit with no `unsafe external` block** is `CE5009`
+  alone, with no `CE2034` beside it.
+- **A constant holds the value of a literal that spells bits**, as a body does:
+  `const i8 A = 0xFF` holds -1, and `const i8 B = A + 1` is 0. The constant evaluator
+  kept the written value (255), so an operator on it was a false `CE2077`, and SLIR
+  lowering stopped with the internal error `CE0000` "a constant value that its type cannot
+  hold" (#1274).
+
+### Known issues
+
+- A static with a method-level type parameter on a generic target
+  (`extend Box@(T) static make@(U)(nom T a, U seed)`) is the internal error `CE0000`
+  "no copy of 'make' applies" (#1276).
+
 ## [0.16.0] - 2026-10-11
 
 Sushi has iterators as values. An `Iterator@(T)` is a type a program can write, with lazy

@@ -1,0 +1,9 @@
+# An argument with its own fault gives no type argument, and no CE2112 follows it.
+# EXPECT_ERROR_CODES_EXACT: CE2518
+
+struct Box@(T):
+    T value
+
+fn main() i32:
+    println(Box(1 + true).value)
+    return 0

@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "8\n"
+#
+# a spine program that uses each comparison operator on `i32`, and `==` and `!=` on
+# `bool`. Each comparison that holds adds one to the count.
+
+fn count(i32 a, i32 b) i32:
+    let i32 hits = 0
+    if (a == a):
+        hits := hits + 1
+    if (a != b):
+        hits := hits + 1
+    if (a < b):
+        hits := hits + 1
+    if (a <= a):
+        hits := hits + 1
+    if (b > a):
+        hits := hits + 1
+    if (b >= b):
+        hits := hits + 1
+    if (b >= a):
+        hits := hits + 1
+    if (a >= b):
+        hits := hits + 10
+    let bool same = a == b
+    if (same != true):
+        hits := hits + 1
+    return hits
+
+fn main() i32:
+    println(count(3, 5))
+    return 0

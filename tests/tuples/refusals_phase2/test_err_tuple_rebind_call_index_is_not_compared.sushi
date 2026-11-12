@@ -1,0 +1,14 @@
+# The check compares an index only when it is a literal or a name: `xs[next()]` twice can
+# name two slots, so it is no CE6109. The one error of the program is the type mismatch of
+# its first statement, which the typecheck pass gives only because the AST builder refused
+# nothing.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn next() i32:
+    return 0
+
+fn main() i32:
+    let i32 first = true
+    let i32[] xs = from([1, 2])
+    (xs[next()], xs[next()]) := (3, 4)
+    return first + xs[0]

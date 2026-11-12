@@ -1,27 +1,9 @@
-"""Resolve a `Type` from its string representation."""
+"""Read the parts of a type string: the top-level splitter, the grouping and a function type."""
 
-from typing import Any, Callable
-import re
+from typing import Callable
 
-from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType
-from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.type_display import display_type_name
+from sushi_lang.semantics.typesys import Type
 
-
-_BUILTIN_TYPES = {
-    "i8": BuiltinType.I8,
-    "i16": BuiltinType.I16,
-    "i32": BuiltinType.I32,
-    "i64": BuiltinType.I64,
-    "u8": BuiltinType.U8,
-    "u16": BuiltinType.U16,
-    "u32": BuiltinType.U32,
-    "u64": BuiltinType.U64,
-    "f32": BuiltinType.F32,
-    "f64": BuiltinType.F64,
-    "bool": BuiltinType.BOOL,
-    "string": BuiltinType.STRING,
-}
 
 
 def split_type_arguments(text: str, sep: str = ",") -> list[str]:
@@ -71,9 +53,8 @@ def _closing_paren(text: str) -> int:
 def parse_function_type_string(type_str: str, resolve: Callable[[str], Type]) -> Type:
     """Read a first-class function type string: "fn(P0, P1, ...) -> T [| E]".
 
-    The one reader of the spelling. `resolve` reads each component type, so the
-    table-backed reader here and the manifest reader (`type_resolution.parse_type_string`)
-    share it.
+    The one reader of the spelling. `resolve` reads each component type: the manifest
+    reader (`type_resolution.parse_type_string`) gives itself.
     """
     from sushi_lang.semantics.param_modes import ParamMode, normalize_modes
     from sushi_lang.semantics.typesys import FunctionType
@@ -118,48 +99,3 @@ def parse_function_type_string(type_str: str, resolve: Callable[[str], Type]) ->
         ]),
     )
 
-
-def resolve_type_from_string(type_str: str, tables: Any) -> Type:
-    """Resolve a type from its string representation."""
-    type_str = strip_grouping(type_str.strip())
-
-    # First-class function type: must be handled before the array branch (its return
-    # type may legitimately end with "[]", which the array regex would misparse).
-    if type_str.startswith("fn(") or type_str.startswith("fn ("):
-        return parse_function_type_string(
-            type_str, lambda text: resolve_type_from_string(text, tables))
-
-    if '[' in type_str and type_str.endswith(']'):
-        match = re.match(r'^(.+)\[(\d*)\]$', type_str)
-        if match:
-            base_type_str = match.group(1)
-            size_str = match.group(2)
-
-            base_type = resolve_type_from_string(base_type_str, tables)
-
-            if size_str:
-                return ArrayType(base_type=base_type, size=int(size_str))
-            return DynamicArrayType(base_type=base_type)
-
-    if type_str in _BUILTIN_TYPES:
-        return _BUILTIN_TYPES[type_str]
-
-    from sushi_lang.semantics.generics.iterators import read_iterator_string
-    iterator = read_iterator_string(type_str, lambda text: resolve_type_from_string(text, tables))
-    if iterator is not None:
-        return iterator
-
-    if '<' in type_str and type_str.endswith('>'):
-        if type_str in tables.enum_table.by_name:
-            return tables.enum_table.by_name[type_str]
-        if type_str in tables.struct_table.by_name:
-            return tables.struct_table.by_name[type_str]
-        raise_internal_error("CE0045", type=display_type_name(type_str))
-
-    if type_str in tables.struct_table.by_name:
-        return tables.struct_table.by_name[type_str]
-
-    if type_str in tables.enum_table.by_name:
-        return tables.enum_table.by_name[type_str]
-
-    raise_internal_error("CE0022", type=type_str)

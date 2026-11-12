@@ -1,0 +1,12 @@
+# A perk implemented in one unit and called in another. The call links to the symbol of the
+# method in the unit of its implementation.
+# EXPECT_STDOUT_EXACT: "gadget 3\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use "helpers/gadgets"
+
+fn main() i32:
+    let Gadget g = Gadget(3)
+    println(g.label())
+    println(g.size())
+    return 0

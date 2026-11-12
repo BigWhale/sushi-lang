@@ -1,0 +1,14 @@
+# A constant whose initializer has an error has no value. A body that names it still
+# reports its own later faults: each write into a constant is CE2096.
+# EXPECT_ERROR_CODES_EXACT: CE0108, CE2096, CE2096
+
+struct S:
+    i32[2] a
+
+const S K = S(from([1, 2]))
+const i32[3] T = [1, 2, 3]
+
+fn main() i32:
+    K.a[1] := 2
+    T.reverse()
+    return 0

@@ -1,0 +1,44 @@
+# A row that answers an owning value (`getenv` a `Maybe@(string)`, `fd_readln` a
+# `Result@(Maybe@(string), FileError)`) answers a fresh value: bound, discarded, matched
+# and passed on, each is freed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "bound:Mostly Harmless\nmatched:Mostly Harmless\npassed:15\nline:[So long]\nend:none\n"
+use <sys/env>
+use <io/files>
+
+fn length_of(nom Maybe@(string) value) i32:
+    match value:
+        Maybe.Some(text) -> return text.len()
+        Maybe.None -> return -1
+
+fn main() i32:
+    setenv("RR_OWNING_ANSWER", "Mostly Harmless").realise(-1)
+    let Maybe@(string) bound = getenv("RR_OWNING_ANSWER")
+    println("bound:{bound.realise('missing')}")
+    getenv("RR_OWNING_ANSWER")
+    match getenv("RR_OWNING_ANSWER"):
+        Maybe.Some(text) -> println("matched:{text}")
+        Maybe.None -> println("matched:none")
+    println("passed:{length_of(nom getenv('RR_OWNING_ANSWER'))}")
+
+    let i32 fd = fd_open("rr_owning_answers_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return 1
+    fd_write_str(fd, "So long\n").realise(-1)
+    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
+    let Maybe@(string) line = fd_readln(fd).realise(Maybe.None)
+    match line:
+        Maybe.Some(text) -> println("line:[{text}]")
+        Maybe.None -> println("line:none")
+    match fd_readln(fd):
+        Result.Ok(answer) ->
+            match answer:
+                Maybe.Some(text) -> println("end:[{text}]")
+                Maybe.None -> println("end:none")
+        Result.Err(_) -> println("end:failed")
+    fd_close(fd).realise(-1)
+    remove("rr_owning_answers_probe.txt").realise(-1)
+    return 0

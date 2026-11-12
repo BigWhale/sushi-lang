@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE2426
+# EXPECT_STDERR_CONTAINS: "cannot write to 's': it borrows storage another value still owns."
+# EXPECT_STDERR_CONTAINS: "'s' is bound here, borrowing storage its owner keeps"
+# EXPECT_STDERR_CONTAINS: ":18:6"
+# EXPECT_DUMP_SHIR: test_err_borrow_destructure_rebinds_a_let_borrow.shir
+#
+# A `let` of a string field is a let-borrow of the root of the field: it views storage
+# that the root keeps. A place of a destructure that rebinds it is CE2426 at the place,
+# with a note at the `let`.
+
+struct Named:
+    string name
+
+fn main() i32:
+    let Named n = Named("Mostly Harmless")
+    let string s = n.name
+    let i32 b = 0
+    (s, b) := ("towel", 2)
+    println(s)
+    return b

@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2426
+# EXPECT_STDERR_CONTAINS: "cannot write to 'b': it borrows storage another value still owns."
+# EXPECT_STDERR_CONTAINS: "'b' is bound here, borrowing storage its owner keeps"
+# EXPECT_STDERR_CONTAINS: ":23:5"
+# EXPECT_DUMP_SHIR: test_err_borrow_field_write_through_a_let_borrow.shir
+#
+# A `let` of an owning struct field is a let-borrow of the root. A read through it is
+# legal, and a write of a field through it is CE2426 at the statement, with a note at the
+# `let`.
+
+struct Box:
+    string name
+    i32 n
+
+struct Pair:
+    Box a
+    i32 k
+
+fn main() i32:
+    let Pair q = Pair(Box("Mostly Harmless", 1), 2)
+    let Box b = q.a
+    println(b.n)
+    b.n := 5
+    return q.k

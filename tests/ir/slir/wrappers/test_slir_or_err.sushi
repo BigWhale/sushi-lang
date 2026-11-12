@@ -1,0 +1,43 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ok Mostly Harmless\nerr BadInput.Missing("one")\nok 15\nerr BadInput.Missing("two")\ntrue\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_or_err.slir
+#
+# `or_err` over an owned `Maybe` is a builtin call with an `@owned` receiver and an
+# `@owned` argument; `is_some` reads its receiver `@guaranteed`. `m.or_err(nom e)??` over a
+# borrowed owning `Maybe` is one shape with no call: a switch on the discriminant of the
+# `Maybe` where it is, a `None` block that builds `Err(e)` into `_0` with the move of
+# `e`, and a `Some` block that writes a view of the payload. A named error goes into a
+# temporary of the statement first, which the `Some` path drops.
+
+error BadInput:
+    Missing(string)
+
+fn make(i32 k) Maybe@(string):
+    if (k > 0):
+        return Maybe.Some("Mostly Harmless")
+    return Maybe.None()
+
+fn show(Result@(string, BadInput) r) ~:
+    match r:
+        Result.Ok(s) -> println("ok {s}")
+        Result.Err(e) -> println("err {e}")
+
+fn first(Maybe@(string) m, string why) i32 | BadInput:
+    let BadInput e = BadInput.Missing(why.clone())
+    let string s = m.or_err(nom e)??
+    return Result.Ok(s.len())
+
+fn main() i32:
+    show(make(1).or_err(nom BadInput.Missing("none")))
+    show(make(0).or_err(nom BadInput.Missing("one")))
+    let Maybe@(string) a = make(1)
+    let Maybe@(string) b = make(0)
+    match first(a, "zero"):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(e) -> println("err {e}")
+    match first(b, "two"):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(e) -> println("err {e}")
+    println(a.is_some())
+    return 0

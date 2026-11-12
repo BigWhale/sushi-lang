@@ -4,7 +4,7 @@ from typing import Callable, Dict, Optional, Tuple, TYPE_CHECKING
 from sushi_lang.semantics.generics.interned import interned_name
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type, StructType, EnumType
+    from sushi_lang.semantics.typesys import Type, StructType, EnumType, UnknownType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
 
@@ -114,6 +114,28 @@ def resolve_unknown_type(
             return entry
 
     return ty
+
+
+def require_named_type(
+    semantic_type: 'UnknownType',
+    struct_table: Dict[str, 'StructType'],
+    enum_table: Dict[str, 'EnumType'],
+) -> 'StructType | EnumType':
+    """The declaration `semantic_type` names, or the internal error CE0020.
+
+    Named for its CONTRACT, not for its lookup. `resolve_unknown_type` above has the
+    opposite contract -- a name it cannot place comes back UNCHANGED -- so one name for the
+    two read alike at a call site and hid which one applied (#678). Here the caller is about
+    to emit (the backend, the declaration table), a name with no declaration cannot be
+    lowered, and the seam says so.
+    """
+    from sushi_lang.internals.errors import raise_internal_error
+
+    if semantic_type.name in struct_table:
+        return struct_table[semantic_type.name]
+    if semantic_type.name in enum_table:
+        return enum_table[semantic_type.name]
+    raise_internal_error("CE0020", type=semantic_type.name)
 
 
 def _resolve_generic_ref(

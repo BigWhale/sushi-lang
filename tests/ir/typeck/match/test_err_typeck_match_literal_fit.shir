@@ -1,0 +1,21 @@
+unit test_err_typeck_match_literal_fit
+
+ShirBody signed
+  params : [(_0 "b": i8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(0xff), [Return(adopt Lit("minus one"))]), Arm(Literal(-128), [Return(adopt Lit("lowest"))]), Arm(Wildcard, [Return(adopt Lit("other"))])], consumes: false)
+
+ShirBody unsigned
+  params : [(_0 "t": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(300), [Return(Lit("impossible"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@signed), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@unsigned), [(Lit(7), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

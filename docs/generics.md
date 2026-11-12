@@ -702,7 +702,8 @@ fn main() i32:
     let Stack@(i32) s = Stack.new()      # T comes from the annotation
     s.push(nom 1)
     s.push(nom 2)
-    println("Top: {s.pop().realise(0)}, left: {s.size()}")
+    let i32 top = s.pop().realise(0)
+    println("Top: {top}, left: {s.size()}")
     return 0
 ```
 

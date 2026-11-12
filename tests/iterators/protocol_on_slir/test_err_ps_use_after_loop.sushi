@@ -1,0 +1,19 @@
+# The loop takes an owning local with `next()`, so a use after the loop is CE2405.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn main() i32:
+    let Words w = Words(from(["a"]), 0)
+    foreach(s in w):
+        println(s)
+    println(w.pos)
+    return 0

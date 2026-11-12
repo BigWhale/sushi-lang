@@ -1,0 +1,10 @@
+# A borrow capture stays refused.
+# EXPECT_ERROR_CODE: CE2094
+fn look(poke i32 n) i32:
+    let fn() -> i32 f = |~| n + 1
+    return f()
+
+fn main() i32:
+    let i32 k = 1
+    println(look(poke k))
+    return 0

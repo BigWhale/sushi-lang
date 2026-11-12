@@ -1,0 +1,15 @@
+# A value in the variadic tail of a C function has no declared type, so it must be a
+# value that C holds as itself. A struct is CE5005 at the argument.
+# EXPECT_ERROR_CODES_EXACT: CE5005
+# EXPECT_STDERR_CONTAINS: "non-C-ABI type 'Pair' passed as variadic argument to external 'c.printf'"
+unsafe external "C" as c because "formatted output":
+    fn printf(string fmt, ...) i32 = "printf"
+
+struct Pair:
+    i32 a
+    i32 b
+
+fn main() i32:
+    let Pair p = Pair(1, 2)
+    let i32 n = c.printf("%d\n", p)
+    return n

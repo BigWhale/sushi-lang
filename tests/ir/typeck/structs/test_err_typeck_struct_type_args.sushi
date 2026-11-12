@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE6102
+# EXPECT_STDERR_CONTAINS: "explicit type arguments are only supported on direct function calls"
+# EXPECT_STDERR_CONTAINS: "  |     keep(Duo@(i32, i32)(1, 2))\n  `          ----------+---------\n"
+# EXPECT_STDERR_CONTAINS: "= help: write the type arguments on the type of the position, e.g. `let Duo@(i32, i32) v = Duo(1, 2)`"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_type_args.shir
+#
+# A struct construction takes no written type arguments. `Duo@(i32, i32)(1, 2)` is an
+# error hole, and the typecheck pass reports CE6102 at it. The help names the
+# construction as the source writes it. The old pipeline compiled this program with no
+# error.
+
+struct Duo@(T, U):
+    T first
+    U second
+
+fn keep(Duo@(i32, i32) p) Duo@(i32, i32):
+    return p
+
+fn main() i32:
+    keep(Duo@(i32, i32)(1, 2))
+    return 0

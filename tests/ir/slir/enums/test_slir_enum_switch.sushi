@@ -1,0 +1,79 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "12\n12\n0\ntrue\nfalse\n5\n7\n-1\ncircle 9\nother\ntext\ntaken text\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_enum_switch.slir
+#
+# A match on an enum whose arms test only the variant is ONE switch on the tag of the
+# scrutinee (ir.md 8.9). The `Discriminant` goes into a local with no storage marker, and
+# each variant of an arm is one case at its tag. The `_` arm is the `otherwise` target, and
+# a match that covers each variant has `otherwise: unreachable`. A binder is a local of the
+# arm, and it reads its payload value through `Downcast` and `Field`. In `side`, the two
+# alternatives of one arm bind `n` from two places, so each one writes `n` in a block of its
+# own and goes to the body. A new value as the scrutinee goes into a temporary of the match,
+# which drops it at the end of the match, and so does a local that `match nom` takes.
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+    Dot
+
+enum Light:
+    Red
+    Amber
+    Green
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(r) -> return 3 * r * r
+        Shape.Rect(w, h) -> return w * h
+        Shape.Dot -> return 0
+
+fn stops(Light l) bool:
+    match l:
+        Light.Red | Light.Amber -> return true
+        _ -> return false
+
+fn side(Shape s) i32:
+    let i32 out = 0
+    match s:
+        Shape.Circle(n) | Shape.Rect(n, _) -> out := n
+        Shape.Dot -> out := -1
+    return out
+
+enum Note:
+    Text(string)
+    Empty
+
+fn note(i32 n) Note:
+    if (n > 0):
+        return Note.Text("n{n}")
+    return Note.Empty
+
+fn make(i32 n) Shape:
+    if (n > 0):
+        return Shape.Circle(n)
+    return Shape.Dot
+
+fn main() i32:
+    println(area(Shape.Circle(2)))
+    println(area(Shape.Rect(3, 4)))
+    println(area(Shape.Dot))
+    println(stops(Light.Amber))
+    println(stops(Light.Green))
+    println(side(Shape.Rect(5, 6)))
+    println(side(Shape.Circle(7)))
+    println(side(Shape.Dot))
+    match make(9):
+        Shape.Circle(r) -> println("circle {r}")
+        _ -> println("other")
+    match make(0):
+        Shape.Circle(r) -> println("circle {r}")
+        _ -> println("other")
+    match note(3):
+        Note.Text(_) -> println("text")
+        Note.Empty -> println("empty")
+    let Note kept = note(4)
+    match nom kept:
+        Note.Text(_) -> println("taken text")
+        Note.Empty -> println("taken empty")
+    return 0

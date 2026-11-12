@@ -269,7 +269,7 @@ def _literal_prefix(node: ast.AST | None) -> str | None:
 
 def libc_offences_in(source: str, path: Path) -> list[tuple[int, str]]:
     """Every libc declaration in one module that does not go through the libc table."""
-    from sushi_lang.sushi_stdlib.src.libc_declarations import LIBC_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.libc_signatures import LIBC_SIGNATURES
 
     found: list[tuple[int, str]] = []
     in_seam = path == SRC / SEAM_MODULE
@@ -308,16 +308,15 @@ def test_every_libc_declaration_reads_the_table():
 
 
 def test_every_table_entry_lowers():
-    from sushi_lang.sushi_stdlib.src.libc_declarations import (
-        LIBC_SIGNATURES, libc_function_type,
-    )
+    from sushi_lang.sushi_stdlib.src.libc_declarations import libc_function_type
+    from sushi_lang.sushi_stdlib.src.libc_signatures import LIBC_SIGNATURES
     for name in LIBC_SIGNATURES:
         libc_function_type(name)
 
 
 def test_the_reserved_signatures_are_read_from_the_table():
     from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS, RESERVED_NAMES
-    from sushi_lang.sushi_stdlib.src.libc_declarations import LIBC_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.libc_signatures import LIBC_SIGNATURES
 
     assert set(RESERVED_EXTERNS) == set(RESERVED_NAMES) == {"malloc", "free", "exit"}
     assert set(RESERVED_NAMES) <= set(LIBC_SIGNATURES)

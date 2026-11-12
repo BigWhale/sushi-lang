@@ -1,0 +1,5 @@
+public fn inst_echo@(T)(nom T x) T:
+    return x
+
+public fn inst_from_lib() string:
+    return inst_echo(nom "lib")

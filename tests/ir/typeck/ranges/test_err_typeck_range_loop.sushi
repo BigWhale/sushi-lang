@@ -1,0 +1,25 @@
+# EXPECT_ERROR_CODES_EXACT: CE2125
+# EXPECT_STDERR_CONTAINS: "range '(9..=3).rev()' goes down: a range always goes up."
+# EXPECT_DUMP_SHIR: test_err_typeck_range_loop.shir
+#
+# A range written as the iterable of a `foreach` is a counted loop (ir.md 7.7). Its bounds
+# are i32 positions, the binder is an i32, and `_` binds nothing. The bounds may be read
+# or computed, and `.rev()` is in the range. The last loop has readable bounds that go
+# down, which is CE2125.
+
+const i32 TOP = 6
+
+fn total(i32 n) i32:
+    let i32 sum = 0
+    foreach(i in 0..n):
+        sum := sum + i
+    foreach(i in (1..=TOP).rev()):
+        sum := sum + i
+    foreach(_ in a'a'..-3 + n):
+        sum := sum + 1
+    foreach(i in (9..=3).rev()):
+        sum := sum + i
+    return sum
+
+fn main() i32:
+    return 0

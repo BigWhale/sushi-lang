@@ -1,0 +1,19 @@
+unit test_shir_match_tuple
+
+ShirBody describe
+  params : [(_0 "pair": (Color, i32), Guaranteed)]
+  locals : [_1 "out": i32, _2 "n": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Tuple([Variant(@Color, "Red", []), Literal(0)]), [Assign(LocalRef(_1), adopt Lit(1), is_init: false)]), Arm(Tuple([Variant(@Color, "Red", []), (_2, Bare)]), [Assign(LocalRef(_1), adopt LocalRef(_2), is_init: false)]), Arm(Tuple([Variant(@Color, "Green", []), Wildcard]), [Assign(LocalRef(_1), adopt Lit(7), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@describe), [(TupleInit([adopt EnumInit(@Color, "Red", []), adopt Lit(0)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@describe), [(TupleInit([adopt EnumInit(@Color, "Red", []), adopt Lit(5)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@describe), [(TupleInit([adopt EnumInit(@Color, "Green", []), adopt Lit(3)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

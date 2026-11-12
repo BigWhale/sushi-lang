@@ -1,0 +1,37 @@
+# The argument of an array search method changes the array. Each method reads the length
+# and the data of the array after its arguments, so it sees the change.
+# EXPECT_STDOUT_EXACT: "contains: true len 3\nindex_of: 2\nindex_of_from: 2\nstarts_with: true\neq_range: true len 3\nnames: true len 2\n"
+# EXPECT_NO_LEAKS
+
+fn grow(poke i32[] all) i32:
+    all.push(42)
+    return 42
+
+fn grow_to(poke i32[] all) i32[]:
+    all.push(42)
+    return from([1, 2, 42])
+
+fn add_name(poke string[] all) string:
+    all.push("Marvin".s(0, 6))
+    return "Marvin"
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    let bool found = a.contains(grow(poke a))
+    println("contains: {found} len {a.len()}")
+    let i32[] b = from([1, 2])
+    let i32 at = b.index_of(grow(poke b)).realise(-1)
+    println("index_of: {at}")
+    let i32[] c = from([1, 2])
+    let i32 from_at = c.index_of_from(grow(poke c), 0).realise(-1)
+    println("index_of_from: {from_at}")
+    let i32[] d = from([1, 2])
+    let bool starts = d.starts_with(grow_to(poke d))
+    println("starts_with: {starts}")
+    let i32[] e = from([1, 2])
+    let bool same = e.eq_range(grow(poke e) - 40, from([42]))
+    println("eq_range: {same} len {e.len()}")
+    let string[] names = from(["Arthur".s(0, 6)])
+    let bool has = names.contains(add_name(poke names))
+    println("names: {has} len {names.len()}")
+    return 0

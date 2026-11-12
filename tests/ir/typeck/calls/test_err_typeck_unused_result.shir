@@ -1,0 +1,22 @@
+unit test_err_typeck_unused_result
+
+ShirBody mk
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(1)]))
+
+ShirBody act
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32]
+  block  :
+    ExprStmt(Call(Free(@act), []))
+    ExprStmt(Call(Free(@mk), []))
+    Assign(LocalRef(_0), Call(Free(@mk), []), is_init: true)
+    Return(LocalRef(_0))

@@ -1,0 +1,24 @@
+unit test_shir_stmt_let
+
+ShirBody BASE (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(*, Lit(6), Lit(7)))
+
+ShirBody hits (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Binary(-, ConstRef(@BASE), Lit(2)), is_init: true)
+    Assign(LocalRef(_1), adopt Binary(+, LocalRef(_0), Lit(2)), is_init: true)
+    Assign(LocalRef(_1), adopt Binary(-, LocalRef(_1), Lit(1)), is_init: false)
+    Assign(StorageRef(@hits), adopt LocalRef(_1), is_init: false)
+    ExprStmt(Call(Intrinsic("println"), [(StorageRef(@hits), Guaranteed)]))
+    Return(adopt Lit(0))

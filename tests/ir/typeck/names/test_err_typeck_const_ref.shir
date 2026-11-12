@@ -1,0 +1,17 @@
+unit test_err_typeck_const_ref
+
+ShirBody LIMIT (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(42))
+
+ShirBody main
+  params : []
+  locals : [_0 "limit": i64, _1 "text": string]
+  block  :
+    Assign(LocalRef(_0), ConstRef(@LIMIT), is_init: true)
+    Assign(LocalRef(_1), ConstRef(@LIMIT), is_init: true)
+    ExprStmt(LocalRef(_0))
+    ExprStmt(LocalRef(_1))
+    Return(Lit(0))

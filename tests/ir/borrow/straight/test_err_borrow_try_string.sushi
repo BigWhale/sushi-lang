@@ -1,0 +1,29 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'kept'"
+# EXPECT_STDERR_CONTAINS: "'kept' was moved here"
+# EXPECT_DUMP_SHIR: test_err_borrow_try_string.shir
+#
+# A `Result` over a `string`. `Result.Ok(word)` moves the `nom` parameter into the payload,
+# and the `return` adopts the new `Result`. A `??` on a call adopts the value of the call,
+# and the `let` adopts the payload. A `??` on a local that owns its `Result` spends the
+# local: the `let` adopts the payload, and a later use of the local is CE2405.
+
+fn keep(nom string word) string | StdError:
+    return Result.Ok(word)
+
+fn relay(nom string word) ~ | StdError:
+    let string got = keep(nom word)??
+    println(got)
+    return Result.Ok(~)
+
+fn spend(nom string word) ~ | StdError:
+    let Result@(string, StdError) kept = keep(nom word)
+    let string got = kept??
+    println(got)
+    println(kept??)
+    return Result.Ok(~)
+
+fn main() i32:
+    relay(nom "{5} towels")
+    spend(nom "{6} towels")
+    return 0

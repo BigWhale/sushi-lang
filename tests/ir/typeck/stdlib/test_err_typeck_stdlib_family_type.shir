@@ -1,0 +1,11 @@
+unit test_err_typeck_stdlib_family_type
+
+ShirBody main
+  params : []
+  locals : [_0 "v": u8, _1 "w": u8, _2 "r": f64]
+  block  :
+    Assign(LocalRef(_0), Lit(3), is_init: true)
+    Assign(LocalRef(_1), Call(Stdlib(<math>, @abs), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), Call(Stdlib(<math>, @sqrt), [(Lit(2.0), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), " ", LocalRef(_2), ""]), Guaranteed)]))
+    Return(Lit(0))

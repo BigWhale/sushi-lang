@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ab 2\nab\ncd\nab\nlit\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_clone_shapes.slir
+#
+# `.clone()` is the rvalue `Clone` (ir.md 8.7). A receiver that is a place gives a `Clone`
+# of a copy of the place. A receiver that is a temporary gives no `Clone`: the temporary is
+# the value. A chain clones once. A view of a get-out is a place.
+
+struct Holder:
+    string name
+    i32 n
+
+fn make() Holder:
+    let string base = "c"
+    return Holder("{base}d", 1)
+
+fn main() i32:
+    let string base = "a"
+    let Holder h = Holder("{base}b", 2)
+    let Holder c = h.clone()
+    println("{c.name} {c.n}")
+    let string s = h.name.clone()
+    println(s)
+    let Holder t = make().clone()
+    println(t.name)
+    let List@(Holder) l = List.new()
+    l.push(h.clone().clone())
+    let Maybe@(Holder) got = l.get(0).clone()
+    match got:
+        Maybe.Some(x) -> println(x.name)
+        Maybe.None -> println("none")
+    let string lit = "lit".clone()
+    println(lit)
+    return 0

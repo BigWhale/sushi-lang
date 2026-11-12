@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2041, CE2041
+# EXPECT_STDERR_CONTAINS: "duplicate match arm for variant 'Plus'"
+# EXPECT_STDERR_CONTAINS: "duplicate match arm for variant 'Minus'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_duplicate.shir
+#
+# A variant that an arm above, or an alternative before it, names again is CE2041.
+
+enum Sign:
+    Plus
+    Minus
+    Zero
+
+fn across(Sign s) i32:
+    match s:
+        Sign.Plus -> return 1
+        Sign.Minus -> return 2
+        Sign.Plus -> return 3
+        Sign.Zero -> return 0
+
+fn within(Sign s) i32:
+    match s:
+        Sign.Plus | Sign.Minus | Sign.Minus -> return 1
+        Sign.Zero -> return 0
+
+fn main() i32:
+    return across(Sign.Plus) + within(Sign.Zero)

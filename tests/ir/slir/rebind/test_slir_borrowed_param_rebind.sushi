@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "new\nMostly\nMostly\nArthur Dent\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_borrowed_param_rebind.slir
+#
+# A by-value parameter that owns holds the value of the caller (ir.md 8.10, rule 5): its
+# first rebind drops nothing and gives it a value of its own. Where a path that rebound it
+# meets a path that did not, its flag, false at the entry, tells the exit to drop it. A
+# rebind through a `poke` binder drops the old value at its address, then stores (rules 6
+# and 8).
+fn pick(string s, bool fresh) ~:
+    if (fresh):
+        s := "new".concat("")
+    println(s)
+
+fn main() i32:
+    let string c = "Mostly".concat("")
+    pick(c, true)
+    pick(c, false)
+    println(c)
+    let Maybe@(string) m = Maybe.Some("Ford".concat(""))
+    match m:
+        Maybe.Some(poke n) -> n := "Arthur".concat(" Dent")
+        Maybe.None -> println("none")
+    match m:
+        Maybe.Some(n) -> println(n)
+        Maybe.None -> println("none")
+    return 0

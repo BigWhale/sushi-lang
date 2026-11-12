@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 300 out of range for u8."
+# EXPECT_STDERR_CONTAINS: "  |     let (u8 a, b) = (300, 1)\n  `                      -+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_destructure_literal_range.shir
+#
+# A written type gives the part of a tuple literal its type, so a literal that the type
+# cannot hold is CE2073 at the literal.
+
+fn main() i32:
+    let (u8 a, b) = (300, 1)
+    return b + (a as i32)

@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "12\n"
+# EXPECT_DUMP_SHIR: test_shir_foreach_iterator_value.shir
+#
+# the SHIR dump of a `foreach` over an iterator value: the result of a call, and the
+# result of an adapter chain. The iterable is the call. A tuple binder `(i, x)` is a
+# binder that the AST builder made: the loop binds a hidden local, with no name, and the
+# body starts with the `Destructure` of it into `i` and `x`.
+
+use <collections/iter>
+
+fn upto(i32 n) Iterator@(i32):
+    return 0..n
+
+fn main() i32:
+    let i32 total = 0
+    foreach(v in upto(4)):
+        total := total + v
+    let i32[] xs = from([5, 6])
+    foreach((i, x) in xs.iter().enumerate()):
+        total := total + i * x
+    println(total)
+    return 0

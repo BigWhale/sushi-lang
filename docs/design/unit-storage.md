@@ -64,8 +64,9 @@ with it. Two consequences:
 
 ## The borrow checker: one storage class beside "local"
 
-A `var` gets a `BorrowState` at every function's entry (`is_unit_var`), so the rules that
-already exist apply to it with one addition:
+A `var` is a `StorageRef` of SHIR, and the borrow pass gives it a `BorrowState`
+(`is_unit_var`) at its first borrow in a body, keyed by the symbol of its global
+(`borrows.storage_state`), so the rules that already exist apply to it with one addition:
 
 - **Borrowable like a local.** `peek v` and `poke v` take its address; one `poke` at a
   time ([CE2403](../error-catalog.md#ce2403)); a `poke` beside a `peek` is [CE2407](../error-catalog.md#ce2407). `foreach(poke r in v.iter())` points
@@ -117,10 +118,15 @@ a value. A `var` is ONE storage, so:
 - a consumer of a BINARY library declares it under the manifest's `link_symbol`, and the
   library's bitcode carries the definition.
 
-The reads and writes reach it through the seams a constant uses:
-`resolve_name_slot` answers the global where it answered a local's slot, and
-`namespaced_storage` (backend/expressions/names.py) is the ONE reader of an alias that
-reaches storage -- a rebind, a `poke`, a field write and a mutating method all ask it.
+The reads and writes reach it as a `Global` place of SLIR (`semantics/slir/places.py`),
+which carries the symbol of the global and the declared type of the `var`. The emitter finds
+the global in the module by its symbol (`backend/slir/values.py`, `global_address`). A
+rebind, a `poke`, a field write and a mutating method all go through that one place. A read
+of a plain `var` by value is copied into a temporary of its statement first, so a later
+call of the statement that changes the `var` does not change the value that was read. A
+`var` of a type that owns is read where it is, because a temporary would own a second copy
+of its value. Its rebind drops the old value and then stores the new one, and nothing drops
+it at an exit (`docs/design/ir.md`, 8.4 and 8.10).
 
 ## Library manifest
 

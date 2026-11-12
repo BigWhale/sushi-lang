@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_DUMP_SHIR: test_shir_foreach_discard.shir
+#
+# the SHIR dump of a `foreach` with the `_` binder: the binder of the `Items` source is
+# `_`, the item is discarded, and the loop has no local for it. The `peek _` binder keeps
+# its mode.
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 count = 0
+    foreach(_ in xs.iter()):
+        count := count + 1
+    foreach(peek _ in xs.iter()):
+        count := count + 1
+    println(count)
+    return 0

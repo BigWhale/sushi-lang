@@ -1,0 +1,248 @@
+"""The construction arm of an enum value in the typecheck pass over SHIR (docs/design/ir.md 7.3, 7.4).
+
+A variant of a `Result` or a `Maybe` takes the instance of `Result@(T, E)` or `Maybe@(T)`
+from the type of its position: the return type of the body, the written type of a `let`,
+the type of a parameter. A variant of an enum that is not generic (`StdError.Error`, a
+variant of an enum or an `error` of the program) is an instance of that enum, also behind
+an alias (`geo.Sign.Plus`): the namespace holds the enum. The instance is an answer, and
+the payload is checked against the types of the variant. A variant of a private enum of
+another unit is CE3005. A node that has an error has no answer.
+
+Lowering makes `T.m(...)` a `Static` call when the enum `T` has no variant `m`. When no
+unit declares a method `m`, the dot of the enum holds no such member: CE2045. The bare
+`T.m` is an error hole that keeps the member, and it is CE2045 too. The hole of a struct
+construction with written type arguments (`Pair@(i32, i32)(1, 2)`, `geo.Box@(i32)(1)`) is
+CE6102.
+
+A variant of a generic enum (`Maybe`, `Result`, one of the program) takes the instance of its
+position, else the instance that its payload solves (`visit/constructions.py`). A variant of
+an enum whose name the unit lost is an internal error.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.call_facts import declaring_units
+from sushi_lang.semantics.passes.types.arguments import check_arguments
+from sushi_lang.semantics.passes.types.calls.enums import (
+    declared_position_answer, refuse_untyped_variant, reject_missing_variant,
+    validate_constructor_arguments)
+from sushi_lang.semantics.passes.types.calls.namespaced import reject_unknown_namespace_call
+from sushi_lang.semantics.passes.types.utils import (
+    names_no_type, reject_named_argument, reject_unpromised_arguments)
+from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
+from sushi_lang.semantics.passes.types.visit.constructions import (
+    Constructed, interned_instance, solve_arguments, solved_type_args, walk_unchecked)
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.nodes import Hole
+from sushi_lang.semantics.source_text import source_text
+from sushi_lang.semantics.type_predicates import is_abstract_type, is_instance_of
+from sushi_lang.semantics.typesys import EnumType, Type
+from sushi_lang.semantics.written_types import written_name
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.types import TypeValidator
+
+#: The codes of an error hole whose error a pass before typecheck reports: a name with no
+#: declaration, a jump outside a loop and a `self` in a static method.
+REPORTED_BEFORE = frozenset({"CE1001", "CE1002", "CE0144", "CE1003", "CE0134"})
+
+#: The codes of `REPORTED_BEFORE` that the collect pass reports to the program, not to the
+#: reporter of the unit. Lowering makes the hole only where that pass refused the node, and
+#: the check of the error holes at the end of the analysis holds the rest (ir.md 7.4).
+REPORTED_TO_THE_PROGRAM = frozenset({"CE0134"})
+
+
+def check_enum_init(validator: TypeValidator, node: e.EnumInit,
+                    expected: Optional[Type]) -> Optional[Type]:
+    offered = validator.errors_offered()
+    built = _instance(validator, node, expected)
+    instance = built.instance
+    if not isinstance(instance, EnumType):
+        return instance
+    variant = instance.get_variant(node.variant)
+    if variant is None and not instance.variants:
+        # The instance of a type that CE0122 refused holds no variant.
+        reject_missing_variant(validator, node.loc, node.variant, display_type(instance))
+        return None
+    if variant is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail=f"lowering made a construction of '{node.variant}', "
+                                       f"which '{instance.name}' does not declare")
+    reject_unpromised_arguments(validator, instance, node.loc)
+    validate_constructor_arguments(validator, node, variant, instance, built.typed)
+    if validator.errors_offered() != offered:
+        return None
+    validator.body_answers().record_instance(node.shir_id, instance)
+    return instance
+
+
+def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Static,
+                           expected: Optional[Type]) -> bool:
+    """CE2045 for `T.m(...)` on an enum `T` whose dot holds no variant `m` and no method
+    `m`. True when it was reported."""
+    if declaring_units(validator, target.name):
+        return False
+    return _reject_member(validator, written_name(target.ty), target.name, node.loc,
+                          expected)
+
+
+def check_hole(validator: TypeValidator, node: Hole,
+               expected: Optional[Type] = None) -> Optional[Type]:
+    """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
+    the member, the hole of written type arguments on a struct construction
+    (`Pair@(i32, i32)(1, 2)`, `geo.Box@(i32)(1)`) is CE6102 at the hole, the hole of written type arguments
+    after a dot is CE6102 at the type arguments and answers its `call`, the `RangeExpr` hole of a slice
+    with a reversed range is CE2122 at the range, the hole of a named argument is CE6104
+    at the hole, and the hole of a name that a namespace does not hold is CE2008 at the
+    call, then CE6104 when the call names an argument (ir.md 7.4). An error hole whose error a pass before typecheck reported
+    (`REPORTED_BEFORE`: a name with no declaration, CE1001) has no answer: the walk goes on, so the later faults of the body
+    are reported too, and the body does not go on to the next stage. Every other hole
+    is an internal error."""
+    if (node.codes and set(node.codes) <= REPORTED_BEFORE
+            and (set(node.codes) <= REPORTED_TO_THE_PROGRAM
+                 or any(validator.reporter.errors_offered.get(code) for code in node.codes))):
+        validator.refused_before = True
+        return
+    if node.call is not None:
+        er.emit_with(validator.reporter, er.ERR.CE6102, node.type_args_loc or node.loc) \
+            .help("call the generic function directly, e.g. foo@(i32)(x)").emit()
+        return visit.check_expr(validator, node.call, expected)
+    if "CE6102" in node.codes:
+        _reject_construction_type_args(validator, node)
+        return None
+    reported = False
+    if "CE2008" in node.codes and "CE2045" not in node.codes and node.member is not None:
+        alias = node.member.written
+        reject_unknown_namespace_call(validator, alias, alias, node.member.name,
+                                      node.member.name_loc)
+        reported = True
+    if "CE6104" in node.codes and node.named is not None:
+        reject_named_argument(validator, node.named, node.loc)
+        reported = True
+    if reported:
+        return
+    if node.ast_class == "RangeExpr" and "CE2122" in node.codes:
+        er.emit_with(validator.reporter, er.ERR.CE2122, node.loc) \
+            .help("a slice takes its range in order: write `data[a..b]`, and walk the view "
+                  "with an index that counts down") \
+            .emit()
+        return
+    member = node.member
+    if member is None or not _reject_member(validator, member.written, member.name,
+                                            member.name_loc, expected):
+        visit.unhandled(validator, node)
+
+
+def _reject_construction_type_args(validator: TypeValidator, node: Hole) -> None:
+    """CE6102 at a construction with written type arguments. The help moves them to the
+    type of the position, with the construction as the source writes it."""
+    report = er.emit_with(validator.reporter, er.ERR.CE6102, node.loc)
+    parts = _split_type_args(source_text(validator.reporter.body_source(), node.loc))
+    if parts is None:
+        report.help("write the type arguments on the type of the position").emit()
+        return
+    name, type_args, args = parts
+    report.help(f"write the type arguments on the type of the position, e.g. "
+                f"`let {name}{type_args} v = {name}{args}`").emit()
+
+
+def _split_type_args(text: Optional[str]) -> Optional[tuple[str, str, str]]:
+    """`Pair@(i32, i32)(1, 2)` as the name, the type arguments and the arguments, or None
+    when the text has no such shape."""
+    if text is None or "@(" not in text:
+        return None
+    name, _, rest = text.partition("@(")
+    depth = 1
+    for index, char in enumerate(rest):
+        depth += {"(": 1, ")": -1}.get(char, 0)
+        if depth == 0:
+            return name.strip(), "@(" + rest[:index + 1], rest[index + 1:].strip()
+    return None
+
+
+def _reject_member(validator: TypeValidator, written: str, member: str, loc: Span,
+                   expected: Optional[Type]) -> bool:
+    """CE2045 for the member `member` of the written type `written` when it names an enum
+    whose name the unit did not lose. True when it was reported. The diagnostic names the
+    instance that the position gives to a generic enum, else the enum."""
+    name = _enum_name(validator, written)
+    if name is None or name_is_contested(validator, "enum", name):
+        return False
+    generic = name in validator.generic_enum_table.by_name
+    if not generic and name not in validator.enum_table.by_name:
+        return False
+    shown = display_type(expected) if generic and is_instance_of(expected, name) else name
+    reject_missing_variant(validator, loc, member, shown)
+    return True
+
+
+def _instance(validator: TypeValidator, node: e.EnumInit,
+              expected: Optional[Type]) -> Constructed:
+    """The enum that the construction builds, or no instance after its error. A lost
+    name of the enum is an internal error."""
+    written = validator.decl_name(node.decl)
+    name = _enum_name(validator, written)
+    if name is None or name_is_contested(validator, "enum", name):
+        visit.unhandled(validator, node)
+    generic = name in validator.generic_enum_table.by_name
+    instance = None if generic else validator.enum_table.by_name.get(name)
+    if instance is None and not generic:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail=f"the enum '{written}' of a construction has no record")
+    if name != written:
+        reject_private_type(validator, name, node.decl_loc)
+    if generic:
+        return _generic_instance(validator, node, name, expected)
+    return Constructed(instance)
+
+
+def _generic_instance(validator: TypeValidator, node: e.EnumInit, name: str,
+                      expected: Optional[Type]) -> Constructed:
+    """The instance of a variant of the generic enum `name`: from the position, else from
+    the payload (#1005). A wrong count is CE2050. With no instance, a position that declares
+    another type reports the one mismatch, and every other position is CE2112. A declared
+    type that was refused (CE2001) is the one fault."""
+    if isinstance(expected, EnumType) and is_instance_of(expected, name):
+        return Constructed(expected)
+    template = validator.generic_enum_table.by_name[name]
+    types = next(v.associated_types for v in template.variants if v.name == node.variant)
+    if len(types) != len(node.payload):
+        check_arguments(validator, node.variant, [None] * len(types), node.payload, node.loc,
+                        mismatch_code=er.ERR.CE2049, arity_code=er.ERR.CE2050,
+                        stop_on_arity=True)
+        return Constructed(None)
+    names = [tp.name for tp in template.type_params]
+    solution = solve_arguments(validator, names, list(types), node.payload)
+    type_args = solved_type_args(validator, names, solution.solved)
+    if all(arg is not None for arg in type_args):
+        return Constructed(interned_instance(validator, node.loc, name, type_args),
+                           solution.typed)
+    walk_unchecked(validator, node.payload, solution.typed)
+    if expected is not None and names_no_type(validator, expected):
+        return Constructed(None)
+    if _declares_a_type(validator, expected):
+        return Constructed(declared_position_answer(template, type_args))
+    if not any(ty is None for ty in solution.typed.values()):
+        refuse_untyped_variant(validator, node, template, name, type_args)
+    return Constructed(None)
+
+
+def _declares_a_type(validator: TypeValidator, expected: Optional[Type]) -> bool:
+    return expected is not None and not is_abstract_type(
+        expected, validator.struct_table.by_name, validator.enum_table.by_name,
+        opaque_bound=validator.struct_table.admits_opaque)
+
+
+def _enum_name(validator: TypeValidator, written: str) -> Optional[str]:
+    """The declared name of the enum that a written type names, or None when it names no
+    enum: behind an alias (`geo.Sign`), the enum that the namespace holds."""
+    alias, dot, name = written.rpartition(".")
+    if not dot:
+        return written
+    binding = validator.namespaces.lookup(alias, name)
+    return binding.name if binding is not None and binding.kind == "enum" else None

@@ -1,0 +1,12 @@
+unit test_err_typeck_assert_message
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(3), is_init: true)
+    Assert(Binary(>, LocalRef(_0), Lit(0)))
+    Assert(Binary(>, LocalRef(_0), Lit(0)), message: Lit("n is positive"))
+    Assert(Binary(>, LocalRef(_0), Lit(0)), message: Interp(["n was ", LocalRef(_0), ""]))
+    Assert(Binary(>, LocalRef(_0), Lit(0)), message: LocalRef(_0))
+    Return(Lit(0))

@@ -1,0 +1,64 @@
+# An extension method of a user enum and of a user struct may have the name of a method
+# of `Result` or `Maybe` (`realise`, `or_err`, `map_err`, `is_ok`, `expect`). The call is
+# the extension, and its receiver is evaluated one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "make 1\nrealise 1 7\nmake 2\nor_err 2\nmake 3\nis_ok 3\nbox 4\nrealise box 4\nbox 5\nmap_err box 5\nbox 6\nexpect box 6 Mostly Harmless\n"
+enum Light:
+    Lit(i32)
+    Dark
+
+struct Crate:
+    string label
+
+extend Light realise(i32 d) i32:
+    match self:
+        Light.Lit(n) ->
+            println("realise {n} {d}")
+            return n
+        Light.Dark -> return d
+
+extend Light or_err(i32 code) i32:
+    match self:
+        Light.Lit(n) ->
+            println("or_err {n}")
+            return n
+        Light.Dark -> return code
+
+extend Light is_ok() bool:
+    match self:
+        Light.Lit(n) ->
+            println("is_ok {n}")
+            return true
+        Light.Dark -> return false
+
+extend Crate realise(i32 d) i32:
+    println("realise {self.label}")
+    return d
+
+extend Crate map_err(i32 d) i32:
+    println("map_err {self.label}")
+    return d
+
+extend Crate expect(string why) i32:
+    println("expect {self.label} {why}")
+    return why.len()
+
+fn make(i32 n) Light:
+    println("make {n}")
+    return Light.Lit(n)
+
+fn pack(i32 n) Crate:
+    println("box {n}")
+    return Crate("box {n}")
+
+fn main() i32:
+    let i32 a = make(1).realise(7)
+    let i32 b = make(2).or_err(0)
+    let bool c = make(3).is_ok()
+    let i32 d = pack(4).realise(0)
+    let i32 e = pack(5).map_err(0)
+    let i32 f = pack(6).expect("Mostly Harmless")
+    if (a + b + d + e > 0 and c and f > 0):
+        return 0
+    return 1

@@ -149,7 +149,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
         BUILTIN_TYPE_METHOD_MODULES, PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES,
         builtin_type_method_names, get_stdlib_registry, keep_builtin_type_methods,
         may_declare_methods, named_methods, platform_key, platform_source,
-        resolve_source_stdlib_path,
+        resolve_source_stdlib_path, stdlib_imports,
     )
 
     compiled = _compiled_stdlib_modules(library_linker)
@@ -159,8 +159,8 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
 
     def _imported(units) -> set:
         needed = set()
-        paths = [use_stmt.path for unit in units if unit.ast is not None
-                 for use_stmt in unit.ast.uses if use_stmt.is_stdlib]
+        paths = [path for unit in units if unit.ast is not None
+                 for path in stdlib_imports(unit.ast)]
         for path in [*paths, *compiled]:
             if path in SOURCE_STDLIB_MODULES:
                 needed.add(path)
@@ -191,8 +191,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
             src_path = SOURCE_STDLIB_MODULES[module_path]
             module_src = _text(module_path)
             try:
-                module_ast, _ = parse_to_ast(module_src, dump_parse=False,
-                                             source_label=str(src_path))
+                module_ast, _ = parse_to_ast(module_src, dump_parse=False)
             except SushiError as e:
                 e.filename = e.filename or str(src_path)
                 raise
@@ -568,8 +567,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
             publish_atomically(file_path, text.encode("utf-8"))
 
         try:
-            module_ast, _tree = parse_to_ast(text, dump_parse=False,
-                                             source_label=str(file_path))
+            module_ast, _tree = parse_to_ast(text, dump_parse=False)
         except SushiError as e:
             e.filename = e.filename or str(file_path)
             raise
@@ -658,8 +656,11 @@ def _stdlib_units(compilation_order: list[Unit], library_linker,
     has to be on the link line even where no unit of the build wrote the import.
     """
     from sushi_lang.backend.stdlib_linker import linked_stdlib_paths
+    from sushi_lang.semantics.stdlib_registry import named_methods, stdlib_imports
+    programs = [unit.ast for unit in compilation_order if unit.ast]
     stdlib_units = set(linked_stdlib_paths(
-        [unit.ast for unit in compilation_order if unit.ast],
+        [path for program in programs for path in stdlib_imports(program)],
+        frozenset().union(*(named_methods(program) for program in programs)),
         also=sorted(_compiled_stdlib_modules(library_linker))))
 
     if len(compilation_order) > 1:
@@ -730,6 +731,56 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
     return analyzer
 
 
+def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter) -> None:
+    """`--dump-shir`: the SHIR of each body that the scope pass checked, as UTF-8 text.
+
+    The analyzer lowers every unit. The dump prints the units of the program and leaves out each
+    unit that has a provenance (a bundled stdlib unit, a source library unit), so a golden
+    file does not change when the stdlib changes. Each body prints with the answers in its
+    side tables (docs/design/ir.md 7.3, 7.9).
+    """
+    from sushi_lang.semantics.shir.printer import print_units
+
+    shir = analyzer.shir
+    units = [(lowered.unit.name,
+              [(body, shir.typeck_of(body), shir.ownership_table_of(body), shir.lift_table_of(body))
+               for body in lowered.bodies()])
+             for lowered in shir.units if lowered.unit.provenance is None]
+    _write_dump("SHIR", print_units(units, shir.decls), target, reporter)
+
+
+def _write_slir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter) -> None:
+    """`--dump-slir`: the SLIR of each body that reached the SLIR stage, as UTF-8 text.
+
+    The units and the bodies are those of `--dump-shir`, in the same order. A body that
+    reached the SLIR stage prints its function; a body that did not reach it (a template
+    check, a body that a pass refused) does not print (docs/design/ir.md 8.2).
+    """
+    from sushi_lang.semantics.slir.printer import print_units
+
+    slir = analyzer.slir
+    units = [(lowered.unit.name,
+              [outcome for outcome in (slir.outcome_of(body.fn_id) for body in lowered.bodies())
+               if outcome is not None])
+             for lowered in analyzer.shir.units if lowered.unit.provenance is None]
+    _write_dump("SLIR", print_units(units), target, reporter)
+
+
+def _write_dump(kind: str, text: str, target: str, reporter: Reporter) -> None:
+    """Write the text of one dump to `target`; `-` prints it on stdout."""
+    from sushi_lang.compiler.cli import COMMAND_LINE
+    from sushi_lang.internals import errors as er
+
+    if target == "-":
+        print(text, end="")
+        return
+    try:
+        Path(target).write_text(text, encoding="utf-8")
+    except OSError as exc:
+        er.emit(reporter, er.ERR.CW0005, None, filename=COMMAND_LINE, dump=kind, path=target,
+                reason=exc.strerror or str(exc))
+
+
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        options: BuildOptions) -> int:
     """Compile a program or a library: load, resolve libraries, analyse, gate, emit."""
@@ -760,9 +811,13 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
 
     analyzer = _analyse(unit_manager, compilation_order, library_linker, reporter,
                         src_path.stem, options)
+    if options.dump_shir is not None:
+        _write_shir_dump(analyzer, options.dump_shir, reporter)
+    if options.dump_slir is not None:
+        _write_slir_dump(analyzer, options.dump_slir, reporter)
     if reporter.has_errors:
         return 2
-
+    analyzer.check_error_holes()
     out_path = _resolve_out_path(options, src_path)
     use_incremental = (len(compilation_order) > 1 and not options.lib
                        and not options.no_incremental and not options.dump_ll)
@@ -775,7 +830,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                                options, library_linker)
 
 
-def codegen_for(analyzer: SemanticAnalyzer,
+def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit],
                 library_linker: Optional['LibraryResolver'] = None) -> 'LLVMCodegen':
     """One `LLVMCodegen` over the analyzer's program tables.
 
@@ -792,22 +847,27 @@ def codegen_for(analyzer: SemanticAnalyzer,
     through a Protocol that names its manifests alone -- the back end also resolves a
     path with it -- and the registry and the implementations come off the analyzer,
     which is where the `libraries` step files them.
+
+    The SLIR of the program travels the same way: every body that the backend defines
+    comes from the `SlirFunction` of the analysis (docs/design/ir.md 8.2). So does the
+    declaration table of `units` (ir.md 6.3), made here, after the last pass of the
+    analysis: the declaration round reads each declaration from it.
     """
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.backend.slir.bodies import SlirBodies
+    from sushi_lang.semantics.decl_table import declarations
 
     tables = analyzer.tables
     cg = LLVMCodegen(struct_table=tables.structs, enum_table=tables.enums,
-                     func_table=tables.funcs, perk_impl_table=tables.perk_impls,
-                     const_table=tables.constants)
+                     perk_impl_table=tables.perk_impls)
     cg.external_table = tables.externals
     cg.library_linker = library_linker
     cg.library_registry = analyzer.library_registry
-    cg.library_perk_impls = analyzer.library_perk_impls
-    cg.library_extensions = analyzer.library_extensions
-    # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
-    # through the same per-unit scope the typecheck pass accepted it under, and a
-    # constant's initializer through the aliases of the unit that wrote it (#561).
-    cg.unit_namespaces = dict(tables.namespaces)
+    cg.decls = declarations(units, tables, analyzer.shir,
+                            copies=analyzer.monomorphized_extensions,
+                            shipped_methods=analyzer.library_extensions,
+                            shipped_perks=analyzer.library_perk_impls)
+    cg.slir_bodies = SlirBodies(analyzer.slir)
     return cg
 
 
@@ -827,7 +887,7 @@ def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
 def _emit_library(driver, analyzer, compilation_order, out_path: Path,
                   reporter: Reporter, options: BuildOptions) -> bool:
     """Write the `.slib`. False when a gate refused it; the reporter holds why."""
-    from sushi_lang.backend.library_manifest import (
+    from sushi_lang.compiler.library_manifest import (
         LibraryManifestGenerator, resolve_library_version,
     )
     # Resolve the library's own version FIRST: a missing or contradicted version is
@@ -861,7 +921,6 @@ def _emit_library(driver, analyzer, compilation_order, out_path: Path,
         bitcode = driver.compile_to_bitcode(
             compilation_order, debug=options.dump_ll, opt=options.opt,
             verify=not options.no_verify,
-            monomorphized_extensions=analyzer.monomorphized_extensions,
             exported_private_functions=closure_fn_symbols)
 
     source = manifest_gen.source_map(compilation_order) if kind != "binary" else None
@@ -878,7 +937,7 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                         reporter: Reporter, options: BuildOptions, library_linker) -> int:
     """One module for the whole program: a native binary, or a `.slib`."""
     from sushi_lang.backend.driver import LLVMDriver
-    cg = codegen_for(analyzer, library_linker)
+    cg = codegen_for(analyzer, compilation_order, library_linker)
     driver = LLVMDriver(cg)
 
     if options.lib:
@@ -891,8 +950,7 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                                   debug=options.dump_ll, opt=options.opt,
                                   verify=not options.no_verify,
                                   keep_object=options.keep_object,
-                                  main_expects_args=analyzer.main_expects_args,
-                                  monomorphized_extensions=analyzer.monomorphized_extensions)
+                                  main_expects_args=analyzer.main_expects_args)
         written = "native binary"
 
     if options.write_ll:
@@ -905,30 +963,29 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
 def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: Reporter,
                          options: BuildOptions, stdlib_units, library_imports,
                          library_linker, unit_manager, cache: CacheManager) -> int:
-    """Incremental compilation path: per-unit .o caching."""
+    """Incremental compilation path: per-unit .o caching.
+
+    The module of every unit that the cache does not hold is built before the first
+    object is written, so an internal error of the emitter leaves no output behind.
+    """
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
         compute_stdlib_fingerprint,
         compute_lib_fingerprint,
     )
 
-    cache.prepare()
-
     monomorphized_extensions = analyzer.monomorphized_extensions
 
     from sushi_lang.backend.driver import LLVMDriver
-    cg = codegen_for(analyzer, library_linker)
+    cg = codegen_for(analyzer, compilation_order, library_linker)
     driver = LLVMDriver(cg)
     cg.main_expects_args = analyzer.main_expects_args
-    cg.monomorphized_extensions = monomorphized_extensions
 
     obj_paths: list[Path] = []
     rebuilt = []
     cached = []
 
     t0 = time.monotonic()
-
-    print("Code generation:")
 
     # Digest every imported `.slib` once. These feed both the consumer unit
     # fingerprints (so a library template change invalidates consumers that
@@ -944,22 +1001,31 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     from sushi_lang.backend.ownership import drops_of
     drop_types = drops_of(cg)
 
-    for unit in compilation_order:
-        fp = compute_unit_fingerprint(
+    fingerprints = {
+        unit.name: compute_unit_fingerprint(
             unit, unit_manager, monomorphized_extensions,
             library_fingerprints=library_fingerprints,
             drop_types=drop_types,
         )
+        for unit in compilation_order
+    }
+    modules = {unit.name: cg.build_module_single_unit(unit, compilation_order)
+               for unit in compilation_order
+               if not cache.has_cached_unit(unit.name, fingerprints[unit.name])}
 
-        if cache.has_cached_unit(unit.name, fp):
+    cache.prepare()
+    print("Code generation:")
+    for unit in compilation_order:
+        fp = fingerprints[unit.name]
+        module = modules.get(unit.name)
+        if module is None:
             obj_path = cache.unit_object_path(unit.name, fp)
             obj_paths.append(obj_path)
             cached.append(unit.name)
             print(f"  {unit.name:<30s} [cached]")
         else:
             obj_bytes = driver.compile_single_unit_to_object(
-                unit, compilation_order,
-                opt=options.opt, verify=not options.no_verify,
+                module, unit.name, opt=options.opt, verify=not options.no_verify,
             )
             obj_path = cache.store_unit_object(unit.name, obj_bytes, fp)
             obj_paths.append(obj_path)

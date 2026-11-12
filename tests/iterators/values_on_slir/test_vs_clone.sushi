@@ -1,0 +1,26 @@
+# The clone of a lent iterator is lent, on the heap, and it borrows the same owners. The
+# clone of an owned iterator copies what it holds. Each is dropped once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a\nb\na\nb\n0\n1\n0\n1\nx\nx\n"
+use <collections/iter>
+
+fn main() i32:
+    let string[] xs = from(["a", "b"])
+    let Iterator@(peek string) lent = xs.iter()
+    foreach(s in lent.clone()):
+        println(s)
+    foreach(s in lent):
+        println(s)
+    let Iterator@(i32) r = 0..2
+    let Iterator@(i32) again = r.clone()
+    foreach(x in r):
+        println(x)
+    foreach(x in again):
+        println(x)
+    let Iterator@(peek string) owned = from(["x"]).iter()
+    foreach(s in owned.clone()):
+        println(s)
+    foreach(s in owned):
+        println(s)
+    return 0

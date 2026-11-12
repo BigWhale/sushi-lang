@@ -1,0 +1,47 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "second\nfirst\n1 2\n3 4\n5 6\n7 8\n9 1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_struct_construction.slir
+#
+# A struct construction evaluates its fields in the written order, then builds ONE
+# `Aggregate` of the instance type with the parts in the declaration order (ruling R1,
+# ir.md 8.9). A named construction that writes `second` first calls `second()` first. A
+# new value goes into a temporary of the statement; a local and a literal are read at the
+# `Aggregate`, except a local that a later new value can change: it is copied into a
+# temporary first.
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    Point b
+
+fn first() i32:
+    println("first")
+    return 1
+
+fn second() i32:
+    println("second")
+    return 2
+
+fn bump(poke i32 n) i32:
+    n := n + 1
+    return n
+
+fn make(i32 x, i32 y) Point:
+    return Point(x, y)
+
+fn main() i32:
+    let Point named = Point(y: second(), x: first())
+    println("{named.x} {named.y}")
+    let Point direct = make(3, 4)
+    println("{direct.x} {direct.y}")
+    let Seg seg = Seg(Point(5, 6), Point(7, 8))
+    println("{seg.a.x} {seg.a.y}")
+    println("{seg.b.x} {seg.b.y}")
+    let i32 n = 9
+    let Point kept = Point(n, bump(poke n) - 9)
+    println("{kept.x} {kept.y}")
+    return 0

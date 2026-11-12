@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE5010
+# EXPECT_STDERR_CONTAINS: "foreign `ptr` cannot be used with operator '=='"
+# EXPECT_DUMP_SHIR: test_err_typeck_foreign_pointer.shir
+#
+# A foreign `ptr` is an opaque handle: no operator takes one. A `ptr` parameter is a
+# value of the body like any other, and the other operations of the body are correct.
+# The comparison of two `ptr` values is CE5010.
+
+unsafe external "C" as libc because "a ptr parameter":
+    fn free(ptr p) ~ = "free"
+
+fn same(ptr a, ptr b, i32 n) bool:
+    let bool small = n < 4
+    return small and a == b
+
+fn main() i32:
+    return 0

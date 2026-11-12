@@ -1,0 +1,29 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "11\n11\n5\nMostly Harmless\n"
+# EXPECT_NO_LEAKS
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn read(peek i32 n) i32:
+    return n
+
+fn size_of(nom string[] xs) i32:
+    return xs.len()
+
+fn echo(nom string s) string:
+    return s
+
+fn main() i32:
+    let i32 n = 10
+    let fn(poke i32) -> ~ b = bump
+    b(poke n)
+    println(n)
+    let fn(peek i32) -> i32 r = read
+    println(r(peek n))
+    let fn(nom string[]) -> i32 c = size_of
+    let string[] xs = from(["a", "b", "c", "d", "e"])
+    println(c(nom xs))
+    let fn(nom string) -> string e = echo
+    println(e(nom "Mostly Harmless".clone()))
+    return 0

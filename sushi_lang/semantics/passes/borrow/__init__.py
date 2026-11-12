@@ -1,340 +1,303 @@
-"""The borrow pass. The pass object holds the state; siblings hold the rules."""
+"""The borrow pass over SHIR (docs/design/ir.md 7.9). The pass object holds the state of one
+body; the sibling modules hold the rules.
+
+The lift pass gives the pass each body that typecheck and lift finished with no error,
+with its `TypeckResults` (`check_body`), and each body whose walk in typecheck reported an
+error. In such a body a node with no answer is UNKNOWN (`reads.unknown`): it has no arm, and
+the pass writes no row of the body. The DECLARATION half reads the declaration of the
+body: the mode of each parameter, the receiver, a borrowed return and its source set. The BODY half walks the
+SHIR body through one table of arms keyed on the SHIR class (`arms.py`), and writes each
+answer as a row of the `OwnershipResults` of the body. The state of the walk is keyed by
+`LocalId`, and a diagnostic names a local by the source name of its `ShirLocal`.
+
+A branch starts each block from the state before it, and the paths that reach the code
+after it JOIN (`flow.py`). A loop body is walked two rounds: a discovery round, which
+reports nothing and writes no row, gives the facts that come round the back edge, and the
+second round starts from the fixed point and reports.
+
+A construct that the pass does not check is an internal error; after an error, the walk of
+the body ends there (`AfterAnError`). The body of a constant or `var`
+initializer is walked as any other body: the constant evaluator makes its value, so a
+constant that it names is read, not moved (`consume.source_provenance`). A body that the
+walk finished with no error writes its conditionally moved locals and the region of each
+view (`regions.py`), has its table
+checked (`check_ownership`, CE0157), and goes to the stage after the pass, the SLIR
+lowering (`slir/lower.py`).
+"""
 
 from __future__ import annotations
-from collections import ChainMap
-from contextlib import contextmanager
-from typing import (
-    TYPE_CHECKING, AbstractSet, Callable, Dict, FrozenSet, Iterator, List, Optional, Set)
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional, Set
 
-from sushi_lang.semantics.ast import (
-    Block, Expand, ExtendDef, ExtendWithDef, FuncDef, Param, Program)
-from sushi_lang.semantics.typesys import (
-    BorrowMode, BuiltinType, DynamicArrayType, ReferenceType, StructType, Type,
-)
-from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
-from sushi_lang.semantics.namespaces import body_namespaces
-from sushi_lang.semantics.ast_walk import is_template_copy
-from sushi_lang.semantics.borrowed_return import BorrowedReturn
-from sushi_lang.semantics.param_modes import CalleeModes, param_mode, receiver_mode
-from sushi_lang.internals.report import Reporter, Span
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.diagnostics import AfterAnError
+from sushi_lang.internals.report import Reporter
+from sushi_lang.semantics.error_reporter import PassErrorReporter
+from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
+from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
+from sushi_lang.semantics.shir.body import TemplateCheck
+from sushi_lang.semantics.shir.ownership_check import check_ownership
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
 
+# The table of arms first: the arm modules import it, and it imports them.
+from . import arms  # noqa: F401
 from .borrowed_returns import BodyReturn, body_return
+from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
-from .destroy_effects import compute_destroy_effects
-from .expressions import INERT_EXPRS, check_expr
-from .flow import FlowFacts, LoopFrame
-from .reads import captured_key, unit_variables
+from .flow import FlowFacts, LoopFrame, record_exit, terminates
+from .methods import MUTATING_METHODS
+from .iterators import write_heap_decisions
+from .regions import write_regions
 from .state import BorrowState
 from .statements import check_block
 from .types import TypeQueries
-from .written_names import WrittenNameReporter
-from .methods import MUTATING_METHODS
 from .writes import READONLY_RECEIVERS
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir import exprs as e
+    from sushi_lang.semantics.shir.body import ShirBody, ShirLocal, ShirParam
+    from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
+    from sushi_lang.semantics.shir.lowering import LoweredProgram
+    from sushi_lang.semantics.shir.nodes import ShirBlock
+    from sushi_lang.semantics.shir.ownership import OwnershipResults
+    from sushi_lang.semantics.shir.typeck import TypeckResults
     from sushi_lang.semantics.tables import SymbolTables
-    from sushi_lang.semantics.template_scope import CheckCopy
-
-
-def _build_callee_modes(tables, unit_name: Optional[str] = None,
-                        scope: object = None) -> CalleeModes:
-    """Build the mode resolver from the collect pass's tables, as ONE unit reads them.
-
-    `unit_name` is the unit whose bodies are about to be checked. A name it declares
-    itself answers with its own signature, which is what stops a source library's own
-    call being measured against the consumer's declaration of the same name (#487,
-    `docs/design/unit-namespaces.md` section 13.1), and `scope` is what stops it reading
-    a declaration from a unit it never imported (section 6).
-    """
-    if tables is None:
-        return CalleeModes()
-    funcs = getattr(tables, "funcs", None)
-    struct_names = _struct_names(tables)
-    stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
-    # A generic fn is called by its bare name in a template body but interned under a
-    # mangled one, and the mode does not vary per instantiation. Concrete table first.
-    # Both tables answer per unit, or a call is measured against a declaration from
-    # next door (#495).
-    generics = getattr(tables, "generic_funcs", None)
-    sigs = dict(generics.view_for(unit_name, scope) if generics is not None else {})
-    sigs.update(funcs.view_for(unit_name, scope) if funcs is not None else {})
-    return CalleeModes(
-        func_sigs=sigs,
-        struct_names=struct_names,
-        stdlib_sigs=stdlib_sigs,
-    )
-
-
-def _struct_names(tables) -> ChainMap:
-    """A LIVE view of both struct tables: the typecheck pass runs after the resolver is
-    built, and it interns the instance a generic struct constructor solves from its
-    arguments (#1150)."""
-    maps = [getattr(getattr(tables, name, None), "by_name", None)
-            for name in ("structs", "generic_structs")]
-    return ChainMap(*(names for names in maps if names is not None))
-
+    from .state import Owner
 
 class BorrowChecker:
-    """Analyzes borrowing safety for a program."""
+    """The borrow pass over the SHIR bodies of one unit, one body at a time."""
 
     def __init__(self, reporter: Reporter, *,
                  tables: SymbolTables,
-                 destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None,
-                 enum_names: Optional[Set[str]] = None,
-                 unit_name: Optional[str] = None,
-                 scope: object = None):
+                 shir: LoweredProgram,
+                 next_stage: Callable[..., None],
+                 destroy_effects: Dict[str, FrozenSet[int]],
+                 namespaces: Optional[NamespaceTable] = None,
+                 program_failed: Callable[[], bool] = lambda: False):
         self.reporter = reporter
-        # Used only to RESOLVE a named type before classifying it: `owns_resource`
-        # answers False for an UnknownType, so without this an owning struct would alias.
+        # Whether the program has an error that this unit did not report (`has_an_error`).
+        self.program_failed = program_failed
+        self.err = PassErrorReporter(reporter)
+        # The tables that a type of the body is resolved in: the program's, or the overlay
+        # of a template check (`check_body`).
         self.tables = tables
         self.types = TypeQueries(tables)
-        self.err = WrittenNameReporter(reporter, lambda: self.borrow_state)
-        # fn name -> the poke param indices it destroys (#168). Computed once over EVERY
-        # unit by compute_destroy_effects(), so a cross-unit callee is not a blind spot.
-        # Empty means "no call destroys anything", i.e. the old intra-procedural behaviour.
-        self.destroy_effects: Dict[str, FrozenSet[int]] = destroy_effects or {}
-        # Tells an enum constructor `Box.Full(a)` from a method call `xs.push(a)` -- both
-        # are DotCall here, and only the former is an ownership sink (#134).
-        self.enum_names: Set[str] = enum_names or set()
-        self.borrow_state: Dict[str, BorrowState] = {}
-        self.active_borrows: Set[str] = set()
-        # The nodes that are the operand of a `??`: a read-through `or_err` stands only
-        # there (CE2522).
-        self.try_operands: Set[int] = set()
+        self.shir = shir
+        self.next_stage = next_stage
+        # fn name -> the poke param indices it destroys (#168), over EVERY unit, so a
+        # cross-unit callee is not a blind spot (the `effects` pass).
+        self.destroy_effects = destroy_effects
+        # The names of the unit, and the names that the body resolves in (`_enter`): the
+        # names of its unit, or of the library unit of a library copy (#1120).
+        self.unit_names = namespaces if namespaces is not None else NamespaceTable()
+        self.names = self.unit_names
+        # The body that the pass walks, its tables and its locals.
+        self.body: Optional[ShirBody] = None
+        self.typeck: Optional[TypeckResults] = None
+        self.ownership: Optional[OwnershipResults] = None
+        self.locals: Dict[LocalId, ShirLocal] = {}
+        # The text of the file of the body, for the source text of a node.
+        self.source: Optional[str] = None
+        # The `peek` return of the body, with its source set (`borrowed_returns.py`).
+        self.borrowed_return: Optional[BodyReturn] = None
+        # The body of `main`, whose `string[] args` is a view of the process arguments.
+        self.is_main = False
+        self.borrow_state: Dict[Owner, BorrowState] = {}
+        self.active_borrows: Set[Owner] = set()
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
-        self._scope_binding_borrows: list[list[tuple[str, str]]] = []
-        # One frame per loop body being checked: the `break` and `continue` paths (#993).
-        self._loop_frames: list[LoopFrame] = []
-        # THE mode resolver. Which kind of callee a `Call` names, and what each of its
-        # parameters declares. Built from the same tables the backend's copy reads, so
-        # the two halves cannot reach different answers (docs/design/borrow-model.md S1).
-        self.callee_modes = _build_callee_modes(tables, unit_name, scope)
-        # Which unit is being checked, and what it may write bare. A bare name that is
-        # no local is a CONSTANT, and reading its type needs the same per-unit ladder
-        # every other reader walks (`docs/design/unit-namespaces.md` section 8).
-        self.unit_name = unit_name
-        self.scope = scope
-        # Set only while a check copy is read (#1070, R6): the element type of each
-        # `expand`.
-        self.pack_element_of: Optional[Callable[[Expand], Optional[Type]]] = None
-        # The `peek` return of the body being checked, or None for an owned return (#1229).
-        self.borrowed_return: Optional[BodyReturn] = None
+        self._scope_binding_borrows: list[list[tuple[Owner, Owner]]] = []
+        # The locals that each open block declared, the parameters in the first: an exit
+        # of a block is an exit of each of them (`flow.record_exit`).
+        self.block_locals: list[list[LocalId]] = []
+        # One frame per loop that the walk is in: the paths of its `break` and `continue`.
+        self.loop_frames: list[LoopFrame] = []
+        # The count of the discovery rounds of loops that the walk is in.
+        self.discovery_rounds = 0
+        # Conditional-move tracking (#414): the locals moved on some path, and the locals
+        # that an exit of their scope sees not moved on every path.
+        self.moved_locals: Set[LocalId] = set()
+        self.kept_at_an_exit: Set[LocalId] = set()
+        # The statement that the walk is in, one entry for each open block, and each view
+        # that a `let` made, with its owners and its statement (`regions.py`).
+        self.statement_at: list[tuple[ShirBlock, int]] = []
+        self.views: Dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]] = {}
+        # Each lent iterator call of the body, True for a state that is on the heap anyway,
+        # and the lent calls that leave through a `peek` return (`iterators.py`).
+        self.lent_calls: Dict[ShirId, bool] = {}
+        self.leaving_calls: Set[ShirId] = set()
+        # The operand of each `??` that the walk entered: a read-through `or_err` stands
+        # there and nowhere else (CE2522).
+        self.try_operands: Set[ShirId] = set()
+        # True when the walk of the body in typecheck reported an error.
+        self.typecheck_failed = False
 
-    def refresh_callee_modes(self) -> None:
-        """Read the function tables again: the typecheck pass can declare a late instance
-        after this checker was built (#1155)."""
-        self.callee_modes = _build_callee_modes(self.tables, self.unit_name, self.scope)
+    def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
+                   filename: Optional[str], typecheck_failed: bool = False) -> None:
+        """Walk the SHIR body of `decl`, which lift finished with no error.
 
-    def run(self, program: Program, skip: AbstractSet[int] = frozenset()) -> None:
-        """Run borrow checking on the entire program.
-
-        `skip` holds the `id` of each written template that the typecheck pass checked
-        on a check copy: the borrow pass read that copy (`check_template_copy`), with
-        each type parameter opaque.
+        `tables` are the tables that the typecheck pass read the body in. A walk with no
+        error checks the table of the body, and gives the body, with the tables that
+        typecheck read it in, to the next stage, the SLIR lowering. A template check never
+        goes to SLIR (docs/design/ir.md 4.3). A body whose walk in typecheck reported an
+        error (`typecheck_failed`) gives only its diagnostics: it writes no row, and it
+        never goes to SLIR (docs/design/ir.md 7.9).
         """
-        self.refresh_callee_modes()
-        for func in program.functions:
-            if id(func) in skip:
-                continue
-            # Whose body this is: the file its diagnostics belong to (#471), and whether
-            # it is one of many copies of one source (#648).
-            self.reporter.enter_body(func)
-            self._check_function(func)
-        self.reporter.leave_body()
-
-        for ext in program.extensions:
-            self._check_extension(ext)
-
-        # A TEMPLATE that no check copy covers, as written, with `self` abstract: a
-        # template of a consumed library unit was checked at its own build. What each
-        # copy decides per instance is in the stamps of its own borrow walk (R7).
-        for ext in program.generic_extensions:
-            if id(ext) not in skip:
-                self._check_extension(ext)
-
-        # Perk impl methods carry an implicit `self`, like an extension method. Omitting
-        # them left a perk body unchecked entirely (#176).
-        for perk_impl in program.perk_impls:
-            self._check_perk_impl(perk_impl)
-        self.reporter.leave_body()
-
-    def check_template_copy(self, copy: 'CheckCopy') -> None:
-        """The borrow rules on a check copy (#1070, R5): an opaque type parameter moves.
-
-        The copy is read in the overlay tables, which hold its instances over an opaque
-        parameter. The mode resolver keeps the program's function tables, which the
-        overlay shares, and reads the overlay's struct names. A fault here refuses the
-        template, so each copy of it is muted.
-        """
-        saved = (self.tables, self.types, self.callee_modes)
-        self.tables, self.types = copy.tables, TypeQueries(copy.tables)
-        self.callee_modes = self.callee_modes.with_struct_names(
-            _struct_names(copy.tables))
-        self.pack_element_of = copy.element_of
+        self._enter(decl, body, tables)
+        self.typecheck_failed = typecheck_failed
+        offered = sum(self.reporter.errors_offered.values())
+        has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"
+        # The template check of a generic free function gives its parameters no span: the note
+        # of CE2411 names the type parameter there.
+        located = not (isinstance(body.origin, TemplateCheck)
+                       and isinstance(decl, GenericFuncDef))
         try:
-            node = copy.node
-            if isinstance(node, ExtendWithDef):
-                self._check_perk_impl(node)
-            elif isinstance(node, ExtendDef):
-                self._check_extension(node)
-            else:
-                self.reporter.enter_body(node)
-                self._check_function(node)
-            self.pack_element_of = None
-            for fn in copy.lifted:
-                self.reporter.enter_body(fn)
-                self._check_function(fn)
-        finally:
-            self.tables, self.types, self.callee_modes = saved
-            self.pack_element_of = None
-            self.reporter.leave_body()
-
-    def _check_perk_impl(self, perk_impl) -> None:
-        """Borrow-check every method body of one perk implementation."""
-        for method in perk_impl.methods:
-            # Whether this body is one of many copies of one source (#800).
-            self.reporter.enter_body(method)
-            with self._body_scope(method):
-                self._check_callable(method.params, method.body, fn_name=method.name,
-                                     self_type=perk_impl.target_type,
-                                     self_span=perk_impl.target_type_span,
-                                     self_mode=getattr(method, "self_mode", None),
-                                     borrowed_return=method.borrowed_return,
-                                     template_copy=is_template_copy(method))
-
-    @contextmanager
-    def _body_scope(self, node) -> Iterator[None]:
-        """Check one body in the scope its names resolve in (`body_namespaces`, #1120)."""
-        table = body_namespaces(node, getattr(self.tables, "namespaces", None))
-        if table is None:
-            yield
+            params = [param for param in body.params if not param.pack]
+            for param in params:
+                self._declare_param(param, has_receiver=has_receiver, located=located)
+            self.block_locals.append([param.local for param in params])
+            check_block(self, body.block)
+            if not terminates(body.block):
+                record_exit(self)
+        except AfterAnError:
             return
-        saved = (self.scope, self.callee_modes)
-        self.scope = table.scope
-        self.callee_modes = _build_callee_modes(self.tables, self.unit_name, table.scope)
-        try:
-            yield
         finally:
-            self.scope, self.callee_modes = saved
+            self._leave()
+        if sum(self.reporter.errors_offered.values()) != offered or typecheck_failed:
+            return
+        ownership = self.shir.ownership_table_of(body)
+        for local in sorted(self.moved_locals & self.kept_at_an_exit):
+            ownership.record_conditional_move(local)
+        write_regions(self.views, ownership)
+        write_heap_decisions(self, ownership)
+        check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
+                        ownership, self.shir.decls)
+        if not isinstance(body.origin, TemplateCheck):
+            self.next_stage(decl, body, tables=tables, filename=filename)
 
-    def _check_function(self, func: FuncDef) -> None:
-        """Check borrow safety for a single plain function."""
-        with self._body_scope(func):
-            self._check_callable(func.params, func.body, fn_name=func.name,
-                                 borrowed_return=getattr(func, "borrowed_return", None),
-                                 template_copy=is_template_copy(func))
+    def has_an_error(self) -> bool:
+        """Whether the body, this unit or the program has an error so far. An error of
+        another unit counts too (`program_failed`), so `dispatch.unhandled` then ends the
+        walk with no CE0000, and an internal fault of this unit stays hidden."""
+        return (self.typecheck_failed or self.reporter.has_offered_errors
+                or self.program_failed())
 
-    def _check_extension(self, ext: ExtendDef) -> None:
-        """Check borrow safety for an extension method."""
-        # A copy of a refused template says nothing (#1070), as a perk method does.
-        self.reporter.enter_body(ext)
-        with self._body_scope(ext):
-            self._check_callable(ext.params, ext.body, fn_name=ext.name,
-                                 self_type=ext.target_type,
-                                 self_span=ext.target_type_span,
-                                 self_mode=getattr(ext, "self_mode", None),
-                                 borrowed_return=ext.borrowed_return,
-                                 template_copy=is_template_copy(ext))
-
-    def _check_callable(self, params: List[Param], body: Block, *,
-                        fn_name: Optional[str] = None,
-                        self_type: Optional[Type] = None,
-                        self_span: Optional[Span] = None,
-                        self_mode: Optional[str] = None,
-                        borrowed_return: Optional[BorrowedReturn] = None,
-                        template_copy: bool = False) -> None:
-        """Set up the state for one callable body and check it. THE entry point."""
-        self.borrowed_return = body_return(self, borrowed_return, params, template_copy)
+    def _enter(self, decl: object, body: ShirBody, tables: SymbolTables) -> None:
+        self.tables, self.types = tables, TypeQueries(tables)
+        self.names = (body_namespaces(decl, getattr(tables, "namespaces", None))
+                      or self.unit_names)
+        self.body = body
+        self.typeck = self.shir.typeck_of(body)
+        self.ownership = self.shir.ownership_table_of(body)
+        self.locals = {local.id: local for local in body.locals}
+        self.source = self.reporter.body_source()
+        self.borrowed_return = body_return(self, decl, body)
+        self.is_main = self.shir.decls.name_of(body.fn_id) == "main"
         self.borrow_state = {}
-        self.err.enter_body()
         self.active_borrows = set()
         self._scope_binding_borrows = []
-        self._loop_frames = []
-        # Conditional-move tracking (#414): `branch_depth` counts the if/match/loop
-        # bodies entered; a move at a depth greater than the owner's declaration depth
-        # cannot dominate the scope exit, so the backend must guard that owner's frees
-        # with a runtime drop flag. Stamped on the BODY block (shared by the synthetic
-        # perk-method wrapper) for the backend to read.
-        self.branch_depth = 0
-        self.conditional_moves = set()
+        self.block_locals = []
+        self.loop_frames = []
+        self.discovery_rounds = 0
+        self.moved_locals = set()
+        self.kept_at_an_exit = set()
+        self.statement_at = []
+        self.views = {}
+        self.lent_calls = {}
+        self.leaving_calls = set()
+        self.try_operands = set()
 
-        # Unit variables first, so a parameter or a `let` of the same name shadows one by
-        # overwriting its entry. No `declared_at_span`: the declaration may stand in
-        # another unit's file, and a note here would point into the wrong one.
-        for name, sig in unit_variables(self):
-            self.borrow_state[name] = BorrowState(name=name, var_type=sig.const_type,
-                                                  is_unit_var=True)
+    def _leave(self) -> None:
+        self.body = self.typeck = self.ownership = None
+        self.locals = {}
+        self.source = None
+        self.borrow_state = {}
+        self.typecheck_failed = False
 
-        if self_type is not None:
-            # A `poke self` / `peek self` receiver keeps its full ReferenceType, which
-            # wires the rules in by construction (#327). A `nom self` receiver is not a
-            # borrow at all: the method owns the value, so it registers as an ordinary
-            # owned local and every read-only-receiver rule must miss it (ruling R25).
-            mode = receiver_mode(self_mode)
-            receiver_type = self_type
-            if mode.by_pointer:
-                receiver_type = ReferenceType(self_type, mode.borrow_mode)
-            self._declare(BorrowState(name="self", var_type=receiver_type,
-                                      declared_at_span=self_span,
-                                      is_method_receiver=not mode.consumes),
-                          is_borrow=not mode.consumes)
+    def answers(self) -> TypeckResults:
+        """The `TypeckResults` of the body that the pass walks."""
+        if self.typeck is None:
+            er.raise_internal_error("CE0000", detail="the borrow pass walks no SHIR body")
+        return self.typeck
 
-        for param in params:
-            state = BorrowState(name=param.name, var_type=param.ty,
-                                declared_at_span=getattr(param, "loc", None),
-                                is_method_param=self_type is not None)
-            # main's `string[] args` is a borrowed view of process argv (the runtime owns
-            # and frees it). Stamp it so a by-value move is a hard error (CE2410), not a
-            # silent move that makes the callee free argv (N2).
-            if fn_name == "main" and self._is_argv_view_param(param.ty):
-                state.is_argv_view = True
-            # Every mode but `nom` is a borrow, in every kind of callable. Being a METHOD
-            # used to be the condition, because a method was the only callable whose
-            # parameters did not transfer (docs/design/borrow-model.md S1).
-            self._declare(state, is_borrow=not param_mode(param).consumes)
+    def table(self) -> OwnershipResults:
+        """The `OwnershipResults` of the body that the pass walks."""
+        if self.ownership is None:
+            er.raise_internal_error("CE0000", detail="the borrow pass walks no SHIR body")
+        return self.ownership
 
-        if params and params[0].name == ENV_PARAM_NAME:
-            self._declare_captures(params[0])
+    def name_of(self, local: Owner) -> str:
+        """The source name of a local or of a `var`, for a diagnostic."""
+        if isinstance(local, str):
+            return self.borrow_state[local].name
+        shir_local = self.locals.get(local)
+        if shir_local is None or shir_local.name is None:
+            return f"_{local.index}"
+        return shir_local.name
 
-        check_block(self, body)
-        body.conditional_move_names = frozenset(self.conditional_moves)
+    def decl_name(self, decl: DeclId) -> str:
+        """The written name of a declaration that a SHIR node names."""
+        return self.shir.decls.name_of(decl)
 
-    def _declare(self, state: BorrowState, *, is_borrow: bool) -> None:
-        """Register a parameter, recording whether its declared mode is a borrow."""
-        # A borrow parameter does not own its value -- `string` included (#338).
-        state.is_borrow_param = is_borrow
-        self.borrow_state[state.name] = state
+    def constant_record(self, node: e.ConstRef) -> Any:
+        """The record of the constant that `node` names in the scope of the body: a
+        `ConstSig`, or the record of a stdlib constant. `typecheck` resolved the name, so a
+        lookup that misses is an internal error."""
+        record = self.names.constant_record(self.decl_name(node.const_id),
+                                            self.tables.constants)
+        if record is None:
+            er.raise_internal_error("CE0000", span=node.loc,
+                                    detail=f"the constant '{self.decl_name(node.const_id)}' "
+                                           f"has no record in the borrow pass")
+        return record
 
-    def _declare_captures(self, env: Param) -> None:
-        """Give each captured variable of a lifted lambda the state of a `poke` borrow.
+    def local_type(self, local: LocalId) -> Optional[Type]:
+        return self.answers().local_type(local)
 
-        The environment is a `poke` parameter, and a borrow of one captured field is
-        counted on that field alone (`borrow_owner`, #1129).
+    def declare(self, state: BorrowState) -> None:
+        """Give a local of the body its state, at its declaration."""
+        self.borrow_state[state.local] = state
+
+    def _declare_param(self, param: ShirParam, *, has_receiver: bool, located: bool) -> None:
+        """A parameter: every mode but `nom` is a borrow, in every kind of callable.
+
+        A `peek` or a `poke` parameter keeps the reference type, which wires the rules of a
+        reference in by construction (#327). A `nom self` receiver is not a borrow at all:
+        the method owns the value, so every read-only-receiver rule misses it (R25).
         """
-        env_type = env.ty.referenced_type if isinstance(env.ty, ReferenceType) else None
-        if not isinstance(env_type, StructType):
-            return
-        for field_name, field_type in env_type.fields:
-            self._declare(BorrowState(name=captured_key(field_name),
-                                      var_type=ReferenceType(field_type, BorrowMode.POKE),
-                                      declared_at_span=getattr(env, "loc", None)),
-                          is_borrow=True)
+        name = self.name_of(param.local)
+        ty = self.local_type(param.local)
+        mode = BY_ADDRESS.get(param.convention)
+        var_type = ReferenceType(ty, mode) if mode is not None and ty is not None else ty
+        is_borrow = param.convention is not Convention.OWNED
+        receiver = name == "self" and has_receiver
+        state = BorrowState(name=name, local=param.local, var_type=var_type,
+                            declared_at_span=param.loc if located else None,
+                            is_method_receiver=receiver and is_borrow,
+                            is_method_param=has_receiver and not receiver,
+                            is_borrow_param=is_borrow)
+        # main's `string[] args` is a borrowed view of process argv (the runtime owns and
+        # frees it): a by-value move of it is CE2410 (N2).
+        state.is_argv_view = self.is_main and _is_argv_view(ty)
+        # A by-value parameter that owns holds the value of the caller until a rebind
+        # (docs/design/ir.md 8.10, rule 5).
+        caller = (param.convention is Convention.GUARANTEED
+                  and self.types.type_class(ty) is TypeClass.MOVE)
+        state.holds_caller_value = state.holds_caller_value_on_every_path = caller
+        self.declare(state)
 
-    @staticmethod
-    def _is_argv_view_param(ty: Optional[Type]) -> bool:
-        """True if `ty` is `string[]` -- the shape of main's borrowed argv parameter."""
-        return isinstance(ty, DynamicArrayType) and ty.base_type == BuiltinType.STRING
+
+def _is_argv_view(ty: Optional[Type]) -> bool:
+    """True if `ty` is `string[]` -- the shape of main's borrowed argv parameter."""
+    return isinstance(ty, DynamicArrayType) and ty.base_type == BuiltinType.STRING
 
 
 __all__ = [
     'BorrowChecker',
     'BorrowState',
     'FlowFacts',
-    'INERT_EXPRS',
     'MUTATING_METHODS',
     'READONLY_RECEIVERS',
     'binds_a_bare_literal_string',
-    'check_expr',
-    'compute_destroy_effects',
 ]

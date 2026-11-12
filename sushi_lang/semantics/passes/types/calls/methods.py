@@ -1,35 +1,24 @@
-"""Method call validation."""
+"""The resolution of a user-written method: a perk implementation, then an extension.
+
+The order of the rungs is `calls/dotcall.py:resolve_dotted`, and the SHIR arms of an
+extension method and of a static are in `visit/calls.py`.
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
-    IteratorType, StructType)
+    DynamicArrayType, EnumType, StructType)
 from sushi_lang.semantics.generics.types import TypeParameter
-from sushi_lang.semantics.ast import MethodCall, Name
-from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
-from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.constraints import target_bounds_hold
 from sushi_lang.semantics.passes.collect.functions import GenericExtensionMethod
-from ..arguments import check_arguments
-from ..borrowed_returns import stamp_call_sources
-from sushi_lang.semantics.generics.iterators import ITERATOR_BASE
-from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
-from ..utils import call_constraint_check, intern_signature, reject_spread_args
-
-# A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
-# `HashMap@(K, V)` are named StructTypes, so the tuple covers them with every other
-# struct. An `Iterator@(T)` (a range too) answers `clone()` alone, and it is here so that
-# any other call on one is CE2008 at the call and not an internal error in the backend
-# (#1136).
-# An opaque type parameter answers what its constraints promise, and nothing else (#1070).
-RECEIVERS_WITH_METHODS = (BuiltinType, ArrayType, DynamicArrayType, EnumType,
-                          FunctionType, IteratorType, StructType, TypeParameter)
+from ..utils import call_constraint_check, intern_signature
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.exprs import ShirExpr
     from .. import TypeValidator
 
 
@@ -64,19 +53,19 @@ def instantiate_array_extension(validator: 'TypeValidator',
 
 
 def instantiate_target_extension(validator: 'TypeValidator', receiver_type, template,
-                                 call=None, report: bool = True):
+                                 report: bool = True, site: Optional[Span] = None):
     """Resolve a call on an instance of a generic type against one generic-target template.
 
     The `T[]` rung is the model (#1196). The substituted signature answers the call. The
     first call that reaches the method files the signature in the extension table, so
     the next call and the backend find it, and queues the body copy for the analyzer's
-    fixpoint round. A question with no call node (the `foreach` protocol asks for
-    `next()`) gets the signature and writes nothing; the call that `foreach` then
-    validates writes it. A template check and an early inference write nothing either.
+    fixpoint round. A question with no `site` (the `foreach` protocol asks for `next()`)
+    gets the signature and writes nothing; the call that `foreach` then validates writes
+    it. A template check and an early inference write nothing either.
 
     An instance that fails a target bound gets no copy, and the last rung refuses the
     call (CE4006). A type argument in an `E` position of the template is CE2084 at the
-    call (E3), told only with `report` and a call to point at.
+    call (E3), told only with `report` and a site to point at.
     """
     from sushi_lang.semantics.generics.extensions import (
         bounds_hold_for, target_copy_args, target_copy_substitution)
@@ -84,13 +73,12 @@ def instantiate_target_extension(validator: 'TypeValidator', receiver_type, temp
     if args is None or not bounds_hold_for(template, args, validator.tables):
         return None
     substitution = target_copy_substitution(template, receiver_type)
-    site = call.loc if call is not None else None
-    report = report and call is not None
+    report = report and site is not None
     if _refuses_non_error_arguments(validator, template, receiver_type, substitution,
                                     site, report):
         return RESOLUTION_REPORTED if report else None
     concrete = target_copy_signature(validator, template, receiver_type)
-    if call is not None and validator.queues_late_copies:
+    if site is not None and validator.queues_late_copies:
         validator.extension_table.add_method(concrete)
         _queue_extension_instantiation(validator, template, receiver_type, args, (), site)
     return concrete
@@ -224,8 +212,8 @@ def _queue_extension_instantiation(validator: 'TypeValidator', template, target_
         site=(site, validator.reporter.filename)))
 
 
-# Returned by resolve_method_generic_extension when it found the template but the
-# call cannot use it (CE2063 already reported): the caller must not add CE2008 on top.
+# Returned when a rung found the template but the call cannot use it (the rung reported
+# the fault): the caller must not add CE2008 on top.
 RESOLUTION_REPORTED = object()
 
 
@@ -236,18 +224,13 @@ class ResolvedMethod:
 
 
 def resolve_extension_method(validator: 'TypeValidator', receiver_type,
-                             method_name: str, call=None, report: bool = True,
-                             static: bool = False):
-    """The three EXTENSION rungs, in the order every caller reads them.
+                             method_name: str, report: bool = True,
+                             static: bool = False, site: Optional[Span] = None):
+    """The EXTENSION rungs, in the order every caller reads them.
 
     The extension table, then a `T[]` template instantiated at this call site, then a
-    method-generic template solved from the arguments. Returns None, the method, or
-    RESOLUTION_REPORTED when the last rung emitted CE2063 and the caller must not add
-    CE2008 on top.
-
-    A caller with no call NODE -- the `foreach` protocol asks for a nullary `next()` --
-    passes `call=None`, and the method-generic rung is skipped: it solves its type
-    arguments from the call's own arguments, and there are none to read.
+    template of a generic target. Returns None, the method, or RESOLUTION_REPORTED when a
+    rung reported the fault and the caller must not add CE2008 on top.
 
     `static` says which of the two callable shapes is being asked for (#542). The two
     share one table, keyed on (type, name), so ONE filter keeps them apart: an instance
@@ -256,6 +239,8 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
 
     Whatever a rung answers, the calling unit must be allowed to call it
     (`docs/design/extension-visibility.md`): `_choose_visible` reads the one predicate.
+    A refusal stands at `site`. The method-generic rung does not run here: the arm of the
+    call asks it after this answer (`visit/method_templates.py`).
     """
     records = validator.extension_table.declarations(receiver_type, method_name)
     templates = _uncut_templates(validator, receiver_type, method_name, records)
@@ -265,32 +250,23 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
                     if bool(getattr(record, "is_static", False)) == static]
         if not matching:
             return None
-        chosen = _choose_visible(validator, receiver_type, method_name, matching, call,
+        chosen = _choose_visible(validator, receiver_type, method_name, matching, site,
                                  report)
         if not isinstance(chosen, GenericExtensionMethod):
             return chosen
         if isinstance(receiver_type, DynamicArrayType):
-            method = instantiate_array_extension(validator, receiver_type, chosen,
-                                                 call.loc if call is not None else None)
+            method = instantiate_array_extension(validator, receiver_type, chosen, site)
         else:
-            method = instantiate_target_extension(validator, receiver_type, chosen, call,
-                                                  report)
+            method = instantiate_target_extension(validator, receiver_type, chosen, report,
+                                                  site)
             if method is RESOLUTION_REPORTED:
                 return method
         if method is not None:
             return method
 
-    if method is None and call is not None:
-        resolved = resolve_method_generic_extension(validator, receiver_type, call,
-                                                   report=report)
-        if resolved is RESOLUTION_REPORTED:
-            return RESOLUTION_REPORTED
-        method = resolved
-
     if method is None:
-        method = _answer_from_template(
-            validator, receiver_type, method_name, call.loc if call is not None else None,
-            report=report and call is not None, static=static)
+        method = _answer_from_template(validator, receiver_type, method_name, site,
+                                       report=report and site is not None, static=static)
         if method is RESOLUTION_REPORTED:
             return RESOLUTION_REPORTED
 
@@ -298,7 +274,7 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
         return method
     if bool(getattr(method, "is_static", False)) != static:
         return None
-    return _choose_visible(validator, receiver_type, method_name, [method], call, report)
+    return _choose_visible(validator, receiver_type, method_name, [method], site, report)
 
 
 def _uncut_templates(validator: 'TypeValidator', receiver_type, method_name: str,
@@ -324,12 +300,12 @@ def _uncut_templates(validator: 'TypeValidator', receiver_type, method_name: str
 
 
 def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
-                    records: list, call, report: bool):
+                    records: list, site: Optional[Span], report: bool):
     """The one extension of `records` that the calling unit calls, or a refusal.
 
     An own extension wins (C3, C5). One visible extension answers. Two or more visible
     ones are CE3023 at the call (C4). No visible one is CE3022 or CE3005. A refusal is
-    reported only with `report` and a call to point at, and answers RESOLUTION_REPORTED,
+    reported only with `report` and a call site to point at, and answers RESOLUTION_REPORTED,
     so the caller adds no CE2008. A reader with no unit of its own takes the first.
     """
     from sushi_lang.semantics.passes.types.visibility import (
@@ -347,14 +323,12 @@ def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
         return own[0]
     if len(visible) == 1:
         return visible[0]
-    if not (report and call is not None):
+    if not (report and site is not None):
         return None
     if visible:
-        reject_ambiguous_extension(validator, receiver_type, method_name, visible,
-                                   call.loc)
+        reject_ambiguous_extension(validator, receiver_type, method_name, visible, site)
     else:
-        reject_unreachable_extension(validator, receiver_type, method_name, reaches,
-                                     call.loc)
+        reject_unreachable_extension(validator, receiver_type, method_name, reaches, site)
     return RESOLUTION_REPORTED
 
 
@@ -427,17 +401,16 @@ def _template_for(validator: 'TypeValidator', receiver_type, method_name: str):
 
 
 def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
-                   call=None, report: bool = True, static: bool = False):
+                   report: bool = True, static: bool = False):
     """The whole ladder for a USER-written method: a perk implementation, then extensions.
 
     A perk implementation is the sanctioned override and wins
     (`docs/design/method-resolution.md`), so it is asked first. Built-in methods are NOT
-    on this ladder: each family resolves its own before the ladder is reached, and that
-    order is pinned by `tests/unit/test_method_resolution_family_order.py`.
+    on this ladder: each family resolves its own before the ladder is reached, and the
+    claims of the families are disjoint (`tests/unit/test_method_family_dispatch_is_one.py`).
 
-    Returns a `ResolvedMethod`, None, or RESOLUTION_REPORTED. Four callers read it --
-    the validation half, the inference half, the `foreach` protocol and the static path
-    -- and the point of one function is that a fifth cannot drift.
+    Returns a `ResolvedMethod`, None, or RESOLUTION_REPORTED. The `foreach` protocol and
+    the static path read it, and the point of one function is that a third cannot drift.
 
     `static` skips the perk rung outright: a perk holds no static (CE4014), so a
     contract can never answer a call written on the type name.
@@ -448,7 +421,7 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
             return ResolvedMethod(method=perk_method)
 
     method = resolve_extension_method(validator, receiver_type, method_name,
-                                      call=call, report=report, static=static)
+                                      report=report, static=static)
     if method is RESOLUTION_REPORTED:
         return RESOLUTION_REPORTED
     if method is None:
@@ -456,8 +429,8 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
     return ResolvedMethod(method=method)
 
 
-def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
-                                  method_name: str, call, report: bool):
+def find_method_generic_template(validator: 'TypeValidator', receiver_type,
+                                 method_name: str, site: Optional[Span], report: bool):
     """The method-generic template a receiver answers to, plus its receiver substitution.
 
     Three receiver shapes: a `T[]` (the `$array` templates, element substitution), an
@@ -477,8 +450,7 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
                 and not (t.target_key and t.target_key != target_key)]
 
     def choose(templates):
-        return _choose_visible(validator, receiver_type, method_name, templates, call,
-                               report)
+        return _choose_visible(validator, receiver_type, method_name, templates, site, report)
 
     table = validator.generic_extension_table
     if isinstance(receiver_type, DynamicArrayType):
@@ -514,11 +486,9 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
     return None, None
 
 
-def _unsolved_margs_help(args, count: int) -> str:
+def unsolved_margs_help(bare_lambda: bool, count: int) -> str:
     """The help of CE2063, from its cause: a bare-param lambda, or no argument at all."""
-    from sushi_lang.semantics.ast import Lambda
-    if any(isinstance(arg, Lambda) and any(p.ty is None for p in arg.params)
-           for arg in args):
+    if bare_lambda:
         return ("annotate the lambda's parameter types ('|i32 x| ...'), or pass a named "
                 "function -- a bare-param lambda has no type of its own to infer from")
     pronoun = "them" if count > 1 else "it"
@@ -526,50 +496,31 @@ def _unsolved_margs_help(args, count: int) -> str:
             f"no '@(...)' slot, so write the type parameter in a parameter type")
 
 
-def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, call,
-                                     report: bool = True):
-    """Resolve a call against a method-generic template (`name@(U)`, Phase 4).
+def reject_unsolved_margs(validator: 'TypeValidator', method: str, unsolved, site,
+                          help_text: str) -> None:
+    """CE2063: the arguments of the call solve no method-level type parameter of `unsolved`."""
+    names = ", ".join(f"'{n}'" for n in unsolved)
+    er.emit_with(validator.reporter, er.ERR.CE2063, site,
+                 plural="s" if len(unsolved) > 1 else "", names=names, method=method) \
+        .help(help_text).emit()
 
-    The receiver substitution and the method-parameter unification COMPOSE: the
-    receiver names T, the arguments solve U. The substituted signature is returned as
-    a synthetic ExtensionMethod -- never added to the ExtensionTable, which keys on
-    (type, name) alone -- the solved margs are stamped on the call (the backend's half
-    of the symbol identity), and the instantiation is queued for the analyzer's
-    fixpoint round. Returns None (no template), RESOLUTION_REPORTED (CE2063 emitted),
-    or the synthetic method.
+
+def method_generic_copy(validator: 'TypeValidator', template, receiver_type, receiver_subst,
+                        solved, site, report: bool):
+    """The signature of the copy of a method-generic template at the solved method arguments.
+
+    The receiver substitution and the method-parameter unification COMPOSE: the receiver
+    names T, the arguments solve U. The signature is never added to the ExtensionTable,
+    which keys on (type, name) alone. It holds the method arguments (the half of the symbol
+    identity that a call reads), and the copy is queued for the analyzer's fixpoint round.
+    A type argument that a rule refuses answers RESOLUTION_REPORTED, or None with no
+    `report`.
     """
-    from sushi_lang.semantics.generics.pack_inference import (
-        infer_call_arg_type, solve_leading_type_args)
-    from sushi_lang.semantics.generics.types import substitute_type_params
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-    template, receiver_subst = _find_method_generic_template(
-        validator, receiver_type, call.method, call, report)
-    if template is None or template is RESOLUTION_REPORTED:
-        return template
-
-    expected_params = [
-        substitute_type_params(p.ty, receiver_subst) if p.ty is not None else None
-        for p in template.params]
-
     margs_names = list(template.method_type_param_names)
-    arg_types = [infer_call_arg_type(validator, arg) if expected is not None else None
-                 for arg, expected in zip(call.args, expected_params, strict=False)]
-    type_param_map, unsolved = solve_leading_type_args(
-        template, arg_types, validator.struct_table.by_name, validator.enum_table.by_name,
-        partial=True, param_types=expected_params, type_param_names=margs_names)
-    if unsolved:
-        if report:
-            names = ", ".join(f"'{n}'" for n in unsolved)
-            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
-                         plural="s" if len(unsolved) > 1 else "",
-                         names=names, method=call.method) \
-                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
-            return RESOLUTION_REPORTED
-        return None
-
     margs = tuple(
-        resolve_unknown_type(type_param_map[n], validator.struct_table.by_name,
+        resolve_unknown_type(solved[n], validator.struct_table.by_name,
                              validator.enum_table.by_name)
         for n in margs_names)
 
@@ -578,23 +529,24 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
 
     # E3 at the call, which is the instance: no copy is cut for a refused argument.
     if _refuses_non_error_arguments(validator, template, receiver_type, full_subst,
-                                    call.loc, report):
+                                    site, report):
         return RESOLUTION_REPORTED if report else None
 
     receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
     receiver_args = tuple(receiver_subst[n] for n in receiver_names)
     if _refuses_unmet_bounds(validator, template, template.name, receiver_type,
-                             receiver_args, margs, call.loc, report=report):
+                             receiver_args, margs, site, report=report):
         return RESOLUTION_REPORTED if report else None
 
     concrete = substituted_extension_signature(validator, template, receiver_type,
                                                full_subst)
-    call.callee_method_type_args = margs
+    concrete.method_type_args = margs
 
     # A template check cuts no copy (#1070).
     if not validator.in_template_check:
+        validator.extension_table.add_method_generic_copy(concrete)
         _queue_extension_instantiation(validator, template, receiver_type,
-                                       receiver_args, margs, call.loc)
+                                       receiver_args, margs, site)
     return concrete
 
 
@@ -665,35 +617,7 @@ def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_
     return refused
 
 
-def _perk_answers(validator: 'TypeValidator', call: MethodCall, receiver_type) -> bool:
-    """Does a perk implementation answer this call? Not when a family beats the perk."""
-    family = METHOD_TYPE_REGISTRY.claim(receiver_type, call.method, validator)
-    if family is not None and family.beats_perk:
-        return False
-    return validator.perk_impl_table.get_method(receiver_type, call.method) is not None
-
-
-def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
-                              receiver_type) -> bool:
-    """CE2431: a resource type has no deep copy (HANDLES.md ruling R3).
-
-    A derived clone copies field by field, so cloning a handle copies its descriptor
-    number and leaves two values that both drop. The refusal reaches anything HOLDING
-    one -- a struct field, an array element, a container -- because the copy happens one
-    level down there just the same.
-
-    Asked before every clone family rather than inside one: `.clone()` is registered on
-    a struct, an enum, an array and a container by different seams, and the rule is the
-    receiver's, not the seam's. The container and array families beat a perk, so the
-    refusal comes before them too (#770); only a perk implementation that answers the
-    call is the sanctioned override.
-    """
-    if call.method != "clone":
-        return False
-    return reject_uncloneable(validator, call, receiver_type)
-
-
-def reject_uncloneable(validator: 'TypeValidator', call: MethodCall, value_type) -> bool:
+def reject_uncloneable(validator: 'TypeValidator', call: 'ShirExpr', value_type) -> bool:
     """CE4018 or CE2431 when a value of `value_type` has no deep copy. True when refused.
 
     The one rule of `.clone()`, read by `.clone()` itself and by `clone_each`, which
@@ -725,7 +649,7 @@ def reject_uncloneable(validator: 'TypeValidator', call: MethodCall, value_type)
     return True
 
 
-def _reject_clone_of_opaque(validator: 'TypeValidator', call: MethodCall,
+def _reject_clone_of_opaque(validator: 'TypeValidator', call: 'ShirExpr',
                             receiver_type, param: TypeParameter) -> None:
     """CE4018: the receiver holds a type parameter that does not promise `Clone`.
 
@@ -771,260 +695,41 @@ def _unhandled_channel_payload(receiver_type):
     return None
 
 
-def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall,
-                                    receiver_type) -> bool:
+def reject_unhandled_channel_chain(validator: 'TypeValidator', method: str, receiver_type,
+                                   loc, receiver_loc, called: Optional[str]) -> bool:
     """CE2515, the resolution FALLBACK of ruling 5.
 
     Fires only when resolution missed on a Result/Maybe receiver AND the method exists
     on the payload type -- which is what tells an unhandled channel from a typo. The
     diagnostic is relational: the primary names the missing method, the note points at
-    the call that returned the wrapper, and the help spells the fix: `??` for a Result,
-    `.or_err(nom e)??` for a Maybe, because `??` takes a Result only.
+    the call that returned the wrapper (`receiver_loc`; `called` is its method name), and
+    the help spells the fix: `??` for a Result, `.or_err(nom e)??` for a Maybe, because
+    `??` takes a Result only.
     """
-    from sushi_lang.semantics.ast import DotCall
     from sushi_lang.semantics.type_predicates import is_instance_of
 
     payload = _unhandled_channel_payload(receiver_type)
-    if payload is None or not _method_exists_on(validator, payload, call.method):
+    if payload is None or not _method_exists_on(validator, payload, method):
         return False
 
-    diag = er.emit_with(validator.reporter, er.ERR.CE2515, call.loc,
-                        method=call.method, wrapper=display_type(receiver_type))
-    receiver = call.receiver
-    receiver_loc = getattr(receiver, "loc", None)
+    diag = er.emit_with(validator.reporter, er.ERR.CE2515, loc,
+                        method=method, wrapper=display_type(receiver_type))
     if receiver_loc is not None:
         diag.note_at("the unhandled channel comes from this call", receiver_loc)
-    called = receiver.method if isinstance(receiver, (MethodCall, DotCall)) else None
     if is_instance_of(receiver_type, "Maybe"):
-        fix = (f" -- e.g. '{called}().or_err(nom <error value>)??.{call.method}()'"
+        fix = (f" -- e.g. '{called}().or_err(nom <error value>)??.{method}()'"
                if called else "")
         diag.help("handle the Maybe first: match on it, '.realise(default)', or give it "
                   f"an error value and propagate with '.or_err(nom e)??'{fix}").emit()
         return True
-    fix = f" -- e.g. '{called}()??.{call.method}()'" if called else ""
+    fix = f" -- e.g. '{called}()??.{method}()'" if called else ""
     diag.help("handle the channel first: match on it, '.realise(default)', or "
               f"propagate with '??'{fix}").emit()
     return True
 
 
-def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
-                                 mode) -> None:
-    """A MARKED receiver must name storage the call can reach (#327, ruling R25).
-
-    A `poke self` writes the receiver, so read-only storage cannot take it (CE2400); a
-    temporary receiver is the borrow pass's rule (CE2429). A `peek self` receiver only
-    reads, so it never arrives here.
-
-    A `nom self` TAKES the receiver, and that is the borrow pass's rule for storage of
-    either kind (CE2436, #726): `stdout.close()` and a constant's `release()` read one
-    code. A temporary is owned by construction, so it is legal there -- the same rule
-    ruling R11 states for a match scrutinee.
-    """
-    from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
-
-    root = walk_place(call.receiver, Step.MEMBER | Step.INDEX | Step.CALL).name
-    if root is None:
-        return
-    if root.id in validator.variable_types or mode.consumes:
-        return
-    # Only the WRITE asks the borrow gate. A unit variable has an address for a `poke
-    # self`, and a take of either kind of unit-level storage is CE2436. The lookup is
-    # SCOPED: the flat view is first-wins over the whole program, so it answered with
-    # another unit's declaration of the same name (#685).
-    reject_borrow_of_constant(validator.err, root.id, validator.const_sig(root.id),
-                              root.loc, mode=mode.value)
-
-
-def _validate_foreign_ptr_call(validator: 'TypeValidator', call: MethodCall,
-                               receiver_type) -> None:
-    """CE5011: a `ptr` has the closed set of foreign-memory methods and nothing else.
-
-    No hash, no string form, no extension (#1086). Wrap the handle in a struct and extend
-    the struct instead.
-    """
-    if not METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
-                                                beats_perk=True):
-        er.emit(validator.reporter, er.ERR.CE5011, call.loc, method=call.method)
-
-
-def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
-    """The method-call ladder: a built-in family, a perk implementation, an extension.
-
-    Each rung is a named step that answers whether it took the call. The order is
-    `docs/design/method-resolution.md`'s and the codegen dispatcher's alike, and the
-    families are one table both halves of the pass read (`method_registry.py`, #751).
-    """
-    # A bloom spread `arr...` is never valid in a method call (methods cannot be
-    # variadic, CE0115). Reject early so it never reaches the backend (CE0120).
-    if reject_spread_args(validator, call.args):
-        return
-
-    validator.validate_expression(call.receiver)
-    receiver_type = validator.infer_expression_type(call.receiver)
-
-    if isinstance(receiver_type, ForeignPtrType):
-        _validate_foreign_ptr_call(validator, call, receiver_type)
-        return
-
-    if receiver_type is None:
-        # A receiver that named no value may still name a TYPE: `List.new()` and
-        # `HashMap.new()` are statics, and a static has no receiver to dispatch on.
-        if isinstance(call.receiver, Name):
-            _validate_type_name_call(validator, call, call.receiver.id)
-        return
-
-    # StructType for perk and auto-derived methods; FunctionType because a function value
-    # carries clone(). Without the latter a method call on a fn value was never validated
-    # AT ALL, and reached codegen to die mangling `fn(i32) - i32_clone`.
-    if not isinstance(receiver_type, RECEIVERS_WITH_METHODS):
-        return
-
-    if (not _perk_answers(validator, call, receiver_type)
-            and _reject_clone_of_resource(validator, call, receiver_type)):
-        return
-
-    if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
-                                            beats_perk=True):
-        return
-
-    if _validate_perk_method(validator, call, receiver_type):
-        return
-
-    if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
-                                            beats_perk=False):
-        return
-
-    _validate_extension_call(validator, call, receiver_type)
-
-
-def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
-                             type_name: str) -> None:
-    """A call written on a built-in generic's NAME: `List.new()`, `HashMap.new()`.
-
-    There is no receiver here, so no family claims it; the count is still the family's
-    row, and a miscount is CE2009 (#799). Every other static goes through `passes/types/calls/statics.py`;
-    these two keep their narrow emitters because a container static has no `ExtendDef`
-    to converge onto (`docs/design/method-resolution.md`).
-    """
-    # A static on a GATED generic obeys the scope like the type does: behind
-    # an aliased import the bare name is refused, and the qualified form is
-    # what folds to this shape (#506, decision A-strict).
-    from sushi_lang.semantics.namespaces import GATED_GENERIC_NAMES
-    if (type_name in GATED_GENERIC_NAMES
-            and getattr(call, "namespace_ref", None) is None):
-        from sushi_lang.semantics.passes.types.visibility import reject_out_of_scope_type
-        if reject_out_of_scope_type(validator, type_name, call.receiver.loc):
-            return
-
-    from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
-    family, statics = _CONTAINER_STATICS.get(type_name, ("", ()))
-    if call.method in statics:
-        if reject_builtin_miscount(validator.reporter, call, f"{type_name}.{call.method}",
-                                   arity_of_family(family)):
-            return
-        if call.method in _CONTAINER_STATIC_COUNTS:
-            from sushi_lang.semantics.passes.types.arrays import reject_non_i32
-            count = call.args[0]
-            reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
-        elif call.method == "alloc":
-            _validate_own_alloc_payload(validator, call)
-        elif type_name == ITERATOR_BASE:
-            _validate_iterator_new(validator, call)
-        stamp_builtin_modes(call, METHOD_TYPE_REGISTRY.family(family).modes)
-
-
-#: The statics a built-in container answers on its type NAME, and the family whose count
-#: row each one reads (`MethodFamily.arity`).
-_CONTAINER_STATICS = {"List": ("list", ("new", "with_capacity")),
-                      "HashMap": ("hashmap", ("new",)),
-                      "Own": ("own", ("alloc",)),
-                      ITERATOR_BASE: ("iterator", ("new",))}
-
-#: The container statics whose one argument is a count, an i32 position (#870).
-_CONTAINER_STATIC_COUNTS = frozenset({"with_capacity"})
-
-
-def _validate_iterator_new(validator: 'TypeValidator', call: MethodCall) -> None:
-    """`Iterator.new(nom x)`: `x` is walkable, and the result owns `x` and its items.
-
-    The `next()` call on the value is built and checked here, as a protocol `foreach`
-    builds its own, so the backend reads the receiver mode and the symbol from its
-    stamps (#1259).
-    """
-    from sushi_lang.semantics.passes.types.statements import (
-        protocol_item_type, protocol_next_call)
-    from sushi_lang.semantics.hidden_names import hidden_name
-
-    argument = call.args[0]
-    argument_type = validator.validate_expression(argument)
-    if argument_type is None:
-        argument_type = validator.infer_expression_type(argument)
-    if argument_type is None:
-        return
-    if protocol_item_type(validator, argument_type) is None:
-        er.emit(validator.reporter, er.ERR.CE2033, argument.loc,
-                got=display_type(argument_type))
-        return
-    item, next_call = protocol_next_call(validator, argument_type,
-                                         hidden_name("iter_new", id(call)), argument.loc)
-    call.iterator_next = next_call
-    call.inferred_return_type = iterator_new_type(validator, call)
-
-
-def iterator_new_type(validator: 'TypeValidator', call) -> Optional[IteratorType]:
-    """What `Iterator.new(nom x)` answers: `Iterator@(T)` with owned items, or None."""
-    from sushi_lang.semantics.passes.types.statements import protocol_item_type
-    if len(call.args) != 1:
-        return None
-    argument_type = validator.infer_expression_type(call.args[0])
-    if argument_type is None:
-        return None
-    item = protocol_item_type(validator, argument_type)
-    return IteratorType(element_type=item) if item is not None else None
-
-
-def _validate_own_alloc_payload(validator: 'TypeValidator', call: MethodCall) -> None:
-    """`Own.alloc(v)`: the payload is an argument like any other, against the stamped `T`."""
-    from sushi_lang.semantics.generics.own import own_payload_type
-    payload = own_payload_type(getattr(call, "resolved_struct_type", None))
-    check_arguments(validator, "Own.alloc", [payload], call.args, call.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
-
-
-def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
-                          receiver_type) -> bool:
-    """A perk implementation answered the call. Answers whether one did.
-
-    A perk implementation is the sanctioned override
-    (`docs/design/method-resolution.md`), so the ladder asks it between the two halves
-    of the family table: after the families a built-in wins outright, before the ones
-    that decline to it.
-
-    It takes the SAME check as an extension method, and the same two codes with it: a
-    perk method and an extension method are one rule -- a user-written method on a type
-    -- so one rule gets one checker. CE0023 is in the INTERNAL family and documented as
-    a codegen check, and CE2023 says "dynamic array method" about whatever it is handed;
-    both were wrong here, and neither was visible until io/contracts made `write(string)`
-    a perk method.
-    """
-    perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
-    if perk_method is None:
-        return False
-
-    if _reject_call_of_drop(validator, call, receiver_type):
-        return True
-
-    if not _check_user_method(validator, call, receiver_type, perk_method,
-                              stop_on_arity=True):
-        return True
-
-    if perk_method.ret is not None:
-        call.inferred_return_type = extension_call_result_type(validator, perk_method)
-    return True
-
-
-def _reject_call_of_drop(validator: 'TypeValidator', call: MethodCall,
-                         receiver_type) -> bool:
+def reject_call_of_drop(validator: 'TypeValidator', loc: Span, receiver_type,
+                        method: str) -> bool:
     """CE4020: a written call of the `drop` method of the predefined `Drop` perk (#1198).
 
     The compiler runs `drop()` at the scope exit, one time for each value, and the
@@ -1032,10 +737,10 @@ def _reject_call_of_drop(validator: 'TypeValidator', call: MethodCall,
     gives the method, so a `drop` of a user perk stays an ordinary method.
     """
     from sushi_lang.semantics.passes.collect.perks import PerkCollector
-    perk = validator.perk_impl_table.providing_perk(receiver_type, call.method)
+    perk = validator.perk_impl_table.providing_perk(receiver_type, method)
     if perk != PerkCollector.DROP_PERK:
         return False
-    er.emit_with(validator.reporter, er.ERR.CE4020, call.loc,
+    er.emit_with(validator.reporter, er.ERR.CE4020, loc,
                  type=display_type(receiver_type)) \
         .help("to end the value early, let it leave its scope, give it to a function "
               "with 'nom', or declare a 'nom self' method on the type (as 'close()' "
@@ -1044,43 +749,7 @@ def _reject_call_of_drop(validator: 'TypeValidator', call: MethodCall,
     return True
 
 
-def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
-                             receiver_type) -> None:
-    """The last rung: a user-written extension method, or the unknown-method refusal.
-
-    A generic-target extension is resolved through the monomorphized copy the
-    monomorphize pass put in the extension table under the concrete receiver type. There
-    used to be a second lookup here, by base name -- it repeated the first verbatim, so
-    it could only ever find None again, and under #393 asking by base name is the wrong
-    question anyway: a concrete target answers its own instantiation and no other.
-    """
-    method = resolve_extension_method(validator, receiver_type, call.method, call=call)
-    if method is RESOLUTION_REPORTED:
-        return
-
-    if method is None:
-        if _reject_unhandled_channel_chain(validator, call, receiver_type):
-            return
-        if _was_refused(validator, receiver_type, call.method):
-            return
-        if isinstance(call.receiver, Name) and call.receiver.id in validator.refused_bindings:
-            return
-        diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.loc,
-                            name=f"{display_type(receiver_type)}.{call.method}")
-        if isinstance(receiver_type, IteratorType):
-            diag.help("an iterator has the methods 'clone' and the adapters 'map', "
-                      "'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' "
-                      "and 'collect': walk it with 'foreach', or call the method on the "
-                      "collection it comes from")
-        _explain_unpromised_method(validator, diag, receiver_type, call.method)
-        diag.emit()
-        return
-
-    call.callee_extension_unit = method.unit_name
-    _check_user_method(validator, call, receiver_type, method, stop_on_arity=False)
-
-
-def _explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
+def explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
                                method_name: str) -> None:
     """The note and the help of CE2008 on an opaque type parameter (#1070).
 
@@ -1101,7 +770,8 @@ def _explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
                   f"of its constraints and nothing more")
 
 
-def _was_refused(validator: 'TypeValidator', receiver_type, method_name: str) -> bool:
+def declaration_was_refused(validator: 'TypeValidator', receiver_type,
+                            method_name: str) -> bool:
     """The collect pass refused this method's declaration, and said so there.
 
     An extension (#808) and a perk implementation (#860, #864) keep one record each,
@@ -1114,280 +784,8 @@ def _was_refused(validator: 'TypeValidator', receiver_type, method_name: str) ->
                               validator.tables.generic_perk_impls))
 
 
-def _check_user_method(validator: 'TypeValidator', call: MethodCall, receiver_type,
-                       method, *, stop_on_arity: bool) -> bool:
-    """The check a USER-written method takes, perk implementation or extension alike.
-
-    Stamp what the borrow pass and the backend read off the call -- the receiver's mode
-    and the declared parameter modes -- then measure the arguments through the one
-    argument check (`passes/types/arguments.py`). Answers whether the COUNT fit.
-
-    `stop_on_arity` is the one thing the two rungs do not share: a perk call reports a
-    wrong count and says no more, an extension call reads the remaining arguments as a
-    plain function call does.
-    """
-    return _run_method_steps(validator, call, receiver_type, method,
-                             stop_on_arity=stop_on_arity)
-
-
-def _run_method_steps(validator: 'TypeValidator', call: MethodCall, receiver_type,
-                      method, *, stop_on_arity: bool, solve=None) -> bool:
-    """The steps of a method check, in their order. Answers whether the COUNT fit.
-
-    The receiver mode comes from `method`. `solve`, when given, runs after it and
-    answers the declaration that holds the parameters, or None when it reported a
-    fault: a built-in method with a method-level type parameter (design 8.3) has its
-    parameters only after its arguments solve them.
-    """
-    _check_receiver_mode(validator, call, method)
-    if solve is not None:
-        method = solve()
-        if method is None:
-            return False
-    _stamp_param_modes(call, method)
-    stamp_call_sources(validator, call, method)
-    return check_arguments(
-        validator, f"{display_type(receiver_type)}.{call.method}",
-        [p.ty for p in method.params], call.args, call.loc,
-        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-        stop_on_arity=stop_on_arity)
-
-
-def _check_receiver_mode(validator: 'TypeValidator', call: MethodCall, method) -> None:
-    """A `poke self` / `peek self` method (#327) receives its receiver's ADDRESS.
-
-    Stamp the mode on the call node -- the borrow pass treats a poke-self call as a
-    WRITE to the receiver root (the CE2408/CE2412 gates), and the backend passes a
-    pointer instead of a value. Both read the stamp instead of re-resolving the method.
-    A poke receiver must also name storage the call can reach; a peek one only reads.
-    """
-    self_mode = getattr(method, "self_mode", None)
-    if self_mode is None:
-        return
-    call.callee_self_mode = self_mode
-    mode = receiver_mode(self_mode)
-    if mode is not ParamMode.PEEK:
-        _reject_unreachable_receiver(validator, call, mode)
-
-
 # The validation half of each built-in family, in the table's order. The claim is the
 # registry's and is written once; what stands here is the CHECK that follows it.
-
-
-@METHOD_TYPE_REGISTRY.validator("array")
-@METHOD_TYPE_REGISTRY.validator("array_hash")
-def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
-                           receiver_type) -> None:
-    from sushi_lang.semantics.passes.types.arrays import validate_builtin_array_method
-    validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("string")
-def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
-                            receiver_type) -> None:
-    from sushi_lang.sushi_stdlib.src.collections.strings import (
-        validate_builtin_string_method_with_validator)
-    validate_builtin_string_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("result")
-def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
-                            receiver_type) -> None:
-    from sushi_lang.semantics.generics.results import (
-        RESULT_METHOD_SIGNATURES, validate_result_method_with_validator)
-    signature = RESULT_METHOD_SIGNATURES.get(call.method)
-    if signature is not None:
-        _validate_builtin_signature(validator, call, receiver_type, signature)
-        return
-    validate_result_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("maybe")
-def _validate_maybe_family(validator: 'TypeValidator', call: MethodCall,
-                           receiver_type) -> None:
-    from sushi_lang.semantics.generics.maybe import (
-        MAYBE_METHOD_SIGNATURES, validate_maybe_method_with_validator)
-    signature = MAYBE_METHOD_SIGNATURES.get(call.method)
-    if signature is not None:
-        _validate_builtin_signature(validator, call, receiver_type, signature)
-        return
-    validate_maybe_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
-
-
-def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
-                                receiver_type, signature) -> None:
-    """A built-in method with a method-level type parameter (design 8.3).
-
-    It takes the steps of a user method: the receiver mode and the parameter modes are
-    stamped for the borrow pass and the backend, and the arguments go through the one
-    argument check. Between the two, the arguments solve the method-level type
-    parameters, and E3 judges each one in an `E` position at this call, which is the
-    instance.
-    """
-    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-        instance_return_type)
-
-    # The borrow pass and the backend read the receiver type from this stamp.
-    call.resolved_enum_type = receiver_type
-    solved: list = []
-
-    def solve():
-        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
-        if instance is not None:
-            solved.append(instance)
-        return instance
-
-    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
-                      solve=solve)
-    if solved:
-        call.inferred_return_type = instance_return_type(validator, solved[0])
-
-
-def _solve_builtin_instance(validator: 'TypeValidator', call: MethodCall, receiver_type,
-                            signature):
-    """The instance this call names, or None after the fault is reported.
-
-    A type parameter the arguments leave unsolved is CE2063; a solved one in an `E`
-    position that is not an error type is refused by E3.
-    """
-    from sushi_lang.semantics.error_types import reject_non_error_type
-    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-        solve_builtin_call)
-
-    instance, unsolved = solve_builtin_call(validator, signature, receiver_type, call)
-    if instance is None:
-        if unsolved:
-            names = ", ".join(f"'{n}'" for n in unsolved)
-            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
-                         plural="s" if len(unsolved) > 1 else "",
-                         names=names, method=call.method) \
-                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
-        return None
-
-    structs = validator.struct_table.by_name
-    enums = validator.enum_table.by_name
-    refused = [name for name in signature.error_parameters
-               if reject_non_error_type(validator.reporter, instance.substitution[name],
-                                        call.loc, structs, enums)]
-    if refused:
-        return None
-    return instance
-
-
-@METHOD_TYPE_REGISTRY.validator("own")
-def _validate_own_family(validator: 'TypeValidator', call: MethodCall,
-                         receiver_type) -> None:
-    from sushi_lang.semantics.generics.own import validate_own_method_with_validator
-    validate_own_method_with_validator(call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("hashmap")
-def _validate_hashmap_family(validator: 'TypeValidator', call: MethodCall,
-                             receiver_type) -> None:
-    from sushi_lang.semantics.generics.hashmap import validate_hashmap_method_with_validator
-    validate_hashmap_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("list")
-def _validate_list_family(validator: 'TypeValidator', call: MethodCall,
-                          receiver_type) -> None:
-    from sushi_lang.semantics.generics.list import validate_list_method_with_validator
-    validate_list_method_with_validator(call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("foreign_ptr")
-def _validate_foreign_ptr_family(validator: 'TypeValidator', call: MethodCall,
-                                 receiver_type) -> None:
-    from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_METHODS
-    check_arguments(validator, f"ptr.{call.method}", FOREIGN_PTR_METHODS[call.method].params,
-                    call.args, call.loc, mismatch_code=er.ERR.CE2006,
-                    arity_code=er.ERR.CE2009)
-
-
-@METHOD_TYPE_REGISTRY.validator("derived_hash")
-@METHOD_TYPE_REGISTRY.validator("derived_clone")
-def _validate_derived_method(validator: 'TypeValidator', call: MethodCall,
-                             receiver_type) -> None:
-    """A derived `hash` or `clone` takes no argument, and the count is the whole rule.
-
-    The registry checked it against the family's row before this hook ran.
-    """
-
-
-@METHOD_TYPE_REGISTRY.validator("contract")
-def _validate_contract_method(validator: 'TypeValidator', call: MethodCall,
-                              receiver_type) -> None:
-    """`a.eq(b)` and `a.compare(b)` take one value of the receiver's type; `to_str`
-    takes none, and the registry checked the count against the family's row."""
-    from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
-    from sushi_lang.semantics.typesys import deref_type
-    params = [deref_type(receiver_type)] * CONTRACT_METHOD_ARITY[call.method]
-    check_arguments(validator, f"{display_type(receiver_type)}.{call.method}", params,
-                    call.args, call.loc, mismatch_code=er.ERR.CE2006,
-                    arity_code=er.ERR.CE2009)
-
-
-@METHOD_TYPE_REGISTRY.validator("iterator")
-def _validate_iterator_family(validator: 'TypeValidator', call: MethodCall,
-                              receiver_type) -> None:
-    """`it.clone()`, or an adapter (#1228): the steps of a built-in signature, then the
-    result in the item mode that the receiver gives it."""
-    from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_SIGNATURES
-    from sushi_lang.semantics.typesys import deref_type
-    from ..iterator_adapters import adapter_result, settle_adapter_instance
-    signature = ITERATOR_METHOD_SIGNATURES.get(call.method)
-    if signature is None:
-        _validate_function_family(validator, call, receiver_type)
-        return
-    receiver_type = deref_type(receiver_type)
-    solved: list = []
-
-    def solve():
-        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
-        if instance is not None:
-            instance = settle_adapter_instance(validator, call, instance)
-            solved.append(instance)
-        return instance
-
-    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
-                      solve=solve)
-    if solved:
-        call.inferred_return_type = adapter_result(validator, call, receiver_type,
-                                                   solved[0], report=True)
-
-
-@METHOD_TYPE_REGISTRY.validator("function")
-def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
-                              receiver_type) -> None:
-    # A closure read out of a struct field or a container is a borrow, so consuming it is
-    # CE2411 and `.clone()` is the escape the diagnostic names -- it has to resolve here,
-    # or dispatch falls through to the extension path and mangles the type name into a
-    # symbol nobody defines. An iterator value has the one method `clone()` as well, with
-    # the same rule (#1259).
-    from sushi_lang.semantics.generics.closures import (
-        validate_function_method_with_validator)
-    validate_function_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
-
-
-@METHOD_TYPE_REGISTRY.validator("primitive")
-def _validate_primitive_family(validator: 'TypeValidator', call: MethodCall,
-                               receiver_type) -> None:
-    from sushi_lang.semantics.generics.primitives import validate_primitive_method
-    validate_primitive_method(call, receiver_type, validator.reporter)
-
-
-def _stamp_param_modes(call, method) -> None:
-    """Record the resolved method's declared parameter modes on the call node."""
-    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
-    params = getattr(method, "params", None) or ()
-    call.callee_param_modes = modes_for(params, CalleeKind.METHOD)
-    call.callee_param_names = tuple(p.name for p in params)
-    call.callee_param_types = tuple(p.ty for p in params)
 
 
 def _method_exists_on(validator: 'TypeValidator', payload, method_name: str) -> bool:

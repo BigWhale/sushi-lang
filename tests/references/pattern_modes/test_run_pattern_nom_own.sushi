@@ -1,0 +1,34 @@
+# `Own(nom x)` is refused, but a variant payload of type `Own@(T)` can be taken:
+# `Slot.Full(nom o)`. `match nom s:` hands a local over and the arm gives the box to a
+# `nom` parameter; a temporary scrutinee keeps the box to the end of the arm. Each box
+# and the string in its payload are destroyed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate box 1\nheld box 2\nempty\n"
+struct Note:
+    string text
+
+enum Slot:
+    Full(Own@(Note))
+    Empty
+
+fn make(i32 n) Slot:
+    if (n == 0):
+        return Slot.Empty
+    return Slot.Full(Own.alloc(Note("box {n}")))
+
+fn eat(nom Own@(Note) o) ~:
+    println("ate {o.get().text}")
+
+fn main() i32:
+    let Slot s = make(1)
+    match nom s:
+        Slot.Full(nom o) -> eat(nom o)
+        Slot.Empty -> println("empty")
+    match make(2):
+        Slot.Full(nom o) -> println("held {o.get().text}")
+        Slot.Empty -> println("empty")
+    match make(0):
+        Slot.Full(nom o) -> eat(nom o)
+        Slot.Empty -> println("empty")
+    return 0

@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n1\n2\n9\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_string.shir
+#
+# the SHIR dump of a match on a string: string literal arms in both quote forms, `|`
+# alternatives and `_`. A string arm is a `Literal` with the text after the escapes, so
+# `"fetch"` and `'fetch'` give one constant.
+
+fn verb(string word) i32:
+    let i32 code = 0
+    match word:
+        "get" | 'fetch' -> code := 1
+        "put" -> code := 2
+        _ -> code := 9
+    return code
+
+fn main() i32:
+    println(verb("get"))
+    println(verb("fetch"))
+    println(verb("put"))
+    println(verb("drop"))
+    println("Mostly Harmless")
+    return 0

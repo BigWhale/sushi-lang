@@ -1,0 +1,50 @@
+unit test_shir_variadic_expand
+
+ShirBody show_all (TemplateCheck("test_shir_variadic_expand.show_all"))
+  params : [(_0 "args": Ts, Guaranteed, pack: true)]
+  locals : [_1 "n": i32, _2 "a": Ts, _3 "line": string]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Expand(_2, "args", [Assign(LocalRef(_3), adopt Interp(["[", LocalRef(_2), "]"]), is_init: true), ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)])), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Return(adopt LocalRef(_1))
+
+ShirBody count (TemplateCheck("test_shir_variadic_expand.count"))
+  params : [(_0 "args": Ts, Guaranteed, pack: true)]
+  locals : [_1 "n": i32, _2: Ts]
+  block  :
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Expand(_2, "args", [Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Return(adopt LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@show_all__i32_string.pack2), [(Lit(1), Guaranteed), (Lit("Mostly Harmless"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@count__i32_string_bool.pack3), [(Lit(1), Guaranteed), (Lit("a"), Guaranteed), (Lit(true), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))
+
+ShirBody count__i32_string_bool.pack3
+  params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed), (_2 "#pack_args_2": bool, Guaranteed)]
+  locals : [_3 "n": i32]
+  block  :
+    Assign(LocalRef(_3), adopt Lit(0), is_init: true)
+    Assign(LocalRef(_3), adopt Binary(+, LocalRef(_3), Lit(1)), is_init: false)
+    Assign(LocalRef(_3), adopt Binary(+, LocalRef(_3), Lit(1)), is_init: false)
+    Assign(LocalRef(_3), adopt Binary(+, LocalRef(_3), Lit(1)), is_init: false)
+    Return(adopt LocalRef(_3))
+  copies : [block: [1..2, 2..3, 3..4]]
+
+ShirBody show_all__i32_string.pack2
+  params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed)]
+  locals : [_2 "n": i32, _3 "#line_x0": string, _4 "#line_x1": string]
+  block  :
+    Assign(LocalRef(_2), adopt Lit(0), is_init: true)
+    Assign(LocalRef(_3), adopt Interp(["[", LocalRef(_0), "]"]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))
+    Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)
+    Assign(LocalRef(_4), adopt Interp(["[", LocalRef(_1), "]"]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_4), Guaranteed)]))
+    Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)
+    Return(adopt LocalRef(_2))
+  copies : [block: [1..4, 4..7]]

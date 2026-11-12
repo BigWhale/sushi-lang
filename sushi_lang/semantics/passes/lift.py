@@ -1,318 +1,63 @@
-"""Lambda-lifting pass: turn each lambda literal into a top-level function + env."""
+"""The lift pass (docs/design/ir.md 7.9, ruling Q8).
+
+`LiftPass` runs on SHIR, between typecheck and borrow. It rewrites no node: the answers for
+each `Lambda` of a body are rows of the `LiftResults` of the body, the symbol of the lifted
+function and the captured locals in slot order. A body has its table checked (`check_lift`),
+and goes on to the borrow pass, also a body whose walk in typecheck reported an error.
+"""
 from __future__ import annotations
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Callable, Optional
 
-from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import (
-    Node, FuncDef, Lambda, Block, Return, Name, MemberAccess, Param, DotCall,
-)
-from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
-from sushi_lang.semantics.hidden_names import hidden_name
-from sushi_lang.semantics.typesys import StructType, ReferenceType, BorrowMode
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.body import Initializer, TemplateCheck
+from sushi_lang.semantics.shir.lift_check import check_lift
+from sushi_lang.semantics.shir.walk import walk
+from sushi_lang.semantics.slir.lower_signature import symbol_of
+from sushi_lang.semantics.unit_symbols import declaring_unit
 
-ENV_PARAM_NAME = hidden_name("closure_env")
-
-
-@runtime_checkable
-class Annotator(Protocol):
-    """What this pass needs from the typecheck pass, and nothing more.
-
-    A lifted lambda is a function the typecheck pass has never seen, and it has to be
-    typed before this pass looks inside its body for the next lambda (#629). The pass
-    names the CAPABILITY instead of the provider: it used to take
-    `TypeValidator._validate_function`, a PRIVATE method of another pass, so this pass
-    could not run or be tested without a `TypeValidator`, and a rename over there broke
-    this pass with no diagnostic (#687).
-    """
-
-    def annotate_function(self, func: FuncDef) -> None:
-        ...
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.body import ShirBody
+    from sushi_lang.semantics.shir.lowering import LoweredProgram
+    from sushi_lang.semantics.tables import SymbolTables
 
 
-class LambdaLifter:
-    def __init__(self, structs, func_table, program,
-                 annotate: Optional[Annotator] = None):
-        self.structs = structs
-        self.func_table = func_table
-        self.program = program
-        self.annotate = annotate
-        self._counter = 0
-        self._lifted: List[FuncDef] = []
-        # Whose body the walk is inside. A lambda lifted out of a library body becomes a
-        # function of its own and is checked as one, so it has to carry the same answer
-        # (#468).
-        self._owner_is_library = False
-        self._owner_origin = None
-        # And whose SOURCE it is. A lambda in a generic body lifts once per instance,
-        # every copy carrying the template's spans, so the copies answer one report
-        # (#648).
-        self._owner_instance_of = None
-        # And which template: a lambda of a copy of a template that the template check
-        # refused reports nothing, as the copy does (#1070).
-        self._owner_template_id = None
-        # And which scope its names resolve in: a copy of a compiled library's
-        # template resolves in the library unit's (#1120), and so does its lambda.
-        self._owner_scope_unit: Optional[str] = None
+class LiftPass:
+    """The lift pass over the SHIR bodies of one unit, one body at a time."""
 
-    def run(self) -> None:
-        for fn in list(self.program.functions):
-            if getattr(fn, "type_params", None):
-                continue  # generic templates: their instantiations carry the lambdas
-            self._walk_function(fn)
-        # Extension and perk-impl bodies emit through the same statement paths
-        # as a plain fn, so their lambdas lift the same way (#399).
-        # program.generic_extensions stays unwalked: templates, like generic
-        # fn templates -- their instantiation copies carry the lambdas and are
-        # lifted into the copy's home unit in `_check_copies` of the analyzer.
-        for ext in list(self.program.extensions):
-            self._walk_function(ext)
-        for impl in list(self.program.perk_impls):
-            for method in impl.methods:
-                self._walk_function(method)
-        self._own(None)
+    def __init__(self, shir: LoweredProgram, *, next_stage: Callable[..., None],
+                 unit: str) -> None:
+        self.shir = shir
+        self.next_stage = next_stage
+        self.unit = unit
 
-    def _own(self, owner) -> None:
-        """Take the answers of the body that the walk is inside: a function, an
-        extension method or a perk method. None clears them."""
-        self._owner_is_library = bool(getattr(owner, "is_library_template", False))
-        self._owner_origin = getattr(owner, "library_origin", None)
-        self._owner_instance_of = getattr(owner, "instance_of", None)
-        self._owner_template_id = getattr(owner, "template_id", None)
-        self._owner_scope_unit = getattr(owner, "scope_unit", None)
+    def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
+                   filename: Optional[str], typecheck_failed: bool = False) -> None:
+        """Lift the SHIR body of `decl`, which the typecheck pass finished.
 
-    def _walk_function(self, fn) -> None:
-        """Lift the lambdas of one body, as the owner of what they become: a function,
-        an extension method or a perk method."""
-        self._own(fn)
-        self._walk(fn.body)
-
-    def lift_body(self, owner) -> List[FuncDef]:
-        """Lift the body of one function, extension method or perk method, and answer
-        the FuncDefs this call produced (#399, #1155).
-
-        A copy that is cut after the per-unit loop lives in no unit AST, so the caller
-        runs the pass that the per-unit loop cannot: it borrow-checks exactly what this
-        call lifted. Each lifted function carries the answers of its owner, as a lambda
-        of a function does.
+        The pass writes one row of each kind for each `Lambda`, a lambda in a lambda too, in
+        the order of the walk. It checks the table of the body and gives the body, with the
+        tables that typecheck read it in, to the borrow pass, with `typecheck_failed` when
+        the walk of typecheck reported an error. The symbol has the symbol of the body as its
+        prefix, so a lambda of an instance is one function for each instance (ir.md 8.2).
         """
-        before = len(self._lifted)
-        self._walk_function(owner)
-        self._own(None)
-        return self._lifted[before:]
+        table = self.shir.lift_table_of(body)
+        lambdas = [value for _path, value in walk(body.block, "block")
+                   if isinstance(value, e.Lambda)]
+        if lambdas:
+            prefix = self._prefix(decl, body, tables)
+            for index, lam in enumerate(lambdas):
+                table.record_symbol(lam.shir_id, f"{prefix}.__lambda_{index}")
+                table.record_environment(lam.shir_id, lam.captures)
+        check_lift(body, table, self.shir.decls)
+        if typecheck_failed:
+            self.next_stage(decl, body, tables=tables, filename=filename,
+                            typecheck_failed=True)
+            return
+        self.next_stage(decl, body, tables=tables, filename=filename)
 
-    def lift_perk_impl(self, impl) -> List[FuncDef]:
-        """Lift every method body of one perk implementation copy (#699)."""
-        lifted: List[FuncDef] = []
-        for method in impl.methods:
-            lifted.extend(self.lift_body(method))
-        return lifted
-
-    def _walk(self, node) -> None:
-        """Find and lift Lambda nodes anywhere under `node` (not into their bodies)."""
-        walk_nodes(node, self._lift_if_lambda)
-
-    def _lift_if_lambda(self, node: Node) -> bool:
-        """Lift a lambda where the walk meets it, and stop at its body.
-
-        The body is walked again from `_lift`, AFTER the annotate hook typed it: a
-        nested lambda lifted before that carried no parameter types and no captures
-        (#629).
-        """
-        if isinstance(node, Lambda):
-            self._lift(node)
-            return False
-        return True
-
-    def _lift(self, lam: Lambda) -> None:
-        """Turn one lambda literal into a top-level function plus an environment."""
-        index = self._claim_index()
-        env_struct = self._synthesize_env_struct(f"__closure_env_{index}", lam)
-
-        body = _normalized_body(lam)
-        _rewrite_captures(body, {c.name: c for c in (lam.captures or [])})
-
-        lifted = _build_lifted_function(lam, f"__lambda_{index}", env_struct, body)
-        self._register(lifted)
-
-        lam.lifted_name = lifted.name
-        lam.env_struct = env_struct
-        self._annotate_then_walk(lifted)
-
-    def _claim_index(self) -> int:
-        """The next index no other unit's lifter has taken.
-
-        The counter is per lifter instance and the tables are global, so a taken index
-        means another unit's lifter got there first -- step past it, or this closure
-        silently aliases that unit's body and environment layout (#402).
-        """
-        while (f"__lambda_{self._counter}" in self.func_table.by_name
-               or f"__closure_env_{self._counter}" in self.structs.by_name):
-            self._counter += 1
-        index = self._counter
-        self._counter += 1
-        return index
-
-    def _synthesize_env_struct(self, env_name: str, lam: Lambda) -> StructType:
-        """The closure's own storage: one field per capture, in capture order.
-
-        This mint takes NO derived pair, and the absence is deliberate at both ends --
-        the shape `List`, `Own` and `HashMap` already carry in `generics/cloning.py`
-        (#730). The environment is a heap box with its own duplicator and destructor
-        (`backend/runtime/closures.py`), reached through the closure fat pointer's
-        `clone_ptr` and `drop_ptr` slots and never through the derived table. Its name
-        is unwritable, so no receiver can reach an entry either. A census of the derived
-        table reads an environment struct as empty BY DESIGN and not as a registration
-        that went missing.
-        """
-        env_struct = StructType(
-            name=env_name,
-            fields=tuple((c.name, c.ty) for c in (lam.captures or [])))
-        self.structs.by_name[env_name] = env_struct
-        self.structs.order.append(env_name)
-        return env_struct
-
-    def _register(self, lifted: FuncDef) -> None:
-        """Park the lifted function in the global table, under the claimed name."""
-        from sushi_lang.semantics.generics.synthesis import register_synthesized_function
-        if not register_synthesized_function(
-                self.func_table, lifted, program=self.program,
-                from_library_template=self._owner_is_library,
-                origin=self._owner_origin):
-            # Unreachable after `_claim_index`, which answers a name that is free in
-            # both tables. A silent False here is exactly the #402 aliasing.
-            raise_internal_error("CE0137", name=lifted.name)
-        self._lifted.append(lifted)
-        lifted.instance_of = self._owner_instance_of
-        lifted.template_id = self._owner_template_id
-        lifted.scope_unit = self._owner_scope_unit
-
-    def _annotate_then_walk(self, lifted: FuncDef) -> None:
-        """Type the lifted body, THEN look in it for the next lambda.
-
-        The order is the dependency and not a preference. The annotator is what types a
-        Lambda node, so a nested one lifted before it ran carried no parameter types, no
-        captures and no channel, and its own body went unchecked (#629).
-        """
-        if self.annotate is not None:
-            self.annotate.annotate_function(lifted)
-        self._walk(lifted.body)
-
-
-def _normalized_body(lam: Lambda) -> Block:
-    """A lambda's body as a Block. An expression body returns itself: bare, or as the
-    `Result.Ok` of a lambda whose type has a channel (docs/design/error-channel.md)."""
-    if isinstance(lam.body, Block):
-        return lam.body
-    value = lam.body
-    if _lambda_err_type(lam) is not None:
-        value = DotCall(receiver=Name(id="Result", loc=lam.loc), method="Ok",
-                        args=[lam.body], loc=lam.loc)
-    return Block(statements=[Return(value=value, loc=lam.loc)], loc=lam.loc)
-
-
-def _lambda_err_type(lam: Lambda):
-    """The lambda's `| E`, from its inferred type when it has one."""
-    return (lam.resolved_type.err_type if lam.resolved_type is not None
-            else lam.err_type)
-
-
-def _build_lifted_function(lam: Lambda, lifted_name: str, env_struct: StructType,
-                           body: Block) -> FuncDef:
-    """The top-level function a lambda becomes: the environment, then its own params."""
-    ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
-    err_type = _lambda_err_type(lam)
-    # The env borrow is `poke`, and the mode is not decoration: a move-captured
-    # `List@(T)` is MUTABLE inside the body by design, so the write must persist across
-    # calls. Spelled `peek`, it made the language's own closure semantics a CE2408 once
-    # the write gate became total. The environment is the closure's own storage.
-    env_param = Param(
-        name=ENV_PARAM_NAME,
-        ty=ReferenceType(referenced_type=env_struct, mutability=BorrowMode.POKE),
-        loc=lam.loc,
-    )
-    # The lambda's own location is the name span: a diagnostic keyed on the name span
-    # of a lifted function carets the lambda, and not nothing (#846).
-    return FuncDef(
-        name=lifted_name,
-        params=[env_param] + list(lam.params),
-        ret=ok_type,
-        body=body,
-        err_type=err_type,
-        # A lambda's channel is its type's `| E` and nothing else: a Result it answers
-        # as a value (`fn(i32) -> Result@(i32, E)`) is a bare return.
-        written_channel=err_type is not None,
-        name_span=lam.loc,
-        loc=lam.loc,
-        borrowed_return=lam.borrowed_return,
-    )
-
-
-def is_lifted_lambda(func: FuncDef) -> bool:
-    """Whether this function is a lambda the pass lifted: its first parameter is the env."""
-    return bool(func.params) and func.params[0].name == ENV_PARAM_NAME
-
-
-def _rewrite_captures(node, captures: dict) -> None:
-    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place.
-
-    The body of a nested lambda is left alone: its reads are rewritten against its own
-    environment when it is lifted. Its capture LIST is not: a name it shares with this
-    lambda is no local of the lifted function, so the nested environment is filled from
-    this one (#1127).
-    """
-    cap_names = set(captures)
-
-    def rewrite_the_slots_of(owner: Node) -> bool:
-        if isinstance(owner, Lambda):
-            _source_from_env(owner, captures)
-            return False
-        for name, value in node_fields(owner):
-            rebuilt = _rewrite_slot(value, cap_names)
-            if rebuilt is not value:
-                setattr(owner, name, rebuilt)
-        return True
-
-    walk_nodes(node, rewrite_the_slots_of)
-
-
-def _source_from_env(nested: Lambda, captures: dict) -> None:
-    """Point each capture `nested` shares with the enclosing lambda at its env field."""
-    for cap in (nested.captures or []):
-        outer = captures.get(cap.name)
-        if outer is None or cap.capture_source is not None:
-            continue
-        cap.capture_source = _env_access(Name(id=cap.name, loc=cap.loc or nested.loc))
-        if cap.ty is None:
-            cap.ty = outer.ty
-
-
-def _rewrite_slot(value, cap_names: set):
-    """The new value of one field slot. A captured Name becomes a read off the env.
-
-    A list is rewritten in place; a tuple cannot be, so it is rebuilt -- an `If.arms`
-    element is a (cond, Block) tuple and the condition alone can BE a captured name
-    (#400). The original is answered unchanged when nothing moved, so a slot that holds
-    no capture keeps the object it had.
-    """
-    if isinstance(value, Name) and value.id in cap_names:
-        return _env_access(value)
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            value[index] = _rewrite_slot(item, cap_names)
-        return value
-    if isinstance(value, tuple):
-        rebuilt = tuple(_rewrite_slot(item, cap_names) for item in value)
-        if any(new is not old for new, old in zip(rebuilt, value, strict=True)):
-            return rebuilt
-    return value
-
-
-def _env_access(name_node: Name) -> MemberAccess:
-    # The call-site `nom` marker rides on the argument node, so the read keeps it (#1130).
-    return MemberAccess(
-        receiver=Name(id=ENV_PARAM_NAME, loc=name_node.loc),
-        member=name_node.id,
-        loc=name_node.loc,
-        nom_marked=name_node.nom_marked,
-        nom_span=name_node.nom_span,
-    )
+    def _prefix(self, decl: object, body: ShirBody, tables: SymbolTables) -> str:
+        """The symbol of the body. A template check and an initializer never lower, so their
+        name is enough."""
+        if isinstance(body.origin, (TemplateCheck, Initializer)):
+            return self.shir.decls.name_of(body.fn_id)
+        return symbol_of(decl, declaring_unit(decl, self.unit), body, tables.perk_impls)

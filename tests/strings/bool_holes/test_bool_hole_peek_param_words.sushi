@@ -1,0 +1,12 @@
+# A bool read through a `peek` parameter prints the words in a hole.
+# EXPECT_STDOUT_EXACT: "peek true\npeek false\n"
+
+fn show(peek bool b) ~:
+    println("peek {b}")
+
+fn main() i32:
+    let bool t = true
+    let bool f = false
+    show(peek t)
+    show(peek f)
+    return 0

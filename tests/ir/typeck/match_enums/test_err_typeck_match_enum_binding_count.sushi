@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2044
+# EXPECT_STDERR_CONTAINS: "wrong number of pattern bindings: variant 'Success' expects 1, got 2"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_binding_count.shir
+#
+# A variant pattern binds one item for each value of the payload: CE2044 when the count
+# differs. The other arm is checked, and its binder gets its type.
+
+enum Status:
+    Success(i32)
+    Failure(i32, string)
+
+fn code(Status s) i32:
+    match s:
+        Status.Success(a, b) -> return a + b
+        Status.Failure(n, _) -> return n
+
+fn main() i32:
+    return code(Status.Success(42))

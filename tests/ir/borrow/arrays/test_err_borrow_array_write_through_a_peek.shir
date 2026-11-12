@@ -1,0 +1,24 @@
+unit test_err_borrow_array_write_through_a_peek
+
+ShirBody grow
+  params : [(_0 "xs": i32[], Inout)]
+  locals : []
+  block  :
+    ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(adopt Lit(1), Owned)]))
+    Assign(Index(LocalRef(_0), Lit(0), unchecked: false), adopt Call(Builtin(LocalRef(_0), "len"), []), is_init: false)
+
+ShirBody read
+  params : [(_0 "xs": i32[], InGuaranteed)]
+  locals : [_1 "n": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Binary(+, Call(Builtin(LocalRef(_0), "len"), []), Index(LocalRef(_0), Lit(0), unchecked: false)), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(adopt LocalRef(_1), Owned)]))
+    Return(adopt LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32[]]
+  block  :
+    Assign(LocalRef(_0), adopt ArrayInit(Dynamic, [Single(adopt Lit(1)), Single(adopt Lit(2))]), is_init: true)
+    ExprStmt(Call(Free(@grow), [(LocalRef(_0), Inout)]))
+    Return(adopt Call(Free(@read), [(LocalRef(_0), InGuaranteed)]))

@@ -1,0 +1,21 @@
+# The target bound of a perk template fails for an instance that only the typecheck pass names:
+# the miss hook cuts no copy, and the call is CE4006 with the note at the bound. It is not CE2008.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "error [CE4006]"
+# EXPECT_STDERR_CONTAINS: "test_err_perk_call_bound_fails_late_instance.sushi:14:13"
+perk Named:
+    fn name() string
+perk Show:
+    fn show() string
+struct Box@(T):
+    T v
+struct Pt:
+    i32 x
+extend Box@(T: Named) with Show:
+    fn show() string:
+        return "box"
+extend i32 boxed@(U)(nom U u) Box@(U):
+    return Box(nom u)
+fn main() i32:
+    println(1.boxed(nom Pt(1)).show())
+    return 0

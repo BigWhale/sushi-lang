@@ -1,0 +1,44 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'msg'"
+# EXPECT_DUMP_SHIR: test_err_borrow_move_in_both_arms.shir
+#
+# A move in each arm of an `if` moves the local on every path. `both` finishes with no
+# error, and its local `msg` has no row of a conditional move: it gets no drop. A move
+# on the path of a `return` and no move on the path that falls through is a conditional
+# move too: `early` has `msg` in the row. A use of `msg` after the `if` of `spent` is a
+# use after a move on every path: CE2405.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn keep(nom string text) ~:
+    println("kept {text}")
+
+fn both(bool give) ~:
+    let string msg = "{1} towels"
+    if (give):
+        eat(nom msg)
+    else:
+        keep(nom msg)
+    println("done")
+
+fn early(bool give) i32:
+    let string msg = "{2} towels"
+    if (give):
+        eat(nom msg)
+        return 1
+    return 0
+
+fn spent(bool give) ~:
+    let string msg = "{3} towels"
+    if (give):
+        eat(nom msg)
+    else:
+        keep(nom msg)
+    println(msg)
+
+fn main() i32:
+    both(true)
+    println(early(false))
+    spent(false)
+    return 0

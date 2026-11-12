@@ -8,17 +8,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-def emit_array_literal_elements(codegen: 'LLVMCodegen', elements, element_type):
-    """Emit array-literal values as RUNS, deep-copying heap-owning aliases.
-
-    A run carries its count rather than a value per slot, so `from([-1; 32768])` emits one
-    value and not 32768 (#446).
-    """
-    from sushi_lang.backend.types.arrays import runs
-
-    return runs.emit_runs(codegen, elements, element_type)
-
-
 def emit_dynamic_array_of_length(codegen: 'LLVMCodegen', element_llvm_type: ir.Type,
                                  length: ir.Value) -> tuple[ir.Value, ir.Value]:
     """A `T[]` of a RUN-TIME length, allocated and sized but not filled (#478, Phase 3).
@@ -42,12 +31,12 @@ def emit_dynamic_array_of_length(codegen: 'LLVMCodegen', element_llvm_type: ir.T
     data_ptr = memory.emit_realloc_call(codegen, null_ptr, total_bytes)
     typed_data_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(element_llvm_type))
 
-    array_struct = _descriptor(codegen, element_llvm_type, length, length, typed_data_ptr)
+    array_struct = descriptor(codegen, element_llvm_type, length, length, typed_data_ptr)
     return array_struct, typed_data_ptr
 
 
-def _descriptor(codegen: 'LLVMCodegen', element_llvm_type: ir.Type, length: ir.Value,
-                capacity: ir.Value, data_ptr: ir.Value) -> ir.Value:
+def descriptor(codegen: 'LLVMCodegen', element_llvm_type: ir.Type, length: ir.Value,
+               capacity: ir.Value, data_ptr: ir.Value) -> ir.Value:
     """The `{len, cap, data}` descriptor, built by value."""
     array_struct_type = ir.LiteralStructType([
         codegen.types.i32,
@@ -68,7 +57,7 @@ def emit_empty_dynamic_array(codegen: 'LLVMCodegen', element_llvm_type: ir.Type)
     """
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
-    return _descriptor(codegen, element_llvm_type, zero_i32, zero_i32, null_ptr)
+    return descriptor(codegen, element_llvm_type, zero_i32, zero_i32, null_ptr)
 
 
 def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_llvm_type: ir.Type,
@@ -110,6 +99,6 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_llvm_type
 
     runs.fill_runs(codegen, typed_data_ptr, elements, element_llvm_type)
 
-    return _descriptor(codegen, element_llvm_type,
+    return descriptor(codegen, element_llvm_type,
                        ir.Constant(codegen.types.i32, initial_len),
                        ir.Constant(codegen.types.i32, capacity), typed_data_ptr)

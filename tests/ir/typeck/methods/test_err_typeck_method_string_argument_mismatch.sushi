@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006, CE2006
+# EXPECT_DUMP_SHIR: test_err_typeck_method_string_argument_mismatch.shir
+#
+# Each argument of a string method has the type of its row. A wrong type is CE2006 at
+# the argument, and the call still yields the type of its row.
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let bool a = s.starts_with(5)
+    let string p = s.pad_left(3, 4)
+    let string t = s.sleft(2)
+    if (a):
+        return p.len()
+    return t.len()

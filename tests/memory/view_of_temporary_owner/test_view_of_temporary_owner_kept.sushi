@@ -1,0 +1,39 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nab\nother\nh1\nother\n"
+#
+# A `let` that views a part of a temporary keeps the temporary to the end of its block: a
+# get-out of a temporary List, a field of a temporary struct, and the same in a loop with a
+# `break`, where the view is used in one branch.
+
+struct Holder:
+    string name
+    i32 n
+
+fn make_list() List@(string):
+    let List@(string) xs = List.new()
+    let string base = "a"
+    xs.push("{base}1")
+    return xs
+
+fn make(i32 n) Holder:
+    return Holder("h{n}", n)
+
+fn make_ab() Holder:
+    let string base = "a"
+    return Holder("{base}b", 1)
+
+fn main() i32:
+    let Maybe@(string) m = make_list().get(0)
+    println(m.is_some())
+    let string s = make_ab().name
+    println(s)
+    foreach(i in 0..4):
+        let string t = make(i).name
+        if (i == 1):
+            println(t)
+        else:
+            println("other")
+        if (i == 2):
+            break
+    return 0

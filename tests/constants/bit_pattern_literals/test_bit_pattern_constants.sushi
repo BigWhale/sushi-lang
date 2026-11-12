@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "-1 0\n-559038737\n-128\n-1\n239\n"
+# A literal in another base spells bits, so a constant holds the value that a body holds (#1274).
+
+const i8 A = 0xFF
+const i8 B = A + 1
+const i32 H = 0xDEADBEEF
+const i8 N = -0x80
+const i16 W = 0b1111_1111_1111_1111
+const i32 LOW = H & 0xFF
+
+fn main() i32:
+    println("{A} {B}")
+    println(H)
+    println(N)
+    println(W)
+    println(LOW)
+    return 0

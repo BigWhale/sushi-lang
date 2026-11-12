@@ -1,0 +1,7 @@
+# The unit that `test_shir_call_namespace_type_args` binds behind an alias: a generic
+# function whose type parameter only the return type names, and one that takes it.
+public fn nothing@(T)() Maybe@(T):
+    return Maybe.None()
+
+public fn identity@(T)(nom T x) T:
+    return x

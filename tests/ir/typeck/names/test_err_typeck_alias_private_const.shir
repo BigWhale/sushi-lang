@@ -1,0 +1,24 @@
+unit units/geo
+
+ShirBody HIDDEN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(3))
+
+ShirBody SHOWN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(4))
+
+unit test_err_typeck_alias_private_const
+
+ShirBody main
+  params : []
+  locals : [_0 "shown": i32, _1 "hidden": i32]
+  block  :
+    Assign(LocalRef(_0), ConstRef(@geo.SHOWN), is_init: true)
+    Assign(LocalRef(_1), ConstRef(@geo.HIDDEN), is_init: true)
+    ExprStmt(LocalRef(_1))
+    Return(LocalRef(_0))

@@ -1,0 +1,20 @@
+unit test_err_typeck_array_init
+
+ShirBody first
+  params : [(_0 "xs": u8[], Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Index(LocalRef(_0), Lit(0), unchecked: false))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "w": i64[3], _2 "a": i32[6], _3 "b": i32[], _4 "bag": Bag, _5 "one": u8, _6 "k": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(2), is_init: true)
+    Assign(LocalRef(_1), ArrayInit(Fixed, [Single(Lit(1)), Repeat(Lit(2), Lit(2))]), is_init: true)
+    Assign(LocalRef(_2), ArrayInit(Fixed, [Single(Lit(1)), Repeat(Lit(2), Lit(2)), RangeRun(Range(Lit(0), Lit(2), inclusive: true, reverse: false))]), is_init: true)
+    Assign(LocalRef(_3), ArrayInit(Dynamic, [Repeat(Lit(7), LocalRef(_0)), RangeRun(Range(Lit(0), LocalRef(_0), inclusive: false, reverse: false))]), is_init: true)
+    Assign(LocalRef(_4), StructInit(@Bag, [ArrayInit(Dynamic, [])], written_order: [0]), is_init: true)
+    Assign(LocalRef(_5), Call(Free(@first), [(ArrayInit(Dynamic, []), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_6), Index(ArrayInit(Dynamic, []), Lit(0), unchecked: false), is_init: true)
+    Return(Binary(+, Binary(+, Binary(+, Binary(+, Binary(+, Cast(Index(LocalRef(_1), Lit(0), unchecked: false), i32), Index(LocalRef(_2), Lit(0), unchecked: false)), Index(LocalRef(_3), Lit(1), unchecked: false)), Cast(Index(Field(LocalRef(_4), "items"), Lit(0), unchecked: false), i32)), Cast(LocalRef(_5), i32)), LocalRef(_6)))

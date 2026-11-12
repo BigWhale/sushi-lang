@@ -1,7 +1,6 @@
 """LLVM emission for the auto-derived array hash() method."""
 
-from typing import Any, Optional
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
@@ -9,7 +8,7 @@ from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
+from sushi_lang.semantics.derived_methods import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -17,10 +16,10 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
     """Create a hash() emitter function for fixed array types."""
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for fixed_array.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -59,10 +58,10 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
 def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     """Create a hash() emitter function for dynamic array types."""
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for dynamic_array.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -125,34 +124,6 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         return final_hash
 
     return emitter
-
-
-def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,
-                                 receiver_type: ir.Type, array_type: Type,
-                                 to_i1: bool) -> ir.Value:
-    """Direct emitter for fixed array hash.
-
-    The receiver arrives as an address and its type arrives with it. Looking the type up by
-    NAME rejected every receiver that has no name, so `b.slots.hash()` on a field was CE0056
-    (#480). A wrong element type would silently produce a wrong hash, which is why the old
-    code refused rather than guessed; the caller now knows the type, so there is nothing to
-    guess.
-    """
-    emitter = _emit_fixed_array_hash(array_type)
-    return emitter(codegen, expr, array_ptr, receiver_type, to_i1)
-
-
-def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
-                                   receiver_type: ir.Type, array_type: DynamicArrayType,
-                                   to_i1: bool) -> ir.Value:
-    """Direct emitter for dynamic array hash.
-
-    The receiver's type arrives with it, the way the fixed twin above takes one. Reading it
-    out of the name tables rejected every receiver that has no name, so `h.nums.hash()` on a
-    field was CE0056 (#482).
-    """
-    emitter = _emit_dynamic_array_hash(array_type)
-    return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
 
 def _make_array_hash_emitter(array_type: Type) -> Any:

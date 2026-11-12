@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+
+fn pair@(T, U)(nom T x) T:
+    return x
+
+fn main() i32:
+    let fn(nom i32) -> i32 f = pair
+    println(f(nom 1))
+    return 0

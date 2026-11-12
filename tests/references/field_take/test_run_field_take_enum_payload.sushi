@@ -1,0 +1,32 @@
+# A marked field take of a `Maybe@(string)` field: `nom s.note` moves the enum value out
+# of a value this function owns, in a `let`, in a `return` and in a `nom` argument. The
+# other owning field is destroyed at the take, and the payload string is destroyed once
+# by its new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let note 1\nreturn note 2\nate note 3\n"
+struct Card:
+    Maybe@(string) note
+    string label
+
+fn make(i32 n) Card:
+    return Card(Maybe.Some("note {n}"), "label {n}")
+
+fn take_out(nom Card s) Maybe@(string):
+    return nom s.note
+
+fn eat(nom Maybe@(string) note) ~:
+    let string v = note.realise("none")
+    println("ate {v}")
+
+fn main() i32:
+    let Card a = make(1)
+    let Maybe@(string) got = nom a.note
+    let string v1 = got.realise("none")
+    println("let {v1}")
+    let Maybe@(string) back = take_out(nom make(2))
+    let string v2 = back.realise("none")
+    println("return {v2}")
+    let Card c = make(3)
+    eat(nom c.note)
+    return 0

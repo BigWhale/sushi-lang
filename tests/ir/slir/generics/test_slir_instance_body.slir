@@ -1,0 +1,58 @@
+unit test_slir_instance_body
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string
+    let _2: ~
+    let _3: i32
+    let _4: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @alpha_pass__string(const "Mostly Harmless" @owned)
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    StorageLive(_3)
+    _3 = call @alpha_pass__i32(const 42_i32 @owned)
+    StorageLive(_4)
+    _4 = call builtin println@(i32)(copy _3 @guaranteed)
+    StorageDead(_4)
+    StorageDead(_3)
+    _0 = const 0_i32
+    return
+}
+
+fn alpha_pass__i32(_1: i32 @owned) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = call @zeta_pass__i32(copy _1 @owned)
+    return
+}
+
+fn alpha_pass__string(_1: string @owned) -> string {
+    let _0: string
+
+  bb0:
+    _0 = call @zeta_pass__string(move _1 @owned)
+    return
+}
+
+fn zeta_pass__i32(_1: i32 @owned) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy _1
+    return
+}
+
+fn zeta_pass__string(_1: string @owned) -> string {
+    let _0: string
+
+  bb0:
+    _0 = move _1
+    return
+}

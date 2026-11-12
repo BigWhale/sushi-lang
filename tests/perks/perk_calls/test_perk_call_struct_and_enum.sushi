@@ -1,0 +1,36 @@
+# A perk implementation method on a struct and on an enum: the call names one implementation.
+# EXPECT_STDOUT_EXACT: "dog\n4\nsmall\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+perk Named:
+    fn name() string
+    fn legs(i32 extra) i32
+
+struct Dog:
+    i32 legs
+
+enum Size:
+    Small
+    Large
+
+extend Dog with Named:
+    fn name() string:
+        return "dog"
+    fn legs(i32 extra) i32:
+        return self.legs + extra
+
+extend Size with Named:
+    fn name() string:
+        match self:
+            Size.Small -> return "small"
+            Size.Large -> return "large"
+    fn legs(i32 extra) i32:
+        return extra
+
+fn main() i32:
+    let Dog d = Dog(3)
+    println(d.name())
+    println(d.legs(1))
+    println(Size.Small.name())
+    return 0

@@ -1,0 +1,34 @@
+unit test_shir_expr_try
+
+ShirBody parse
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_0), Lit("")), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@ParseError, "Empty", [])]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(42)]))
+
+ShirBody bump
+  params : [(_0 "s": string, Guaranteed)]
+  locals : [_1 "n": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Try(adopt Call(Free(@parse), [(LocalRef(_0), Guaranteed)])), is_init: true)
+    Return(adopt EnumInit(@Result, "Ok", [adopt Binary(+, LocalRef(_1), Lit(1))]))
+
+ShirBody first
+  params : [(_0 "xs": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt Try(adopt Call(Builtin(adopt Call(Builtin(LocalRef(_0), "get"), [(Lit(0), Guaranteed)]), "or_err"), [(adopt EnumInit(@ParseError, "Empty", []), Owned)]))]))
+
+ShirBody main
+  params : []
+  locals : [_0 "full": i32[], _1 "none": i32[]]
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@bump), [(Lit("x"), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@bump), [(Lit(""), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    Assign(LocalRef(_0), adopt ArrayInit(Dynamic, [Single(adopt Lit(7))]), is_init: true)
+    Assign(LocalRef(_1), adopt ArrayInit(Dynamic, []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@first), [(LocalRef(_0), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@first), [(LocalRef(_1), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

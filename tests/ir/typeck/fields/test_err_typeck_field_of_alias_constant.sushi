@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign i32 to bool."
+# EXPECT_STDERR_CONTAINS: "  |     let bool b = geo.ORIGIN.x\n  `                  ------+-----\n"
+# EXPECT_STDERR_CONTAINS: "= note: declared here"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_of_alias_constant.shir
+#
+# A field of a struct constant behind an alias is a field read of the constant (ruling
+# R-J): `geo.ORIGIN.y` is an `i32`. So a `let` of a `bool` is CE2002 at the read.
+
+use "units/fieldgeo" as geo
+
+fn main() i32:
+    println(geo.ORIGIN.y)
+    let i32 y = geo.ORIGIN.y
+    let bool b = geo.ORIGIN.x
+    if (b):
+        return 1
+    return y

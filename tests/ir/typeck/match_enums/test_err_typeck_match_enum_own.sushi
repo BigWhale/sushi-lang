@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2109
+# EXPECT_STDERR_CONTAINS: "Own(...) pattern needs an Own@(T) value, got 'i32'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_own.shir
+#
+# An `Own(...)` pattern unwraps an `Own@(T)`. The payload of `Leaf` is an `i32`.
+
+enum Node:
+    Leaf(i32)
+    Branch(Own@(Node))
+
+fn depth(Node n) i32:
+    match n:
+        Node.Branch(Own(Node.Leaf(v))) -> return v
+        Node.Leaf(Own(v)) -> return v
+        _ -> return 0
+
+fn main() i32:
+    return depth(Node.Leaf(1))

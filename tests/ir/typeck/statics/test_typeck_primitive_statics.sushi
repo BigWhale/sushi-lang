@@ -1,0 +1,14 @@
+# EXPECT_DUMP_SHIR: test_typeck_primitive_statics.shir
+# EXPECT_STDOUT_EXACT: "1.5\nhi\n"
+# EXPECT_RUNTIME_EXIT: 0
+#
+# A static of a primitive type name is a `BuiltinStatic` callee with the row of the family
+# of its type. `f64.from_bits` borrows its integer (`Guaranteed`), and `string.from_bytes`
+# takes its array (`Owned`), so the array is a move.
+
+fn main() i32:
+    let f64 v = 1.5
+    println(f64.from_bits(v.to_bits()))
+    let u8[] bytes = from([a'h', a'i'])
+    println(string.from_bytes(nom bytes))
+    return 0

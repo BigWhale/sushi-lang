@@ -1,0 +1,24 @@
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "30\n20\n40\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_expr_dont_panic.shir
+#
+# the SHIR dump of an index in a `dont_panic` body. The AST builder marks each index of the
+# body, and lowering copies the mark: the `Index` has `unchecked: true`. A slice keeps its
+# range check in every body, so a `Slice` has no such field. An index outside a marked
+# body has `unchecked: false`.
+
+fn third(i32[] xs) i32 dont_panic because "the caller gives four elements":
+    return xs[2]
+
+fn pair(i32[] xs) i32 dont_panic because "the caller gives four elements":
+    let i32[] view = xs[2..4]
+    return view.len() * xs[0]
+
+fn main() i32:
+    let i32[] xs = from([10, 20, 30, 40])
+    println(third(xs))
+    println(pair(xs))
+    println(xs[3])
+    println("Mostly Harmless")
+    return 0

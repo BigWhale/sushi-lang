@@ -1,0 +1,18 @@
+# A tail of `...i32` and a tail of `...string` of functions of another unit, and a bloom
+# from a function of this unit into a function of the other unit.
+# EXPECT_STDOUT_EXACT: "6\n9\n+Mostly+Harmless\n\n Mostly Harmless Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use "helpers/tail_unit"
+
+fn local_total(nom i32[] xs) i32:
+    return total(xs...)
+
+fn main() i32:
+    println(total(1, 2, 3))
+    println(local_total(nom from([4, 5])))
+    println(joined("+", "Mostly", "Harmless"))
+    println(joined("+"))
+    let string s = "Mostly {'Harmless'}"
+    println(joined(" ", s.clone(), s))
+    return 0

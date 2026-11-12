@@ -1,0 +1,19 @@
+unit test_err_typeck_match_enum_other_enum
+
+ShirBody top
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : [_1 "r": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Shape, "Circle", [(_1, Bare)]), [Return(LocalRef(_1))]), Arm(Variant(@Other, "Alpha", []), [Return(Lit(0))]), Arm(Wildcard, [Return(Lit(1))])], consumes: false)
+
+ShirBody nested
+  params : [(_0 "o": Outer, Guaranteed)]
+  locals : [_1 "side": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Outer, "Wrap", [Variant(@Other, "Alpha", [])]), [Return(Lit(0))]), Arm(Variant(@Outer, "Wrap", [Variant(@Shape, "Square", [(_1, Bare)])]), [Return(LocalRef(_1))]), Arm(Wildcard, [Return(Lit(1))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@top), [(EnumInit(@Shape, "Circle", [adopt Lit(2)]), Guaranteed)]), Call(Free(@nested), [(EnumInit(@Outer, "Wrap", [adopt EnumInit(@Shape, "Square", [adopt Lit(3)])]), Guaranteed)])))

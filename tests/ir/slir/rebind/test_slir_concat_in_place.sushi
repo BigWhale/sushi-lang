@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nxy!\nlit!?\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_concat_in_place.slir
+#
+# The concat peephole (ir.md 8.9): `s := s.concat(x)` of a local that holds a value of its
+# own is ONE call of `string.concat_in_place`, with the receiver `Inout` and the argument
+# `Guaranteed`, and no `Drop` of the old value. A `poke` parameter takes it through its
+# address. A by-value parameter holds the value of the caller before its first rebind: that
+# rebind takes the general path and drops nothing, and the next one is the peephole. The
+# rebind of a field takes the general path.
+struct Person:
+    string name
+
+fn shout(poke string s) ~:
+    s := s.concat("!")
+
+fn twice(string s) ~:
+    s := s.concat("!")
+    s := s.concat("?")
+    println(s)
+
+fn main() i32:
+    let string s = "Mostly".concat("")
+    s := s.concat(" Harmless")
+    println(s)
+    let Person p = Person("x".concat(""))
+    p.name := p.name.concat("y")
+    shout(poke p.name)
+    println(p.name)
+    twice("lit")
+    return 0

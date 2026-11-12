@@ -3,25 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH
-from sushi_lang.semantics.ast import Expr, UnaryOp, BinaryOp
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.utils import require_both_initialized
+from sushi_lang.semantics.operators import EQUALITY_OPS
+from sushi_lang.semantics.type_predicates import is_unsigned_int
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.typesys import Type
-
-
-def emit_operator(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
-    """Dispatch operator emission to appropriate handler."""
-    match expr:
-        case UnaryOp():
-            return emit_unary_op(codegen, expr, to_i1)
-        case BinaryOp():
-            return emit_binary_op(codegen, expr, to_i1)
-        case _:
-            raise_internal_error("CE0099", type=type(expr).__name__)
 
 
 def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
@@ -29,85 +17,47 @@ def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
     return codegen.builder.fneg(val)
 
 
-def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Value:
-    """Emit unary operation (negation, logical not)."""
-    val = codegen.expressions.emit_expr(expr.expr)
-
-    if expr.op == "neg":
+def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool) -> ir.Value:
+    """A unary operator over one LLVM value: the SLIR emitter calls it for a `Unary`."""
+    if op == "neg":
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
         else:
             return codegen.builder.sub(ir.Constant(val.type, 0), val)
 
-    if expr.op == "not":
+    if op == "not":
         if to_i1:
             i1v = codegen.utils.as_i1(val)
             return codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1))
         i1v = codegen.utils.as_i1(val)
         return codegen.builder.zext(codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1)), codegen.i8)
 
-    if expr.op == "~":
+    if op == "~":
         return codegen.builder.not_(val)
 
-    raise NotImplementedError(f"unknown UnaryOp: {expr.op!r}")
+    raise NotImplementedError(f"unknown UnaryOp: {op!r}")
 
 
-def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
-    """Emit binary operation with proper type handling."""
-    op = expr.op
-
-    if op in ("and", "or", "xor"):
-        return emit_logic(codegen, op, expr.left, expr.right, to_i1=to_i1)
-
-    if op in ("==", "!=", "<", "<=", ">", ">="):
-        return emit_comparison(codegen, expr, to_i1)
-
-    if op in ("&", "|", "^", "<<", ">>"):
-        left = codegen.expressions.emit_expr(expr.left)
-        right = codegen.expressions.emit_expr(expr.right)
-        from .type_utils import infer_expr_semantic_type
-        left_type = infer_expr_semantic_type(codegen, expr.left)
-        return emit_bitwise(codegen, op, left, right, left_type)
-
-    left = codegen.expressions.emit_expr(expr.left)
-    right = codegen.expressions.emit_expr(expr.right)
-    from .type_utils import infer_expr_semantic_type
-    left_type = infer_expr_semantic_type(codegen, expr.left)
-    if left_type is None:
-        left_type = infer_expr_semantic_type(codegen, expr.right)
-    return emit_arithmetic(codegen, op, left, right, left_type)
+def emit_string_relation(codegen: 'LLVMCodegen', op: str, lhs: ir.Value,
+                         rhs: ir.Value) -> ir.Value:
+    """The i1 answer of a comparison of two strings: `==` and `!=` read the bytes, and the
+    order operators read the bytes, then the length."""
+    if op in EQUALITY_OPS:
+        return codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
+    return codegen.runtime.strings.emit_string_order(op, lhs, rhs)
 
 
-def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
-    """Emit comparison operations with string support.
-
-    The comparison only reads each operand, so an owning temporary operand gets its owner
-    as soon as it is emitted: a `??` in the right operand frees the left one once.
-    """
-    lhs = _emit_compared_operand(codegen, expr, expr.left)
-    rhs = _emit_compared_operand(codegen, expr, expr.right)
-    op = expr.op
-
-    if expr.operand_type is not None:
-        i1v = _emit_contract_comparison(codegen, expr, lhs, rhs)
-        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
-
-    if (codegen.types.is_string_type(lhs.type) and
-        codegen.types.is_string_type(rhs.type)):
-        if op in ("==", "!="):
-            i1v = codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
-        else:
-            i1v = codegen.runtime.strings.emit_string_order(op, lhs, rhs)
-        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
-
-    sem = None
-    if isinstance(lhs.type, ir.IntType):
-        from .type_utils import infer_expr_semantic_type
-        sem = infer_expr_semantic_type(codegen, expr.left)
-        if sem is None:
-            sem = infer_expr_semantic_type(codegen, expr.right)
-    i1v = emit_number_comparison(codegen, op, lhs, rhs, sem)
-    return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+def emit_contract_relation(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: ir.Value,
+                           ty: 'Type') -> ir.Value:
+    """The i1 answer of a comparison of two values of one struct, enum or container type:
+    `==` and `!=` read the `Eq` contract, the order operators read the `Ord` contract."""
+    from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
+    if op == "==":
+        return emit_value_eq(codegen, lhs, rhs, ty)
+    if op == "!=":
+        return codegen.builder.not_(emit_value_eq(codegen, lhs, rhs, ty))
+    order = emit_value_compare(codegen, lhs, rhs, ty)
+    return codegen.builder.icmp_signed(op, order, ir.Constant(order.type, 0))
 
 
 def emit_number_comparison(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: ir.Value,
@@ -125,40 +75,9 @@ def emit_number_comparison(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: 
             raise_internal_error("CE0017", src=str(operand.type), dst="an integer comparison operand")
     _require_one_width(op, lhs, rhs)
 
-    from .type_utils import is_unsigned_type
-    if operand_type is not None and is_unsigned_type(operand_type):
+    if operand_type is not None and is_unsigned_int(operand_type):
         return codegen.builder.icmp_unsigned(op, lhs, rhs)
     return codegen.builder.icmp_signed(op, lhs, rhs)
-
-
-def _emit_contract_comparison(codegen: 'LLVMCodegen', expr: BinaryOp,
-                              lhs: ir.Value, rhs: ir.Value) -> ir.Value:
-    """A struct or an enum operand: `==`/`!=` read `Eq`, the order operators `Ord`.
-
-    The typecheck pass stamped the operand type. Each operand is already loaded and
-    held, by `_emit_compared_operand`.
-    """
-    from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
-    ty = expr.operand_type
-    if expr.op in ("==", "!="):
-        equal = emit_value_eq(codegen, lhs, rhs, ty)
-        return equal if expr.op == "==" else codegen.builder.not_(equal)
-    order = emit_value_compare(codegen, lhs, rhs, ty)
-    return codegen.builder.icmp_signed(expr.op, order, ir.Constant(order.type, 0))
-
-
-def _emit_compared_operand(codegen: 'LLVMCodegen', expr: BinaryOp, operand) -> ir.Value:
-    """Emit one comparison operand, and give it an owner at once when it is a temporary."""
-    from sushi_lang.semantics.typesys import BuiltinType
-    from .memory import own_temporary
-    value = codegen.expressions.emit_expr(operand)
-    if expr.operand_type is not None:
-        from sushi_lang.backend.types.contracts import load_operand
-        value = load_operand(codegen, value, expr.operand_type)
-        own_temporary(codegen, operand, value, expr.operand_type)
-    elif codegen.types.is_string_type(value.type):
-        own_temporary(codegen, operand, value, BuiltinType.STRING)
-    return value
 
 
 def _require_one_width(op: str, left: ir.Value, right: ir.Value) -> None:
@@ -188,8 +107,7 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
         # Integer arithmetic operations. Division and modulo dispatch on
         # signedness (the same-type binop rule guarantees both operands share
         # one signedness, so the left operand's type suffices).
-        from .type_utils import is_unsigned_type
-        unsigned = is_unsigned_type(left_type)
+        unsigned = is_unsigned_int(left_type)
         int_ops = {
             "+": codegen.builder.add,
             "-": codegen.builder.sub,
@@ -241,7 +159,6 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     - a count the compiler can read never arrives out of range. That is CE2512,
       and LLVM folds this whole sequence back to one shift for a constant in range.
     """
-    from .type_utils import is_unsigned_type
 
     builder = codegen.builder
     width = value.type.width
@@ -259,7 +176,7 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     if op == "<<":
         shifted = builder.shl(value, places)
         emptied = ir.Constant(value.type, 0)
-    elif is_unsigned_type(value_type):
+    elif is_unsigned_int(value_type):
         shifted = builder.lshr(value, places)
         emptied = ir.Constant(value.type, 0)
     else:
@@ -269,48 +186,10 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     return builder.select(leaves_the_type, emptied, shifted)
 
 
-def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Expr, to_i1: bool = False) -> ir.Value:
-    """Emit short-circuit boolean logic for 'and', 'or', and 'xor' operations."""
-    builder, func = require_both_initialized(codegen)
+def emit_xor(codegen: 'LLVMCodegen', lhs: ir.Value, rhs: ir.Value, to_i1: bool) -> ir.Value:
+    """`xor` over two bool values: it reads both operands, so it is no control flow."""
+    result = codegen.builder.xor(codegen.utils.as_i1(lhs), codegen.utils.as_i1(rhs),
+                                 name="xor_result")
+    return result if to_i1 else codegen.builder.zext(result, codegen.i8)
 
-    if op == "xor":
-        lhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(left_expr, to_i1=True))
-        rhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(right_expr, to_i1=True))
-        result = codegen.builder.xor(lhs_i1, rhs_i1, name="xor_result")
-        return result if to_i1 else codegen.builder.zext(result, codegen.i8)
-
-    lhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(left_expr, to_i1=True))
-    lhs_branch_bb = codegen.builder.block
-
-    rhs_bb = codegen.func.append_basic_block(name=f"logic.{op}.rhs")
-    end_bb = codegen.func.append_basic_block(name=f"logic.{op}.end")
-
-    if op == "and":
-        codegen.builder.cbranch(lhs_i1, rhs_bb, end_bb)
-        lhs_false_pred = lhs_branch_bb
-    else:  # "or"
-        codegen.builder.cbranch(lhs_i1, end_bb, rhs_bb)
-        lhs_true_pred = lhs_branch_bb
-
-    # The right operand is evaluated on ONE path, so an owning temporary it builds gets a
-    # scope of its own and is freed inside that block. Registered in the enclosing scope,
-    # the free also ran on the short-circuit path, where the slot was never stored (#497).
-    codegen.builder.position_at_end(rhs_bb)
-    codegen.memory.push_scope()
-    rhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(right_expr, to_i1=True))
-    codegen.memory.pop_scope()
-    rhs_pred = codegen.builder.block
-    codegen.builder.branch(end_bb)
-
-    codegen.builder.position_at_end(end_bb)
-    phi = codegen.builder.phi(codegen.i1)
-
-    if op == "and":
-        phi.add_incoming(ir.Constant(codegen.i1, 0), lhs_false_pred)
-        phi.add_incoming(rhs_i1, rhs_pred)
-    else:  # "or"
-        phi.add_incoming(ir.Constant(codegen.i1, 1), lhs_true_pred)
-        phi.add_incoming(rhs_i1, rhs_pred)
-
-    return phi if to_i1 else codegen.builder.zext(phi, codegen.i8)
 

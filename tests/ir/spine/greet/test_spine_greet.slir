@@ -1,0 +1,93 @@
+unit test_spine_greet
+
+fn decorate(_1: string @owned) -> Result@(string, StdError) {
+    let _0: Result@(string, StdError)
+    let _2: string
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(copy _1 @guaranteed, const "!" @guaranteed)
+    _0 = Result::Ok(move _2)
+    StorageDead(_2)
+    Drop(_1)
+    return
+}
+
+fn shout(_1: string @owned) -> Result@(~, StdError) {
+    let _0: Result@(~, StdError)
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = Result::Ok(const ~)
+    Drop(_1)
+    return
+}
+
+fn greet(_1: string @owned, _2: bool @guaranteed) -> Result@(~, StdError) {
+    let _0: Result@(~, StdError)
+    let _3: Result@(string, StdError)
+    let _4: i32
+    let _5: string                         // msg
+    let _6: bool
+    let _7: Result@(~, StdError)
+
+  bb0:
+    StorageLive(_3)
+    _3 = call @decorate(move _1 @owned)
+    _4 = discriminant(_3)
+    switchInt(copy _4) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_5)
+    _5 = move ((_3 as Ok).0)
+    StorageDead(_3)
+    StorageLive(_6)
+    _6 = const true
+    switchInt(copy _2) -> [0: bb4, otherwise: bb3]
+
+  bb2:
+    _0 = Result::Err(move ((_3 as Err).0))
+    StorageDead(_3)
+    return
+
+  bb3:
+    StorageLive(_7)
+    _7 = call @shout(move _5 @owned)
+    _6 = const false
+    StorageDead(_7)
+    goto -> bb4
+
+  bb4:
+    _0 = Result::Ok(const ~)
+    DropIfSet(_5, _6)
+    StorageDead(_6)
+    StorageDead(_5)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Result@(~, StdError)
+    let _2: ~
+    let _3: Result@(~, StdError)
+    let _4: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @greet(const "So long" @owned, const false @guaranteed)
+    StorageDead(_1)
+    StorageLive(_2)
+    _2 = call builtin println@(string)(const "quiet" @guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call @greet(const "Mostly Harmless" @owned, const true @guaranteed)
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = call builtin println@(string)(const "loud" @guaranteed)
+    StorageDead(_4)
+    _0 = const 0_i32
+    return
+}

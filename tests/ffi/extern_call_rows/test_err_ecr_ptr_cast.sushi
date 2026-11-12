@@ -1,0 +1,12 @@
+# A `ptr` is not a number: a cast from a `ptr` to an integer is CE2014.
+# EXPECT_ERROR_CODES_EXACT: CE2014
+unsafe external "C" as libc because "a C copy of a string":
+    fn strdup(string s) ptr = "strdup"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.strdup("Mostly Harmless")
+    let i64 n = p as i64
+    libc.free(p)
+    println("{n}")
+    return 0

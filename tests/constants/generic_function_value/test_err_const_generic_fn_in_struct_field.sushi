@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_STDERR_CONTAINS: test_err_const_generic_fn_in_struct_field.sushi:12:15: error [CE2093]
+# EXPECT_STDERR_CONTAINS: "cannot take a function value of 'id': the function type 'fn(nom i32) -> i32' of this position does not solve its type arguments"
+#
+# A generic function is no value in a field of a struct constant.
+fn id@(T)(nom T x) T:
+    return x
+
+struct H:
+    fn(nom i32) -> i32 f
+
+const H C = H(id)
+
+fn main() i32:
+    let i32 v = C.f(nom 7)
+    println(v)
+    return 0

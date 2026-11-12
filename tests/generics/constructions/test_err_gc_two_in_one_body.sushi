@@ -1,0 +1,14 @@
+# Two refused constructions in one body: the walk goes on after each one.
+# EXPECT_ERROR_CODES_EXACT: CE2111, CE2065
+
+struct Both@(T):
+    T left
+    T right
+
+struct Cage@(T):
+    T[] items
+
+fn main() i32:
+    println(Cage(from([])).items.len())
+    println(Both(1, "x").left)
+    return 0

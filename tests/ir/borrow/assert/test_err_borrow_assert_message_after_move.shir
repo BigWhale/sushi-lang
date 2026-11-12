@@ -1,0 +1,16 @@
+unit test_err_borrow_assert_message_after_move
+
+ShirBody eat
+  params : [(_0 "s": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string]
+  block  :
+    Assign(LocalRef(_0), adopt Interp(["the message ", Binary(+, Lit(1), Lit(1)), ""]), is_init: true)
+    ExprStmt(Call(Free(@eat), [(move LocalRef(_0), Owned)]))
+    Assert(Lit(true), message: LocalRef(_0))
+    Return(adopt Lit(0))

@@ -23,6 +23,6 @@ fn one@(T: Named)(T x) ~:
 
 fn main() i32:
     let Box@(bool) a = Box(true)
-    one(true)
+    one@(bool)(true)
     let Tag@(bool) b = Tag(true)
     return 0

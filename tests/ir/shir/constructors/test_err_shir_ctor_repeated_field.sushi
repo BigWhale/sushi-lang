@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2081
+# EXPECT_DUMP_SHIR: test_err_shir_ctor_repeated_field.shir
+#
+# the SHIR dump of a named construction that writes one name two times. `StructInit`
+# keeps the arguments in the written order, with the written names in `names`. The
+# typecheck pass reports the repeated name (CE2081) after lowering.
+
+struct Vec:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Vec v = Vec(x: 1, x: 2)
+    return v.x

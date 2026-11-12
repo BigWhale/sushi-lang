@@ -1,0 +1,71 @@
+unit test_err_borrow_match_move_in_one_arm
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody maybe
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "msg": string]
+  cond_moved : [_1]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(1), " towels"]), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal(0), [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))]), Arm(Wildcard, [ExprStmt(Call(Intrinsic("println"), [(Lit("kept"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("done"), Guaranteed)]))
+
+ShirBody every
+  params : [(_0 "word": string, Guaranteed)]
+  locals : [_1 "msg": string]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(2), " towels"]), is_init: true)
+    Match(LocalRef(_0), [Arm(Or([Literal("get"), Literal("fetch")]), [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))]), Arm(Wildcard, [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("done"), Guaranteed)]))
+
+ShirBody leaves
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : [_1 "msg": string]
+  cond_moved : [_1]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(3), " towels"]), is_init: true)
+    Match(LocalRef(_0), [Arm(IntRange(a'0', a'9', inclusive: true), [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)])), Return(adopt Lit(1))]), Arm(Wildcard, [ExprStmt(Call(Intrinsic("println"), [(Lit("kept"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(adopt Lit(0))
+
+ShirBody looped
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "msg": string, _2 "i": i32]
+  cond_moved : [_1]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(4), " towels"]), is_init: true)
+    Assign(LocalRef(_2), adopt Lit(0), is_init: true)
+    Loop(Cond(Binary(<, LocalRef(_2), LocalRef(_0))), [Match(LocalRef(_2), [Arm(Literal(3), [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)])), Break]), Arm(Wildcard, [Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)])], consumes: false)])
+    ExprStmt(Call(Intrinsic("println"), [(Lit("done"), Guaranteed)]))
+
+ShirBody scoped
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "t": string]
+  cond_moved : [_1]
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(0), [Assign(LocalRef(_1), adopt Interp(["", Lit(5), " towels"]), is_init: true), If(Binary(>, LocalRef(_0), Lit(0)), then: [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))])]), Arm(Wildcard, [ExprStmt(Call(Intrinsic("println"), [(Lit("kept"), Guaranteed)]))])], consumes: false)
+
+ShirBody reuse
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "msg": string]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", Lit(6), " towels"]), is_init: true)
+    Match(LocalRef(_0), [Arm(IntRange(0x10, 0x1f, inclusive: true), [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))]), Arm(Wildcard, [ExprStmt(Call(Intrinsic("println"), [(Lit("kept"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@maybe), [(Lit(0), Guaranteed)]))
+    ExprStmt(Call(Free(@every), [(Lit("get"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@leaves), [(Lit(a'5'), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Free(@looped), [(Lit(5), Guaranteed)]))
+    ExprStmt(Call(Free(@scoped), [(Lit(0), Guaranteed)]))
+    ExprStmt(Call(Free(@reuse), [(Lit(0x15), Guaranteed)]))
+    Return(adopt Lit(0))

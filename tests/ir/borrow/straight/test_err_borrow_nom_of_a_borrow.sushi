@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: "cannot consume 'lent': another owner keeps this value"
+# EXPECT_STDERR_CONTAINS: "clone it to take an independent value: `lent.clone()`"
+# EXPECT_DUMP_SHIR: test_err_borrow_nom_of_a_borrow.shir
+#
+# A `nom` parameter is owned by the callee, so a `nom` argument of it moves it on. A
+# parameter with no `nom` is a borrow of the caller's value: a `nom` argument of it is a
+# consuming use of a borrow, CE2411. A temporary in a `Guaranteed` argument moves nothing.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn pass(nom string owned, string lent) ~:
+    eat(nom owned)
+    eat(nom lent)
+
+fn main() i32:
+    pass(nom "{7} towels", "{8} towels")
+    return 0

@@ -1,0 +1,16 @@
+# A contract call is one `Call` of the intrinsic of its method, with the type of each operand
+# and each operand `Guaranteed`, and a `Display` print is a call of the intrinsic `println`.
+# EXPECT_DUMP_SLIR: test_slir_contract_calls.slir
+# EXPECT_STDOUT_EXACT: "true\ntrue\n0\nPoint(x: 1)\nPoint(x: 1)\n"
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point a = Point(1)
+    println(a.hash() == a.hash())
+    println(a.eq(a))
+    println(a.compare(a))
+    println(a.to_str())
+    println(a)
+    return 0

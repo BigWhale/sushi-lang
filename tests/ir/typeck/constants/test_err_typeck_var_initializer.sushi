@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign i32 to bool"
+# EXPECT_DUMP_SHIR: test_err_typeck_var_initializer.shir
+#
+# The initializer of a `var` is a one-expression body too, and the typecheck pass checks it
+# at the declared type of the `var`, as it checks the initializer of a constant. The first
+# two initializers fit. The last one holds an integer where a `bool` is declared, which is
+# CE2002.
+
+var i32 counter = 0
+var string name = "Ford"
+var bool ready = 1
+
+fn main() i32:
+    return 0

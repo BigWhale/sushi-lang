@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "20\n3\n40\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_array_slice.slir
+#
+# A slice checks `0 <= start <= end <= len` as `u32` compares and goes to the trap RE2028
+# on the failing edge, in every body (ir.md 8.9). Its value is a `Slice` in a VIEW local,
+# which owns nothing and drops nothing (ir.md 8.7). An inclusive end is one more, so the
+# `Slice` and the trap read an exclusive end.
+
+fn first(i32[] xs) i32:
+    return xs[0]
+
+fn main() i32:
+    let i32[] d = from([10, 20, 30, 40, 50])
+    let i32[4] a = [1, 2, 3, 4]
+    let i32 lo = 1
+    println(first(d[lo..4]))
+    println(first(a[2..=3]))
+    println(d[1..=3][2])
+    return 0

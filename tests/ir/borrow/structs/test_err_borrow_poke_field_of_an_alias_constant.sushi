@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'ORIGIN' with `poke`"
+# EXPECT_STDERR_CONTAINS: ":18:14"
+# EXPECT_DUMP_SHIR: test_err_borrow_poke_field_of_an_alias_constant.shir
+#
+# A borrow of a field of a constant behind an alias is a borrow of the constant (ruling
+# R-J). A `peek` of it reads read-only storage, and a `poke` of it is CE2400 at the name
+# of the constant. On main this program is CE0056; the new pipeline gives CE2400, by design.
+
+use "helpers/borrow_geo" as geo
+
+fn inc(poke i32 v) ~:
+    v := v + 1
+
+fn main() i32:
+    let i32 seen = geo.ORIGIN.y
+    println(seen)
+    inc(poke geo.ORIGIN.x)
+    return 0

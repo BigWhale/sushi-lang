@@ -1,0 +1,25 @@
+unit test_shir_call_bloom
+
+ShirBody sum
+  params : [(_0 "nums": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+
+ShirBody forward
+  params : [(_0 "xs": i32[], Owned)]
+  locals : []
+  block  :
+    Return(adopt Call(Free(@sum), [(move LocalRef(_0)..., Owned)]))
+
+ShirBody direct
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@sum), [(adopt Lit(1), Owned), (adopt Lit(2), Owned), (adopt Lit(3), Owned)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

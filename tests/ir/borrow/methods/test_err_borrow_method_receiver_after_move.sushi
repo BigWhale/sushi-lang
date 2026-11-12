@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'text'"
+# EXPECT_STDERR_CONTAINS: "'text' was moved here"
+# EXPECT_DUMP_SHIR: test_err_borrow_method_receiver_after_move.shir
+#
+# The receiver of a string method is a read of its local. A read after the move of the
+# local is CE2405, with a note at the move. No string method consumes its receiver, so
+# a call of one never moves the local.
+
+fn make(i32 n) string:
+    return "{n} towels"
+
+fn main() i32:
+    let string text = make(42)
+    let i32 first = text.len()
+    let string other = text
+    let i32 second = text.len()
+    println(other)
+    return first + second

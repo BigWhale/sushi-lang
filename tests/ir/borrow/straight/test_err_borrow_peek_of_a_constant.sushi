@@ -1,0 +1,27 @@
+# EXPECT_ERROR_CODES_EXACT: CE2436
+# EXPECT_STDERR_CONTAINS: "cannot move 'GREETING': it is a constant"
+# EXPECT_DUMP_SHIR: test_err_borrow_peek_of_a_constant.shir
+#
+# A constant is storage that the program keeps, so it has an address: a `peek` argument of
+# a constant borrows it, and an unmarked argument reads it. A plain constant copies out.
+# Storage that the program keeps is never moved out of: a `nom` argument of a constant
+# that owns a resource is CE2436.
+
+const i32 LIMIT = 3
+const string GREETING = "Mostly Harmless"
+
+fn show(peek i32 n) ~:
+    println(n)
+
+fn shout(string text) ~:
+    println(text)
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    show(peek LIMIT)
+    shout(GREETING)
+    let i32 copied = LIMIT
+    eat(nom GREETING)
+    return copied

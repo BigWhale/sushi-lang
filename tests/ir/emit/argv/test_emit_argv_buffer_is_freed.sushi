@@ -1,0 +1,15 @@
+# main takes argv, and the C main frees the string[] buffer of argv after the call. Each
+# element is a borrowed view of argv, so the buffer is the one allocation. `depth` reads
+# argv only as a `peek` argument of its own call.
+# CMD_ARGS: alpha beta gamma
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+fn depth(peek string[] args, i32 n) i32:
+    if (n == 0):
+        return 0
+    return depth(peek args, n - 1)
+
+fn main(string[] args) i32:
+    println("Mostly Harmless")
+    return depth(peek args, 3)

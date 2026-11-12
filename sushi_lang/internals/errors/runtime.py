@@ -1,12 +1,22 @@
 """Runtime errors (RExxxx) -- trapped at run time, not compile time."""
 from __future__ import annotations
 
+import re
+
 from sushi_lang.internals.errors.registry import (
     Category,
     ErrorMessage,
     Severity,
     _add,
 )
+
+_CONVERSION = re.compile(r"%(?:%|[-+ #0-9.*]*[a-zA-Z])")
+
+
+def printf_conversions(text: str) -> tuple[str, ...]:
+    """The printf conversions of a runtime text, in order. A SLIR `Trap` gives one operand to
+    each (docs/design/ir.md 8.8). `%%` prints a percent sign and takes no operand."""
+    return tuple(hit for hit in _CONVERSION.findall(text) if hit != "%%")
 
 
 # Array bounds errors. The text is the printf format: two %d, matching the
@@ -47,9 +57,10 @@ _add(ErrorMessage("RE2022", Severity.ERROR,
 
 # Pattern match exhaustion
 _add(ErrorMessage("RE2023", Severity.ERROR,
-    "no match arm matched the value (expected {pattern})",
+    "no match arm matched the value (expected %.*s)",
     Category.RUNTIME, "A match tested its last candidate arm, and the value did not match "
-    "it. `{pattern}` is that arm. Exhaustiveness checking makes this unreachable: one "
+    "it. The text names that arm as it is written: the trap gives its source text as a "
+    "string operand (docs/design/ir.md 8.8). Exhaustiveness checking makes this unreachable: one "
     "checker reads every match, nested patterns and tuple patterns included (ruling 17 of "
     "the tuple design), and a match that does not cover a value is the compile error "
     "CE2040. The check stays in the program as a backstop. Before ruling 17 the checker "
@@ -64,15 +75,26 @@ _add(ErrorMessage("RE2023", Severity.ERROR,
 # `string.ss`, which have always clamped. A count of zero was already data rather than an
 # error, so a negative one reaching the same answer needed no rule of its own.
 
-# A false assert
+# A false assert. The text is the printf format: two %.*s, the position and the message.
 _add(ErrorMessage("RE2026", Severity.ERROR,
-    "assertion failed at {where}",
+    "assertion failed at %.*s%.*s",
     Category.RUNTIME, "An `assert(cond)` or `assert(cond, message)` found its condition false. "
-    "`{where}` is the file, the line and the column of the `assert`, with the file named as a "
-    "compile-time diagnostic names it; a message, when there is one, follows after `: `. An "
+    "The text gives the file, the line and the column of the `assert`, with the file named as "
+    "a compile-time diagnostic names it; a message, when there is one, follows after `: `. An "
     "assert states an invariant, so a failure is a defect and not data: the program stops "
     "with exit code 1, and no error channel catches it. A failure that a caller can handle "
     "belongs in the channel, `| E` (docs/design/assert.md)."))
+
+# An expect on an Err or a None. The text is the printf format: two %.*s, the position of
+# the call and the message.
+_add(ErrorMessage("RE2029", Severity.ERROR,
+    "expect failed at %.*s: %.*s",
+    Category.RUNTIME, "`.expect(message)` found an `Err` in a `Result`, or `None` in a `Maybe`. "
+    "The text gives the file, the line and the column of the call, with the file named as a "
+    "compile-time diagnostic names it, and then the message. The message is evaluated only "
+    "when the call fails. The program stops with exit code 1, and no error channel catches "
+    "it. Use `??`, `.realise(default)` or `match` when a caller can handle the failure "
+    "(docs/design/ir.md 8.8)."))
 
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,

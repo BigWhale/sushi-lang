@@ -1,0 +1,26 @@
+# A method-level type parameter on a generic target and on a plain target, solved from the
+# arguments at two types.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\nleft\n9\nb\n"
+struct Cell@(T):
+    T v
+
+extend Cell@(T) pick@(U)(nom U a) U:
+    return a
+
+extend i32 either@(U)(nom U a, nom U b) U:
+    if (self > 0):
+        return a
+    return b
+
+fn main() i32:
+    let Cell@(i32) c = Cell(1)
+    println(c.pick(nom 3))
+    println(c.pick(nom "left"))
+    let i32 n = 1
+    println(n.either(nom 9, nom 8))
+    let i32 m = 0
+    println(m.either(nom "a", nom "b"))
+    return 0
+

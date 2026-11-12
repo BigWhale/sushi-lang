@@ -1,0 +1,21 @@
+# A hole holds an unwrap of a Maybe of a string and of a Result of a string.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "yes none\nloaded\nbad\n"
+# EXPECT_NO_LEAKS: true
+
+fn find(i32 n) Maybe@(string):
+    if (n > 0):
+        return Maybe.Some("yes")
+    return Maybe.None
+
+fn load(i32 n) string | StdError:
+    if (n > 0):
+        return Result.Ok("loaded")
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    println("{find(1).realise('none')} {find(0).realise('none')}")
+    let Result@(string, StdError) r = load(1)
+    println("{r.realise('bad')}")
+    println("{load(0).realise('bad')}")
+    return 0

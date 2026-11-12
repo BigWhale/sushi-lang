@@ -1,0 +1,15 @@
+unit test_err_typeck_enum_unknown_variant
+
+ShirBody shade
+  params : [(_0 "l": Light, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@shade), [(EnumInit(@Light, "Green", []), Guaranteed)]))
+    ExprStmt(Call(Free(@shade), [Call(Static(Light, "Blink"), [Lit(1)])]))
+    Return(Lit(0))

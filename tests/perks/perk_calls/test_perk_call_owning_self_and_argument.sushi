@@ -1,0 +1,30 @@
+# An owning receiver and an owning argument, by each mode: a borrow stays with the caller, and
+# `nom` hands the value to the callee. No path leaks.
+# EXPECT_STDOUT_EXACT: "ab!\nab?\nab\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+perk Joins:
+    fn joined(string tail) string
+    fn eaten(nom string tail) string
+    fn finish(nom self) string
+
+struct Text:
+    string body
+
+extend Text with Joins:
+    fn joined(string tail) string:
+        return self.body.concat(tail)
+    fn eaten(nom string tail) string:
+        let string out = self.body.concat(tail)
+        return out
+    fn finish(nom self) string:
+        return nom self.body
+
+fn main() i32:
+    let Text t = Text("a".concat("b"))
+    let string bang = "!".concat("")
+    println(t.joined(bang))
+    println(t.eaten(nom "?".concat("")))
+    println(t.finish())
+    return 0

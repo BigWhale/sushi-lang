@@ -1,0 +1,248 @@
+unit test_slir_array_index
+
+fn first(_1: i32[] @inout) -> i32 {
+    let _0: i32
+    let _2: i32
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy (_1[const 0_i32]) + const 100_i32
+    (_1[const 0_i32]) = copy _2
+    StorageDead(_2)
+    _0 = copy (_1[const 0_i32])
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32[3]                         // fixed
+    let _2: i32[]                          // d
+    let _3: i32                            // i
+    let _4: string                         // s
+    let _5: i32
+    let _6: u32
+    let _7: bool
+    let _8: i32
+    let _9: i32
+    let _10: u32
+    let _11: u32
+    let _12: bool
+    let _13: i32
+    let _14: i32
+    let _15: i32
+    let _16: u32
+    let _17: u32
+    let _18: bool
+    let _19: i32
+    let _20: u32
+    let _21: bool
+    let _22: i32
+    let _23: i32
+    let _24: u32
+    let _25: bool
+    let _26: i32
+    let _27: i32
+    let _28: i32
+    let _29: u32
+    let _30: u32
+    let _31: bool
+    let _32: i32
+    let _33: i32
+    let _34: i32
+    let _35: u32
+    let _36: u32
+    let _37: bool
+    let _38: i32
+    let _39: ~
+    let _40: i32
+    let _41: ~
+    let _42: i32
+    let _43: u32
+    let _44: bool
+    let _45: u8
+    let _46: ~
+    let _47: i32[2]
+    let _48: i32[2]
+    let _49: i32[2][2]                     // grid
+    let _50: i32
+    let _51: u32
+    let _52: bool
+    let _53: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = [const 1_i32, const 2_i32, const 3_i32]
+    StorageLive(_2)
+    _2 = [const 4_i32, const 5_i32, const 6_i32]
+    StorageLive(_3)
+    _3 = const 2_i32
+    StorageLive(_4)
+    _4 = const "Mostly Harmless"
+    StorageLive(_5)
+    _5 = copy _3
+    _6 = copy _5 as u32
+    _7 = copy _6 < const 3_u32
+    switchInt(copy _7) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    trap RE2020(copy _5, const 3_i32)
+
+  bb2:
+    StorageLive(_8)
+    _8 = copy _3
+    StorageLive(_9)
+    _9 = len(_2)
+    _10 = copy _8 as u32
+    _11 = copy _9 as u32
+    _12 = copy _10 < copy _11
+    switchInt(copy _12) -> [0: bb3, otherwise: bb4]
+
+  bb3:
+    trap RE2020(copy _8, copy _9)
+
+  bb4:
+    StorageLive(_13)
+    _13 = copy (_1[copy _5]) + copy (_2[copy _8])
+    StorageLive(_14)
+    _14 = copy _3 - const 1_i32
+    StorageLive(_15)
+    _15 = len(_2)
+    _16 = copy _14 as u32
+    _17 = copy _15 as u32
+    _18 = copy _16 < copy _17
+    switchInt(copy _18) -> [0: bb5, otherwise: bb6]
+
+  bb5:
+    trap RE2020(copy _14, copy _15)
+
+  bb6:
+    (_2[copy _14]) = copy _13
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageDead(_9)
+    StorageDead(_8)
+    StorageDead(_5)
+    StorageLive(_19)
+    _19 = copy _3
+    _20 = copy _19 as u32
+    _21 = copy _20 < const 3_u32
+    switchInt(copy _21) -> [0: bb7, otherwise: bb8]
+
+  bb7:
+    trap RE2020(copy _19, const 3_i32)
+
+  bb8:
+    StorageLive(_22)
+    _22 = copy (_1[const 1_i32]) + copy (_1[copy _19])
+    StorageLive(_23)
+    _23 = len(_2)
+    _24 = copy _23 as u32
+    _25 = const 0_u32 < copy _24
+    switchInt(copy _25) -> [0: bb9, otherwise: bb10]
+
+  bb9:
+    trap RE2020(const 0_i32, copy _23)
+
+  bb10:
+    StorageLive(_26)
+    _26 = copy _22 + copy (_2[const 0_i32])
+    StorageLive(_27)
+    _27 = copy _3 - const 1_i32
+    StorageLive(_28)
+    _28 = len(_2)
+    _29 = copy _27 as u32
+    _30 = copy _28 as u32
+    _31 = copy _29 < copy _30
+    switchInt(copy _31) -> [0: bb11, otherwise: bb12]
+
+  bb11:
+    trap RE2020(copy _27, copy _28)
+
+  bb12:
+    StorageLive(_32)
+    _32 = copy _26 - copy (_2[copy _27])
+    StorageLive(_33)
+    _33 = copy _3
+    StorageLive(_34)
+    _34 = len(_2)
+    _35 = copy _33 as u32
+    _36 = copy _34 as u32
+    _37 = copy _35 < copy _36
+    switchInt(copy _37) -> [0: bb13, otherwise: bb14]
+
+  bb13:
+    trap RE2020(copy _33, copy _34)
+
+  bb14:
+    StorageLive(_38)
+    _38 = copy _32 + copy (_2[copy _33])
+    StorageLive(_39)
+    _39 = call builtin println@(i32)(copy _38 @guaranteed)
+    StorageDead(_39)
+    StorageDead(_38)
+    StorageDead(_34)
+    StorageDead(_33)
+    StorageDead(_32)
+    StorageDead(_28)
+    StorageDead(_27)
+    StorageDead(_26)
+    StorageDead(_23)
+    StorageDead(_22)
+    StorageDead(_19)
+    StorageLive(_40)
+    _40 = call @first(copy _2 @inout)
+    StorageLive(_41)
+    _41 = call builtin println@(i32)(copy _40 @guaranteed)
+    StorageDead(_41)
+    StorageDead(_40)
+    StorageLive(_42)
+    _42 = len(_4)
+    _43 = copy _42 as u32
+    _44 = const 1_u32 < copy _43
+    switchInt(copy _44) -> [0: bb15, otherwise: bb16]
+
+  bb15:
+    trap RE2020(const 1_i32, copy _42)
+
+  bb16:
+    StorageLive(_45)
+    _45 = copy (_4[const 1_i32]) - const 107_u8
+    StorageLive(_46)
+    _46 = call builtin println@(u8)(copy _45 @guaranteed)
+    StorageDead(_46)
+    StorageDead(_45)
+    StorageDead(_42)
+    StorageLive(_47)
+    _47 = [const 1_i32, const 2_i32]
+    StorageLive(_48)
+    _48 = [const 3_i32, const 4_i32]
+    StorageLive(_49)
+    _49 = [move _47, move _48]
+    StorageDead(_48)
+    StorageDead(_47)
+    StorageLive(_50)
+    _50 = copy _3 - const 1_i32
+    _51 = copy _50 as u32
+    _52 = copy _51 < const 2_u32
+    switchInt(copy _52) -> [0: bb17, otherwise: bb18]
+
+  bb17:
+    trap RE2020(copy _50, const 2_i32)
+
+  bb18:
+    ((_49[copy _50])[const 0_i32]) = const 77_i32
+    StorageDead(_50)
+    StorageLive(_53)
+    _53 = call builtin println@(i32)(copy ((_49[const 1_i32])[const 0_i32]) @guaranteed)
+    StorageDead(_53)
+    _0 = const 0_i32
+    StorageDead(_49)
+    Drop(_4)
+    StorageDead(_4)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}

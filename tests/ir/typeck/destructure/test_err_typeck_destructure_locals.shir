@@ -1,0 +1,20 @@
+unit test_err_typeck_destructure_locals
+
+ShirBody pair
+  params : []
+  locals : []
+  block  :
+    Return(adopt TupleInit([adopt Lit(7), adopt Lit("seven")]))
+
+ShirBody main
+  params : []
+  locals : [_1 "a": i32, _2 "b": i32, _4 "c": u8, _6 "d": i64, _7 "e": bool, _8 "f": string, _10 "q": i32, _11 "r": string, _13 "g": string, _14 "h": i32, _15 "i": i32]
+  block  :
+    Destructure([_1, _2], TupleInit([Lit(1), Lit(2)]))
+    Destructure([_4, _], TupleInit([Lit(200), Lit(true)]))
+    Destructure([[_6, _7], _8], TupleInit([TupleInit([Lit(5000000000), Lit(false)]), Lit("Mostly Harmless")]))
+    Destructure([_10, _11], Call(Free(@pair), []))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), " ", LocalRef(_2), " ", LocalRef(_4), " ", LocalRef(_6), " ", LocalRef(_7), " ", LocalRef(_8), " ", LocalRef(_10), " ", LocalRef(_11), ""]), Guaranteed)]))
+    Destructure([[_13, _14], _15], TupleInit([TupleInit([Lit(1), Lit(2)]), Lit(3)]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_13), " ", LocalRef(_14), " ", LocalRef(_15), ""]), Guaranteed)]))
+    Return(Lit(0))

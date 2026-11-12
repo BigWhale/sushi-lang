@@ -1,0 +1,14 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_let_rebind.slir
+#
+# A `let` of a string literal, and a rebind that reads the old value. The rebind computes
+# the new value into a temporary first, then drops the old value, then stores (ir.md 8.10,
+# rule 6). The local is live at the `return`, so the exit drops it after `_0` is written.
+
+fn main() i32:
+    let string word = "Mostly"
+    word := "{word} Harmless"
+    println(word)
+    return 0

@@ -358,10 +358,6 @@ class FunctionTable(UnitOwnedSymbols[FuncSig]):
         key = (module_path, stdlib_func.name)
         self._stdlib_functions[key] = stdlib_func
 
-    def lookup_stdlib_function(self, module_path: str, function_name: str) -> Optional[Any]:
-        """Lookup a stdlib function by module and name."""
-        return self._stdlib_functions.get((module_path, function_name))
-
     def lookup_stdlib_by_name(self, function_name: str,
                               scope: object = None) -> Optional[Tuple[str, Any]]:
         """The registry stdlib FUNCTION a bare name reaches, with its module path.
@@ -378,10 +374,6 @@ class FunctionTable(UnitOwnedSymbols[FuncSig]):
                 continue
             return module_path, func
         return None
-
-    def stdlib_by_name(self) -> Dict[str, Any]:
-        """Every imported stdlib function, keyed by its BARE name."""
-        return {name: func for (_module, name), func in self._stdlib_functions.items()}
 
 
 @dataclass(eq=False)
@@ -433,6 +425,10 @@ class ExtensionMethod:
     template_target: Optional[str] = None
     # A `peek T` return (#1229); a copy of a template shares the record of the template.
     borrowed_return: Optional['BorrowedReturn'] = None
+    # The solved method-level type arguments of a copy of a method-generic template.
+    method_type_args: tuple[Type, ...] = ()
+    # The symbol a BINARY .slib's bitcode gave this method; the unit does not make it.
+    link_symbol: Optional[str] = None
 
 
 @dataclass
@@ -444,6 +440,22 @@ class ExtensionTable:
     keeps both, and method resolution chooses through `visibility.extension_reach`.
     """
     by_type: Dict[Type, Dict[str, List[ExtensionMethod]]] = field(default_factory=dict)
+    # The copies of the method-generic templates, by (target, name, method arguments, unit).
+    # A copy is no answer of (type, name), so only a reader by symbol reads it.
+    method_generic_copies: Dict[tuple, ExtensionMethod] = field(default_factory=dict)
+
+    def add_method_generic_copy(self, method: ExtensionMethod) -> None:
+        """File the signature of the copy of a method-generic template."""
+        key = (method.target_type, method.name, method.method_type_args, method.unit_name)
+        self.method_generic_copies.setdefault(key, method)
+
+    def signatures_named(self, method_name: str) -> Iterator[ExtensionMethod]:
+        """Every signature of one method name that has a symbol, on any type."""
+        for by_name in self.by_type.values():
+            yield from by_name.get(method_name, ())
+        for copy in self.method_generic_copies.values():
+            if copy.name == method_name:
+                yield copy
 
     def add_method(self, method: ExtensionMethod) -> None:
         """File a method. A second record from the same unit replaces the first.
@@ -507,7 +519,7 @@ class GenericExtensionMethod:
     err_type: Optional[Type] = None  # `| E`: instances return Result@(ret, E) (ruling 1)
     err_span: Optional[Span] = None
     # Method-level type parameters (`name@(U)`): SEPARATE from the receiver-derived
-    # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
+    # `type_params`, whose strict zip stays untouched. Solved at the call site.
     method_type_params: Tuple[BoundedTypeParam, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
     is_public: bool = False          # the `public` marker; the declaring unit is `unit_name`

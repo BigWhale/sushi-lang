@@ -1,0 +1,23 @@
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: "cannot consume 'K.name': another owner keeps this value."
+# EXPECT_STDERR_CONTAINS: "clone it to take an independent value: `K.name.clone()`"
+# EXPECT_STDERR_CONTAINS: ":19:12"
+# EXPECT_DUMP_SHIR: test_err_borrow_take_a_string_field_of_a_constant.shir
+#
+# A field of a constant is read-only storage that the program keeps. A take of its plain
+# field is a copy (`adopt`). A take of its string field is CE2411 at the field: the
+# constant keeps the string, and the program does not drop it.
+
+struct Named:
+    string name
+    i32 n
+
+const Named K = Named("towel", 42)
+
+fn name() string:
+    println(K.n)
+    return K.name
+
+fn main() i32:
+    println(name())
+    return 0

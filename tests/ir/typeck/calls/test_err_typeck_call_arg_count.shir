@@ -1,0 +1,21 @@
+unit test_err_typeck_call_arg_count
+
+ShirBody add
+  params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(+, LocalRef(_0), LocalRef(_1)))
+
+ShirBody none
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32, _1 "y": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Free(@add), [(Call(Free(@none), []), Guaranteed), (Call(Free(@add), [(Lit(1), Guaranteed), (Lit(2), Guaranteed)]), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), Call(Free(@add), [(LocalRef(_0), Guaranteed), (Lit(3), Guaranteed), Lit(4)]), is_init: true)
+    Return(LocalRef(_1))

@@ -19,7 +19,8 @@ import sushi_lang.internals.errors as er
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.semantics.library_registry import LibraryRegistry, library_unit
+from sushi_lang.semantics.library_registry import (
+    KEPT_STORAGE_KINDS, LibraryRegistry, library_unit)
 from sushi_lang.semantics.library_templates import (
     TemplateSourceError, apply_template_bindings, deserialize_perk_impl,
     parse_one_declaration)
@@ -266,14 +267,14 @@ class LibraryRegistration:
             yield sig
 
     def kept_constant_names(self) -> frozenset[str]:
-        """The constants a library declares and does not export, by name.
+        """The constants and the variables a library declares and does not export, by name.
 
         The scope pass asks, so a mention reaches the type pass and hears whose the
         declaration is instead of hearing that there is none (#487).
         """
         kept = self.tables.library_not_exported
         return frozenset(name for name, (_lib, kind) in kept.items()
-                         if kind == "constant")
+                         if kind in KEPT_STORAGE_KINDS)
 
     # -- the manifests ------------------------------------------------------------
 
@@ -339,7 +340,7 @@ class LibraryRegistration:
         and the record (`what`). It is never reported at the consumer's `use` line.
         """
         try:
-            program = parse_one_declaration(source, what, label)
+            program = parse_one_declaration(source, what)
         except TemplateSourceError as e:
             raise SushiError("CE3512", path=self._library_file(lib_name),
                              reason=str(e)) from e
@@ -742,7 +743,7 @@ class LibraryRegistration:
             label = _slice_label(lib_name, f"{base} with {perk_name}")
             try:
                 program = parse_one_declaration(
-                    source, f"perk implementation '{base} with {perk_name}'", label)
+                    source, f"perk implementation '{base} with {perk_name}'")
             except TemplateSourceError:
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
                 continue
@@ -888,6 +889,7 @@ class LibraryRegistration:
             sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file,
                                   receiver=not is_static and self_mode != "nom")
             method = ExtensionMethod(
+                link_symbol=record.get("link_symbol"),
                 target_type=target, name=sig.name, ret_type=sig.ret_type,
                 params=sig.params, self_mode=self_mode, filename=lib_file,
                 unit_name=unit, err_type=sig.err_type, is_static=is_static,
@@ -926,7 +928,8 @@ class LibraryRegistration:
         that the table holds already means that two libraries declare one target type:
         that clash has its own diagnostic, and the second record adds nothing.
         """
-        from sushi_lang.semantics.ast import CONVERSION_METHOD, Block, ExtendDef
+        from sushi_lang.semantics.ast import Block, ExtendDef
+        from sushi_lang.semantics.conversions import CONVERSION_METHOD
         from sushi_lang.semantics.conversions import Conversion, conversion_symbol
         from sushi_lang.semantics.library_registry import manifest_conversions
         from sushi_lang.semantics.type_resolution import parse_type_string
@@ -978,7 +981,7 @@ class LibraryRegistration:
         for lib_name, manifest, record in self._template_records("generic_extensions"):
             label = _slice_label(lib_name, f"{record.get('type')} {record.get('name')}")
             try:
-                program = deserialize_extension(record, label)
+                program = deserialize_extension(record)
             except TemplateSourceError as e:
                 raise SushiError("CE3512", path=self._library_file(lib_name),
                                  reason=str(e)) from e

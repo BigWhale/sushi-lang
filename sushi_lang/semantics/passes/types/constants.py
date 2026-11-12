@@ -1,18 +1,39 @@
-"""Constant definition validation for type validation (the typecheck pass)."""
+"""Constant definition validation for type validation (the typecheck pass).
+
+The constant evaluator reads the initializer at the declared type first, with the reporter
+of the pass (docs/design/ir.md 7.3, Q5). After an error of the evaluator, the initializer
+body is not walked. Else the walk checks the body (`visit/statements.py`), and the value
+that the evaluator gave is the value row of its `Return`. An empty container allocates
+nothing, so the evaluator does not read it, and it has no value.
+"""
 from __future__ import annotations
 
-from typing import Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, VarDef
+from sushi_lang.semantics.const_eval import allocates_nothing
 from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.type_predicates import holds_dynamic_array
-from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.typesys import BuiltinType, Type
 
 from .utils import validate_type_name
-from .compatibility import validate_assignment_compatibility
-from .propagation import propagate_types_to_value
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.const_eval import ConstantValue
+
+
+@dataclass(frozen=True)
+class InitializerFacts:
+    """What the `Return` of an initializer body reads: the declaration, its resolved type,
+    the value that the constant evaluator gave it, and whether it is an empty container,
+    which has no value."""
+    decl: ConstDef
+    ty: Type
+    value: Optional[ConstantValue]
+    empty: bool
 
 
 def assignment_span(const: ConstDef) -> Optional[Span]:
@@ -30,10 +51,18 @@ def assignment_span(const: ConstDef) -> Optional[Span]:
 
 
 def validate_constant(self, const: ConstDef) -> None:
-    """Validate a constant definition, in the scope its initializer resolves in."""
+    """Validate the declared type of a constant, then walk its initializer, in the scope its
+    initializer resolves in."""
     from .signatures import unit_tables
-    with in_body_scope(self, "namespaces", const, unit_tables(self)):
-        _validate_constant(self, const)
+    # The initializer of a compiled library's constant names what its library unit may
+    # name, a private function of the library included.
+    outer = self.in_library_body
+    self.in_library_body = self.in_library_unit or const.scope_unit is not None
+    try:
+        with in_body_scope(self, "namespaces", const, unit_tables(self)):
+            _validate_constant(self, const)
+    finally:
+        self.in_library_body = outer
 
 
 def _validate_constant(self, const: ConstDef) -> None:
@@ -50,37 +79,26 @@ def _validate_constant(self, const: ConstDef) -> None:
         return
 
     # The declaration takes the type a `let` would: a `List@(T)` or a `Maybe@(T)`
-    # spelling is interned here, and the record every reader of the name consults
-    # follows the declaration. A generic enum's variant is evaluated against it (#551).
+    # spelling is interned here, into the record that every reader of the declared type
+    # reads. A generic enum's variant is evaluated against it (#551).
     from .resolution import resolve_variable_type
     resolved = resolve_variable_type(self, const.ty, const.type_span)
-    if resolved is not None and resolved != const.ty:
-        const.ty = resolved
-        sig = self.const_sig(const.name)
-        if sig is not None:
-            sig.const_type = resolved
+    sig = self.const_table.record_of(const, self.current_unit_name)
+    if resolved is not None and sig is not None:
+        sig.const_type = resolved
+    ty = resolved if resolved is not None else const.ty
 
-    if is_var:
-        from sushi_lang.semantics.const_eval import allocates_nothing
-        if allocates_nothing(const.value):
-            # An empty container is the descriptor `{0, 0, null}` -- no evaluation,
-            # only the type stamp its position hands over (#544).
-            propagate_types_to_value(self, const.value, const.ty)
-            validate_assignment_compatibility(self, const.ty, const.value,
-                                              const.type_span, assignment_span(const))
+    value = None
+    empty = is_var and allocates_nothing(const.value)
+    if not empty:
+        offered = self.errors_offered()
+        value = self.constant_evaluator(self.reporter).evaluate(const.value, ty, const.loc)
+        if self.errors_offered() != offered:
             return
 
-    evaluator = self.constant_evaluator(self.reporter)
-    reported = len(self.reporter.items)
-    const_value = evaluator.evaluate(const.value, const.ty, const.loc)
-
-    if const_value is None and len(self.reporter.items) != reported:
-        return  # the evaluator named the mistake
-
-    # A value is checked against the declared type below. A SILENT None is a variant
-    # spelling whose mistake the body's validator owns (CE2045, CE2050), and it speaks
-    # here, with the body's code.
-    propagate_types_to_value(self, const.value, const.ty)
-
-    validate_assignment_compatibility(self, const.ty, const.value, const.type_span,
-                                      assignment_span(const))
+    # The initializer is the SHIR body of the constant (docs/design/ir.md 6.3).
+    self.initializer = InitializerFacts(const, ty, value, empty)
+    try:
+        self.check_body(const)
+    finally:
+        self.initializer = None

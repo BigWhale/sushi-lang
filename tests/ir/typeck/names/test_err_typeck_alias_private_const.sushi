@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE3005
+# EXPECT_STDERR_CONTAINS: "HIDDEN"
+# EXPECT_DUMP_SHIR: test_err_typeck_alias_private_const.shir
+#
+# A constant behind an alias is a `ConstRef` with the written name. A public constant of
+# the unit is read: `shown` takes its type. A private one is CE3005, behind an alias as
+# with a bare name.
+
+use "units/geo" as geo
+
+fn main() i32:
+    let i32 shown = geo.SHOWN
+    let i32 hidden = geo.HIDDEN
+    hidden
+    return shown

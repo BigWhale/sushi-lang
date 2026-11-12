@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE0107
+# EXPECT_STDERR_CONTAINS: "function 'sign' must return a value on all code paths"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_arm_falls_off.shir
+#
+# A match ends the path only when each of its arms ends it. Here the `_` arm prints and
+# goes on, so the body can reach its end with no `return`: CE0107.
+
+fn sign(i32 n) i32:
+    match n:
+        0 -> return 0
+        _ -> println(n)
+
+fn main() i32:
+    return sign(4)

@@ -1,0 +1,20 @@
+unit test_err_typeck_match_not_covered_ends_no_path
+
+ShirBody first
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(1), [Return(Lit(1))])], consumes: false)
+    Return(Lit(0))
+
+ShirBody last
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(1), [Return(Lit(1))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@first), [(Lit(1), Guaranteed)]), Call(Free(@last), [(Lit(1), Guaranteed)])))

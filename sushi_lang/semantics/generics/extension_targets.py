@@ -128,7 +128,7 @@ class RefusalRecord:
 
     A call of one is not an undefined name: the declaration carries the one diagnostic
     (#808, #860). The extension table and the generic perk-implementation table both
-    carry one, and one predicate reads both (`calls/methods.py:_was_refused`).
+    carry one, and one predicate reads both (`calls/methods.py:declaration_was_refused`).
     """
 
     refused: Set[Tuple[str, str]] = field(default_factory=set)
@@ -162,6 +162,14 @@ def reject_mixed_target(reporter, target: GenericTypeRef, shape: ExtensionTarget
 def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:
     """The interned name of one instantiation, which is what a concrete target matches."""
     return interned_name(base_name, type_args)
+
+
+def function_instance_key(unit: Optional[str], name: str,
+                          type_args: Tuple[Type, ...]) -> tuple:
+    """The key of an instance of a generic function, for its site, its parent and its
+    refusal. The identity of an instance is its declaring unit, its name and its type
+    arguments (#495), so two units' private generics of one name have two keys."""
+    return ("fn", unit, instantiation_key(name, tuple(type_args)))
 
 
 # What the AST builder read at each top-level argument of a target

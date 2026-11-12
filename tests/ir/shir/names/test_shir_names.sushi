@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_names.shir
+#
+# the SHIR dump of each kind of name: a parameter and the receiver `self` are a
+# `LocalRef`, a `const` is a `ConstRef`, a unit `var` is a `StorageRef`, and a function
+# used as a value is a `GlobalRef`. The constant's body is its initializer.
+
+const i32 LIMIT = 10
+
+var i32 counter = 7
+
+fn double(i32 x) i32:
+    return x * 2
+
+fn limit() i32:
+    return LIMIT + 1
+
+fn stored() i32:
+    return counter
+
+fn pick() fn(i32) -> i32:
+    return double
+
+extend i32 twice() i32:
+    return self * 2
+
+fn main() i32:
+    return 0

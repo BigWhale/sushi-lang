@@ -1,0 +1,37 @@
+unit test_err_typeck_channel
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@StdError, "Error", [])]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody quarter
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "h": i32, _2 "q": Result@(i32, StdError)]
+  block  :
+    Assign(LocalRef(_1), adopt Try(adopt Call(Free(@half), [(LocalRef(_0), Guaranteed)])), is_init: true)
+    Assign(LocalRef(_2), adopt EnumInit(@Result, "Ok", [adopt LocalRef(_1)]), is_init: true)
+    Return(adopt EnumInit(@Result, "Ok", [adopt Try(adopt Call(Free(@half), [(Try(adopt LocalRef(_2)), Guaranteed)]))]))
+
+ShirBody show
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Try(adopt Call(Free(@quarter), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody wrong
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "v": i32]
+  block  :
+    Assign(LocalRef(_1), Try(LocalRef(_0)), is_init: true)
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@show), [(Lit(8), Guaranteed)]))
+    Return(adopt Lit(0))

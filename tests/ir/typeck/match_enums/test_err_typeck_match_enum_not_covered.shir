@@ -1,0 +1,21 @@
+unit test_err_typeck_match_enum_not_covered
+
+ShirBody handle
+  params : [(_0 "e": Event, Guaranteed)]
+  locals : [_1 "x": i32, _2 "y": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Event, "Click", [(_1, Bare), (_2, Bare)]), [Return(Binary(+, LocalRef(_1), LocalRef(_2)))])], consumes: false)
+    Return(Lit(0))
+
+ShirBody paint
+  params : [(_0 "m": Maybe@(Color), Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Variant(@Color, "Red", [])]), [Return(Lit(1))]), Arm(Variant(@Maybe, "None", []), [Return(Lit(0))])], consumes: false)
+    Return(Lit(2))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@handle), [(EnumInit(@Event, "KeyPress", [adopt Lit(1)]), Guaranteed)]), Call(Free(@paint), [(EnumInit(@Maybe, "None", []), Guaranteed)])))

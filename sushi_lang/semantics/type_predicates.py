@@ -147,7 +147,7 @@ def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
     return False
 
 
-def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
+def contains_foreign_ptr(ty: Optional[Type], struct_table: Optional[dict] = None,
                          enum_table: Optional[dict] = None) -> bool:
     """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
     from sushi_lang.semantics.type_walk import walk_named_types

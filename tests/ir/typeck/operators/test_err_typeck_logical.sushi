@@ -1,0 +1,23 @@
+# EXPECT_ERROR_CODES_EXACT: CE2005
+# EXPECT_STDERR_CONTAINS: "use '== 0' or '!= 0' for integer conditions"
+# EXPECT_DUMP_SHIR: test_err_typeck_logical.shir
+#
+# `and`, `or`, `xor` and `not` answer a `bool`, and each operand is a condition: a
+# `bool` and nothing else. A comparison is a `bool`, so it is an operand too. The last
+# statement gives an `i32` to `and`, which is CE2005 at that operand, with the help for
+# an integer.
+
+fn main() i32:
+    let i32 count = 3
+    let bool yes = true
+    let bool no = false
+    let bool either = yes or no
+    let bool both = yes and no
+    let bool one = yes xor no
+    let bool none = not either
+    let bool mixed = (count > 1) and not (count == 2) or both
+    let bool odd = one == none
+    let bool last = mixed and yes and odd
+    let bool bad = last and count
+    bad := false
+    return 0

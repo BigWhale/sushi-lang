@@ -1,0 +1,33 @@
+unit test_shir_match_binding_modes
+
+ShirBody make
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(adopt EnumInit(@Slot, "Empty", []))])
+    Return(adopt EnumInit(@Slot, "Full", [adopt StructInit(@Note, [adopt Interp(["note ", LocalRef(_0), ""])], written_order: [0]), adopt LocalRef(_0)]))
+
+ShirBody show
+  params : [(_0 "note": Note, InGuaranteed), (_1 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", Field(LocalRef(_0), "text"), " ", LocalRef(_1), ""]), Guaranteed)]))
+
+ShirBody eat
+  params : [(_0 "note": Note, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["ate ", Field(LocalRef(_0), "text"), ""]), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": Slot, _1 "note": Note, _2 "n": i32, _3 "n": i32, _4 "note": Note, _5 "n": i32, _6 "note": Note]
+  regions : [_1: {_0} until #10, _3: {_0} until #25, _4: {_0} until #39]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Free(@make), [(Lit(1), Guaranteed)]), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_1, Bare), (_2, Bare)]), [ExprStmt(Call(Free(@show), [(LocalRef(_1), InGuaranteed), (LocalRef(_2), Guaranteed)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("empty"), Guaranteed)]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [Wildcard, (_3, Ref(Poke))]), [Assign(LocalRef(_3), adopt Binary(+, LocalRef(_3), Lit(10)), is_init: false)]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("empty"), Guaranteed)]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_4, Ref(Peek)), (_5, Bare)]), [ExprStmt(Call(Free(@show), [(LocalRef(_4), InGuaranteed), (LocalRef(_5), Guaranteed)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("empty"), Guaranteed)]))])], consumes: false)
+    Match(move LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_6, Nom), Wildcard]), [ExprStmt(Call(Free(@eat), [(move LocalRef(_6), Owned)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("empty"), Guaranteed)]))])], consumes: true)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

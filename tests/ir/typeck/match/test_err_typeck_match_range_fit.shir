@@ -1,0 +1,21 @@
+unit test_err_typeck_match_range_fit
+
+ShirBody high
+  params : [(_0 "b": i8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0x80, 0xff, inclusive: true), [Return(adopt Lit("negative"))]), Arm(Wildcard, [Return(adopt Lit("other"))])], consumes: false)
+
+ShirBody any
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0, 256, inclusive: false), [Return(Lit("any"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@high), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@any), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

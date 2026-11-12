@@ -1,0 +1,37 @@
+# EXPECT_ERROR_CODES_EXACT: CE2048
+# EXPECT_STDERR_CONTAINS: "match scrutinee must be an enum, integer or string type, got 'Point'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_scrutinee.shir
+#
+# A match takes an integer or a string scrutinee with literal arms. The first match reads
+# an i32 with decimal, hex and negative arms, `|` alternatives, two ranges and `_`. The
+# second match reads a string with arms in two quote forms. The last match reads a struct,
+# which has no match: CE2048.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn kind(i32 n) string:
+    match n:
+        0 -> return "zero"
+        1 | 2 | 3 -> return "small"
+        0x10..=0x1f -> return "hex"
+        -9..-1 -> return "minus"
+        _ -> return "other"
+
+fn command(string s) string:
+    match s:
+        "get" | 'fetch' -> return "read"
+        "put" -> return "write"
+        _ -> return "other"
+
+fn where(Point p) string:
+    match p:
+        1 -> return "one"
+        _ -> return "other"
+
+fn main() i32:
+    println(kind(2))
+    println(command("get"))
+    println(where(Point(1, 2)))
+    return 0

@@ -1,0 +1,13 @@
+# Recursion in an instance: the copy calls itself under one symbol.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n2\n"
+fn inst_depth@(T)(T seed, i32 n) i32:
+    if (n == 0):
+        return 0
+    return 1 + inst_depth(seed, n - 1)
+
+fn main() i32:
+    println(inst_depth(1, 3))
+    println(inst_depth("s", 2))
+    return 0

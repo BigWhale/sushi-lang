@@ -1,75 +1,25 @@
-"""Struct constructor validation."""
+"""Struct construction checks (docs/design/ir.md 7.3).
+
+The fields of a `StructInit` go through the one argument check, at the types of the
+fields (`check_struct_fields`). The written names of a named construction whose names are
+not the fields of the struct give CE2080, CE2081 or CE2082 (`reject_field_names`). A
+generic construction that nothing solves is CE2112 or CE2065 (`refuse_unsolved_struct`).
+"""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, NamedTuple, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
-from ..visibility import type_name_is_contested
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import StructType, Type
-from sushi_lang.semantics.ast import Call, Expr
-from ..compatibility import types_compatible
-from ..propagation import propagate_types_to_value
-from ..utils import (
-    intern_declared_wrapper, reject_spread_args, reject_unpromised_arguments,
-    resolve_declared_type)
+from ..arguments import NOTHING_TYPED, check_arguments, reject_misplaced_spread
+from ..utils import intern_declared_wrapper, resolve_declared_type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import GenericStructType
     from .. import TypeValidator
-
-
-class FieldSolution(NamedTuple):
-    """What the arguments of a generic struct constructor give (#1150)."""
-    type_args: tuple
-    disagreement: Optional[str]
-    has_untyped_argument: bool
-
-
-def solve_constructor_fields(validator: 'TypeValidator', base: str, args: Sequence[Expr],
-                             field_names: Optional[Sequence[str]]
-                             ) -> Optional[FieldSolution]:
-    """Solve a generic struct's type parameters from a constructor's arguments. Silent.
-
-    The one leading solver solves it, as it solves a generic call: each argument against
-    the field it fills. `type_args` holds one entry per type parameter, None where no
-    argument gives it. `disagreement` names the first argument that does not unify with
-    what the arguments before it gave. The answer is None when `base` is no generic
-    struct, or when an argument name is not a field: validation reports that.
-    """
-    from sushi_lang.semantics.generics.pack_inference import (
-        infer_call_arg_type, solve_leading_type_args)
-    from sushi_lang.semantics.type_resolution import (
-        resolve_type_recursively, resolve_unknown_type)
-
-    template = validator.generic_struct_table.by_name.get(base)
-    if template is None:
-        return None
-    fields = dict(template.fields)
-    if field_names:
-        if any(name not in fields for name in field_names):
-            return None
-        filled = list(field_names)
-    else:
-        filled = [name for name, _ in template.fields][:len(args)]
-    field_types = [fields[name] for name in filled]
-    args = list(args)[:len(field_types)]
-    names = [tp.name for tp in template.type_params]
-    structs, enums = validator.struct_table.by_name, validator.enum_table.by_name
-    arg_types = [infer_call_arg_type(validator, arg) for arg in args]
-    why: list[str] = []
-    misses: list[int] = []
-    solved, _unsolved = solve_leading_type_args(
-        None, arg_types, structs, enums, partial=True,
-        param_types=field_types, type_param_names=names, why=why, misses=misses)
-
-    disagreement = None
-    if misses:
-        first = misses[0]
-        disagreement = why[0] if why else _disagreement(
-            filled[first], field_types[first],
-            resolve_type_recursively(arg_types[first], structs, enums), solved)
-    type_args = tuple(resolve_unknown_type(solved[name], structs, enums)
-                      if name in solved else None for name in names)
-    return FieldSolution(type_args, disagreement, any(t is None for t in arg_types))
 
 
 def _disagreement(field: str, field_type: Type, arg_type: Type, solved: dict) -> str:
@@ -82,88 +32,43 @@ def _disagreement(field: str, field_type: Type, arg_type: Type, solved: dict) ->
             f"'{display_type(arg_type)}'")
 
 
-def untyped_struct_instance(validator: 'TypeValidator', base: str, args: Sequence[Expr],
-                            field_names: Optional[Sequence[str]]) -> Optional[Type]:
-    """The instance a generic struct constructor with no expected type builds (#1150).
-
-    The validating and the inferring half both read this one answer, and so do the
-    flat spelling and the spelling behind an alias (#1151). None when the arguments do
-    not solve every type parameter, or when two of them disagree.
-    """
-    from .enums import intern_constructed_instance
-    solution = solve_constructor_fields(validator, base, args, field_names)
-    if (solution is None or solution.disagreement is not None
-            or any(t is None for t in solution.type_args)):
-        return None
-    return intern_constructed_instance(validator, base, solution.type_args)
-
-
-def validate_generic_struct_constructor(validator: 'TypeValidator', call: Call,
-                                        written: str) -> Optional[StructType]:
-    """A generic struct constructor that no expected type stamped (#1150).
-
-    The arguments give the instance, and the construction is then checked as the
-    construction of that instance. `call.callee` is renamed to the instance, which is
-    the name every later reader emits from. A constructor that cannot be solved is
-    one error at the constructor, with the annotation in the help: CE2112 when no
-    argument gives a type parameter, CE2065 when two arguments disagree. `written` is
-    the constructor as the source writes it (`Box`, `sh.Box`).
-    """
-    base = call.callee.id
-    instance = untyped_struct_instance(validator, base, call.args, call.field_names)
-    if isinstance(instance, StructType):
-        reject_unpromised_arguments(validator, instance, call.loc)
-        call.callee.id = instance.name
-        validate_struct_constructor(validator, call)
-        return instance
-    _refuse_unsolved_struct_constructor(validator, call, base, written)
-    return None
-
-
-def _refuse_unsolved_struct_constructor(validator: 'TypeValidator', call: Call,
-                                        base: str, written: str) -> None:
-    """Report why a generic struct constructor has no instance, then walk its arguments."""
-    template = validator.generic_struct_table.by_name[base]
-    solution = solve_constructor_fields(validator, base, call.args, call.field_names)
-    field_names = call.field_names
-    call.field_names = None
-    reported = sum(validator.reporter.errors_offered.values())
-    for arg in call.args:
-        validator.validate_expression(arg)
-    # The count is asked before inference, as a generic call asks it (#790): a
-    # miscount is the fault, and an unsolved type parameter only follows from it.
+def refuse_unsolved_struct(validator: 'TypeValidator', node: e.StructInit, template,
+                           written: str, params: Sequence[Type], solution,
+                           type_args: tuple, *, had_error: bool) -> None:
+    """Report why a generic struct construction has no instance. The count comes first, as
+    for a generic call (#790): a miscount is the fault, and an unsolved type parameter only
+    follows from it. An argument with its own error of this pass gives no type argument,
+    and nothing follows it. `written` is the construction as the source writes it (`Box`, `sh.Box`),
+    and `params` holds the type of the field that each argument fills."""
     expected = len(template.fields)
-    if not field_names and len(call.args) != expected:
-        er.emit(validator.reporter, er.ERR.CE2027, call.callee.loc,
-                name=display_type(_template_shape(template, ())),
-                expected=expected, got=len(call.args))
+    if not node.named and len(node.fields) != expected:
+        er.emit(validator.reporter, er.ERR.CE2027, node.decl_loc,
+                name=display_type(template_shape(template, ())),
+                expected=expected, got=len(node.fields))
         return
-    if solution is None:
-        from ..field_matcher import validate_and_reorder_named_args
-        validate_and_reorder_named_args(template, call.args, field_names,
-                                        validator.reporter, call.callee.loc)
+    if had_error and any(ty is None for ty in solution.typed.values()):
         return
-    if (sum(validator.reporter.errors_offered.values()) != reported
-            and solution.has_untyped_argument):
-        return
-    names = [tp.name for tp in template.type_params]
-    spelled = f"{written}(...)" if call.args else f"{written}()"
-    if solution.disagreement is not None:
-        example = display_type(_template_shape(template, ()))
-        diag = er.emit_with(validator.reporter, er.ERR.CE2065, call.callee.loc,
-                            constructor=spelled, reason=solution.disagreement)
+    spelled = f"{written}(...)" if node.fields else f"{written}()"
+    if solution.misses:
+        first = solution.misses[0]
+        field = node.names[first] if node.names else template.fields[first][0]
+        reason = solution.why[0] if solution.why else _disagreement(
+            field, params[first], solution.typed[first], solution.solved)
+        example = display_type(template_shape(template, ()))
+        diag = er.emit_with(validator.reporter, er.ERR.CE2065, node.decl_loc,
+                            constructor=spelled, reason=reason)
     else:
-        example = display_type(_template_shape(template, solution.type_args))
-        missing = [name for name, t in zip(names, solution.type_args, strict=True)
-                   if t is None]
-        diag = er.emit_with(validator.reporter, er.ERR.CE2112, call.callee.loc,
+        example = display_type(template_shape(template, type_args))
+        missing = [tp.name for tp, ty in zip(template.type_params, type_args, strict=True)
+                   if ty is None]
+        diag = er.emit_with(validator.reporter, er.ERR.CE2112, node.decl_loc,
                             constructor=spelled,
                             params=", ".join(f"'{name}'" for name in missing))
     diag.help(f"declare the type first, e.g. 'let {example} v = {spelled}', "
               "then use 'v'").emit()
 
 
-def _template_shape(template, type_args: tuple):
+def template_shape(template, type_args: tuple):
     """`Base@(solved..., T...)`: the instance with each unsolved parameter left named.
 
     A constructor whose arguments disagree names every parameter, because no solution
@@ -177,134 +82,62 @@ def _template_shape(template, type_args: tuple):
         for name, t in zip(names, solved, strict=True)))
 
 
-def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
-    """Validate struct constructor call - field count, field names, and types."""
-    # A bloom spread `arr...` is not a struct-construction argument (CE0120).
-    if reject_spread_args(validator, call.args):
-        return
+def check_struct_fields(validator: 'TypeValidator', node: e.StructInit, struct: StructType,
+                        typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> None:
+    """The fields of a construction of `struct` against the types of its fields.
 
-    struct_name = call.callee.id
-
-    # A type name this unit lost (#863, #921): the table holds the winner, a struct or
-    # an enum, and the declaration's CE0004 / CE0006 / CE3011 is the one fault. The
-    # arguments are still checked.
-    if type_name_is_contested(validator, struct_name):
-        call.field_names = None
-        for arg in call.args:
-            validator.validate_expression(arg)
-        return
-
-    if struct_name not in validator.struct_table.by_name:
-        er.emit(validator.reporter, er.ERR.CE2001, call.callee.loc, name=struct_name)
-        for arg in call.args:
-            validator.validate_expression(arg)
-        return
-
-    struct_type = validator.struct_table.by_name[struct_name]
-
-    expected_fields = list(struct_type.fields)
-
-    field_names = getattr(call, 'field_names', None)
-
-    if field_names is not None:
-        _validate_named_struct_constructor(validator, call, struct_type, expected_fields, field_names)
-    else:
-        _validate_positional_struct_constructor(validator, call, struct_type, expected_fields)
-
-
-def _validate_named_struct_constructor(
-    validator: 'TypeValidator',
-    call: Call,
-    struct_type: StructType,
-    expected_fields: List[Tuple[str, Type]],
-    field_names: List[str]
-) -> None:
-    """Validate named struct constructor and reorder arguments."""
-    from ..field_matcher import validate_and_reorder_named_args
-
-    actual_args = call.args
-
-    reordered_args = validate_and_reorder_named_args(
-        struct_type,
-        actual_args,
-        field_names,
-        validator.reporter,
-        call.callee.loc
-    )
-
-    if reordered_args is None:
-        # The names are spent even when they do not fit: the field matcher has already
-        # said what is wrong with them, and CE6104 must not report them a second time.
-        call.field_names = None
-        for arg in actual_args:
-            validator.validate_expression(arg)
-        return
-
-    call.args = reordered_args
-
-    call.field_names = None
-
-    _check_field_arguments(validator, reordered_args, expected_fields,
-                           code=er.ERR.CE2083, field_key="field")
-
-
-def _validate_positional_struct_constructor(
-    validator: 'TypeValidator',
-    call: Call,
-    struct_type: StructType,
-    expected_fields: List[Tuple[str, Type]]
-) -> None:
-    """Validate positional struct constructor (existing logic)."""
-    actual_args = call.args
-
-    if len(actual_args) != len(expected_fields):
-        er.emit(validator.reporter, er.ERR.CE2027, call.callee.loc,
-               name=display_type(struct_type), expected=len(expected_fields),
-               got=len(actual_args))
-
-    _check_field_arguments(validator, actual_args, expected_fields,
-                           code=er.ERR.CE2028, field_key="field_name")
-
-    for i in range(len(expected_fields), len(actual_args)):
-        validator.validate_expression(actual_args[i])
-
-
-def _check_field_arguments(
-    validator: 'TypeValidator',
-    args: List[Expr],
-    expected_fields: List[Tuple[str, Type]],
-    *,
-    code: er.ErrorMessage,
-    field_key: str,
-) -> None:
-    """Check each argument against the field it fills, and stamp it for the backend.
-
-    The one walk both constructors take: a named construction puts its arguments in
-    field order first, and from there the two are the same work. Only the CODE differs
-    -- CE2083 for a named construction, CE2028 for a positional one -- and the two
-    registry texts spell one sentence with two placeholder names, which is why the
-    keyword travels beside the code.
+    A bloom argument is CE0120, and the fields are then not checked: a struct is never
+    variadic. A positional construction with a wrong count is CE2027 at the written type,
+    and a field
+    that does not fit is CE2028, or CE2083 in a named construction. A named construction
+    whose names are not the fields of the struct is CE2080, CE2081 or CE2082, and its
+    fields are then checked with no type of their position.
     """
-    for arg, (field_name, field_type) in zip(args, expected_fields, strict=False):
-        resolved_field_type = _resolve_field_type(validator, field_type)
+    if any([reject_misplaced_spread(validator, arg) for arg in node.fields]):
+        return
+    if node.names is not None:
+        if not reject_field_names(validator, struct, node.names, node.decl_loc):
+            er.raise_internal_error("CE0000", span=node.loc,
+                                    detail=f"lowering kept the written names of a named "
+                                           f"construction of '{struct.name}' whose names "
+                                           f"are its fields")
+        for index, arg in enumerate(node.fields):
+            if index not in typed:
+                visit.check_expr(validator, arg.value)
+        return
+    check_arguments(validator, display_type(struct),
+                    [resolve_field_type(validator, ty) for _name, ty in struct.fields],
+                    node.fields, node.decl_loc,
+                    mismatch_code=er.ERR.CE2083 if node.named else er.ERR.CE2028,
+                    arity_code=er.ERR.CE2027,
+                    field_names=[name for name, _ty in struct.fields], typed=typed)
 
-        propagate_types_to_value(validator, arg, resolved_field_type)
 
-        if (isinstance(arg, Call) and hasattr(arg.callee, 'id')
-                and isinstance(resolved_field_type, StructType)
-                and arg.callee.id in validator.generic_struct_table.by_name):
-            arg.callee.id = resolved_field_type.name
+def reject_field_names(validator: 'TypeValidator', struct: StructType | GenericStructType,
+                       names: Sequence[str], loc: Optional[Span]) -> bool:
+    """The first fault of the written names of a named construction of `struct`: a name
+    that the struct does not declare (CE2080), a repeated name (CE2081), or a missing
+    field (CE2082). True when one was reported."""
+    declared = [name for name, _ty in struct.fields]
+    unknown = next((name for name in names if name not in declared), None)
+    if unknown is not None:
+        er.emit(validator.reporter, er.ERR.CE2080, loc, field=unknown,
+                struct=display_type(struct))
+        return True
+    repeated = next((name for index, name in enumerate(names) if name in names[:index]),
+                    None)
+    if repeated is not None:
+        er.emit(validator.reporter, er.ERR.CE2081, loc, field=repeated)
+        return True
+    missing = sorted(set(declared) - set(names))
+    if missing:
+        er.emit(validator.reporter, er.ERR.CE2082, loc, fields=", ".join(missing),
+                struct=display_type(struct))
+        return True
+    return False
 
-        validator.validate_expression(arg)
 
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and not types_compatible(validator, arg_type, resolved_field_type):
-            er.emit(validator.reporter, code, arg.loc,
-                    expected=display_type(resolved_field_type),
-                    got=display_type(arg_type), **{field_key: field_name})
-
-
-def _resolve_field_type(validator: 'TypeValidator', field_type: Type) -> Type:
+def resolve_field_type(validator: 'TypeValidator', field_type: Type) -> Type:
     """The concrete type a field's DECLARED type names.
 
     `resolve_declared_type` answers for every kind but one: a written wrapper may name an

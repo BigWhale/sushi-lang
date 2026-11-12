@@ -399,8 +399,9 @@ and hands them to the attachment step instead.
 
 This is not a detail. If a doc block reached the statement dispatcher as an AST statement
 class, every exhaustive statement dispatcher would need an arm for it or would raise an
-ICE — the backend `emit_stmt` match, the `scope`, `borrow` and `typecheck` passes, the
-monomorphize transformer, and `semantics/visitors.py`. Peeling it in `parse_block` is the
+ICE — the lowering to SHIR and to SLIR, the `scope`, `borrow` and `typecheck` passes,
+and the monomorphize transformer. (The backend `emit_stmt` match that
+stood here is deleted: the SLIR emitter reads SLIR and never an AST statement.) Peeling it in `parse_block` is the
 difference between a contained change and one that touches the whole compiler.
 
 ### Keep `loc` on the declaration keyword
@@ -787,7 +788,7 @@ block on:
 
 | Producer | Records that carry `doc` |
 |---|---|
-| `backend/library_manifest.py` | public function, public constant, struct, struct field, enum, enum variant |
+| `compiler/library_manifest.py` | public function, public constant, struct, struct field, enum, enum variant |
 | `semantics/library_templates.py` | `serialize_generic_function`, `serialize_generic_struct`, `serialize_generic_enum`, `serialize_perk`, `serialize_perk_impl` |
 
 Line numbers are deliberately not given, because a commit that has nothing to do with the

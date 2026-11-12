@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2412
+# A use of an owning item after an in-place change of its element.
+
+fn main() i32:
+    let i32 n = 0
+    let string[] words = from(["a{n}", "b{n}"])
+    foreach(w in words.iter()):
+        words[0] := "c"
+        println(w)
+    return 0

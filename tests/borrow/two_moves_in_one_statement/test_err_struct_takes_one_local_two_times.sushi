@@ -1,0 +1,14 @@
+# A struct construction that moves one owning local into two fields is a use after a move
+# (CE2405) at the second field. Two takes of DISJOINT fields of one local are one take;
+# two moves of the same local are not.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: cannot borrow moved variable 't'
+struct P:
+    string a
+    string b
+
+fn main() i32:
+    let string t = "abc".clone()
+    let P p = P(nom t, nom t)
+    println("{p.a} {p.b}")
+    return 0

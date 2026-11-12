@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_DUMP_SHIR: test_err_borrow_assert_message_after_move.shir
+#
+# The message of an assert reads a value. A string that a call took with `nom` is moved,
+# so the message that reads it is an error.
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let string s = "the message {1 + 1}"
+    eat(nom s)
+    assert(true, s)
+    return 0

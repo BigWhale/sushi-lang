@@ -1,0 +1,26 @@
+unit test_err_typeck_match_tuple_poke_constant
+
+ShirBody K (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(4))
+
+ShirBody local
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "m": i32]
+  regions : [_1: {} until #8]
+  block  :
+    Match(TupleInit([adopt ConstRef(@K), adopt LocalRef(_0)]), [Arm(Tuple([Wildcard, (_1, Ref(Poke))]), [Return(adopt LocalRef(_1))])], consumes: false)
+
+ShirBody constant
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "r": i32]
+  block  :
+    Match(TupleInit([ConstRef(@K), LocalRef(_0)]), [Arm(Tuple([(_1, Ref(Poke)), Wildcard]), [Return(LocalRef(_1))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@local), [(Lit(1), Guaranteed)]), Call(Free(@constant), [(Lit(2), Guaranteed)])))

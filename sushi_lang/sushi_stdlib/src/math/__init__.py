@@ -66,11 +66,6 @@ def family_row(name: str, ty) -> Optional[Signature]:
     return Signature(params, ok=ok(ty), error="MathError")
 
 
-def is_builtin_math_function(name: str) -> bool:
-    """Check if name is a built-in math module function."""
-    return name in MATH_SIGNATURES or name in MATH_FAMILIES
-
-
 def is_builtin_math_constant(name: str) -> bool:
     """Check if name is a built-in math module constant."""
     return name in {'PI', 'E', 'TAU'}

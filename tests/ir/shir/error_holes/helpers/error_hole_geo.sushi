@@ -1,0 +1,2 @@
+public fn twice(i32 x) i32:
+    return x * 2

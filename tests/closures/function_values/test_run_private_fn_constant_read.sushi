@@ -1,0 +1,13 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n43\n3\n"
+# EXPECT_NO_LEAKS
+use "helpers/fnconst_units"
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return f(x)
+
+fn main() i32:
+    println(apply(PICK, 1))
+    println(apply(PICK, 2))
+    println(through_kept(2))
+    return 0

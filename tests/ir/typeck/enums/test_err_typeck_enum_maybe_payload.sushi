@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2049
+# EXPECT_STDERR_CONTAINS: "expected 'i32', got 'string'"
+# EXPECT_DUMP_SHIR: test_err_typeck_enum_maybe_payload.shir
+#
+# A `Maybe` variant takes the instance of `Maybe@(T)` from the type of its position, as a
+# `Result` variant does: the return type of the body, the type of a parameter. A string
+# payload where the position holds a `Maybe@(i32)` is CE2049.
+
+fn half(i32 n) Maybe@(i32):
+    if (n % 2 == 1):
+        return Maybe.None()
+    return Maybe.Some(n / 2)
+
+fn count(Maybe@(i32) m) Maybe@(i32):
+    return m
+
+fn main() i32:
+    count(Maybe.Some("Mostly Harmless"))
+    return 0

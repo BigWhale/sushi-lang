@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2008
+# EXPECT_STDERR_CONTAINS: "i32.nowhere"
+# EXPECT_DUMP_SHIR: test_err_typeck_method_unknown_on_call.shir
+#
+# The receiver of a method call can be any expression. Here it is the call of a free
+# function, which answers `i32`: the free call has its callee row, and the method call
+# names no method that an `i32` has, so it is CE2008.
+
+fn twice(i32 n) i32:
+    return n * 2
+
+fn main() i32:
+    let i32 n = twice(21).nowhere()
+    return n

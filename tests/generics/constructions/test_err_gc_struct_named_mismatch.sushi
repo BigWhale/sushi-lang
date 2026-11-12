@@ -1,0 +1,10 @@
+# A named construction with a declared instance: a field that does not fit is CE2083.
+# EXPECT_ERROR_CODES_EXACT: CE2083
+
+struct Box@(T):
+    T value
+
+fn main() i32:
+    let Box@(i32) b = Box(value: "x")
+    println(b.value)
+    return 0

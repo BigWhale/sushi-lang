@@ -1,13 +1,23 @@
 """What a built-in container method does to its receiver and its arguments: ONE table.
 
-The borrow pass reads it for CE2412, CE2408 and CE2430, and the typecheck pass reads
-`mutates` to refuse an in-place method on a constant (CE2096). It sits outside both
-passes, so the typecheck pass never imports the borrow pass.
+The borrow pass reads it for CE2412, CE2408 and CE2430. The typecheck pass reads `mutates`
+to refuse an in-place method on a constant (CE2096), and `consumes_args` for the convention
+of an argument (`argument_conventions`). It sits outside both passes, so the typecheck pass
+never imports the borrow pass. The module also holds the
+partition of the method families by what a method does to its receiver, and the
+convention of a receiver (`receiver_convention`, docs/design/ir.md 8.3): the borrow pass
+and SLIR lowering read it.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
+
+from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.param_modes import Convention
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.callee import BuiltinMethod
 
 
 @dataclass(frozen=True)
@@ -25,6 +35,7 @@ _WRITES_IN_PLACE = MethodEffect(mutates=True)
 _INSERTS = MethodEffect(mutates=True, moves_storage=True, consumes_args=True)
 _BULK_WRITES = MethodEffect(mutates=True, moves_storage=True, bulk_writes=True)
 _REFILLS = MethodEffect(mutates=True, refills=True)
+_STORES = MethodEffect(consumes_args=True)
 _NO_EFFECT = MethodEffect()
 
 # Only the METHOD NAME is matched here. A caller that acts on `consumes_args` checks that
@@ -32,6 +43,7 @@ _NO_EFFECT = MethodEffect()
 METHOD_EFFECTS: dict[str, MethodEffect] = {
     "push": _INSERTS,
     "insert": _INSERTS,
+    "alloc": _STORES,
     "extend": _BULK_WRITES,
     "extend_range": _BULK_WRITES,
     "extend_str": _BULK_WRITES,
@@ -60,14 +72,118 @@ def effect_of(method: str) -> MethodEffect:
 # The built-in method families (`METHOD_TYPE_REGISTRY`) whose methods the table describes.
 # A row applies to a call only when one of these families answered it: `string.reverse()`
 # and a user extension named `push` are other methods with the same name.
-EFFECT_FAMILIES = frozenset({"array", "list", "hashmap", "own"})
+ARRAY_FAMILY = "array"
+LIST_FAMILY = "list"
+HASHMAP_FAMILY = "hashmap"
+OWN_FAMILY = "own"
+EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
+
+PRIMITIVE_FAMILY = "primitive"
+STRING_FAMILY = "string"
+RESULT_FAMILY = "result"
+MAYBE_FAMILY = "maybe"
+ITERATOR_FAMILY = "iterator"
+
+# The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` is in exactly
+# one of the three sets below (ruling R-V, docs/design/ir.md 8.3). The clone family and the
+# contract families are in no set.
+# Only reads: no method of the family changes or consumes its receiver.
+# The one method of a function value is its `clone`, the same rvalue. A method of a `ptr`
+# reads the pointer, a plain scalar; a store writes the memory it points to, not the `ptr`.
+FUNCTION_FAMILY = "function"
+FOREIGN_PTR_FAMILY = "foreign_ptr"
+RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY, FUNCTION_FAMILY,
+                                    FOREIGN_PTR_FAMILY})
+# The one row of the string family that writes its receiver: the call of the concat
+# peephole. Only SLIR lowering makes it, and no program can name it (docs/design/ir.md 8.9).
+CONCAT_IN_PLACE = "concat_in_place"
+# The rows of the map family that step a `HashMapCursor` walk, one for each view. Only SLIR
+# lowering makes them, and no program can name them (docs/design/ir.md 8.6).
+CURSOR_NEXT = "cursor_next."
+# Consumes: the family has a `nom self` method, so the answer is per method.
+CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY, ITERATOR_FAMILY})
+# The effect families whose group wrote the receiver rule: a method whose row `mutates`
+# takes its receiver `Inout`, every other method reads it. The set can only grow.
+RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
+# The derived `clone` of a struct and an enum is in no set: SLIR lowering makes the rvalue
+# `Clone` of every `.clone()`, which reads its receiver (docs/design/ir.md 8.3, 8.7).
+CLONE_FAMILY = "derived_clone"
+# The families of the contract calls are in no set too: SLIR lowering makes each call an
+# intrinsic, which reads each operand (docs/design/ir.md 8.3, 8.6).
+ARRAY_HASH_FAMILY = "array_hash"
+DERIVED_HASH_FAMILY = "derived_hash"
+CONTRACT_FAMILY = "contract"
+CONTRACT_FAMILIES = frozenset({ARRAY_HASH_FAMILY, DERIVED_HASH_FAMILY, CONTRACT_FAMILY})
 
 
-def callee_effect(method: str, family: Optional[str]) -> MethodEffect:
-    """The effect of a call whose callee the typecheck pass stamped as `family`."""
+# The methods whose answer is a view of what the receiver holds, by family: a container
+# get-out (docs/design/ir.md 7.9). The borrow pass reads the receiver as the owner of the
+# view, and SLIR lowering reads it for the destination of the answer.
+VIEW_ANSWERS: dict[str, frozenset[str]] = {
+    ARRAY_FAMILY: frozenset({"get", "first", "last"}),
+    LIST_FAMILY: frozenset({"get", "first", "last"}),
+    HASHMAP_FAMILY: frozenset({"get"}),
+    OWN_FAMILY: frozenset({"get"}),
+}
+
+# The arguments of a storing method that only give a position, by family and method: the
+# index of `insert` borrows, and only the value is a slot (the `slot` of an array row).
+POSITION_ARGUMENTS: dict[tuple[str, str], frozenset[int]] = {
+    (ARRAY_FAMILY, "insert"): frozenset({0}),
+    (LIST_FAMILY, "insert"): frozenset({0}),
+}
+
+
+def answers_view(method: BuiltinMethod) -> bool:
+    """Whether a call of `method` answers a view of what its receiver holds."""
+    return method.name in VIEW_ANSWERS.get(method.family, frozenset())
+
+
+def steps_a_cursor(method: BuiltinMethod) -> bool:
+    """Whether `method` is a `cursor_next` row of the map family."""
+    return method.family == HASHMAP_FAMILY and method.name.startswith(CURSOR_NEXT)
+
+
+def receiver_convention(method: BuiltinMethod) -> Convention:
+    """The convention of the receiver of a call of `method`.
+
+    A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`), but
+    `concat_in_place` of the string family writes it (`Inout`). A `cursor_next` row of the
+    map family reads the map where it is (`InGuaranteed`). A method of a
+    family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
+    `nom self`, and reads it otherwise. A method of a family of `RULED_EFFECT_FAMILIES`
+    writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. The clone
+    family and a family of `CONTRACT_FAMILIES` read their receiver. Any other family in no
+    set is an internal error.
+    """
+    if method.family == STRING_FAMILY and method.name == CONCAT_IN_PLACE:
+        return Convention.INOUT
+    if steps_a_cursor(method):
+        return Convention.IN_GUARANTEED
+    if (method.family in RECEIVER_READ_FAMILIES or method.family == CLONE_FAMILY
+            or method.family in CONTRACT_FAMILIES):
+        return Convention.GUARANTEED
+    if method.family in CONSUMING_RECEIVER_FAMILIES:
+        return Convention.OWNED if method.nom_self else Convention.GUARANTEED
+    if method.family in RULED_EFFECT_FAMILIES:
+        return Convention.INOUT if effect_of(method.name).mutates else Convention.GUARANTEED
+    raise_internal_error("CE0000", detail=f"the method family '{method.family}' is in no "
+                                          f"receiver set of `semantics/method_effects.py`")
+
+
+def argument_conventions(family: str, method: str, count: int) -> tuple[Convention, ...]:
+    """The convention of each of the `count` arguments of a call of `method` of the effect
+    family `family`, a method or a static of `BUILTIN_STATICS` (docs/design/ir.md 8.3). A
+    method whose row `consumes_args` takes each argument (`Owned`): a container insert, and
+    `Own.alloc`, but an argument of `POSITION_ARGUMENTS`. Each other argument is a borrow
+    (`Guaranteed`). A family that is not an effect family is an internal error."""
     if family not in EFFECT_FAMILIES:
-        return _NO_EFFECT
-    return effect_of(method)
+        raise_internal_error("CE0000", detail=f"the method family '{family}' has no argument "
+                                              f"rule in `semantics/method_effects.py`")
+    owned = effect_of(method).consumes_args
+    positions = POSITION_ARGUMENTS.get((family, method), frozenset())
+    return tuple(Convention.OWNED if owned and index not in positions
+                 else Convention.GUARANTEED for index in range(count))
 
 
 def methods_where(flag: str) -> frozenset[str]:

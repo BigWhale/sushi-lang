@@ -1,0 +1,100 @@
+unit test_slir_method_receivers
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Counter                        // c
+    let _2: ~
+    let _3: i32
+    let _4: ~
+    let _5: i32
+    let _6: ~
+    let _7: string                         // s
+    let _8: string
+    let _9: ~
+    let _10: i32
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @Counter.start(const 3_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = call @Counter.bump(copy _1 @inout, const 4_i32 @guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call @Counter.read(copy _1 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin println@(i32)(copy _3 @guaranteed)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = call @Counter.seen(copy _1 @in_guaranteed)
+    StorageLive(_6)
+    _6 = call builtin println@(i32)(copy _5 @guaranteed)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_7)
+    _7 = const "Mostly Harmless"
+    StorageLive(_8)
+    _8 = call @string.shout(copy _7 @guaranteed)
+    StorageLive(_9)
+    _9 = call builtin println@(string)(copy _8 @guaranteed)
+    StorageDead(_9)
+    Drop(_8)
+    StorageDead(_8)
+    StorageLive(_10)
+    _10 = call @Counter.done(copy _1 @owned)
+    _0 = copy _10 + const 6_i32
+    StorageDead(_10)
+    Drop(_7)
+    StorageDead(_7)
+    StorageDead(_1)
+    return
+}
+
+fn Counter.start(_1: i32 @guaranteed) -> Counter {
+    let _0: Counter
+
+  bb0:
+    _0 = Counter(copy _1)
+    return
+}
+
+fn Counter.read(_1: Counter @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy (_1.0)
+    return
+}
+
+fn Counter.seen(_1: Counter @in_guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy (_1.0) + const 100_i32
+    return
+}
+
+fn Counter.bump(_1: Counter @inout, _2: i32 @guaranteed) -> ~ {
+    let _0: ~
+
+  bb0:
+    (_1.0) = copy (_1.0) + copy _2
+    _0 = const ~
+    return
+}
+
+fn Counter.done(_1: Counter @owned) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = copy (_1.0) * const 2_i32
+    return
+}
+
+fn string.shout(_1: string @guaranteed) -> string {
+    let _0: string
+
+  bb0:
+    _0 = call builtin interp@(string, string)(copy _1 @guaranteed, const "!" @guaranteed)
+    return
+}

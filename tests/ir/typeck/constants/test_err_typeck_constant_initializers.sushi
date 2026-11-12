@@ -1,0 +1,23 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign string to i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_constant_initializers.shir
+#
+# The typecheck pass checks the initializer body of each constant at its declared type. A
+# literal takes the declared type, a constant can name another constant, and a cast, a
+# negation and a hexadecimal literal hold the value that their type holds. Each of those
+# initializers fits its type. The last constant holds a string where an `i32` is declared,
+# which is CE2002 at `name = value`, with a note at the declared type.
+
+const i32 ANSWER = 42
+const u8 WRAPPED = 300 as u8
+const i8 SMALLEST = -128
+const i8 ALL_BITS = 0xFF
+const i32 NEXT = ANSWER + 1
+const string GREETING = "Mostly Harmless"
+const bool READY = true
+const f64 HALF = 0.5
+const i32 WORD = "Mostly Harmless"
+
+fn main() i32:
+    println(NEXT)
+    return 0

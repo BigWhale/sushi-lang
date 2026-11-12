@@ -1,0 +1,31 @@
+# EXPECT_ERROR_CODES_EXACT: CE2514
+# EXPECT_STDERR_CONTAINS: "operator '<' cannot compare two values of type 'bool'"
+# EXPECT_DUMP_SHIR: test_err_typeck_comparison.shir
+#
+# A comparison answers a `bool`. Two numbers of one type compare with each of the six
+# operators, a literal beside a typed operand takes its type, a `bool` has `==` and
+# `!=`, and a `string` has all six, by its bytes. A `bool` has no order, so the last
+# statement, `<` on two `bool` values, is CE2514.
+
+fn main() i32:
+    let i32 a = 7
+    let u8 small = 3
+    let bool eq = a == 7
+    let bool ne = a != 8
+    let bool lt = a < 10
+    let bool le = small <= 3
+    let bool gt = 300 > a
+    let bool ge = a >= -1
+    let bool sums = (a + 1) > (a - 1)
+    let bool same = eq == ne
+    let bool other = lt != le
+    let string name = "Arthur"
+    let bool named = name == "Arthur"
+    let bool before = name < "Ford"
+    let bool all = gt == ge
+    let bool texts = named != before
+    let bool mixed = all != texts
+    let bool truth = sums == true
+    let bool order = same < other
+    mixed := truth == order
+    return 0

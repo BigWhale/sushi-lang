@@ -1,0 +1,23 @@
+# Each lazy adapter over a lent source, walked. The state of each adapter is on the stack,
+# and the source array keeps its strings.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n4\n6\nbb\n0:a\n1:bb\na-1\nbb-2\na!\nbb!\n3\n"
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let string[] names = from(["a", "bb"])
+    foreach(x in xs.iter().map(nom |i32 x| x * 2)):
+        println(x)
+    foreach(s in names.iter().filter(nom |string s| s.len() > 1)):
+        println(s)
+    foreach(p in names.iter().enumerate()):
+        println("{p.0}:{p.1}")
+    foreach(p in names.iter().zip(nom xs.iter())):
+        println("{p.0}-{p.1}")
+    foreach(s in names.iter().clone_each()):
+        let string t = s.concat("!")
+        println(t)
+    println(xs.len())
+    return 0

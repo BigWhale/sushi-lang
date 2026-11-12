@@ -1,0 +1,2 @@
+public struct Crate:
+    i32 weight

@@ -1,0 +1,12 @@
+# A hole in a lambda body and a hole of a closure result.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "11 22\npre3\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string pre = "pre"
+    let fn(i32) -> string f = |i32 n| "{n}{n}"
+    println("{f(1)} {f(2).upper()}")
+    let fn(i32) -> string g = |i32 n| "{pre}{n}"
+    println("{g(3)}")
+    return 0

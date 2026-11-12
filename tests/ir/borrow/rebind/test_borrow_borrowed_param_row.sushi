@@ -1,0 +1,31 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "new\nMostly\nMostly!\nMostly\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_borrow_borrowed_param_row.shir
+#
+# A by-value parameter that owns starts as a local that is moved on every path, because
+# the callee does not own the value of the caller (ir.md 7.9). A rebind on some paths and
+# not on others gives it a `cond_moved` row: in `pick` at the exit, in `again` at the
+# second rebind. A rebind on every path gives none (`each`).
+fn pick(string s, bool fresh) ~:
+    if (fresh):
+        s := "new".concat("")
+    println(s)
+
+fn again(string s, bool fresh) ~:
+    if (fresh):
+        s := "new".concat("")
+    s := s.concat("!")
+    println(s)
+
+fn each(string s) ~:
+    s := s.concat("")
+    println(s)
+
+fn main() i32:
+    let string c = "Mostly".concat("")
+    pick(c, true)
+    pick(c, false)
+    again(c, false)
+    each(c)
+    return 0

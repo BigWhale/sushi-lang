@@ -1,0 +1,13 @@
+# A template method on a generic struct, at two type arguments, called from two units.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\nmostly\n"
+use "helpers/tc_crate"
+
+fn main() i32:
+    let Crate@(i32) a = Crate(7)
+    let Crate@(string) b = Crate("mostly")
+    println(a.shown())
+    println(crate_text(a))
+    println(b.shown())
+    return 0
+

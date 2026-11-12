@@ -1,0 +1,31 @@
+# A static template of a generic target, with the type from the position and from the
+# argument, behind a built-in generic target too, and a static with a method-level parameter.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\nsix\n1\n3\n"
+use "helpers/tc_crate"
+
+extend List@(T) static of_one(nom T x) List@(T):
+    let List@(T) out = List.new()
+    out.push(nom x)
+    return out
+
+struct Plain:
+    i32 x
+
+extend Plain static seeded@(U)(nom U seed, i32 x) Plain:
+    let List@(U) held = List.new()
+    held.push(nom seed)
+    return Plain(x + held.len())
+
+fn main() i32:
+    let Crate@(i32) a = Crate.of(nom 4)
+    let Crate@(string) b = Crate.of(nom "six")
+    println(a.held)
+    println(b.held)
+    let List@(string) l = List.of_one(nom "x")
+    println(l.len())
+    let Plain p = Plain.seeded(nom 1, 2)
+    println(p.x)
+    return 0
+

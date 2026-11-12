@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2111
+# EXPECT_STDERR_CONTAINS: "cannot infer the element type of an empty new()"
+# EXPECT_DUMP_SHIR: test_err_typeck_array_init.shir
+#
+# Every run of an array literal: a value, a repeat (the value, then the count) and a
+# range, whose slot is an i32. A literal takes the element type of its position. An empty `from([])` and a
+# `new()` take the whole type of their position (#544); with no type there, the error
+# names the form that the source writes (CE2111).
+
+struct Bag:
+    i64[] items
+
+fn first(u8[] xs) u8:
+    return xs[0]
+
+fn main() i32:
+    let i32 n = 2
+    let i64[3] w = [1, 2; 2]
+    let i32[6] a = [1, 2; 2, 0..=2]
+    let i32[] b = from([7; n, 0..n])
+    let Bag bag = Bag(new())
+    let u8 one = first(from([]))
+    let i32 k = new()[0]
+    return (w[0] as i32) + a[0] + b[1] + (bag.items[0] as i32) + (one as i32) + k

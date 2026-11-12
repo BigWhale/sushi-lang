@@ -1,0 +1,14 @@
+# A `let` of a slice of a unit variable binds a view of its storage, and the variable is
+# its owner: a change of the variable while the view lives is CE2412, as for a local.
+# The `let` itself is legal: a unit variable is no temporary, so it is not CE2437.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+var i32[] buf = from([])
+
+fn main() i32:
+    buf.push(1)
+    buf.push(2)
+    let i32[] view = buf[0..2]
+    buf.push(3)
+    println("{view.len()}")
+    return 0

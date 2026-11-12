@@ -1,0 +1,34 @@
+# `hash()` of a struct, an enum, a tuple, a fixed array, a dynamic array and a container
+# answers one value for two equal values.
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\n"
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    string name
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+fn main() i32:
+    println(Point(1, "a").hash() == Point(1, "a").hash())
+    println(Point(1, "a").hash() == Point(1, "b").hash())
+    println(Shape.Circle(1).hash() == Shape.Circle(1).hash())
+    println(Shape.Circle(1).hash() == Shape.Dot.hash())
+    println((1, "t").hash() == (1, "t").hash())
+    println((1, "t").hash() == (2, "t").hash())
+    let i32[2] a = [1, 2]
+    let i32[2] b = [1, 2]
+    println(a.hash() == b.hash())
+    let string[] c = from(["x", "y"])
+    let string[] d = from(["x", "y"])
+    let string[] f = from(["y", "x"])
+    println(c.hash() == d.hash())
+    println(c.hash() == f.hash())
+    let List@(i32) l = List.new()
+    l.push(1)
+    let List@(i32) m = List.new()
+    m.push(1)
+    println(l.hash() == m.hash())
+    return 0

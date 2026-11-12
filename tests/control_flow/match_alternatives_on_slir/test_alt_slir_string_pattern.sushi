@@ -1,0 +1,31 @@
+# A string pattern in a payload of an owning `Maybe@(string)`, alone and in
+# alternatives. The scrutinee is a local and a temporary.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "help\nversion\nother mostly\nnone\nhelp\nother harmless\n"
+
+fn flag(Maybe@(string) m) ~:
+    match m:
+        Maybe.Some("--help") | Maybe.Some("-h") -> println("help")
+        Maybe.Some("--version") -> println("version")
+        Maybe.Some(s) -> println("other {s}")
+        Maybe.None -> println("none")
+
+fn make(string s) Maybe@(string):
+    return Maybe.Some("{s}")
+
+fn main() i32:
+    let string dash = "-"
+    flag(Maybe.Some("{dash}-help"))
+    flag(Maybe.Some("{dash}-version"))
+    flag(Maybe.Some("mostly"))
+    flag(Maybe.None())
+    match make("-h"):
+        Maybe.Some("--help") | Maybe.Some("-h") -> println("help")
+        Maybe.Some(s) -> println("other {s}")
+        Maybe.None -> println("none")
+    match make("harmless"):
+        Maybe.Some("--help") | Maybe.Some("-h") -> println("help")
+        Maybe.Some(s) -> println("other {s}")
+        Maybe.None -> println("none")
+    return 0

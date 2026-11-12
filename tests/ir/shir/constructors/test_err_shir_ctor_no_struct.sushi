@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2008, CE6104
+# EXPECT_DUMP_SHIR: test_err_shir_ctor_no_struct.shir
+#
+# the SHIR dump of a named construction on a type name that is no struct. The name has
+# no field declaration, so `StructInit` keeps the arguments in the written order, with
+# the written names in `names`. The typecheck pass refuses the call (CE2008) and the
+# named argument (CE6104) after lowering.
+
+struct Vec:
+    i32 x
+    i32 y
+
+enum Sign:
+    Plus
+
+fn main() i32:
+    let Vec v = Sign(x: 1)
+    return v.x

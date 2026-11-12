@@ -1,0 +1,65 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n-1\n-2\none or two\nfive to seven\nother 9\nnone\n1\n2\n0\n4\n6\n-1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_enum_chain.slir
+#
+# A match on an enum with a nested pattern, or with a literal or a range in a payload, is a
+# chain of tests in source order (ir.md 8.9). The test of a variant is a `Discriminant` of
+# its place and a switch with one case; the tests of its items follow at
+# `Field(Downcast(place, variant), index)`. A literal is a switch on the payload value, a
+# range is two compares, and a string literal is a call of `eq`. An `Or` gives one path for
+# each alternative. In `first`, the two paths write `n` from two places, so each one writes
+# `n` in a block of its own and goes to the body. After the last arm of `depth`, the failed
+# test goes to the trap RE2023.
+
+enum Inner:
+    Ok(i32)
+    Err
+
+enum Outer:
+    Success(Inner)
+    Failure
+
+enum Pair:
+    Left(i32, i32)
+    Right(i32, i32)
+
+fn depth(Outer o) i32:
+    match o:
+        Outer.Success(Inner.Ok(v)) -> return v
+        Outer.Success(Inner.Err) -> return -1
+        Outer.Failure -> return -2
+
+fn small(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(1 | 2) -> return "one or two"
+        Maybe.Some(5..=7) -> return "five to seven"
+        Maybe.Some(n) -> return "other {n}"
+        Maybe.None -> return "none"
+
+fn word(Maybe@(string) m) i32:
+    match m:
+        Maybe.Some("go") -> return 1
+        Maybe.Some(_) -> return 2
+        Maybe.None -> return 0
+
+fn first(Pair p) i32:
+    match p:
+        Pair.Left(0, n) | Pair.Right(n, 0) -> return n
+        _ -> return -1
+
+fn main() i32:
+    println(depth(Outer.Success(Inner.Ok(42))))
+    println(depth(Outer.Success(Inner.Err)))
+    println(depth(Outer.Failure))
+    println(small(Maybe.Some(2)))
+    println(small(Maybe.Some(6)))
+    println(small(Maybe.Some(9)))
+    println(small(Maybe.None))
+    println(word(Maybe.Some("go")))
+    println(word(Maybe.Some("stop")))
+    println(word(Maybe.None))
+    println(first(Pair.Left(0, 4)))
+    println(first(Pair.Right(6, 0)))
+    println(first(Pair.Left(1, 4)))
+    return 0

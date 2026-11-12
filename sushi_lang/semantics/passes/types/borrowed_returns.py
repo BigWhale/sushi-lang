@@ -1,8 +1,9 @@
 """The typecheck half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S10h).
 
 The faults of a declaration (no source, an `E` that owns), a function value of a callable
-with a borrowed return, and the stamp on each call: where the sources stand in it. The
-source set itself is `semantics/borrowed_return.py`'s, and the borrow pass reads it too.
+with a borrowed return, and the source row of each call: where the sources stand in it
+(docs/design/ir.md 7.3). The source set itself is `semantics/borrowed_return.py`'s, and the
+borrow pass reads it too.
 """
 from __future__ import annotations
 
@@ -17,17 +18,17 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 
-def stamp_call_sources(validator: 'TypeValidator', call: Any, callee: Any) -> None:
-    """Stamp where the sources of `callee` stand in `call` (`callee_borrows`).
-
-    `callee` is the declaration or the signature the call resolved to. A callee with an
-    owned return leaves the stamp None.
-    """
+def record_call_sources(validator: 'TypeValidator', call: Any, callee: Any) -> None:
+    """The source row of the SHIR `call` of `callee`, a declaration or a signature: where
+    the sources of its `peek` return stand in the call. A callee with an owned return has
+    no row."""
     record = borrowed_return_of(callee)
     if record is None:
         return
     names = [param.name for param in getattr(callee, "params", None) or ()]
-    call.callee_borrows = source_positions(record, names, validator.tables)
+    positions = source_positions(record, names, validator.tables)
+    if positions is not None:
+        validator.body_answers().record_sources(call.shir_id, positions)
 
 
 def reject_borrowed_return_faults(validator: 'TypeValidator', node: Any) -> None:

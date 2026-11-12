@@ -1,0 +1,5 @@
+# `not` answers a bool also when its operand has an error.
+# EXPECT_ERROR_CODES_EXACT: CE1001, CE2002
+fn main() i32:
+    let i32 x = not y
+    return x

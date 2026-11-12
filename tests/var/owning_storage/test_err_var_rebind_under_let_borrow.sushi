@@ -1,0 +1,11 @@
+# A rebind of an owning `var` while a `let`-borrow of its element lives is refused: the
+# rebind frees the value that the borrow reads.
+# EXPECT_ERROR_CODE: CE2412
+
+var string[2] names = ["x", "y"]
+
+fn main() i32:
+    let string first = names[0]
+    names := ["p", "q"]
+    println(first)
+    return 0

@@ -1,0 +1,23 @@
+# A `return` from the body of a `foreach` over an owned adapter chain frees the whole
+# chain: the state of each adapter, each closure with the string it captured, and the
+# owned source array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a:1\nx:2\n"
+fn first_mapped() string:
+    let string tag = "a"
+    foreach(s in from(["a", "bb", "ccc"]).iter().clone_each().map(nom |string n| "{tag}:{n.len()}").filter(nom |string t| t.len() > 0)):
+        return s
+    return "none"
+
+fn second_mapped() string:
+    let string other = "x"
+    foreach(p in from(["a", "bb", "ccc"]).iter().clone_each().map(nom |string n| "{other}:{n.len()}").enumerate()):
+        if (p.0 == 1):
+            return p.1.clone()
+    return "none"
+
+fn main() i32:
+    println(first_mapped())
+    println(second_mapped())
+    return 0

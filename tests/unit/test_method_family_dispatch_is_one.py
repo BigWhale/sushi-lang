@@ -7,16 +7,12 @@ the typecheck pass types the call as the built-in's return while the backend cal
 perk implementation that actually answers it.
 
 This file states the repair. There is ONE family table. A family carries the CLAIM (who
-answers this receiver and this name), the inferrer the typecheck pass reads and the
-validator it runs, and both halves reach it through `MethodTypeRegistry.claim`. The
-tests below hold three things:
+answers this receiver and this name), and the arm of a call in the typecheck pass reaches
+it through `MethodTypeRegistry.claim`. The tests below hold two things:
 
-* the table is total -- every family carries both halves, so a family added for one of
-  them cannot go missing from the other;
-* neither half carries a second dispatcher -- the family predicates are named in the
+* the call arm carries no second dispatcher -- the family predicates are named in the
   registry and nowhere else;
-* the claims are pairwise DISJOINT, which is what makes the two halves' historical
-  orders equivalent and what makes any order safe.
+* the claims are pairwise DISJOINT, which is what makes any order safe.
 
 The disjointness sweep is measured against a space that claims every family at least
 once (`test_the_claim_space_reaches_every_family`): a sweep over a space nothing claims
@@ -39,7 +35,9 @@ from sushi_lang.semantics.typesys import (
 TYPES_PASS = (Path(__file__).resolve().parents[2]
               / "sushi_lang" / "semantics" / "passes" / "types")
 REGISTRY = TYPES_PASS / "method_registry.py"
-VALIDATION = TYPES_PASS / "calls" / "methods.py"
+#: The arm of a method call in the typecheck pass, and the ladder it reads.
+CALL_ARM = (TYPES_PASS / "visit" / "calls.py", TYPES_PASS / "calls" / "dotcall.py",
+            TYPES_PASS / "calls" / "methods.py")
 
 #: The predicate each family asks about a method NAME. A claim is the registry's to make,
 #: so no other module of the pass may name one of these.
@@ -141,34 +139,12 @@ def test_the_registry_holds_one_family_table():
         "two families share one name"
 
 
-def test_every_family_carries_both_halves():
-    """The totality that replaces the two comments: no family is half-registered."""
-    missing = [family.name for family in METHOD_TYPE_REGISTRY.families
-               if family.infer is None or family.validate is None]
-    assert not missing, (
-        "a family carries only one half, so the two dispatchers can disagree again: "
-        + ", ".join(missing))
-
-
-def test_both_halves_reach_the_one_claim():
-    """Inference and validation are two hooks on one claim, measured at the source."""
-    tree = ast.parse(REGISTRY.read_text(encoding="utf-8"), filename=str(REGISTRY))
-    registry = next(node for node in ast.walk(tree)
-                    if isinstance(node, ast.ClassDef) and node.name == "MethodTypeRegistry")
-    bodies = {node.name: ast.unparse(node) for node in registry.body
-              if isinstance(node, ast.FunctionDef)}
-    for half in ("infer_method_type", "validate_method"):
-        assert half in bodies, f"the registry has no {half}"
-        assert "self.claim(" in bodies[half], (
-            f"{half} decides for itself instead of reading the one claim")
-
-
-def test_validation_names_no_family_predicate():
+def test_the_call_arm_names_no_family_predicate():
     """The elif chain is gone: a claim is the registry's, and it is written once."""
-    text = VALIDATION.read_text(encoding="utf-8")
-    offenders = [name for name in _FAMILY_PREDICATES if name in text]
+    offenders = [f"{path.name}: {name}" for path in CALL_ARM
+                 for name in _FAMILY_PREDICATES if name in path.read_text(encoding="utf-8")]
     assert not offenders, (
-        "the validation half asks a family predicate of its own: " + ", ".join(offenders)
+        "the call arm asks a family predicate of its own: " + ", ".join(offenders)
         + "\nA family claim belongs in method_registry.py and nowhere else.")
 
 
@@ -205,7 +181,7 @@ def test_the_claim_space_reaches_every_family():
 
 
 def test_a_name_no_family_answers_is_left_to_the_ladder():
-    """A miss is a miss in both halves: the perk and extension ladder gets the call."""
+    """A miss is a miss: the perk and extension ladder gets the call."""
     for receiver in _RECEIVERS:
         assert _claims(receiver, "no_such_method") == [], (
             f"a family claimed {receiver}.no_such_method()")

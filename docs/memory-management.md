@@ -184,7 +184,7 @@ fn main() i32:
 
     println(name)  # OK: name is bound from a literal, so it owns nothing and never moves
     consume(nom name)
-    println(name)  # still OK -- consume() got an independent, ownerless value
+    println(name)  # still OK -- the call got an independent, ownerless value
 
     return 0
 ```

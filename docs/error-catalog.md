@@ -114,16 +114,6 @@ grammar.lark failed to load. This is a compiler bug.
 
 IR builder is None - function compilation context required.
 
-### CE0010 {#ce0010}
-
-**Error** · internal
-
-**Message:** `function context not initialized`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Function context is None - cannot emit code outside function context.
-
 ### CE0013 {#ce0013}
 
 **Error** · internal
@@ -134,16 +124,6 @@ Function context is None - cannot emit code outside function context.
 
 C library function not declared - runtime initialization required.
 
-### CE0014 {#ce0014}
-
-**Error** · internal
-
-**Message:** `dynamic array manager not initialized`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Dynamic array manager is None - initialization required.
-
 ### CE0015 {#ce0015}
 
 **Error** · internal
@@ -153,16 +133,6 @@ Dynamic array manager is None - initialization required.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program.
-
-### CE0016 {#ce0016}
-
-**Error** · internal
-
-**Message:** `scope stack underflow: attempted to pop from empty scope stack`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Push/pop mismatch - each push\_scope() must be paired with exactly one pop\_scope().
 
 ### CE0017 {#ce0017}
 
@@ -183,16 +153,6 @@ Type conversion failed during code generation - semantic analysis should prevent
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Encountered unrecognized builtin type during codegen.
-
-### CE0019 {#ce0019}
-
-**Error** · internal
-
-**Message:** `cannot determine language type for LLVM type: {llvm_type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Failed to map LLVM type back to semantic type.
 
 ### CE0020 {#ce0020}
 
@@ -244,76 +204,6 @@ Method called with wrong number of arguments during codegen.
 
 Method not found for this type - semantic analysis should prevent this.
 
-### CE0025 {#ce0025}
-
-**Error** · internal
-
-**Message:** `extension method '{name}' not declared`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Extension method reference not found in symbol table.
-
-### CE0026 {#ce0026}
-
-**Error** · internal
-
-**Message:** `function expects {expected} arguments, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Function parameter count mismatch during codegen.
-
-### CE0027 {#ce0027}
-
-**Error** · internal
-
-**Message:** `callee must be a Name, got {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Function call expression has invalid callee type - AST invariant violation.
-
-### CE0028 {#ce0028}
-
-**Error** · internal
-
-**Message:** `stdlib method not implemented: {method}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Standard library method missing backend implementation.
-
-### CE0029 {#ce0029}
-
-**Error** · internal
-
-**Message:** `struct '{struct}' has no field '{field}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct field lookup failed - semantic analysis should prevent this.
-
-### CE0030 {#ce0030}
-
-**Error** · internal
-
-**Message:** `cannot get address of struct for member access`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Failed to retrieve struct pointer for field access.
-
-### CE0031 {#ce0031}
-
-**Error** · internal
-
-**Message:** `member access on non-struct type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Attempted field access on non-struct type - semantic analysis failure.
-
 ### CE0032 {#ce0032}
 
 **Error** · internal
@@ -324,26 +214,6 @@ Attempted field access on non-struct type - semantic analysis failure.
 
 Type mismatch: expected struct type but got different type.
 
-### CE0033 {#ce0033}
-
-**Error** · internal
-
-**Message:** `unknown enum type: {name}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Enum type not found in symbol table during codegen.
-
-### CE0034 {#ce0034}
-
-**Error** · internal
-
-**Message:** `variant '{variant}' not found in enum '{enum}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Enum variant lookup failed - semantic analysis should prevent this.
-
 ### CE0035 {#ce0035}
 
 **Error** · internal
@@ -353,16 +223,6 @@ Enum variant lookup failed - semantic analysis should prevent this.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Expected enum variant not found in enum definition.
-
-### CE0036 {#ce0036}
-
-**Error** · internal
-
-**Message:** `enum variant '{variant}' has wrong number of associated types: expected {expected}, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Enum variant associated type count mismatch - monomorphization failure.
 
 ### CE0040 {#ce0040}
 
@@ -393,26 +253,6 @@ Type mismatch: expected fixed-size array but got different type.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Type mismatch: expected dynamic array but got different type.
-
-### CE0043 {#ce0043}
-
-**Error** · internal
-
-**Message:** `array.get() returned non-struct type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Array element type is not a struct as expected.
-
-### CE0044 {#ce0044}
-
-**Error** · internal
-
-**Message:** `nested member access on non-struct field type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Attempted nested field access on non-struct type.
 
 ### CE0045 {#ce0045}
 
@@ -484,76 +324,6 @@ Type is not hashable - semantic analysis should prevent this.
 
 Hash method called with incorrect number of arguments.
 
-### CE0055 {#ce0055}
-
-**Error** · internal
-
-**Message:** `unknown variable or constant: {name}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Variable/constant not found in symbol table during codegen.
-
-### CE0056 {#ce0056}
-
-**Error** · internal
-
-**Message:** `cannot determine type for variable: {name}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Variable type information missing during codegen.
-
-### CE0057 {#ce0057}
-
-**Error** · internal
-
-**Message:** `dynamic array '{name}' not declared`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Dynamic array not found in tracking state.
-
-### CE0058 {#ce0058}
-
-**Error** · internal
-
-**Message:** `dynamic array '{name}' already destroyed`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Attempted to use dynamic array after explicit destruction.
-
-### CE0059 {#ce0059}
-
-**Error** · internal
-
-**Message:** `attempt to emit into a terminated block`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Cannot add instructions to basic block that already has a terminator.
-
-### CE0060 {#ce0060}
-
-**Error** · internal
-
-**Message:** `attempt to emit statement after a terminator`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Cannot emit code after return/branch - control flow analysis failure.
-
-### CE0061 {#ce0061}
-
-**Error** · internal
-
-**Message:** `block has no 'statements' list`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-AST block node missing expected statements field.
-
 ### CE0064 {#ce0064}
 
 **Error** · internal
@@ -563,46 +333,6 @@ AST block node missing expected statements field.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Generated C main wrapper not found in module.
-
-### CE0067 {#ce0067}
-
-**Error** · internal
-
-**Message:** `cannot infer struct type from expression: {expr}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct type inference failed for expression.
-
-### CE0068 {#ce0068}
-
-**Error** · internal
-
-**Message:** `cannot infer struct type from method call: {method}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct type inference failed for method call.
-
-### CE0069 {#ce0069}
-
-**Error** · internal
-
-**Message:** `cannot infer struct type from DotCall: {method}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct type inference failed for dot-call expression.
-
-### CE0071 {#ce0071}
-
-**Error** · internal
-
-**Message:** `iter() expects 0 arguments, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Iterator method called with incorrect number of arguments.
 
 ### CE0073 {#ce0073}
 
@@ -768,51 +498,11 @@ Maybe.Some variant has incorrect number of associated types.
 
 **Error** · internal
 
-**Message:** `unknown Maybe@(T) method: {method}`
+**Message:** `unknown Result@(T, E) or Maybe@(T) method: {method}`
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-Maybe@(T) method not implemented.
-
-### CE0095 {#ce0095}
-
-**Error** · internal
-
-**Message:** `expect() expects 1 argument, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Maybe.expect() method called with incorrect arguments.
-
-### CE0096 {#ce0096}
-
-**Error** · internal
-
-**Message:** `invalid intrinsic operation: {operation}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Intrinsic operation not recognized.
-
-### CE0099 {#ce0099}
-
-**Error** · internal
-
-**Message:** `not an operator type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Expression node is not a valid operator - AST invariant violation.
-
-### CE0100 {#ce0100}
-
-**Error** · internal
-
-**Message:** `unsupported expression type: {expr}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Expression type not supported in this context.
+A method of Result@(T, E) or Maybe@(T) has no row of its family: the typecheck pass has no argument row for it, or the backend has no emitter for it. The family table names every method, so no program reaches this error.
 
 ### CE0101 {#ce0101}
 
@@ -917,16 +607,6 @@ Type cast is not allowed in constant expressions.
 
 The compiler can read this divisor, and it is zero. The same compile-time arithmetic applies to a constant and to a body, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it.
 
-### CE0113 {#ce0113}
-
-**Error** · internal
-
-**Message:** `{message}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Generic enum constructor requires type annotation from semantic analysis.
-
 ### CE0114 {#ce0114}
 
 **Error** · function
@@ -983,16 +663,6 @@ An `expand(a in args):` walks the value pack `...Ts args` of its own function, a
 
 A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site.
 
-### CE0121 {#ce0121}
-
-**Error** · internal
-
-**Message:** `could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The backend could not determine the scrutinee's concrete enum type for a match arm with bindings. The type checker should have annotated Match.resolved\_scrutinee\_type; a miss here would otherwise silently drop the arm's binding locals.
-
 ### CE0122 {#ce0122}
 
 **Error** · type
@@ -1010,26 +680,6 @@ A generic type instantiation nests without bound (e.g. a type parameter that gro
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 The derive pass registered a hash() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load.
-
-### CE0124 {#ce0124}
-
-**Error** · internal
-
-**Message:** `'??' expression reached codegen without a type annotation from semantic analysis`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred. This is a gap in the typecheck pass, not a user error.
-
-### CE0125 {#ce0125}
-
-**Error** · internal
-
-**Message:** `internal error: borrow checker has no arm for expression node '{node}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The Expr union grew a member the borrow checker does not dispatch on. Without the dispatch, the borrow checker does not check that node. This is a compiler bug, not a user error.
 
 ### CE0126 {#ce0126}
 
@@ -1051,16 +701,6 @@ Two spellings of one generic enum (Result@(T, E), Maybe@(T)) mangled to the same
 
 The derive pass registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load.
 
-### CE0129 {#ce0129}
-
-**Error** · internal
-
-**Message:** `no ownership decision for the {use} consuming use of a {node}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Every position that takes ownership routes through backend/ownership.py::consume, which reads the Provenance semantics stamped on the source expression. A missing stamp means the borrow pass did not classify this position -- a gap in the borrow checker's coverage of the ConsumingUse set, not a user error. [CE0124](#ce0124) is the same check for a missing try-expression annotation.
-
 ### CE0130 {#ce0130}
 
 **Error** · internal
@@ -1069,7 +709,7 @@ Every position that takes ownership routes through backend/ownership.py::consume
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The AST grew a statement or expression node the scope checker does not dispatch on. Without the dispatch, the scope checker does not analyze that node. [CE0125](#ce0125) is the same check in the borrow checker. This is a compiler bug, not a user error.
+The AST grew a statement or expression node the scope checker does not dispatch on. Without the dispatch, the scope checker does not analyze that node. The borrow pass has the same check. This is a compiler bug, not a user error.
 
 ### CE0131 {#ce0131}
 
@@ -1084,16 +724,6 @@ The AST grew a statement or expression node the scope checker does not dispatch 
 - `a conversion is bare, so handle the Result in the body (match, .realise(default))`
 
 A callable has an error channel only when its signature writes '| E' or returns an explicit Result@(T, E). See [the error-channel design](design/error-channel.md). A BARE function, method or lambda returns the value itself ([CE2091](#ce2091)), so a '??' has no Result return to propagate into. Handle the Result in the body with match or .realise(default), or write '| E' in the signature. For a written function or method body the collect pass emits it, so it fires once per declaration and covers templates nobody instantiates. A lambda takes its channel from its type, so the typecheck pass emits it there; a ?? inside a lambda whose type writes '| E' is legal in any body. 'main' is bare, so a ?? in main is this error too.
-
-### CE0132 {#ce0132}
-
-**Error** · internal
-
-**Message:** `no write address for a fixed-array receiver of kind {node}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through backend/types/arrays/fixed\_addressing.py::as\_fixed\_array\_address with writable=True, which resolves an address from the AST. A receiver that names no storage has no write address, and every such receiver already has a diagnostic: [CE2096](#ce2096) for a constant, and [CE2408](#ce2408), [CE2414](#ce2414), [CE2421](#ce2421), [CE2422](#ce2422), [CE2426](#ce2426) or [CE2429](#ce2429) for the read-only receivers. Reaching this means one of them did not fire, so it is a gap in that coverage and not a user error. [CE0129](#ce0129) is the same check for a consuming use with no ownership decision.
 
 ### CE0133 {#ce0133}
 
@@ -1124,27 +754,7 @@ A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so noth
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
-
-### CE0136 {#ce0136}
-
-**Error** · internal
-
-**Message:** `internal error: the AST walk has no arm for node '{node}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-semantics/visitors.py dispatches on a method name it builds from the class name of the node. This error means that a node kind has no arm in a visitor (StatementValidator, ExpressionValidator or TypeInferenceVisitor), so the visitor would skip that node with no diagnostic. A node kind that a parent arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED\_IN\_PARENT and never arrives here. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
-
-### CE0137 {#ce0137}
-
-**Error** · internal
-
-**Message:** `lifted lambda name '{name}' is already registered`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The lambda lifter claims its index before it builds anything: it steps past every \_\_lambda\_&lt;n> already in the function table and every \_\_closure\_env\_&lt;n> already in the struct table, so the name it then registers is free in both. A registration that fails anyway means the name entered a table between that search and the registration. The closure would then use the body and the environment layout of another closure, so the compiler stops. This is a compiler bug, not a user error.
+The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0130](#ce0130) is the same check in the scope checker.
 
 ### CE0138 {#ce0138}
 
@@ -1193,16 +803,6 @@ The lifecycle table in backend/lifecycle.py holds one clone/destroy pair per com
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 The cache key of a unit hashes the text that the parser read, which every unit carries as its source. A unit with no source text means a loader built it without the text, which is a compiler fault and not a user error.
-
-### CE0143 {#ce0143}
-
-**Error** · internal
-
-**Message:** `internal error: the {kind} call '{name}' behind a namespace has no parameter modes`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param\_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. Without the stamp, the borrow pass cannot do the [CE2427](#ce2427) marker check for that call.
 
 ### CE0144 {#ce0144}
 
@@ -1284,6 +884,46 @@ A generic function, or an extension method that the compiler copies at the call 
 - `the library '{library}' asks for unchecked indexes; pass --dont-panic to consent`
 
 The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error [RE2020](#re2020). Only three kinds of unit may write it. A bundled stdlib unit needs no flag. A unit of a build that passes `--dont-panic` may write it. A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents. The message then names the library. A CONCRETE marked body of a binary or hybrid library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. Pass `--dont-panic`, or remove the marker. See [the dont_panic design](design/dont-panic.md).
+
+### CE0153 {#ce0153}
+
+**Error** · internal
+
+**Message:** `the scope pass recorded no binding for the {what} '{name}'`
+
+The scope pass writes the binding table of each body: what each name denotes, the local of each binder, and the captures of each lambda. When a body ends, a check walks it again and finds each name, binder and lambda that the pass did not record. This is a fault in the compiler, not in the program; please report the program.
+
+### CE0154 {#ce0154}
+
+**Error** · internal
+
+**Message:** `the SHIR printer has no text for the class '{name}'`
+
+The SHIR printer writes the text of `--dump-shir` through one table, with one row for each class that a body can hold. A value of a class with no row means that a node or a part was added and the table was not. This is a fault in the compiler, not in the program; please report the program.
+
+### CE0156 {#ce0156}
+
+**Error** · internal
+
+**Message:** `the typecheck pass recorded no {answer} for the {node} at {where} in the body '{body}'`
+
+The typecheck pass writes each answer that it gives into the table of the body ([the IR design](design/ir.md)): the type of each local and each expression, the callee and the conventions of each call, and the other decisions that the later stages read. No node of the body holds an answer. When the pass ends on a body with no error, a check walks the body again and finds each answer that a node needs and that the table does not hold. Such a gap means that an arm of the pass did not answer for a part of the body, and a later stage would then read no answer. This is a fault in the compiler, not in the program; please report the program.
+
+### CE0157 {#ce0157}
+
+**Error** · internal
+
+**Message:** `the {writer} pass recorded no {answer} in its {table} for the {node} at {where} in the body '{body}'`
+
+The borrow pass and the lift pass each write their answers into a table of the body ([the IR design](design/ir.md)): borrow the ownership of each consuming use, the state of each iterator and the walk of each loop, lift the symbol and the environment of each lambda. No node of the body holds an answer. When a pass ends on a body with no error, a check walks the body again and finds each answer that a node needs and that the table does not hold. Such a gap means that the pass did not answer for a part of the body, and a later stage would then read no answer. This is a fault in the compiler, not in the program; please report the program.
+
+### CE0158 {#ce0158}
+
+**Error** · internal
+
+**Message:** `the SLIR of the function '{function}' breaks the verifier rule '{rule}': {detail}`
+
+The SLIR lowering makes one SLIR function from each body ([the IR design](design/ir.md)). Before the function goes to the next stage, the SLIR verifier checks it on every compile: each local and each place has a type, no place is read after a move, no value moves out of a unit variable, each block has one terminator and goes to blocks that exist, each drop is of an owning type and its flag is a bool local, each owning value is moved or dropped one time on each path, each argument of a direct call has the convention of its parameter, no binary carries `and` or `or`, and each trap names a runtime code with the values that its text prints. Each statement and each terminator has a location. The message names the function and the rule that the lowering broke. This is a fault in the compiler, not in the program; please report the program.
 
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
@@ -1731,16 +1371,6 @@ HashMap keys must support equality comparison (==). This is required for collisi
 
 Array indices must be non-negative. Negative indices are not supported. The index is read as [CE2012](#ce2012) reads it: a literal (`a[-1]`), a named constant and an expression of them.
 
-### CE2057 {#ce2057}
-
-**Error** · type
-
-**Message:** `array index {index} out of bounds for array of size {size}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Array index exceeds array bounds. This error is caught at compile-time for constant indices.
-
 ### CE2058 {#ce2058}
 
 **Error** · type
@@ -1962,7 +1592,7 @@ A first-class function value must match the expected function type exactly: same
 - `state a function type whose parameter types solve each type parameter of '{name}'`
 - `state the function type at the position, for example 'let fn(i32) -> i32 g = {name}'`
 
-A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method and an FFI external are not function values.
+A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method, an FFI external and a variadic function are not function values; a variadic function has no function type.
 
 ### CE2094 {#ce2094}
 
@@ -3892,6 +3522,14 @@ The command line names a flag that the build it asks for does not read, so the f
 
 The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it. A marked body with no `[]` removes nothing, so the author believes that a check went and none did. An index in a lambda in the body does not count, because a lambda keeps its checks. The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker. See [the dont_panic design](design/dont-panic.md).
 
+
+### CW0005 {#cw0005}
+
+**Warning** · general
+
+**Message:** `cannot write the {dump} dump to '{path}': {reason}`
+
+`--dump-shir PATH` or `--dump-slir PATH` asked for the SHIR or the SLIR of each body in a file, and the file could not be written, for example because the path is a directory or a directory on it does not exist. The compile goes on as usual and its output is written; only the dump is missing. Fix the path, or write `-` to print the dump on the terminal.
 ### CW1001 {#cw1001}
 
 **Warning** · scope
@@ -4072,9 +3710,9 @@ HashMap.insert() probed every bucket without finding a slot. A live map always r
 
 **Error** · runtime
 
-**Message:** `no match arm matched the value (expected {pattern})`
+**Message:** `no match arm matched the value (expected %.*s)`
 
-A match tested its last candidate arm, and the value did not match it. `{pattern}` is that arm. Exhaustiveness checking makes this unreachable: one checker reads every match, nested patterns and tuple patterns included, and a match that does not cover a value is the compile error [CE2040](#ce2040). The check stays in the program as a backstop.
+A match tested its last candidate arm, and the value did not match it. The text names that arm as it is written. Exhaustiveness checking makes this unreachable: one checker reads every match, nested patterns and tuple patterns included, and a match that does not cover a value is the compile error [CE2040](#ce2040). The check stays in the program as a backstop.
 
 ### RE2025 {#re2025}
 
@@ -4088,9 +3726,9 @@ An `unsafe external` function declared to return a plain `string` or `ptr` answe
 
 **Error** · runtime
 
-**Message:** `assertion failed at {where}`
+**Message:** `assertion failed at %.*s%.*s`
 
-An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}` is the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
+An `assert(cond)` or `assert(cond, message)` found its condition false. The text gives the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
 
 ### RE2027 {#re2027}
 
@@ -4107,6 +3745,14 @@ An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}
 **Message:** `slice %d..%d is out of bounds for an array of size %d`
 
 A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` the elements a to b (see [the slice design](design/slices.md)). The range must hold `0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of range does ([RE2020](#re2020)). This is not the clamp rule of `.s()` and `.ss()`, which are the copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go down are the compile error [CE2125](#ce2125); computed bounds that go down are this error, and not an empty view. The `dont_panic` marker does not remove this check: a bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length. The check runs once, when the slice is made.
+
+### RE2029 {#re2029}
+
+**Error** · runtime
+
+**Message:** `expect failed at %.*s: %.*s`
+
+`.expect(message)` found an `Err` in a `Result`, or `None` in a `Maybe`. The text gives the file, the line and the column of the call, with the file named as a compile-time diagnostic names it, and then the message. The message is evaluated only when the call fails. The program stops with exit code 1, and no error channel catches it. Use `??`, `.realise(default)` or `match` when a caller can handle the failure.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 
