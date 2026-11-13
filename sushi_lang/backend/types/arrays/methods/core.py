@@ -13,8 +13,7 @@ if TYPE_CHECKING:
 
 def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value) -> ir.Value:
     """The capacity of the dynamic array at the address `array_value`."""
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
-    return codegen.builder.load(cap_ptr, name="array_capacity")
+    return gep_utils.load_cap(codegen, array_value, "array_capacity")
 
 
 def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
@@ -36,23 +35,21 @@ def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
                                extent_is_end=extent_is_end)
 
     b = codegen.builder
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
-    current_len = b.load(len_ptr, name="extend_len")
-    current_cap = b.load(cap_ptr, name="extend_cap")
+    current_len = gep_utils.load_len(codegen, array_value, "extend_len", builder=b)
+    current_cap = gep_utils.load_cap(codegen, array_value, "extend_cap", builder=b)
     needed = b.add(current_len, count, name="extend_needed")
 
     element_llvm_type = array_type.elements[2].pointee
     data_ptr = memory.emit_grow_to_fit(
         codegen, data_ptr=b.load(data_ptr_ptr, name="extend_data"), data_ptr_ptr=data_ptr_ptr,
-        cap_ptr=cap_ptr, current_cap=current_cap, count=needed,
+        header=array_value, current_cap=current_cap, count=needed,
         element_llvm_type=element_llvm_type, policy=memory.GrowPolicy.AT_LEAST)
     dest = gep_utils.gep_array_element(codegen, data_ptr, current_len, "extend_dest")
     emit_range_copy(codegen, dest, source_data, start, count, element_type,
                     element_llvm_type, prefix="extend")
-    b.store(needed, len_ptr)
+    gep_utils.store_len(codegen, array_value, needed, builder=b)
 
     return ir.Constant(codegen.types.i32, 0)
 
@@ -83,16 +80,14 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
     """Emit code to append an element to a dynamic array."""
     from sushi_lang.backend.expressions import memory
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    current_cap = codegen.builder.load(cap_ptr, name="current_cap")
+    current_len = gep_utils.load_len(codegen, array_value, "current_len")
+    current_cap = gep_utils.load_cap(codegen, array_value, "current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     data_ptr = memory.emit_grow_to_fit(
-        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
+        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, header=array_value,
         current_cap=current_cap, count=current_len,
         element_llvm_type=array_type.elements[2].pointee, policy=memory.GrowPolicy.DOUBLE)
 
@@ -100,7 +95,7 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
     codegen.builder.store(element_value, element_ptr)
 
     new_len = codegen.builder.add(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
-    codegen.builder.store(new_len, len_ptr)
+    gep_utils.store_len(codegen, array_value, new_len)
 
     return ir.Constant(codegen.types.i32, 0)
 
@@ -121,10 +116,9 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value,
     """
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
+    current_len = gep_utils.load_len(codegen, array_value, "current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     zero = ir.Constant(codegen.types.i32, 0)
@@ -150,7 +144,7 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value,
     popped_element = codegen.builder.load(last_element_ptr, name="popped_element")
 
     new_len = codegen.builder.sub(current_len, one, name="new_len")
-    codegen.builder.store(new_len, len_ptr)
+    gep_utils.store_len(codegen, array_value, new_len)
 
     some_result = emit_maybe_some(codegen, element_semantic_type, popped_element)
     some_pred = codegen.builder.block
@@ -179,8 +173,7 @@ def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
     builder = codegen.builder
     zero = ir.Constant(codegen.types.i32, 0)
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    current_len = builder.load(len_ptr, name="current_len")
+    current_len = gep_utils.load_len(codegen, array_value, "current_len", builder=builder)
 
     is_negative = builder.icmp_signed("<", new_len, zero, name="truncate_negative")
     kept = builder.select(is_negative, zero, new_len, name="truncate_kept")
@@ -197,7 +190,7 @@ def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
                 lambda element_ptr, _i: emit_value_destructor(codegen, element_ptr,
                                                               element_semantic_type),
                 null_guard=True, prefix="truncate")
-        builder.store(kept, len_ptr)
+        gep_utils.store_len(codegen, array_value, kept, builder=builder)
 
     return ir.Constant(codegen.types.i32, 0)
 
@@ -209,11 +202,9 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
     zero = ir.Constant(codegen.types.i32, 0)
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
+    current_len = gep_utils.load_len(codegen, array_value, "current_len")
     old_data_ptr = codegen.builder.load(data_ptr_ptr, name="old_data_ptr")
 
     element_type = array_type.elements[2].pointee
@@ -234,8 +225,8 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
         void_ptr = codegen.builder.bitcast(old_data_ptr, ir.PointerType(codegen.types.i8), name="void_ptr")
         memory.emit_free_call(codegen, void_ptr)
 
-    codegen.builder.store(zero, len_ptr)
-    codegen.builder.store(zero, cap_ptr)
+    gep_utils.store_len(codegen, array_value, zero)
+    gep_utils.store_cap(codegen, array_value, zero)
     codegen.builder.store(null_ptr, data_ptr_ptr)
 
     return ir.Constant(codegen.types.i32, 0)
@@ -244,8 +235,6 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                               array_semantic_type: 'Type') -> ir.Value:
     """Emit code to explicitly destroy a dynamic array (makes it unusable)."""
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
@@ -259,8 +248,8 @@ def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, ar
         emit_value_destructor(codegen, array_value, array_semantic_type)
 
     zero = ir.Constant(codegen.types.i32, 0)
-    codegen.builder.store(zero, len_ptr)
-    codegen.builder.store(zero, cap_ptr)
+    gep_utils.store_len(codegen, array_value, zero)
+    gep_utils.store_cap(codegen, array_value, zero)
     codegen.builder.store(null_ptr, data_ptr_ptr)
 
     return ir.Constant(codegen.types.i32, 0)
@@ -321,15 +310,13 @@ def emit_dynamic_array_resize(codegen: 'LLVMCodegen', array_value: ir.Value,
         return ir.Constant(codegen.types.i32, 0)
 
     b = codegen.builder
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    current_len = b.load(len_ptr, name="resize_len")
+    current_len = gep_utils.load_len(codegen, array_value, "resize_len", builder=b)
     with b.if_then(b.icmp_signed(">", new_len, current_len, name="resize_grows")):
-        cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
         data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
         data_ptr = memory.emit_grow_to_fit(
             codegen, data_ptr=b.load(data_ptr_ptr, name="resize_data"),
-            data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
-            current_cap=b.load(cap_ptr, name="resize_cap"), count=new_len,
+            data_ptr_ptr=data_ptr_ptr, header=array_value,
+            current_cap=gep_utils.load_cap(codegen, array_value, "resize_cap", builder=b), count=new_len,
             element_llvm_type=array_type.elements[2].pointee,
             policy=memory.GrowPolicy.AT_LEAST)
         tail = gep_utils.gep_array_element(codegen, data_ptr, current_len, "resize_tail")
@@ -338,7 +325,7 @@ def emit_dynamic_array_resize(codegen: 'LLVMCodegen', array_value: ir.Value,
             lambda element_ptr, _i: _store_fill_element(codegen, element_ptr, fill_value,
                                                         element_type, replaces=False),
             prefix="resize")
-        b.store(new_len, len_ptr)
+        gep_utils.store_len(codegen, array_value, new_len, builder=b)
 
     return ir.Constant(codegen.types.i32, 0)
 

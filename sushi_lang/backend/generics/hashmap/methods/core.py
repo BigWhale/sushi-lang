@@ -3,6 +3,8 @@
 from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
+from sushi_lang.sushi_stdlib.src.type_definitions import get_dynamic_array_type
 from ..types import get_entry_type
 from sushi_lang.backend.constants import (
     HASHMAP_BUCKETS_INDICES,
@@ -39,10 +41,10 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     emit_init_buckets_empty(codegen, bucket_ptr, capacity_const)
 
-    buckets_array_type = ir.LiteralStructType([codegen.types.i32, codegen.types.i32, ir.PointerType(entry_type)])
+    buckets_array_type = get_dynamic_array_type(entry_type)
     buckets_array = ir.Constant(buckets_array_type, ir.Undefined)
-    buckets_array = codegen.builder.insert_value(buckets_array, capacity_const, 0, name="buckets_len")
-    buckets_array = codegen.builder.insert_value(buckets_array, capacity_const, 1, name="buckets_cap")
+    buckets_array = gep_utils.insert_len(codegen, buckets_array, capacity_const)
+    buckets_array = gep_utils.insert_cap(codegen, buckets_array, capacity_const)
     buckets_array = codegen.builder.insert_value(buckets_array, bucket_ptr, 2, name="buckets_data")
 
     result = ir.Constant(hashmap_llvm_type, ir.Undefined)

@@ -1,9 +1,0 @@
-# An i64 range bound is refused (#870). 4294967297 was truncated to 1, so the loop ran
-# once.
-# EXPECT_ERROR_CODE: CE2121
-# EXPECT_STDERR_CONTAINS: a range bound is i32, got i64
-fn main() i32:
-    let i64 big = 4294967297
-    foreach(i in 0..big):
-        println(i)
-    return 0

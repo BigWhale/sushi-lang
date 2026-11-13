@@ -7,6 +7,8 @@ own, so this walk makes exactly one network request.
 """
 from llvmlite import ir
 from sushi_lang.backend.string_layout import STRING_BYTES
+from sushi_lang.backend.gep_utils import insert_cap, insert_len
+from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
@@ -185,10 +187,8 @@ def generate_resolve(module: ir.Module) -> None:
     builder.position_at_end(done_bb)
     builder.call(freeaddrinfo_fn, [builder.load(res_slot, name="res_free")])
     descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = builder.insert_value(descriptor, builder.load(len_slot, name="final_len"),
-                                      0, name="desc_len")
-    descriptor = builder.insert_value(descriptor, builder.load(cap_slot, name="final_cap"),
-                                      1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, builder.load(len_slot, name="final_len"), builder=builder)
+    descriptor = insert_cap(None, descriptor, builder.load(cap_slot, name="final_cap"), builder=builder)
     descriptor = builder.insert_value(descriptor, builder.load(data_slot, name="final_data"),
                                       2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))

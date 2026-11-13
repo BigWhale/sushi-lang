@@ -7,6 +7,7 @@ the instant its datagram arrives. So recv_from() answers with a Datagram --
 the bytes and the sender together -- rather than with bytes alone.
 """
 from llvmlite import ir
+from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
@@ -129,7 +130,7 @@ def generate_send_to(module: ir.Module) -> None:
     salen = addr.load_i32_at(builder, res, platform_net.AI_ADDRLEN_OFFSET, "ai_addrlen")
     addr.emit_patch_port(builder, sockaddr, port)
 
-    length = builder.extract_value(data, 0, name="data_len")
+    length = extract_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
     length64 = builder.zext(length, i64, name="data_len64")
     sent = builder.call(sendto_fn, [
@@ -241,10 +242,8 @@ def generate_recv_from(module: ir.Module) -> None:
 
     builder.position_at_end(build_bb)
     descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = builder.insert_value(descriptor,
-                                      builder.trunc(got, i32, name="got32"), 0,
-                                      name="desc_len")
-    descriptor = builder.insert_value(descriptor, maximum, 1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, got, builder=builder)
+    descriptor = insert_cap(None, descriptor, maximum, builder=builder)
     descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
 
     text = cstr_to_fat_pointer_with_len(builder,

@@ -12,7 +12,8 @@ FAT_POINTER_SIZE_BYTES = STRING_BYTES
 # Distinct from the string fat pointer above.
 CLOSURE_FAT_POINTER_SIZE_BYTES = 32
 
-DYNAMIC_ARRAY_SIZE_BYTES = 16
+# A `T[]` descriptor: {i64 len, i64 cap, T* data} = 3 * 8 = 24 bytes.
+DYNAMIC_ARRAY_SIZE_BYTES = 24
 
 # An iterator value has the closure's four words: {next_fn, state, drop_fn, clone_fn}.
 ITERATOR_SIZE_BYTES = CLOSURE_FAT_POINTER_SIZE_BYTES

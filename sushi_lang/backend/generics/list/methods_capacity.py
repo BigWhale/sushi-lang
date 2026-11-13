@@ -3,10 +3,11 @@
 from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
 
 from sushi_lang.backend.generics.container_table import blank
 
-from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, get_list_data_ptr
+from .types import get_list_element_type, get_list_data_ptr
 
 
 def emit_list_reserve(codegen: Any, list_ptr: ir.Value, _list_type: StructType,
@@ -16,19 +17,17 @@ def emit_list_reserve(codegen: Any, list_ptr: ir.Value, _list_type: StructType,
     from sushi_lang.backend.expressions import memory
 
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
-    len_ptr = get_list_len_ptr(codegen.builder, list_ptr)
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_ptr)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_ptr)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
+    current_len = gep_utils.load_len(codegen, list_ptr, "current_len")
+    current_cap = gep_utils.load_cap(codegen, list_ptr, "current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     needed_cap = codegen.builder.add(current_len, codegen.utils.count_as_i32(args[0]),
                                      name="needed_cap")
 
     memory.emit_grow_to_fit(
-        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=capacity_ptr,
+        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, header=list_ptr,
         current_cap=current_cap, count=needed_cap, element_llvm_type=element_llvm_type,
         policy=memory.GrowPolicy.EXACT)
 
@@ -44,12 +43,10 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
 
     list_alloca = list_ptr
 
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
+    current_len = gep_utils.load_len(codegen, list_alloca, "current_len")
+    current_cap = gep_utils.load_cap(codegen, list_alloca, "current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     need_shrink = codegen.builder.icmp_unsigned("!=", current_len, current_cap)
@@ -65,7 +62,7 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
 
             null_ptr = ir.Constant(data_ptr.type, None)
             codegen.builder.store(null_ptr, data_ptr_ptr)
-            codegen.builder.store(zero, capacity_ptr)
+            gep_utils.store_cap(codegen, list_alloca, zero)
 
         not_empty_block = codegen.func.append_basic_block("shrink_not_empty")
         after_empty_check = codegen.func.append_basic_block("after_empty_check")
@@ -83,7 +80,7 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
             name="typed_new_data_ptr"
         )
 
-        codegen.builder.store(current_len, capacity_ptr)
+        gep_utils.store_cap(codegen, list_alloca, current_len)
         codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
         codegen.builder.branch(after_empty_check)
 

@@ -1,0 +1,18 @@
+# A range of u8 bounds is a u8 range, and the variable is a u8. `250..=top` with `top` at
+# 255 walks the last value of the type and stops.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n1\n2\n250\n251\n252\n253\n254\n255\ndown 255 254\n"
+fn main() i32:
+    let u8 n = 3
+    foreach(b in 0..n):
+        let u8 v = b
+        println(v)
+    let u8 top = 255
+    foreach(b in 250..=top):
+        println(b)
+    let u8 low = 254
+    let string line = "down"
+    foreach(b in (low..=top).rev()):
+        line := line.concat(" {b}")
+    println(line)
+    return 0

@@ -1,0 +1,24 @@
+# A `List@(T)` is `{i64 len, i64 cap, T* data}` (docs/adr/0001, the expand step).
+# `len()` and `capacity()` still answer an i32: the read narrows the i64 field.
+# EXPECT_IR_HOLDS: grow { i64, i64, ptr }
+# EXPECT_IR_HOLDS: grow load i64
+# EXPECT_IR_LACKS: grow { i32, i32, ptr }
+# EXPECT_IR_HOLDS: room trunc i64
+# EXPECT_IR_LACKS: room { i32, i32, ptr }
+# EXPECT_STDOUT_EXACT: "2 8\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn grow(poke List@(i32) items) i32:
+    items.push(3)
+    items.push(4)
+    return items.len()
+
+fn room(List@(i32) items) i32:
+    return items.capacity()
+
+fn main() i32:
+    let List@(i32) items = List.with_capacity(8)
+    let i32 n = grow(poke items)
+    println("{n} {room(items)}")
+    return 0

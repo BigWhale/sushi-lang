@@ -1,6 +1,8 @@
 """Operations on a socket descriptor, whatever transport made it."""
 from llvmlite import ir
 from sushi_lang.backend.string_layout import STRING_BYTES
+from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.net import addr
@@ -169,7 +171,7 @@ def generate_send(module: ir.Module) -> None:
     fd.name, data.name = "fd", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = builder.extract_value(data, 0, name="data_len")
+    length = extract_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
     length64 = builder.zext(length, i64, name="data_len64")
 
@@ -234,12 +236,10 @@ def generate_recv(module: ir.Module) -> None:
 
     builder.position_at_end(success_bb)
     descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = builder.insert_value(descriptor,
-                                      builder.trunc(got, i32, name="got32"), 0,
-                                      name="desc_len")
-    descriptor = builder.insert_value(descriptor, maximum, 1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, got, builder=builder)
+    descriptor = insert_cap(None, descriptor, maximum, builder=builder)
     descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))
 
 
 def _emit_getpeername(builder: ir.IRBuilder, module: ir.Module, func: ir.Function,

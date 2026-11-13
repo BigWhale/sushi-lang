@@ -77,8 +77,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
             array_struct_ptr = entry_alloca(builder, receiver_type, name="array_struct_temp")
             builder.store(receiver_value, array_struct_ptr)
 
-        len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_struct_ptr)
-        current_len = builder.load(len_ptr, name="array_len")
+        current_len = gep_utils.load_len(codegen, array_struct_ptr, "array_len", builder=builder)
 
         data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_struct_ptr)
         data_ptr = builder.load(data_ptr_ptr, name="array_data")

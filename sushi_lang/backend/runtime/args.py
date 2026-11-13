@@ -60,12 +60,10 @@ def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: 
 
     typed_data_ptr = allocate_string_array_data(codegen, argc)
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, args_array_alloca)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, args_array_alloca)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, args_array_alloca, "data_ptr_ptr")
 
-    builder.store(argc, len_ptr)           # length = argc
-    builder.store(argc, cap_ptr)           # capacity = argc
+    gep_utils.store_len(codegen, args_array_alloca, argc, builder=builder)
+    gep_utils.store_cap(codegen, args_array_alloca, argc, builder=builder)
     builder.store(typed_data_ptr, data_ptr_ptr)  # data pointer
 
     populate_string_array_from_argv(codegen, argc, argv, typed_data_ptr)

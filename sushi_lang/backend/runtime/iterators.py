@@ -161,7 +161,7 @@ class CursorSource:
     live: Optional[Callable[['LLVMCodegen', ir.Value, ir.Value], ir.Value]] = None
 
     def cursor_type(self, codegen: 'LLVMCodegen') -> ir.LiteralStructType:
-        return ir.LiteralStructType([codegen.types.i32, codegen.types.i32,
+        return ir.LiteralStructType([codegen.types.i64, codegen.types.i64,
                                      ir.PointerType(self.data_type)])
 
 
@@ -181,7 +181,7 @@ def emit_lent_cursor(codegen: 'LLVMCodegen', source: CursorSource, length: ir.Va
     """A value that borrows its slots: its cursor is a stack slot, or a heap block when it
     leaves through a `peek` return (#1229)."""
     cursor_type = source.cursor_type(codegen)
-    zero = ir.Constant(codegen.types.i32, 0)
+    zero = ir.Constant(codegen.types.i64, 0)
     if heap:
         raw, cursor = _heap_state(codegen, cursor_type)
         _store_cursor(codegen, cursor, zero, length, data, source)
@@ -196,8 +196,14 @@ def emit_lent_cursor(codegen: 'LLVMCodegen', source: CursorSource, length: ir.Va
 def _store_cursor(codegen: 'LLVMCodegen', cursor_ptr: ir.Value, index: ir.Value,
                   length: ir.Value, data: ir.Value, source: CursorSource) -> None:
     b = codegen.builder
-    b.store(index, gep_utils.gep_struct_field(codegen, cursor_ptr, _INDEX, "iter_index"))
-    b.store(length, gep_utils.gep_struct_field(codegen, cursor_ptr, _LENGTH, "iter_length"))
+    i64 = codegen.types.i64
+
+    def wide(v: ir.Value) -> ir.Value:
+        return v if v.type == i64 else b.sext(v, i64)
+
+    b.store(wide(index), gep_utils.gep_struct_field(codegen, cursor_ptr, _INDEX, "iter_index"))
+    b.store(wide(length), gep_utils.gep_struct_field(codegen, cursor_ptr, _LENGTH,
+                                                     "iter_length"))
     b.store(b.bitcast(data, ir.PointerType(source.data_type)),
             gep_utils.gep_struct_field(codegen, cursor_ptr, _DATA, "iter_data"))
 
@@ -226,7 +232,7 @@ def _cursor_next(codegen: 'LLVMCodegen', source: CursorSource) -> ir.Function:
         b.position_at_end(slot)
         data = b.load(gep_utils.gep_struct_field(codegen, cursor, _DATA, "data_ptr"),
                       name="data")
-        b.store(b.add(index, ir.Constant(codegen.types.i32, 1), name="next_index"),
+        b.store(b.add(index, ir.Constant(codegen.types.i64, 1), name="next_index"),
                 index_ptr)
         if source.live is None:
             b.branch(found)
@@ -279,7 +285,7 @@ def emit_owned_cursor(codegen: 'LLVMCodegen', source: CursorSource,
     b.store(container.value, held)
     length, data = container.slots(codegen, held)
     cursor = gep_utils.gep_struct_field(codegen, state, _CURSOR, "iter_cursor")
-    _store_cursor(codegen, cursor, ir.Constant(codegen.types.i32, 0), length, data, source)
+    _store_cursor(codegen, cursor, ir.Constant(codegen.types.i64, 0), length, data, source)
     return iterator_value(codegen, _cursor_next(codegen, source), raw,
                           _owned_drop(codegen, source, container),
                           _owned_clone(codegen, source, container))
@@ -346,37 +352,42 @@ def array_source(codegen: 'LLVMCodegen', element_type: 'Type') -> CursorSource:
 # ---------------------------------------------------------------------------------------
 # A range and `Iterator.new`: an owned state on the heap
 
-# The range state: `{i64 k, i64 count, i32 first, i32 step}`; the item is first + step * k,
-# with k cut to i32: the item is in the i32 range, so the low 32 bits give it.
+# The range state of the item type `T`: `{i64 k, i64 count, T first, T step}`; the item is
+# first + step * k, with k cut to `T`: the item is in the range of `T`, so the low bits of
+# k give it. An i64 range reads k itself.
 _RANGE_K, _RANGE_COUNT, _RANGE_FIRST, _RANGE_STEP = 0, 1, 2, 3
 
 
-def emit_range_iterator(codegen: 'LLVMCodegen', first: ir.Value, count: ir.Value,
-                        step: int) -> ir.Value:
-    """A range as a value: its first value, its count and its step in a heap state."""
-    i32, i64 = codegen.types.i32, ir.IntType(64)
-    state_type = _range_state_type(codegen)
-    raw, state = _heap_state(codegen, state_type)
+def emit_range_iterator(codegen: 'LLVMCodegen', item_type: 'Type', first: ir.Value,
+                        count: ir.Value, step: int) -> ir.Value:
+    """A range of `item_type` as a value: its first value, its count and its step in a
+    heap state."""
+    i64 = ir.IntType(64)
+    item = codegen.types.ll_type(item_type)
+    raw, state = _heap_state(codegen, _range_state_type(codegen, item_type))
     b = codegen.builder
     for field, value in ((_RANGE_K, ir.Constant(i64, 0)), (_RANGE_COUNT, count),
-                         (_RANGE_FIRST, first), (_RANGE_STEP, ir.Constant(i32, step))):
+                         (_RANGE_FIRST, first), (_RANGE_STEP, ir.Constant(item, step))):
         b.store(value, gep_utils.gep_struct_field(codegen, state, field, "range_field"))
-    return iterator_value(codegen, _range_next(codegen), raw, _free_state(codegen),
-                          _range_clone(codegen))
+    return iterator_value(codegen, _range_next(codegen, item_type), raw, _free_state(codegen),
+                          _range_clone(codegen, item_type))
 
 
-def _range_state_type(codegen: 'LLVMCodegen') -> ir.LiteralStructType:
-    i32, i64 = codegen.types.i32, ir.IntType(64)
-    return ir.LiteralStructType([i64, i64, i32, i32])
+def _range_state_type(codegen: 'LLVMCodegen', item_type: 'Type') -> ir.LiteralStructType:
+    i64, item = ir.IntType(64), codegen.types.ll_type(item_type)
+    return ir.LiteralStructType([i64, i64, item, item])
 
 
-def _range_next(codegen: 'LLVMCodegen') -> ir.Function:
+def _range_symbol(item_type: 'Type') -> str:
+    return lifecycle_symbol("range_", item_type)
+
+
+def _range_next(codegen: 'LLVMCodegen', item_type: 'Type') -> ir.Function:
     from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
-    from sushi_lang.semantics.typesys import BuiltinType
 
     def body(fn: ir.Function) -> None:
         b = codegen.builder
-        state = b.bitcast(fn.args[0], ir.PointerType(_range_state_type(codegen)))
+        state = b.bitcast(fn.args[0], ir.PointerType(_range_state_type(codegen, item_type)))
 
         def field(index: int) -> ir.Value:
             return gep_utils.gep_struct_field(codegen, state, index, "range_field")
@@ -390,27 +401,30 @@ def _range_next(codegen: 'LLVMCodegen') -> ir.Function:
 
         b.position_at_end(found)
         b.store(b.add(k, ir.Constant(k.type, 1)), k_ptr)
-        item = b.add(b.load(field(_RANGE_FIRST), name="first"),
-                     b.mul(b.load(field(_RANGE_STEP), name="step"),
-                           b.trunc(k, codegen.types.i32, name="k_i32")), name="item")
-        emit_return(codegen, fn, emit_maybe_some(codegen, BuiltinType.I32, item))
+        item = codegen.types.ll_type(item_type)
+        at = k if item == k.type else b.trunc(k, item, name="k_item")
+        value = b.add(b.load(field(_RANGE_FIRST), name="first"),
+                      b.mul(b.load(field(_RANGE_STEP), name="step"), at), name="item")
+        emit_return(codegen, fn, emit_maybe_some(codegen, item_type, value))
 
         b.position_at_end(done)
-        emit_return(codegen, fn, emit_maybe_none(codegen, BuiltinType.I32))
+        emit_return(codegen, fn, emit_maybe_none(codegen, item_type))
 
-    return _function(codegen, "__sushi_iter_next_range",
-                     _next_type(codegen, BuiltinType.I32), body)
+    return _function(codegen, f"__sushi_iter_next_{_range_symbol(item_type)}",
+                     _next_type(codegen, item_type), body)
 
 
-def _range_clone(codegen: 'LLVMCodegen') -> ir.Function:
+def _range_clone(codegen: 'LLVMCodegen', item_type: 'Type') -> ir.Function:
     def body(fn: ir.Function) -> None:
         b = codegen.builder
-        state_type = _range_state_type(codegen)
+        state_type = _range_state_type(codegen, item_type)
         raw, state = _heap_state(codegen, state_type)
         b.store(b.load(b.bitcast(fn.args[0], ir.PointerType(state_type))), state)
-        b.ret(iterator_value(codegen, _range_next(codegen), raw, _free_state(codegen), fn))
+        b.ret(iterator_value(codegen, _range_next(codegen, item_type), raw,
+                             _free_state(codegen), fn))
 
-    return _function(codegen, "__sushi_iter_clone_range", _clone_type(codegen), body)
+    return _function(codegen, f"__sushi_iter_clone_{_range_symbol(item_type)}",
+                     _clone_type(codegen), body)
 
 
 def emit_new_iterator(codegen: 'LLVMCodegen', value: ir.Value, value_type: 'Type',

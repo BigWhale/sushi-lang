@@ -3,8 +3,9 @@
 from typing import Any, Optional, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
 
-from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, extract_element_type, get_list_data_ptr, list_slots
+from .types import get_list_element_type, extract_element_type, get_list_data_ptr, list_slots
 from sushi_lang.backend.generics.container_table import blank
 from sushi_lang.backend.types.arrays.methods.safe_access import emit_array_get_maybe
 
@@ -28,16 +29,14 @@ def emit_list_append(codegen: Any, list_ptr: ir.Value, element_value: ir.Value) 
     from sushi_lang.backend.types.arrays.runs import emit_part_into
 
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
-    len_ptr = get_list_len_ptr(codegen.builder, list_ptr)
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_ptr)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_ptr)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
+    current_len = gep_utils.load_len(codegen, list_ptr, "current_len")
+    current_cap = gep_utils.load_cap(codegen, list_ptr, "current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     data_ptr = memory.emit_grow_to_fit(
-        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=capacity_ptr,
+        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, header=list_ptr,
         current_cap=current_cap, count=current_len, element_llvm_type=element_llvm_type,
         policy=memory.GrowPolicy.DOUBLE)
 
@@ -45,7 +44,7 @@ def emit_list_append(codegen: Any, list_ptr: ir.Value, element_value: ir.Value) 
     emit_part_into(codegen, element_value, element_ptr)
 
     new_len = codegen.builder.add(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
-    codegen.builder.store(new_len, len_ptr)
+    gep_utils.store_len(codegen, list_ptr, new_len)
 
 
 def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType,
@@ -63,9 +62,8 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType,
 
     builder = codegen.builder
     element_type = extract_element_type(list_type, codegen)
-    len_ptr = get_list_len_ptr(builder, list_ptr)
     data_ptr_ptr = get_list_data_ptr(builder, list_ptr)
-    current_len = builder.load(len_ptr, name="current_len")
+    current_len = gep_utils.load_len(codegen, list_ptr, "current_len", builder=builder)
     data_ptr = builder.load(data_ptr_ptr, name="data_ptr")
     is_empty = builder.icmp_unsigned("==", current_len, ir.Constant(codegen.types.i32, 0))
 
@@ -85,7 +83,7 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType,
 
     builder.position_at_end(not_empty_block)
     new_len = builder.sub(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
-    builder.store(new_len, len_ptr)
+    gep_utils.store_len(codegen, list_ptr, new_len, builder=builder)
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, new_len, "element_ptr")
     some_value = None
     if dest is None:
@@ -132,16 +130,15 @@ def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> 
 
     list_alloca = list_ptr
 
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
+    current_len = gep_utils.load_len(codegen, list_alloca, "current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     _emit_destroy_elements_loop(codegen, data_ptr, current_len, element_type)
 
     zero = ir.Constant(codegen.types.i32, 0)
-    codegen.builder.store(zero, len_ptr)
+    gep_utils.store_len(codegen, list_alloca, zero)
 
     return blank(codegen)
 

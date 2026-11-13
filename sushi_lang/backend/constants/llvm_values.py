@@ -30,8 +30,6 @@ def make_i64_const(value: int) -> ir.Constant:
     return ir.Constant(ir.IntType(INT64_BIT_WIDTH), value)
 
 
-LIST_LEN_INDICES = [ZERO_I32, ZERO_I32]     # List.len field (index 0)
-LIST_CAP_INDICES = [ZERO_I32, ONE_I32]      # List.cap field (index 1)
 LIST_DATA_INDICES = [ZERO_I32, TWO_I32]     # List.data field (index 2)
 
 # For HashMap<K, V> fields: {buckets, size, capacity, tombstones}.

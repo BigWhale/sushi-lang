@@ -67,8 +67,9 @@ def _map_view(state: FunctionState, rvalue: r.Aggregate, source: r.IterMapView) 
 
 def _range(state: FunctionState, rvalue: r.Aggregate, source: r.IterRange) -> ir.Value:
     first, count = rvalue.parts
-    return emit_range_iterator(state.codegen, operand_value(state, first),
-                               operand_value(state, count), source.step)
+    return emit_range_iterator(state.codegen, _item_of(state, rvalue),
+                               operand_value(state, first), operand_value(state, count),
+                               source.step)
 
 
 def _new(state: FunctionState, rvalue: r.Aggregate, source: r.IterNew) -> ir.Value:

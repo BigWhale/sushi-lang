@@ -15,8 +15,7 @@ if TYPE_CHECKING:
 
 def emit_byte_array_to_string(codegen: "LLVMCodegen", receiver_value: ir.Value) -> ir.Value:
     """A fresh owned string with the bytes of the `u8[]` at the address `receiver_value`."""
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value, "")
-    byte_count = codegen.builder.load(len_ptr)
+    byte_count = gep_utils.load_len(codegen, receiver_value)
 
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value, "")
     data_ptr = codegen.builder.load(data_ptr_ptr)
@@ -47,8 +46,7 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen",
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     from sushi_lang.backend.types.arrays.methods.utf8_validate import get_or_emit_utf8_validate
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value, "")
-    byte_count = codegen.builder.load(len_ptr)
+    byte_count = gep_utils.load_len(codegen, receiver_value)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value, "")
     data_ptr = codegen.builder.load(data_ptr_ptr)
 

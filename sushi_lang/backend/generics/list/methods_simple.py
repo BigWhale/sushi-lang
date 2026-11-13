@@ -3,8 +3,9 @@
 from typing import Any
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
 
-from .types import get_list_llvm_type, get_list_len_ptr, get_list_capacity_ptr, extract_element_type, get_list_data_ptr
+from .types import get_list_llvm_type, extract_element_type, get_list_data_ptr
 
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -14,10 +15,10 @@ def emit_list_new(codegen: Any, list_type: StructType) -> ir.Value:
     """Emit LLVM IR for List<T>.new() - create empty list."""
     list_llvm_type = codegen.types.ll_type(list_type)
 
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
+    zero_i64 = ir.Constant(codegen.types.i64, 0)
     null_ptr = ir.Constant(list_llvm_type.elements[2], None)  # null pointer
 
-    list_value = ir.Constant(list_llvm_type, [zero_i32, zero_i32, null_ptr])
+    list_value = ir.Constant(list_llvm_type, [zero_i64, zero_i64, null_ptr])
 
     return list_value
 
@@ -47,12 +48,10 @@ def emit_list_with_capacity(codegen: Any, capacity: ir.Value, list_type: StructT
 
     list_alloca = entry_alloca(codegen.builder, list_llvm_type, name="list")
 
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    codegen.builder.store(zero_i32, len_ptr)
-    codegen.builder.store(capacity, capacity_ptr)
+    gep_utils.store_len(codegen, list_alloca, zero_i32)
+    gep_utils.store_cap(codegen, list_alloca, capacity)
     codegen.builder.store(data_ptr, data_ptr_ptr)
 
     return codegen.builder.load(list_alloca, name="list_value")
@@ -60,14 +59,12 @@ def emit_list_with_capacity(codegen: Any, capacity: ir.Value, list_type: StructT
 
 def emit_list_len(codegen: Any, list_ptr: ir.Value) -> ir.Value:
     """Emit LLVM IR for list.len() - get current length."""
-    len_ptr = get_list_len_ptr(codegen.builder, list_ptr)
-    return codegen.builder.load(len_ptr, name="list_len")
+    return gep_utils.load_len(codegen, list_ptr, "list_len")
 
 
 def emit_list_capacity(codegen: Any, list_ptr: ir.Value) -> ir.Value:
     """Emit LLVM IR for list.capacity() - get allocated capacity."""
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_ptr)
-    return codegen.builder.load(capacity_ptr, name="list_capacity")
+    return gep_utils.load_cap(codegen, list_ptr, "list_capacity")
 
 
 def emit_list_is_empty(codegen: Any, list_ptr: ir.Value) -> ir.Value:

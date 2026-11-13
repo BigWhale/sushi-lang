@@ -157,8 +157,7 @@ def _emit_dynamic_array_destructor(
         # Check if element type needs cleanup (resolving a named/generic element first --
         # an unresolved name answers False and the elements are silently leaked)
         if needs_cleanup(codegen, value_type.base_type):
-            len_ptr = gep_utils.gep_dynamic_array_len(codegen, value_ptr, "array_len_ptr")
-            array_len = builder.load(len_ptr, name="array_len")
+            array_len = gep_utils.load_len(codegen, value_ptr, "array_len", builder=builder)
             _destroy_elements(codegen, data_ptr, array_len, value_type.base_type,
                               "array_cleanup")
 
@@ -260,8 +259,7 @@ def _emit_list_value_destructor(
     is_not_null = builder.icmp_unsigned("!=", data_ptr, ir.Constant(data_ptr.type, None))
     with builder.if_then(is_not_null):
         if needs_cleanup(codegen, element_type):
-            len_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="list_len_field")
-            list_len = builder.load(len_ptr, name="list_len")
+            list_len = gep_utils.load_len(codegen, value_ptr, "list_len", builder=builder)
             _destroy_elements(codegen, data_ptr, list_len, element_type, "list_cleanup")
 
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
