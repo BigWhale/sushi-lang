@@ -1,0 +1,12 @@
+# A bare literal in an index position takes i64, so a literal above the i32 range is legal.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "none\n-1\nun\n"
+fn main() i32:
+    let string[] a = from(["one"])
+    println(a.get(4294967296).realise("none"))
+    let List@(i32) l = List.new()
+    l.push(1)
+    println("{l.get(8589934592).realise(-1)}")
+    let string w = "Run"
+    println(w.sright(4294967298))
+    return 0

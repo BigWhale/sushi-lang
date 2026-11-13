@@ -1,0 +1,9 @@
+# A negative index is out of bounds: the check compares the 64-bit values as unsigned.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020: array index -1 out of bounds for array of size 3"
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i64 at = -1
+    println("{a[at]}")
+    return 0

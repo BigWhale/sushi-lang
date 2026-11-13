@@ -1,0 +1,8 @@
+# An index position takes an integer, and a value of another type is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2121
+# EXPECT_STDERR_CONTAINS: an array index is an integer, got f64
+fn main() i32:
+    let i32[] a = from([1])
+    let f64 i = 0.0
+    println(a[i])
+    return 0

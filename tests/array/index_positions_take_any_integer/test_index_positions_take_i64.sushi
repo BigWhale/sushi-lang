@@ -1,0 +1,55 @@
+# An index position takes a value of any integer type (docs/adr/0001-index-width-i64.md).
+# Each position kind here takes a i64: an index, a slice bound, a repeat count, and the
+# position or count argument of each built-in method of T[], List@(T) and string.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "20 77\n2 20\n3\n30\nin 9\n9\n4\n2 1\n4 5\n1 3\n5 3\nin 8\n8\n8\n4\n2\nMo ss os t Mo  Mo-\nRun- -Run\n"
+fn main() i32:
+    let i64 zero = 0 as i64
+    let i64 one = 1 as i64
+    let i64 two = 2 as i64
+    let i64 three = 3 as i64
+    let i64 four = 4 as i64
+    let i32[] a = from([10, 20, 30, 40])
+    let string s = "Mostly Harmless"
+    println("{a[one]} {s[zero]}")
+    let i32[] v = a[one..three]
+    println("{v.len()} {v[zero]}")
+    let i32[] r = from([7; three])
+    println("{r.len()}")
+    println("{a.get(two).realise(-1)}")
+    let i32[] d = from([1, 2, 3, 4])
+    match d.insert(one, 9):
+        Result.Ok(_) -> println("in {d[1]}")
+        Result.Err(_) -> println("out")
+    println("{d.remove(one).realise(-1)}")
+    d.truncate(four)
+    println("{d.len()}")
+    d.swap(zero, one)
+    println("{d[0]} {d[1]}")
+    d.resize(three, 5)
+    d.resize(four, 5)
+    println("{d.len()} {d[3]}")
+    let i32[] c = d.s(one, three)
+    let i32[] e = d.ss(two, two)
+    println("{c[0]} {e[0]}")
+    d.extend_back(two, one)
+    println("{d.len()} {d[4]}")
+    let List@(i32) l = List.with_capacity(two)
+    l.push(5)
+    l.reserve(four)
+    match l.insert(zero, 8):
+        Result.Ok(_) -> println("in {l.get(0).realise(-1)}")
+        Result.Err(_) -> println("out")
+    println("{l.get(zero).realise(-1)}")
+    println("{l.remove(zero).realise(-1)}")
+    l.push(4)
+    l.push(5)
+    println("{l.get(one).realise(-1)}")
+    println("{l.index_of_from(5, one).realise(-1)}")
+    let string w = "Run"
+    println("{s.sleft(two)} {s.sright(two)} {s.s(one, three)} {s.char_at(three)} {s.ss(zero, two)} {s.repeat(zero)} {s.sleft(two)}{w.char_at(four)}-")
+    let string dash = "-"
+    let string right = w.pad_right(four, dash)
+    let string left = w.pad_left(four, dash)
+    println("{right} {left}")
+    return 0

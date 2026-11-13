@@ -1,0 +1,7 @@
+# The position argument of a method takes an integer too (CE2006 at the argument).
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: expected an integer, got bool
+fn main() i32:
+    let string s = "Run"
+    println(s.sleft(true))
+    return 0
