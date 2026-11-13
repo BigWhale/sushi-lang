@@ -2,6 +2,7 @@
 # The divisor of each remainder is a sum that holds the next remainder.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5\n"
+# COMPILE_TIMEOUT_SECONDS: 60
 fn main() i32:
     let i32 n = 5
     let i32 m = 10

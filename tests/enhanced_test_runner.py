@@ -937,8 +937,9 @@ class TestRunner:
             env["SUSHI_CWD"] = str(cwd)
             self.fresh_compiles.append((self._key(test_file), args))
             return subprocess.run(command, capture_output=True, text=True,
-                                  cwd=self.project_root, env=env, timeout=30)
-        return self._sushic(args, cwd=cwd, env=env, timeout=30,
+                                  cwd=self.project_root, env=env,
+                                  timeout=metadata.compile_timeout_seconds)
+        return self._sushic(args, cwd=cwd, env=env, timeout=metadata.compile_timeout_seconds,
                             fresh=self.needs_fresh_process(test_file, metadata))
 
     @staticmethod
@@ -1140,7 +1141,7 @@ class TestRunner:
             return success, message
 
         except subprocess.TimeoutExpired:
-            return False, "✗ Compilation: Timeout (30s)"
+            return False, f"✗ Compilation: Timeout ({metadata.compile_timeout_seconds}s)"
         except Exception as e:
             return False, f"✗ Compilation: Exception: {e}"
 

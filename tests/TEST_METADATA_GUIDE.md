@@ -355,10 +355,20 @@ Compares a dump of the program with a golden file beside the fixture:
 
 #### TIMEOUT_SECONDS
 
-Override the default test timeout (default: 10 seconds).
+Override the default test timeout (default: 10 seconds). It is the limit of the run of the
+binary, not of the compilation.
 
 ```sushi
 # TIMEOUT_SECONDS: 10
+```
+
+#### COMPILE_TIMEOUT_SECONDS
+
+Override the limit of each compilation of the fixture (default: 30 seconds). Use it only for
+a fixture that tests the time of a large compilation.
+
+```sushi
+# COMPILE_TIMEOUT_SECONDS: 60
 ```
 
 #### No TEST_TYPE directive

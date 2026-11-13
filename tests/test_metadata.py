@@ -52,6 +52,7 @@ class TestMetadata:
     # Test behavior flags
     requires_runtime: bool = False
     timeout_seconds: int = 10
+    compile_timeout_seconds: int = 30
     cmd_args: Optional[str] = None  # Command-line arguments for runtime test
     stdin_input: Optional[str] = None  # Standard input to provide to the test
     test_env: Optional[Dict[str, str]] = None  # Env vars to set for the runtime binary
@@ -545,6 +546,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_ERROR_CODES_EXACT': _exact_codes,
     'COMPILER_FLAGS': _compiler_flags,
     'TIMEOUT_SECONDS': _int_into('timeout_seconds', 'TIMEOUT_SECONDS'),
+    'COMPILE_TIMEOUT_SECONDS': _int_into('compile_timeout_seconds', 'COMPILE_TIMEOUT_SECONDS'),
     # Stored as-is; the runner splits it on whitespace.
     'CMD_ARGS': _set('cmd_args', str),
     'STDIN_INPUT': _set('stdin_input', _text),
