@@ -55,7 +55,8 @@ def emit_array_add_up(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Valu
                       element_type: 'Type') -> ir.Value:
     """`.add_up()`: the elements added from left to right with the `+` of the element type.
 
-    An empty array gives zero. An integer total wraps, and a float total follows IEEE.
+    An empty array gives zero. An integer total follows the overflow mode, as a `+` that
+    the user wrote does, and a float total follows IEEE.
     """
     from sushi_lang.backend.expressions.operators import emit_arithmetic
 
@@ -67,8 +68,8 @@ def emit_array_add_up(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Valu
     def add(element_ptr: ir.Value, _index: ir.Value) -> None:
         total = builder.load(total_slot, name="add_up_current")
         element = builder.load(element_ptr, name="add_up_element")
-        builder.store(emit_arithmetic(codegen, "+", total, element, element_type),
-                      total_slot)
+        builder.store(emit_arithmetic(codegen, "+", total, element, element_type,
+                                      checked=True), total_slot)
 
     emit_container_walk(codegen, data_ptr, count, add, prefix="add_up")
     return builder.load(total_slot, name="add_up_result")

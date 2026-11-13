@@ -1,0 +1,30 @@
+# `a.divmod(b)` on each signed width answers a bare `(a / b, a % b)`, with no import:
+# the quotient goes toward zero and the remainder takes the sign of `a`.
+# EXPECT_STDOUT_EXACT: "i8 -3 -1\ni16 -142 6\ni32 -14 -2\ni64 1285714285714285714 2\nhole (3, 1)\nsame true\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let i8 a8 = -7
+    let (i8 q8, i8 r8) = a8.divmod(2)
+    println("i8 {q8} {r8}")
+
+    let i16 a16 = 1000
+    let i16 b16 = -7
+    let (q16, r16) = a16.divmod(b16)
+    println("i16 {q16} {r16}")
+
+    let i32 a32 = -100
+    let i32 b32 = 7
+    let (i32, i32) pair = a32.divmod(b32)
+    println("i32 {pair.0} {pair.1}")
+
+    let i64 a64 = 9000000000000000000
+    let (q64, r64) = a64.divmod(7)
+    println("i64 {q64} {r64}")
+
+    let i32 seven = 7
+    println("hole {seven.divmod(2)}")
+
+    let (sq, sr) = a32.divmod(b32)
+    println("same {sq == a32 / b32 and sr == a32 % b32}")
+    return 0

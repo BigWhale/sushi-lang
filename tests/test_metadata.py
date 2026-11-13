@@ -70,6 +70,8 @@ class TestMetadata:
     expect_rebuilt: Optional[List[str]] = None
     expect_cached: Optional[List[str]] = None
     expect_stdout_exact_before_rebuild: Optional[str] = None
+    # Extra flags for the SECOND compilation of a rebuild fixture alone.
+    rebuild_flags: Optional[List[str]] = None
 
     # Start `sushic` from (a copy of) the fixture's directory, with a relative source path.
     run_in_fixture_dir: bool = False
@@ -133,6 +135,8 @@ class TestMetadata:
             self.compiler_flags = []
         if self.lib_flags is None:
             self.lib_flags = []
+        if self.rebuild_flags is None:
+            self.rebuild_flags = []
         if self.build_libs is None:
             self.build_libs = []
         if self.build_libs_binary is None:
@@ -184,7 +188,8 @@ class TestMetadata:
     @property
     def declares_a_rebuild(self) -> bool:
         return (self.expect_rebuilt is not None or self.expect_cached is not None
-                or self.expect_stdout_exact_before_rebuild is not None)
+                or self.expect_stdout_exact_before_rebuild is not None
+                or bool(self.rebuild_flags))
 
         # If any runtime expectations are set, this test requires runtime validation
         if (self.expect_runtime_exit is not None or
@@ -356,6 +361,13 @@ def _lib_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
     metadata.lib_flags.extend(
         token for token in _split(value)
         if not _refuses_runner_flag(token, "LIB_FLAGS", test_file, owned))
+
+
+def _rebuild_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    owned = RUNNER_OWNED_FLAGS | {LIB_FLAG}
+    metadata.rebuild_flags.extend(
+        token for token in _split(value)
+        if not _refuses_runner_flag(token, "REBUILD_FLAGS", test_file, owned))
 
 
 def _test_env(metadata: TestMetadata, value: str, test_file: Path) -> None:
@@ -543,6 +555,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_REBUILT': _extend('expect_rebuilt', lambda v: _split(_unquote(v))),
     'EXPECT_CACHED': _extend('expect_cached', lambda v: _split(_unquote(v))),
     'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
+    'REBUILD_FLAGS': _rebuild_flags,
     'BUILD_LIB': _library_build('build_libs', 'source'),
     'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),
     'BUILD_LIB_HYBRID': _library_build('build_libs_hybrid', 'hybrid'),

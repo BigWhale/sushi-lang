@@ -332,7 +332,7 @@ the function type is bare. The channel is part of the type, so the two forms do 
 ([`CE2002`](error-catalog.md#ce2002)).
 
 ```sushi
-fn(i32) -> i32 | MathError     # takes i32, a call returns Result@(i32, MathError)
+fn(i32) -> i32 | EnvError      # takes i32, a call returns Result@(i32, EnvError)
 fn(i32) -> i32                 # bare: a call returns i32
 fn(i32, string) -> bool        # two parameters
 fn() -> ~                      # no parameters, blank return
@@ -536,16 +536,17 @@ The compiler does not enforce this. The decision record is
 [The error channel is opt-in](design/error-channel.md).
 
 ```sushi
-use <math>
+error DivError:
+    DivisionByZero
 
 fn halve(i32 a) i32 | StdError:                        # Result@(i32, StdError)
     if (a % 2 != 0):
         return Result.Err(StdError.Error)
     return Result.Ok(a / 2)
 
-fn divide(i32 a, i32 b) i32 | MathError:    # Result@(i32, MathError)
+fn divide(i32 a, i32 b) i32 | DivError:     # Result@(i32, DivError)
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)
+        return Result.Err(DivError.DivisionByZero)
     return Result.Ok(a / b)
 
 fn main() i32:
@@ -556,8 +557,8 @@ fn main() i32:
 
 A body with a channel returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a
 bare value: a bare `return value` is [`CE2030`](error-catalog.md#ce2030). A BARE body returns the value itself:
-`return Result.Ok(...)` there is [`CE2091`](error-catalog.md#ce2091), and `??` there is [`CE0131`](error-catalog.md#ce0131). `MathError` has its
-home in `<math>`, and `StdError` is global.
+`return Result.Ok(...)` there is [`CE2091`](error-catalog.md#ce2091), and `??` there is [`CE0131`](error-catalog.md#ce0131). `DivError` is declared
+by the program, and `StdError` is global.
 
 The caller takes the value out of the `Result` in one of three ways: `??` returns the error
 from the calling function at once, `.realise(default)` gives the default for an error, and
@@ -820,21 +821,32 @@ on a `u8` is 144, and `~0` on a `u32` is 4294967295.
 An `as` cast is the escape. It asks for the bit pattern, so it truncates: `300 as u8` is
 44. A wider type is the other answer.
 
-**Run time does not check `+`, `-`, `*` and unary minus.** Only an expression the
-compiler reads is checked, so two locals wrap:
+**Run time follows the overflow mode.** A value that the compiler cannot read, such as
+the sum of two locals, is checked when the program runs. The flag
+`--overflow=trap|wrap` sets the mode, and `trap` is the default
+([compiler reference](compiler-reference.md#integer-overflow)):
+
+- `trap`: a `+`, `-`, `*` or unary minus whose result the type cannot hold stops the
+  program with [RE2032](error-catalog.md#re2032), which names the operator and the type
+  (`integer overflow: '+' on u8`). The program exits 1.
+- `wrap`: the bits that leave the type are lost, and nothing reports it.
 
 ```sushi
 fn main() i32:
     let u8 a = 200
     let u8 b = 100
-    let u8 sum = a + b        # 44 at run time, and nothing reports it
+    let u8 sum = a + b        # RE2032 by default; 44 with --overflow=wrap
     println(sum)
     return 0
 ```
 
+`.add_up()` on an integer array follows the mode too. The arithmetic that the compiler
+makes, for example the count of a range, is never checked.
+
 **A division is checked at run time.** An integer `/` or `%` whose divisor is 0 stops the
-program with [RE2030](error-catalog.md#re2030), and on a signed type the smallest value
-over `-1` stops it with [RE2031](error-catalog.md#re2031). The program exits 1. A float
+program with [RE2030](error-catalog.md#re2030) in both modes. On a signed type the
+smallest value over `-1` stops it with [RE2031](error-catalog.md#re2031) in `trap` mode;
+in `wrap` mode `/` gives the smallest value and `%` gives 0. The program exits 1. A float
 division by zero gives an infinity or a NaN, and nothing reports it.
 
 ```sushi
@@ -1957,7 +1969,7 @@ fn main() i32:
     return 0
 ```
 
-- The right side is any tuple value: a literal, a call (`(q, r) := divmod(7, 2)`), a
+- The right side is any tuple value: a literal, a call (`(q, r) := n.divmod(2)`), a
   local or a parameter. A value that is not a tuple is **[CE2117](error-catalog.md#ce2117)**, an unhandled `Result`
   is **[CE2505](error-catalog.md#ce2505)**, and a count that is not the tuple's count is **[CE2120](error-catalog.md#ce2120)**.
 - Each target is a place that a plain `:=` takes: a name, a field, an array element, a
@@ -2008,11 +2020,11 @@ fn main() i32:
 
 ### Tuples in the Standard Library
 
-A stdlib function with two results answers a tuple:
+A stdlib function or method with two results answers a tuple:
 
 | Module | Function | Answer |
 |---|---|---|
-| `<math>` | `divmod(T a, T b)` | `(T, T) \| MathError` |
+| `<math>` | `a.divmod(b)`, on each integer type, no import | `(T, T)` |
 | `<collections/strings>` | `s.split_once(sep)`, `s.rsplit_once(sep)` | `Maybe@((string, string))` |
 | `<collections/iter>` | `enumerate`, `zip`, `partition`, `unzip` | a `List` of tuples, or a tuple of `List`s |
 | `<collections/hashmap>` | `m.pairs()` | `Iterator@((K, V))` |
@@ -2026,14 +2038,13 @@ A `MsgValue.Map` holds its entries as `(MsgValue, MsgValue)[]`. The answer goes 
 destructure, a `match` with a tuple pattern, or a `foreach`:
 
 ```sushi
-use <math>
 use <collections/hashmap>
 
 fn main() i32:
-    match divmod(7, 2):
-        Result.Ok((q, 1)) -> println("odd, half is {q}")
-        Result.Ok((q, _)) -> println("even, half is {q}")
-        Result.Err(_) -> println("no answer")
+    let i32 n = 7
+    match n.divmod(2):
+        (q, 1) -> println("odd, half is {q}")
+        (q, _) -> println("even, half is {q}")
     match "a/b/c".rsplit_once("/"):
         Maybe.Some((dir, file)) -> println("{dir} {file}")    # a/b c
         Maybe.None -> println("no separator")
@@ -2137,8 +2148,8 @@ exhaustiveness, payloads, the generic form (`error DecodeError@(T)`), the derive
 libraries. An error type is ordinary data in every position: a field, a payload, a
 parameter, a `let`, an array element and a generic argument.
 
-The seven predefined error types are `StdError`, `IoError`, `FileError`, `NetError`,
-`ProcessError`, `EnvError` and `MathError`. `FileMode` and `SeekFrom` are plain enums.
+The six predefined error types are `StdError`, `IoError`, `FileError`, `NetError`,
+`ProcessError` and `EnvError`. `FileMode` and `SeekFrom` are plain enums.
 
 **The `E` of every `Result@(T, E)` is an error type**, in both spellings (`T | E` is
 `Result@(T, E)`) and in every position: a signature of a function, a method, a perk, a

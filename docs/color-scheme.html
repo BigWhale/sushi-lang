@@ -139,7 +139,7 @@
         <pre><span class="cm"># a function that can fail</span>
 <span class="kw">fn</span> halve(<span class="ty">i32</span> n) <span class="ty">i32</span>:
     <span class="kw">if</span> (n % 2 != 0):
-        <span class="kw">return</span> Result.Err(MathError.Odd())
+        <span class="kw">return</span> Result.Err(ParityError.Odd())
     <span class="kw">return</span> Result.Ok(n / 2)</pre>
         <div class="admonition">
           <div class="title">Note · don't use ?? in main()</div>

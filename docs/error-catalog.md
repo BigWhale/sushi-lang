@@ -1503,7 +1503,7 @@ An integer literal arm needs an integer scrutinee, a string literal arm needs a 
 
 **Help:** `use a wider type, or compute in one and cast the result with 'as'`
 
-An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. For example, a u8 constant of '200 + 100' is this error. The overflow-checked operators are + - \* / % and unary minus; & | ^ ~ &lt;&lt; >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. Run time does not change: two locals still wrap.
+An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. For example, a u8 constant of '200 + 100' is this error. The overflow-checked operators are + - \* / % and unary minus; & | ^ ~ &lt;&lt; >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. This check is the same in each overflow mode. At run time, a value that the compiler cannot read (two locals) follows the overflow mode: the default 'trap' stops the program with [RE2032](#re2032) ([RE2031](#re2031) for / and %), and '--overflow=wrap' loses the bits that leave the type.
 
 ### CE2080 {#ce2080}
 
@@ -1847,7 +1847,7 @@ An integer literal and a string literal are legal in every pattern position: a l
 
 **Message:** `the destructure names {count} elements, but '{type}' has {arity}`
 
-A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = divmod(7, 2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
+A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = n.divmod(2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
 
 ### CE2121 {#ce2121}
 
@@ -3776,7 +3776,15 @@ A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` 
 
 **Message:** `integer division overflow: the smallest value of a signed type divided by -1`
 
-`a / b` or `a % b` on a signed integer type found `a` equal to the smallest value of the type and `b` equal to -1 at run time. The quotient is one more than the largest value, so the type cannot hold it, and the machine instruction of `%` divides first. The program stops with exit code 1. This is a code of its own, and not [RE2030](#re2030), because the divisor is not 0. It is the division case of the integer overflow rule: when the overflow modes come, `trap` keeps this stop, and `wrap` gives the smallest value for `/` and 0 for `%`.
+`a / b` or `a % b` on a signed integer type found `a` equal to the smallest value of the type and `b` equal to -1 at run time. The quotient is one more than the largest value, so the type cannot hold it, and the machine instruction of `%` divides first. The program stops with exit code 1. This is a code of its own, and not [RE2030](#re2030), because the divisor is not 0. It is the division case of the integer overflow rule: the default mode `trap` keeps this stop, and `--overflow=wrap` gives the smallest value for `/` and 0 for `%`.
+
+### RE2032 {#re2032}
+
+**Error** · runtime
+
+**Message:** `integer overflow: '{op}' on {type}`
+
+`a + b`, `a - b`, `a * b` or `-a` on an integer type gave a result that the type cannot hold, at run time. The default overflow mode is `trap`, so the program stops with exit code 1. The text names the operator and the type, for example `integer overflow: '+' on i32`. `.add_up()` on an integer array is a `+` for this rule. Build with `--overflow=wrap` to lose the bits that leave the type in place of the stop. The checked operators are the [CE2077](#ce2077) set; for `/` and `%` the overflow is [RE2031](#re2031), and a division by zero is [RE2030](#re2030) in both modes. The arithmetic that the compiler makes (the count of a range, a loop counter) gets no check. `~`, `&`, `|`, `^` and `as` are width-defined, and a wider type or a cast is the escape.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 

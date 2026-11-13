@@ -50,7 +50,7 @@ Complete reference for Sushi's standard library modules and types.
 - [URLs](stdlib/net/url.md) - lexical URL splitting
 
 ### System Modules
-- [Math](stdlib/system/math.md) - Mathematical operations (abs, min, max, divmod, sqrt, pow, trig)
+- [Math](stdlib/system/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig, and the `divmod` method)
 - [Random](stdlib/system/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
 - [Time](stdlib/system/time.md) - Sleep functions, the wall clock and the monotonic clock
 - [Environment](stdlib/system/env.md) - Environment variables and system information
@@ -319,7 +319,8 @@ fn greet() ~ | IoError:
 All functions use a single polymorphic name (no type-suffixed variants):
 - Absolute value / min / max: `abs()`, `min()`, `max()` (return the argument's type; a
   literal argument of `min`/`max` takes the type of the other argument)
-- Integer division: `divmod(a, b)` answers `(a / b, a % b) | MathError`
+- Integer division: the method `a.divmod(b)` answers `(a / b, a % b)` on each integer type,
+  with no import; a divisor of 0 stops the program, the same as `/`
 - Floating-point (f64): `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`, `trunc()`
 - Trigonometry: `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`, `atan2()`
 - Hyperbolic: `sinh()`, `cosh()`, `tanh()`

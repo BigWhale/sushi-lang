@@ -1,11 +1,9 @@
-# `divmod` is for the integer types only: a float argument is refused.
-# EXPECT_ERROR_CODE: CE2006
-use <math>
+# `divmod` is a method of the integer types only: a float has no `divmod`.
+# EXPECT_ERROR_CODE: CE2008
 
 fn main() i32:
     let f64 a = 7.0
     let f64 b = 2.0
-    match divmod(a, b):
-        Result.Ok(_) -> println("ok")
-        Result.Err(_) -> println("failed")
+    let (q, r) = a.divmod(b)
+    println("{q} {r}")
     return 0

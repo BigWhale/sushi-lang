@@ -1,0 +1,14 @@
+# The smallest i32 divided by -1 stops the program in the default mode.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2031"
+
+fn div(i32 a, i32 b) i32:
+    return a / b
+
+fn rem(i32 a, i32 b) i32:
+    return a % b
+
+fn main(string[] args) i32:
+    println("{div(-2147483648, -args.len())} {rem(-2147483648, -args.len())}")
+    return 0

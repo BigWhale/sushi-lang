@@ -44,6 +44,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--version`         | Print the version banner and exit                  |
 | `-o NAME`           | Specify output executable name                     |
 | `--opt LEVEL`       | Set optimization level (none, mem2reg, O1, O2, O3) |
+| `--overflow MODE`   | What an integer overflow does at run time: `trap` (the default) or `wrap` (see [Integer Overflow](#integer-overflow)) |
 | `--no-verify`       | Do not verify the LLVM IR before and after optimization |
 | `--keep-object`     | Keep the `.o` file after the link (add `--no-incremental` for a program of more than one unit) |
 | `--build-stdlib`    | Build the standard library bitcode again, from its generators |
@@ -234,6 +235,34 @@ fn main() i32:
 
 See [Libraries](libraries.md) for complete documentation.
 
+### Integer Overflow
+
+`--overflow=trap|wrap` sets what an integer `+`, `-`, `*`, `/`, `%` or unary minus does
+at run time when the result is out of the range of its type. The default is `trap`. The
+flag does not depend on `--opt`.
+
+- `trap`: the program stops with exit code 1. `+`, `-`, `*` and unary minus give
+  [RE2032](error-catalog.md#re2032), for example
+  `Runtime Error RE2032: integer overflow: '+' on i32`. The smallest signed value over
+  `-1` gives [RE2031](error-catalog.md#re2031).
+- `wrap`: the bits that are out of the type are lost. The smallest signed value divided by
+  `-1` is the smallest value, and its remainder is 0.
+
+In both modes, an integer division or remainder by zero stops the program with
+[RE2030](error-catalog.md#re2030). The mode applies to the operators that you write and
+to `.add_up()` on an integer array. The arithmetic that the compiler makes, for example
+the count of a range, is not checked. The stdlib modules in Sushi compile with the mode of
+the program; the generated stdlib does not change. The mode is part of the cache key, so a
+build in the other mode does not use a cached object. An expression that the compiler can
+read is checked at compile time in both modes ([CE2077](error-catalog.md#ce2077)).
+
+```bash
+./sushic --overflow=wrap program.sushi
+```
+
+With `--lib-info` the flag has no effect, and the compiler warns
+([CW0003](error-catalog.md#cw0003)).
+
 ### Incremental Compilation
 
 Multi-unit projects (those with `use` statements to other `.sushi` files) automatically use incremental compilation. Each unit is compiled to its own `.o` file and cached in `__sushi_cache__/`. Only units whose content or dependencies change are recompiled.
@@ -269,7 +298,7 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
   same source built from another directory with one `--cache-dir` is another object
 - Each cached object is content-addressed: its filename is
   `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
-  version, target triple, opt level, **and** a content digest of the compiler's own
+  version, target triple, opt level, overflow mode, **and** a content digest of the compiler's own
   sources, and `fingerprint` digests the unit itself
 - A hit therefore means exactly "an object built from this input, by this compiler,
   with these settings" — there is no separate staleness check to get wrong; a

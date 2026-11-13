@@ -454,21 +454,24 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
     )
 
     # The predefined enums this module is the HOME of ride along with every shape
-    # (#574): `<io/fs>` brings `FileMode`, `<math>` brings `MathError`.
+    # (#574): `<io/fs>` brings `FileMode`, `<sys/env>` brings `EnvError`.
     homed = homed_enums(path, getattr(tables, "enums", None))
     generic = GENERIC_UNIT_TYPES.get(path)
     gated = () if generic is None else (GenericNamespace(path, {generic}),)
+    module = get_stdlib_registry().get_module(path)
     if is_source_stdlib_module(path):
         # A source module that also activates a built-in generic hands the name on as
-        # a re-export of its unit: one provider, both roles.
+        # a re-export of its unit: one provider, both roles. A module with two halves
+        # (`<math>`) hands on the names of its generator half the same way.
+        generator_half = (() if module is None
+                          else (StdlibNamespace(path, module, types=homed),))
         return _unit_provider(path, tables, homed, units=units,
                               library_registry=library_registry, visited=visited,
-                              generics=gated)
+                              generics=(*gated, *generator_half))
 
     if gated:
         return gated[0]
 
-    module = get_stdlib_registry().get_module(path)
     if module is not None:
         # A registry module declares its re-exports beside its functions (section
         # 8.1): `<io/files>` hands on `<io/error>`, so `FileError` rides with `fd_*`.

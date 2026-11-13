@@ -1054,7 +1054,7 @@ fn main() i32:
 - **The type and the literal** are both written in parentheses: `(i32, string)` and
   `(42, "Arthur")`. A tuple type stands wherever a type does: a parameter, a field, a type
   argument (`List@((string, i32))`), an array element, and a return with a channel
-  (`fn divmod(i32 a, i32 b) (i32, i32) | MathError`)
+  (`fn split(i32 a, i32 b) (i32, i32) | EnvError`)
 - **Element access** is `.0`, `.1`, ... and `.0.1` for a nested tuple. The index is a
   literal, so `t[i]` is not a tuple access
 - **A destructure** takes a typed binder (`i32 q`), a bare binder (`q`), a `_` that
@@ -1101,11 +1101,11 @@ The standard library answers a tuple where a function has two results. A destruc
 them apart at the call:
 
 ```sushi
-use <math>
 use <collections/iter>
 
 fn main() i32:
-    let (i32 q, i32 r) = divmod(17, 5).realise((0, 0))
+    let i32 total = 17
+    let (i32 q, i32 r) = total.divmod(5)
     println("{q} {r}")                                   # 3 2
     let (key, value) = "port=8080".split_once("=").realise(("", ""))
     println("{key}: {value}")                            # port: 8080

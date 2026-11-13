@@ -99,19 +99,21 @@ A function with a channel returns `Result@(T, E)`, where:
 #### Custom Error Type with | Syntax
 
 ```sushi
-use <math>
+error DivError:
+    DivisionByZero
+    Overflow
 
-fn divide(i32 a, i32 b) i32 | MathError:
+fn divide(i32 a, i32 b) i32 | DivError:
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)
+        return Result.Err(DivError.DivisionByZero)
     return Result.Ok(a / b)
-# Returns Result@(i32, MathError)
+# Returns Result@(i32, DivError)
 ```
 
-`MathError` is a predefined error type, and `use <math>` brings its name. Do not declare your
-own `MathError`: a predefined name cannot be declared again (**[CE2046](error-catalog.md#ce2046)**), also in a unit
-with no `use <math>`. Give your own error type a new name. The examples below use this
-`divide`.
+`DivError` is an error type that the program declares with `error`. Do not give your own
+error type the name of a predefined one, for example `EnvError`: a predefined name cannot
+be declared again (**[CE2046](error-catalog.md#ce2046)**), also in a unit with no
+`use <sys/env>`. The examples below use this `divide`.
 
 The error type `E` must be an ERROR TYPE, in both spellings (`T | E` and `Result@(T, E)`)
 and in every position (**[CE2084](error-catalog.md#ce2084)**): an enum declared with `error`, or a predefined error
@@ -172,12 +174,11 @@ fn main() i32:
 ### Standard Error Types
 
 Sushi provides built-in error types for common error conditions. Each but `StdError` has
-a HOME module, and the import brings the bare name (`use <math>` for `MathError`). A module
+a HOME module, and the import brings the bare name (`use <sys/env>` for `EnvError`). A module
 that re-exports the home module brings the name too: `use <io/fs>` brings `IoError` and
 `FileError`.
 
 - **StdError** - Generic fallback (`StdError.Error`); in scope everywhere, no import
-- **MathError** (`<math>`) - Mathematical errors (`DivisionByZero`, `Overflow`, `Underflow`, `InvalidInput`)
 - **FileError** (`<io/error>`, also through `<io/fs>`) - Path and descriptor errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`, `TooManyOpen`, `InvalidPath`, `IOError`, `Other`)
 - **IoError** (`<io/error>`, also through `<io/contracts>`, `<io/fs>` and `<io/buf>`) - What every read, write, seek, `open()` and `close()` answers (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `ConnectionReset`, `TimedOut`, `Closed`, `Interrupted`, `WouldBlock`, `DiskFull`, `TooManyOpen`, `InvalidInput`, `Os(i32)`, `Other`)
 - **NetError** (`<net/error>`) - Connect, bind and resolve errors (`ConnectionRefused`, `TimedOut`, `ResolveFailed`, ...)
@@ -193,11 +194,13 @@ See [Result@(T, E) API Reference](stdlib/core/result.md) for complete details.
 return Result.Ok(value)
 
 # Failure - always include the error value
-use <math>
+error DivError:
+    DivisionByZero
+    Overflow
 
-fn divide(i32 a, i32 b) i32 | MathError:
+fn divide(i32 a, i32 b) i32 | DivError:
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)  # Error with data
+        return Result.Err(DivError.DivisionByZero)  # Error with data
     return Result.Ok(a / b)
 ```
 
@@ -251,7 +254,7 @@ fn main() i32:
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
-    let Result@(i32, MathError) result = divide(10, 2)
+    let Result@(i32, DivError) result = divide(10, 2)
 
     if (result.is_ok()):
         # Success case
@@ -306,7 +309,7 @@ fn main() i32:
     match divide(10, 2):
         Result.Ok(value) ->
             println("Result: {value}")
-        Result.Err(MathError.DivisionByZero) ->
+        Result.Err(DivError.DivisionByZero) ->
             println("Cannot divide by zero")
         Result.Err(e) ->
             println("Other error")
@@ -323,7 +326,7 @@ Result@(T, E) provides several methods for working with success and error values
 Check which variant the Result contains:
 
 ```sushi
-let Result@(i32, MathError) result = divide(10, 2)
+let Result@(i32, DivError) result = divide(10, 2)
 
 if (result.is_ok()):
     println("Success!")
@@ -337,11 +340,11 @@ if (result.is_err()):
 Extract the error value as a Maybe:
 
 ```sushi
-let Result@(i32, MathError) result = divide(10, 0)
-let Maybe@(MathError) err = result.err()
+let Result@(i32, DivError) result = divide(10, 0)
+let Maybe@(DivError) err = result.err()
 
 match err:
-    Maybe.Some(MathError.DivisionByZero) ->
+    Maybe.Some(DivError.DivisionByZero) ->
         println("Division by zero!")
     Maybe.None() ->
         println("No error")
@@ -352,7 +355,7 @@ match err:
 Unwrap the Ok value or panic with a custom message:
 
 ```sushi
-let Result@(i32, MathError) result = divide(10, 2)
+let Result@(i32, DivError) result = divide(10, 2)
 let i32 value = result.expect("Division should succeed")
 # Prints "ERROR: Division should succeed" and exits if Err
 ```

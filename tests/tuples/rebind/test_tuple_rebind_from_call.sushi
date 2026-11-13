@@ -3,11 +3,12 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3 1\n0 0\nn3 3\nn4 4\n"
-use <math>
+error DivError:
+    DivisionByZero
 
-fn divmod(i32 a, i32 b) (i32, i32) | MathError:
+fn divmod(i32 a, i32 b) (i32, i32) | DivError:
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)
+        return Result.Err(DivError.DivisionByZero)
     return Result.Ok((a / b, a % b))
 
 fn make(i32 n) (string, i32[]):

@@ -1,0 +1,12 @@
+# The negation of the smallest i32 stops the program in the default mode.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2032"
+# EXPECT_STDERR_CONTAINS: "integer overflow: '-' on i32"
+
+fn negate(i32 a) i32:
+    return -a
+
+fn main() i32:
+    println("{negate(-2147483648)}")
+    return 0

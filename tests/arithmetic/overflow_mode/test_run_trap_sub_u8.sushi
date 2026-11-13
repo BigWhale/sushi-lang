@@ -1,0 +1,12 @@
+# A u8 difference below 0 stops the program in the default mode.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2032"
+# EXPECT_STDERR_CONTAINS: "integer overflow: '-' on u8"
+
+fn sub(u8 a, u8 b) u8:
+    return a - b
+
+fn main(string[] args) i32:
+    println("{sub(0, args.len() as u8)}")
+    return 0

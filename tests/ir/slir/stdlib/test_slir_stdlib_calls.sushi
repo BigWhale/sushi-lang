@@ -14,9 +14,9 @@ fn main() i32:
     let f64 r = sqrt(16.0)
     let u8 a = 9
     let u8 lo = min(a, 3)
-    let (i32, i32) qr = divmod(15, 2).realise((0, 0))
+    let i32 hi = max(7, 2)
     let i32 slept = t.msleep(0 as i64).realise(9)
     let i32 failed = t.msleep(-1 as i64).realise(9)
-    println("{r} {lo} {qr.0}")
+    println("{r} {lo} {hi}")
     println("{slept} {failed}")
     return 0

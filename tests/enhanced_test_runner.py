@@ -888,12 +888,13 @@ class TestRunner:
         return Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
     def _invoke_compiler(self, test_file: Path, metadata: TestMetadata,
-                         binary_path: Path, clean: Optional[str] = None
-                         ) -> subprocess.CompletedProcess:
+                         binary_path: Path, clean: Optional[str] = None,
+                         before_rebuild: bool = False) -> subprocess.CompletedProcess:
         """Start `sushic` for one compilation of a fixture, the way the fixture asks.
 
         `clean` is a THEN_CLEAN_CACHE form: "bare" starts `sushic --clean-cache` with the
-        cache flag alone, "source" starts `sushic --clean-cache <source> -o ...`.
+        cache flag alone, "source" starts `sushic --clean-cache <source> -o ...`. The
+        REBUILD_FLAGS join the second compilation of a rebuild fixture, never the first.
 
         Force NO_COLOR so diagnostic codes/messages land in stderr without ANSI escapes,
         keeping substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS) robust.
@@ -923,6 +924,7 @@ class TestRunner:
         else:
             args = [*(["--clean-cache"] if clean else []), source, "-o", output,
                     *metadata.compiler_flags, *(IR_FLAGS if metadata.reads_the_ir else ()),
+                    *(() if before_rebuild else metadata.rebuild_flags),
                     *dump_flags(metadata, binary_path), *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
@@ -991,7 +993,7 @@ class TestRunner:
         """
         workspace = self._workspaces[self._key(test_file)]
         first = binary_path.with_name(binary_path.name + "__before_rebuild")
-        done = self._invoke_compiler(test_file, metadata, first)
+        done = self._invoke_compiler(test_file, metadata, first, before_rebuild=True)
         if done.returncode not in (0, 1) or spelling_gate_tripped(done.stderr):
             return (f"✗ Compilation: the build before the rebuild failed with exit "
                     f"{done.returncode}\nSTDERR: {done.stderr.strip()}")

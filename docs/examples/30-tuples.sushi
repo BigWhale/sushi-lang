@@ -8,7 +8,7 @@
 # - A tuple type `(A, B)`, a tuple literal, and `t.0` / `t.1`
 # - A destructure: `let (a, b) = ...`, with `_` for a part you do not need
 # - A tuple pattern in a `match`, with a literal element
-# - Stdlib functions that answer a tuple: `divmod`, `split_once`,
+# - Stdlib functions and methods that answer a tuple: `divmod`, `split_once`,
 #   `enumerate`, `zip` and `HashMap.pairs()`
 
 use <math>
@@ -32,8 +32,9 @@ fn describe((string, i32) entry) string:
         (name, n) -> return "{name} x{n}"
 
 fn main() i32:
-    # divmod answers (quotient, remainder) in a Result.
-    let (i32 hours, i32 minutes) = divmod(135, 60).realise((0, 0))
+    # divmod answers (quotient, remainder).
+    let i32 flight = 135
+    let (i32 hours, i32 minutes) = flight.divmod(60)
     println("flight time: {hours}h {minutes}m")
 
     # split_once answers a Maybe of the two parts.

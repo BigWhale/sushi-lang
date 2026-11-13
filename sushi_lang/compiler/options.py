@@ -5,6 +5,8 @@ import argparse
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.overflow_mode import OverflowMode
+
 if TYPE_CHECKING:
     from sushi_lang.semantics.semantic_analyzer import Lints
 
@@ -14,6 +16,7 @@ class BuildOptions:
     """What one compilation was asked to do. The pipeline never sees the `Namespace`."""
     out: Optional[str]
     opt: str
+    overflow: OverflowMode
     no_verify: bool
     keep_object: bool
     ignore_compiler_version: bool
@@ -35,6 +38,7 @@ class BuildOptions:
         return cls(
             out=args.out,
             opt=args.opt,
+            overflow=OverflowMode(args.overflow),
             no_verify=args.no_verify,
             keep_object=args.keep_object,
             ignore_compiler_version=args.ignore_compiler_version,

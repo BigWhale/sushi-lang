@@ -10,8 +10,10 @@ Mathematical functions for numeric types.
 use <math>
 ```
 
-The import brings `MathError`, the module's error type: the bare name needs it, and
-`use <math> as m` puts it behind the dot (`m.MathError.DivisionByZero`).
+The module has two halves. The functions and the constants are compiled into the stdlib
+bitcode. The methods on the integer types (`divmod`) are written in Sushi
+(`sushi_lang/sushi_stdlib/src_sushi/math.sushi`). A method of a built-in type needs no
+import, so `a.divmod(b)` works with no `use <math>`.
 
 ## Overview
 
@@ -20,9 +22,10 @@ referred to by a single, **polymorphic** name — there are no type-suffixed var
 `abs_i32` or `sqrt_f64`. Two families exist:
 
 - `abs`, `min`, and `max` accept any matching numeric type and return that same type.
-  `divmod` accepts any integer type and returns a pair of that type.
 - All other functions (`sqrt`, `pow`, the trigonometric, hyperbolic, logarithmic, and
   exponential functions, and `hypot`) operate on `f64` and return `f64`.
+
+`divmod` is a method of each integer type, not a function: `a.divmod(b)`.
 
 `sqrt`, `pow`, `floor`, `ceil`, `round`, `trunc`, `sin`, `cos`, the logarithms and the
 exponentials compile to LLVM intrinsics. `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`,
@@ -66,32 +69,29 @@ fn main() i32:
 
 ## Integer Division: divmod
 
-### `divmod(T a, T b) -> (T, T) | MathError`
+### `a.divmod(T b) -> (T, T)`
 
 The quotient and the remainder in one call: `(a / b, a % b)`, exactly as the two operators
-give them, so the quotient truncates toward zero and the remainder has the sign of `a`. `T`
-is any **integer** type (`i8` to `i64`, `u8` to `u64`); a float is [CE2006](../../error-catalog.md#ce2006). The typing rules
-of `min` apply: two typed arguments have one type, and a literal takes the type of the other
-argument.
+give them, so the quotient truncates toward zero and the remainder has the sign of `a`.
+`divmod` is a method of each **integer** type (`i8` to `i64`, `u8` to `u64`); a float has
+no `divmod` ([CE2008](../../error-catalog.md#ce2008)). The divisor `b` has the type of `a`
+([CE2006](../../error-catalog.md#ce2006)), and a literal divisor takes that type.
 
-`divmod` has an error channel, where the `/` and `%` operators have none:
-
-- `b == 0` is `Err(MathError.DivisionByZero)`.
-- A signed `MIN / -1` (for example `divmod(-128 as i8, -1 as i8)`) is
-  `Err(MathError.Overflow)`, because the quotient does not fit `T`.
+The answer is a bare tuple, with no error channel. A divisor of 0 stops the program with
+the runtime error [RE2030](../../error-catalog.md#re2030), the same as `/`. A signed
+`MIN.divmod(-1)` stops it with [RE2031](../../error-catalog.md#re2031), because the
+quotient does not fit `T`.
 
 ```sushi
-use <math>
-
 fn main() i32:
-    let (i32 q, i32 r) = divmod(17, 5).realise((0, 0))
+    let i32 a = 17
+    let (i32 q, i32 r) = a.divmod(5)
     println("{q} {r}")                                   # 3 2
-    let (i32 nq, i32 nr) = divmod(-17, 5).realise((0, 0))
+    let i32 n = -17
+    let (nq, nr) = n.divmod(5)
     println("{nq} {nr}")                                 # -3 -2
-    match divmod(7, 0):
-        Result.Ok((a, b)) -> println("{a} {b}")
-        Result.Err(MathError.DivisionByZero) -> println("division by zero")
-        Result.Err(_) -> println("other")
+    let u8 b = 200
+    println("{b.divmod(7)}")                             # (28, 4)
     return 0
 ```
 

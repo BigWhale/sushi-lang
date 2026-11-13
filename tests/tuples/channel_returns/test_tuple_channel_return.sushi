@@ -2,14 +2,15 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3 1\n0 0\n3 3\nerr\n"
-use <math>
+error DivError:
+    DivisionByZero
 
-fn divmod(i32 a, i32 b) (i32, i32) | MathError:
+fn divmod(i32 a, i32 b) (i32, i32) | DivError:
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)
+        return Result.Err(DivError.DivisionByZero)
     return Result.Ok((a / b, a % b))
 
-fn both(i32 a, i32 b) (i32, i32) | MathError:
+fn both(i32 a, i32 b) (i32, i32) | DivError:
     let (i32 q, i32 r) = divmod(a, b)??
     return Result.Ok((q + r, q + r))
 

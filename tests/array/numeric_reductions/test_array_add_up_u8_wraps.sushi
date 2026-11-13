@@ -1,4 +1,5 @@
-# `.add_up()` follows the run-time rule of `+`: an integer total wraps.
+# `.add_up()` follows the run-time rule of `+`: with --overflow=wrap, an integer total wraps.
+# COMPILER_FLAGS: --overflow=wrap
 # EXPECT_STDOUT_EXACT: "44 200 100\n"
 # EXPECT_RUNTIME_EXIT: 0
 fn main() i32:
