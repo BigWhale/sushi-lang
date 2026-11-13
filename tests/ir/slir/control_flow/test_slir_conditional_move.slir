@@ -96,7 +96,7 @@ fn refill(_1: i32 @guaranteed) -> ~ {
 
   bb1:
     StorageLive(_6)
-    _6 = copy _5 < copy _1
+    _6 = user copy _5 < copy _1
     switchInt(copy _6) -> [0: bb3, otherwise: bb2]
 
   bb2:
@@ -107,7 +107,7 @@ fn refill(_1: i32 @guaranteed) -> ~ {
     _2 = move _7
     _3 = const true
     StorageDead(_7)
-    _5 = copy _5 + const 1_i32
+    _5 = user copy _5 + const 1_i32
     goto -> bb1
 
   bb3:

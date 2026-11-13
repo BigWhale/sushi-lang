@@ -151,7 +151,7 @@ fn main() -> i32 {
     StorageDead(_6)
     StorageDead(_5)
     StorageLive(_7)
-    _7 = neg const 1_i8
+    _7 = const -1_i8
     StorageLive(_8)
     _8 = call @kind(copy _7 @guaranteed)
     StorageLive(_9)

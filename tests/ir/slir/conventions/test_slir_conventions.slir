@@ -16,7 +16,7 @@ fn four(_1: string @owned, _2: string @guaranteed, _3: string @in_guaranteed, _4
     StorageLive(_7)
     _7 = call builtin println@(string)(copy _3 @guaranteed)
     StorageDead(_7)
-    _4 = copy _4 + const 1_i32
+    _4 = user copy _4 + const 1_i32
     _0 = const ~
     Drop(_1)
     return

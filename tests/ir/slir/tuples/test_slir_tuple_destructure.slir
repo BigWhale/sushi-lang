@@ -89,7 +89,7 @@ fn main() -> i32 {
     _16 = copy (_15.1)
     StorageDead(_15)
     StorageLive(_17)
-    _17 = copy _16 + const 1_i32
+    _17 = user copy _16 + const 1_i32
     StorageLive(_18)
     _18 = call builtin interp@(i32, string, i32)(copy _14 @guaranteed, const " " @guaranteed, copy _17 @guaranteed)
     StorageLive(_19)

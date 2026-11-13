@@ -101,17 +101,17 @@ fn last_small(_1: i32 @guaranteed) -> i32 {
     StorageLive(_2)
     _2 = const 0_i32
     StorageLive(_3)
-    _3 = neg const 1_i32
+    _3 = const -1_i32
     goto -> bb1
 
   bb1:
     StorageLive(_4)
-    _4 = copy _2 < copy _1
+    _4 = user copy _2 < copy _1
     switchInt(copy _4) -> [0: bb3, otherwise: bb2]
 
   bb2:
     StorageDead(_4)
-    _2 = copy _2 + const 1_i32
+    _2 = user copy _2 + const 1_i32
     _5 = copy _2 >= const 0_i32
     switchInt(copy _5) -> [0: bb7, otherwise: bb5]
 
@@ -187,7 +187,7 @@ fn main() -> i32 {
     StorageDead(_4)
     StorageDead(_3)
     StorageLive(_5)
-    _5 = neg const 9_i32
+    _5 = const -9_i32
     StorageLive(_6)
     _6 = call @class(copy _5 @guaranteed)
     StorageLive(_7)
@@ -196,7 +196,7 @@ fn main() -> i32 {
     StorageDead(_6)
     StorageDead(_5)
     StorageLive(_8)
-    _8 = neg const 1_i32
+    _8 = const -1_i32
     StorageLive(_9)
     _9 = call @class(copy _8 @guaranteed)
     StorageLive(_10)

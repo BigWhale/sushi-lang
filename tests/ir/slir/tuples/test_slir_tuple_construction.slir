@@ -4,7 +4,7 @@ fn bump(_1: i32 @inout) -> i32 {
     let _0: i32
 
   bb0:
-    _1 = copy _1 + const 1_i32
+    _1 = user copy _1 + const 1_i32
     _0 = copy _1
     return
 }
@@ -15,7 +15,7 @@ fn pair(_1: i32 @guaranteed) -> (i32, i32) {
 
   bb0:
     StorageLive(_2)
-    _2 = copy _1 + const 1_i32
+    _2 = user copy _1 + const 1_i32
     _0 = (copy _1, move _2)
     StorageDead(_2)
     return

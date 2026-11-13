@@ -113,7 +113,7 @@ fn Words.next(_1: Words @inout) -> Maybe@(string) {
     StorageLive(_3)
     _3 = call builtin array.len(copy (_1.0) @guaranteed)
     StorageLive(_4)
-    _4 = copy _2 >= copy _3
+    _4 = user copy _2 >= copy _3
     StorageDead(_3)
     StorageDead(_2)
     switchInt(copy _4) -> [0: bb2, otherwise: bb1]
@@ -128,9 +128,9 @@ fn Words.next(_1: Words @inout) -> Maybe@(string) {
     goto -> bb3
 
   bb3:
-    (_1.1) = copy (_1.1) + const 1_i32
+    (_1.1) = user copy (_1.1) + const 1_i32
     StorageLive(_5)
-    _5 = copy (_1.1) - const 1_i32
+    _5 = user copy (_1.1) - const 1_i32
     StorageLive(_6)
     _6 = len((_1.0))
     _7 = copy _5 as u32

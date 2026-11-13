@@ -1,0 +1,16 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "12\n13\n14\n11\n"
+# EXPECT_DUMP_SLIR: test_slir_user_arithmetic_range.slir
+#
+# The user wrote `n + 2` and `i + 10`: each carries the `user` mark. The compiler made the
+# count of each range (`end - start`, and `+ 1` for `..=`), the step of the counter (`+ 1`)
+# and the item (`first + k`, and `first - k` for `.rev()`): these have no mark, so a later
+# check of user arithmetic leaves them unchecked.
+
+fn main() i32:
+    let i32 n = 2
+    foreach(i in n..=(n + 2)):
+        println(i + 10)
+    foreach(i in (1..n).rev()):
+        println(i + 10)
+    return 0

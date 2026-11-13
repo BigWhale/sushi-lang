@@ -12,8 +12,8 @@ fn count(_1: string @guaranteed, _2: string[] @guaranteed) -> i32 {
     StorageLive(_4)
     _4 = call builtin string.len(copy _1 @guaranteed)
     StorageLive(_5)
-    _5 = copy _3 + copy _4
-    _0 = copy _5 - const 1_i32
+    _5 = user copy _3 + copy _4
+    _0 = user copy _5 - const 1_i32
     StorageDead(_5)
     StorageDead(_4)
     StorageDead(_3)

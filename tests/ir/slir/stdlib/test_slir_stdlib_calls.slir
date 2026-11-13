@@ -78,7 +78,7 @@ fn main() -> i32 {
     StorageDead(_10)
     StorageDead(_9)
     StorageLive(_14)
-    _14 = neg const 1_i64
+    _14 = const -1_i64
     StorageLive(_15)
     _15 = move _14 as i64
     StorageLive(_16)

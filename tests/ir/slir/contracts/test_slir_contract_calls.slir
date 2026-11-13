@@ -23,7 +23,7 @@ fn main() -> i32 {
     StorageLive(_3)
     _3 = call builtin hash@(Point)(copy _1 @guaranteed)
     StorageLive(_4)
-    _4 = copy _2 == copy _3
+    _4 = user copy _2 == copy _3
     StorageLive(_5)
     _5 = call builtin println@(bool)(copy _4 @guaranteed)
     StorageDead(_5)

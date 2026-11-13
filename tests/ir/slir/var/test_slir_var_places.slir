@@ -6,7 +6,7 @@ fn bump(_1: i32 @inout) -> ~ {
     let _0: ~
 
   bb0:
-    _1 = copy _1 + const 1_i32
+    _1 = user copy _1 + const 1_i32
     _0 = const ~
     return
 }
@@ -75,35 +75,35 @@ fn main() -> i32 {
     StorageDead(_1)
     StorageLive(_7)
     _7 = copy @test_slir_var_places$counter
-    @test_slir_var_places$counter = copy _7 + const 5_i32
+    @test_slir_var_places$counter = user copy _7 + const 5_i32
     StorageDead(_7)
     StorageLive(_8)
     _8 = call @bump(copy @test_slir_var_places$counter @inout)
     StorageDead(_8)
     StorageLive(_9)
     _9 = copy (@test_slir_var_places$origin.1)
-    (@test_slir_var_places$origin.1) = copy _9 * const 2_i32
+    (@test_slir_var_places$origin.1) = user copy _9 * const 2_i32
     StorageDead(_9)
     StorageLive(_10)
     _10 = copy (@test_slir_var_places$table[const 2_i32])
     StorageLive(_11)
     _11 = copy (@test_slir_var_places$origin.0)
     StorageLive(_12)
-    _12 = copy _11 * const 6_i32
-    (@test_slir_var_places$origin.0) = copy _10 + copy _12
+    _12 = user copy _11 * const 6_i32
+    (@test_slir_var_places$origin.0) = user copy _10 + copy _12
     StorageDead(_12)
     StorageDead(_11)
     StorageDead(_10)
     StorageLive(_13)
     _13 = copy (@test_slir_var_places$table[const 1_i32])
     StorageLive(_14)
-    _14 = copy _13 + const 10_i32
+    _14 = user copy _13 + const 10_i32
     (@test_slir_var_places$table[const 1_i32]) = copy _14
     StorageDead(_14)
     StorageDead(_13)
     StorageLive(_15)
     _15 = copy @units$tally$count
-    @units$tally$count = copy _15 + const 1_i32
+    @units$tally$count = user copy _15 + const 1_i32
     StorageDead(_15)
     StorageLive(_16)
     _16 = copy @test_slir_var_places$counter

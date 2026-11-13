@@ -33,7 +33,7 @@ fn main() -> i32 {
     _6 = call builtin println@(bool)(const true @guaranteed)
     StorageDead(_6)
     StorageLive(_7)
-    _7 = neg const -128_i8
+    _7 = const -128_i8
     StorageLive(_8)
     _8 = const -1_i8
     StorageLive(_9)
@@ -42,7 +42,7 @@ fn main() -> i32 {
     StorageLive(_10)
     _10 = call builtin println@(i8)(copy _8 @guaranteed)
     StorageDead(_10)
-    _0 = const 43_i32 - const 43_i32
+    _0 = user const 43_i32 - const 43_i32
     StorageDead(_8)
     StorageDead(_7)
     return

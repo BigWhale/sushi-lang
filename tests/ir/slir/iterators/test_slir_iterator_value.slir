@@ -139,7 +139,7 @@ fn Spell.next(_1: Spell @inout) -> Maybe@(string) {
 
   bb0:
     StorageLive(_2)
-    _2 = copy (_1.0) == const 0_i32
+    _2 = user copy (_1.0) == const 0_i32
     switchInt(copy _2) -> [0: bb2, otherwise: bb1]
 
   bb1:
@@ -152,9 +152,9 @@ fn Spell.next(_1: Spell @inout) -> Maybe@(string) {
     goto -> bb3
 
   bb3:
-    (_1.0) = copy (_1.0) - const 1_i32
+    (_1.0) = user copy (_1.0) - const 1_i32
     StorageLive(_3)
-    _3 = copy (_1.0) + const 1_i32
+    _3 = user copy (_1.0) + const 1_i32
     StorageLive(_4)
     _4 = call builtin interp@(i32)(copy _3 @guaranteed)
     _0 = Maybe::Some(move _4)

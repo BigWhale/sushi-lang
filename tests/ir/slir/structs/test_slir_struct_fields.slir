@@ -12,7 +12,7 @@ fn sum(_1: Point @guaranteed) -> i32 {
     let _0: i32
 
   bb0:
-    _0 = copy (_1.0) + copy (_1.1)
+    _0 = user copy (_1.0) + copy (_1.1)
     return
 }
 
@@ -20,7 +20,7 @@ fn moved(_1: Point @inout) -> ~ {
     let _0: ~
 
   bb0:
-    (_1.0) = copy (_1.0) + const 10_i32
+    (_1.0) = user copy (_1.0) + const 10_i32
     (_1.1) = const 13_i32
     _0 = const ~
     return
@@ -116,7 +116,7 @@ fn main() -> i32 {
     StorageLive(_18)
     _18 = Flags(const true, const 0_i32)
     StorageLive(_19)
-    _19 = copy (_18.1) > const 0_i32
+    _19 = user copy (_18.1) > const 0_i32
     StorageLive(_20)
     _20 = copy _19
     switchInt(copy _20) -> [0: bb2, otherwise: bb1]

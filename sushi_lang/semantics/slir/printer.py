@@ -177,6 +177,11 @@ def _switch(term: tm.SwitchInt) -> str:
     return f"switchInt({show(term.operand)}) -> [{', '.join([*arms, f'otherwise: {otherwise}'])}]"
 
 
+def _user(user: bool) -> str:
+    """The mark of an operator that the user wrote."""
+    return "user " if user else ""
+
+
 def _trap(term: tm.Trap) -> str:
     return f"trap {term.code}({_each(term.args)})" if term.args else f"trap {term.code}"
 
@@ -210,8 +215,8 @@ PRINTERS: dict[type, Render] = {
     r.AggIterator: lambda kind: f"iterator {_iterator_source(kind.source)}, heap: {str(kind.heap).lower()}",
     # rvalues (ir.md 8.7)
     r.Use: lambda n: show(n.operand),
-    r.Binary: lambda n: f"{show(n.left)} {n.op} {show(n.right)}",
-    r.Unary: lambda n: f"{n.op} {show(n.operand)}",
+    r.Binary: lambda n: f"{_user(n.user)}{show(n.left)} {n.op} {show(n.right)}",
+    r.Unary: lambda n: f"{_user(n.user)}{n.op} {show(n.operand)}",
     r.Cast: lambda n: f"{show(n.operand)} as {_type(n.target)}",
     r.Aggregate: _aggregate,
     r.Discriminant: lambda n: f"discriminant({show(n.place)})",
