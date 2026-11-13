@@ -49,7 +49,8 @@ from sushi_lang.backend.types.arrays.indexing import array_length, element_addre
 from sushi_lang.backend.types.arrays.runs import (
     emit_array_value, emit_aggregate_copy, emit_fixed_array_into, moves_by_address)
 from sushi_lang.backend.types.structs import emit_struct_into, emit_struct_value
-from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS
+from sushi_lang.semantics.operators import (
+    ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS, XOR_OP)
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -340,7 +341,7 @@ def _binary(state: FunctionState, rvalue: r.Binary) -> ir.Value:
     if op in COMPARISON_OPS:
         answer = emit_number_comparison(codegen, op, left, right, ty)
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
-    if op == "xor":
+    if op == XOR_OP:
         return emit_xor(codegen, left, right, to_i1=False)
     state.fault(f"the operator '{op}' is control flow, never an rvalue")
 

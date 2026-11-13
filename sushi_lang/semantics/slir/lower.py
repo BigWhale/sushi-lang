@@ -65,6 +65,7 @@ from sushi_lang.semantics.shir.paths import reached_statements
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.shir.literals import negated_int_literal
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
@@ -73,9 +74,11 @@ from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_conversions as conversions
+from sushi_lang.semantics.slir import lower_division as division
 from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_globals as globals_
+from sushi_lang.semantics.operators import DIVISION_OPS, SHORT_CIRCUIT_OPS
 from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_takes as takes
 from sushi_lang.semantics.slir import lower_try as tries
@@ -495,6 +498,9 @@ class Lowering:
                                     detail=f"a move row on a {type(expr).__name__}, which is no place")
         if isinstance(expr, e.Lit):
             return p.Const(k.of_literal(expr, self.typeck))
+        literal = negated_int_literal(expr)
+        if literal is not None:
+            return p.Const(k.of_literal(literal, self.typeck, expr))
         if isinstance(expr, e.ConstRef):
             return p.Const(self.constant(expr))
         temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc,
@@ -522,13 +528,18 @@ class Lowering:
         return r.Use(self.operand(expr, in_place=True))
 
     def binary(self, node: e.Binary) -> Value:
-        if node.op in ("and", "or"):
+        if node.op in SHORT_CIRCUIT_OPS:
             return ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
         lhs = agg.settled(self, node.lhs, self.operand(node.lhs), (node.rhs,))
-        return r.Binary(node.op, lhs, self.operand(node.rhs))
+        rhs = self.operand(node.rhs)
+        if node.op in DIVISION_OPS:
+            division.check_division(self, lhs, rhs, self.type_of(node), node.loc)
+        return r.Binary(node.op, lhs, rhs, user=True)
 
     def unary(self, node: e.Unary) -> Value:
-        return r.Unary(node.op, self.operand(node.operand))
+        if negated_int_literal(node) is not None:
+            return r.Use(self.operand(node))
+        return r.Unary(node.op, self.operand(node.operand), user=True)
 
     def enum_init(self, node: e.EnumInit) -> Value:
         """An enum variant as an aggregate of its instance type (L10)."""

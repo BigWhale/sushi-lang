@@ -108,7 +108,7 @@ fn main() -> i32 {
     StorageLive(_21)
     _21 = call builtin hashmap.len(copy _1 @guaranteed)
     StorageLive(_22)
-    _22 = copy _21 + const 1_i32
+    _22 = user copy _21 + const 1_i32
     StorageLive(_23)
     _23 = copy _12
     StorageLive(_24)

@@ -3762,6 +3762,22 @@ A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` 
 
 `.expect(message)` found an `Err` in a `Result`, or `None` in a `Maybe`. The text gives the file, the line and the column of the call, with the file named as a compile-time diagnostic names it, and then the message. The message is evaluated only when the call fails. The program stops with exit code 1, and no error channel catches it. Use `??`, `.realise(default)` or `match` when a caller can handle the failure.
 
+### RE2030 {#re2030}
+
+**Error** · runtime
+
+**Message:** `integer division by zero`
+
+`a / b` or `a % b` on an integer type found `b` equal to 0 at run time. A division by zero has no answer, so the program stops with exit code 1 in every overflow mode (see [the overflow-mode decision](adr/0002-overflow-mode.md)). A divisor of 0 that the compiler can read is the compile error [CE0112](#ce0112), in a constant and in a body. A divisor that is a constant other than 0 gets no check. A float division by zero is not this error: it gives an infinity or a NaN.
+
+### RE2031 {#re2031}
+
+**Error** · runtime
+
+**Message:** `integer division overflow: the smallest value of a signed type divided by -1`
+
+`a / b` or `a % b` on a signed integer type found `a` equal to the smallest value of the type and `b` equal to -1 at run time. The quotient is one more than the largest value, so the type cannot hold it, and the machine instruction of `%` divides first. The program stops with exit code 1. This is a code of its own, and not [RE2030](#re2030), because the divisor is not 0. It is the division case of the integer overflow rule: when the overflow modes come, `trap` keeps this stop, and `wrap` gives the smallest value for `/` and 0 for `%`.
+
 ## NExxxx: Nori package manager errors {#nexxxx}
 
 The package manager, `nori`, gives these errors. The ranges are: NE00xx internal, NE10xx the manifest, NE20xx the archive, NE30xx the installed packages, NE40xx the operating system, NE50xx the package repository.

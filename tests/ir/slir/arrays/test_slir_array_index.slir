@@ -6,7 +6,7 @@ fn first(_1: i32[] @inout) -> i32 {
 
   bb0:
     StorageLive(_2)
-    _2 = copy (_1[const 0_i32]) + const 100_i32
+    _2 = user copy (_1[const 0_i32]) + const 100_i32
     (_1[const 0_i32]) = copy _2
     StorageDead(_2)
     _0 = copy (_1[const 0_i32])
@@ -102,9 +102,9 @@ fn main() -> i32 {
 
   bb4:
     StorageLive(_13)
-    _13 = copy (_1[copy _5]) + copy (_2[copy _8])
+    _13 = user copy (_1[copy _5]) + copy (_2[copy _8])
     StorageLive(_14)
-    _14 = copy _3 - const 1_i32
+    _14 = user copy _3 - const 1_i32
     StorageLive(_15)
     _15 = len(_2)
     _16 = copy _14 as u32
@@ -134,7 +134,7 @@ fn main() -> i32 {
 
   bb8:
     StorageLive(_22)
-    _22 = copy (_1[const 1_i32]) + copy (_1[copy _19])
+    _22 = user copy (_1[const 1_i32]) + copy (_1[copy _19])
     StorageLive(_23)
     _23 = len(_2)
     _24 = copy _23 as u32
@@ -146,9 +146,9 @@ fn main() -> i32 {
 
   bb10:
     StorageLive(_26)
-    _26 = copy _22 + copy (_2[const 0_i32])
+    _26 = user copy _22 + copy (_2[const 0_i32])
     StorageLive(_27)
-    _27 = copy _3 - const 1_i32
+    _27 = user copy _3 - const 1_i32
     StorageLive(_28)
     _28 = len(_2)
     _29 = copy _27 as u32
@@ -161,7 +161,7 @@ fn main() -> i32 {
 
   bb12:
     StorageLive(_32)
-    _32 = copy _26 - copy (_2[copy _27])
+    _32 = user copy _26 - copy (_2[copy _27])
     StorageLive(_33)
     _33 = copy _3
     StorageLive(_34)
@@ -176,7 +176,7 @@ fn main() -> i32 {
 
   bb14:
     StorageLive(_38)
-    _38 = copy _32 + copy (_2[copy _33])
+    _38 = user copy _32 + copy (_2[copy _33])
     StorageLive(_39)
     _39 = call builtin println@(i32)(copy _38 @guaranteed)
     StorageDead(_39)
@@ -207,7 +207,7 @@ fn main() -> i32 {
 
   bb16:
     StorageLive(_45)
-    _45 = copy (_4[const 1_i32]) - const 107_u8
+    _45 = user copy (_4[const 1_i32]) - const 107_u8
     StorageLive(_46)
     _46 = call builtin println@(u8)(copy _45 @guaranteed)
     StorageDead(_46)
@@ -222,7 +222,7 @@ fn main() -> i32 {
     StorageDead(_48)
     StorageDead(_47)
     StorageLive(_50)
-    _50 = copy _3 - const 1_i32
+    _50 = user copy _3 - const 1_i32
     _51 = copy _50 as u32
     _52 = copy _51 < const 2_u32
     switchInt(copy _52) -> [0: bb17, otherwise: bb18]

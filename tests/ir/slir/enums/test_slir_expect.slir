@@ -9,9 +9,9 @@ fn half(_1: i32 @guaranteed) -> Result@(i32, Odd) {
 
   bb0:
     StorageLive(_2)
-    _2 = copy _1 % const 2_i32
+    _2 = user copy _1 % const 2_i32
     StorageLive(_3)
-    _3 = copy _2 == const 1_i32
+    _3 = user copy _2 == const 1_i32
     StorageDead(_2)
     switchInt(copy _3) -> [0: bb2, otherwise: bb1]
 
@@ -29,7 +29,7 @@ fn half(_1: i32 @guaranteed) -> Result@(i32, Odd) {
 
   bb3:
     StorageLive(_5)
-    _5 = copy _1 / const 2_i32
+    _5 = user copy _1 / const 2_i32
     _0 = Result::Ok(move _5)
     StorageDead(_5)
     return
@@ -41,7 +41,7 @@ fn find(_1: i32 @guaranteed) -> Maybe@(i32) {
 
   bb0:
     StorageLive(_2)
-    _2 = copy _1 > const 0_i32
+    _2 = user copy _1 > const 0_i32
     switchInt(copy _2) -> [0: bb2, otherwise: bb1]
 
   bb1:

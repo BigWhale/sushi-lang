@@ -231,6 +231,8 @@ SHAPES: list[tuple[object, str]] = [
     (r.Use(_copy(1)), "copy _1"),
     (r.Binary("+", _copy(1), _const(k.Int(1, I32))), "copy _1 + const 1_i32"),
     (r.Unary("neg", _copy(1)), "neg copy _1"),
+    (r.Binary("+", _copy(1), _copy(2), user=True), "user copy _1 + copy _2"),
+    (r.Unary("neg", _copy(1), user=True), "user neg copy _1"),
     (r.Cast(_copy(1), BuiltinType.I64), "copy _1 as i64"),
     (r.Aggregate(r.AggVariant(STD_ERROR, "Error"), ()), "StdError::Error"),
     (r.Aggregate(r.AggVariant(RESULT_STRING, "Ok"), (_move(2),)), "Result::Ok(move _2)"),

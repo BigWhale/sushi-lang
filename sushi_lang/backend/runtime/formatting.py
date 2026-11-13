@@ -8,6 +8,7 @@ from llvmlite import ir
 from sushi_lang.backend.constants.llvm_values import make_i64_const
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.runtime.constants import FORMAT_STRINGS, STDOUT_FD
+from sushi_lang.backend.string_constants import text_global
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -206,22 +207,11 @@ class FormattingOperations:
 
         return self.codegen.builder.select(bool_value, true_str, false_str)
 
-    def _create_format_string(self, name: str, format_str: str) -> ir.GlobalVariable:
-        """Generic method to create a global format string constant."""
-        data = format_str.encode('utf-8') + b'\0'
-        arr_ty = ir.ArrayType(self.codegen.i8, len(data))
-        gv = ir.GlobalVariable(self.codegen.module, arr_ty, name=f".fmt.{name}")
-        gv.linkage = "private"
-        gv.global_constant = True
-        gv.unnamed_addr = "unnamed_addr"
-        gv.initializer = ir.Constant(arr_ty, bytearray(data))
-        return gv
-
     def _format_global(self, name: str) -> ir.GlobalVariable:
         """The global that holds the `FORMAT_STRINGS` text of `name`, made on first use."""
         existing = self._format_strings.get(name)
         if existing is None:
-            existing = self._create_format_string(name, FORMAT_STRINGS[name])
+            existing = text_global(self.codegen.module, f".fmt.{name}", FORMAT_STRINGS[name])
             self._format_strings[name] = existing
         return existing
 

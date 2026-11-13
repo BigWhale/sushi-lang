@@ -108,7 +108,7 @@ fn main() -> i32 {
     BeginBorrow(b1, _16, peek, for _19)
     _19 = copy ((_17 as Some).0)
     StorageLive(_20)
-    _20 = copy (_19.0) == const 1_i32
+    _20 = user copy (_19.0) == const 1_i32
     switchInt(copy _20) -> [0: bb10, otherwise: bb9]
 
   bb7:
@@ -170,7 +170,7 @@ fn user_main.__lambda_0(_1: __closure_env@() @in_guaranteed, _2: i32 @guaranteed
     _4 = copy _2
     StorageLive(_5)
     _5 = call builtin string.len(copy _3 @guaranteed)
-    _0 = copy _4 + copy _5
+    _0 = user copy _4 + copy _5
     StorageDead(_5)
     StorageDead(_4)
     return

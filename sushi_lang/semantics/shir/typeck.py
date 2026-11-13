@@ -172,7 +172,7 @@ class TypeckResults(SideTable):
         return self._element_types.get((node, target))
 
     def value_of(self, node: ShirId) -> Optional[ConstantValue]:
-        """The value of an integer literal or of a `ConstRef`."""
+        """The value of an integer literal, of a negated integer literal or of a `ConstRef`."""
         return self._values.get(node)
 
     def global_of(self, node: ShirId) -> Optional[str]:

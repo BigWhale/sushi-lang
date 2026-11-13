@@ -6,7 +6,7 @@ fn make(_1: i32 @guaranteed) -> Maybe@(string) {
 
   bb0:
     StorageLive(_2)
-    _2 = copy _1 > const 0_i32
+    _2 = user copy _1 > const 0_i32
     switchInt(copy _2) -> [0: bb2, otherwise: bb1]
 
   bb1:

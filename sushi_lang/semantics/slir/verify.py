@@ -77,6 +77,7 @@ from sushi_lang.semantics.slir.verify_rules import (
     INTEGER_SWITCH, KNOWN_BLOCKS, NUMERIC_CAST, ONE_TERMINATOR, OWNING_DROP, PEEK_RETURN,
     SHORT_CIRCUIT, SPANS, STRUCT_VALUE, TAG_SWITCH, TRAP, TYPED_LOCALS, TYPED_PLACES, VIEW,
 )
+from sushi_lang.semantics.operators import SHORT_CIRCUIT_OPS
 from sushi_lang.semantics.typesys import (
     ArrayType, FunctionType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
     StructType, Type, UnknownType, owns_resource,
@@ -404,7 +405,7 @@ class Check:
                 self.constant(part, span)
 
     def rvalue(self, value: r.Rvalue, span: Span) -> None:
-        if isinstance(value, r.Binary) and value.op in ("and", "or"):
+        if isinstance(value, r.Binary) and value.op in SHORT_CIRCUIT_OPS:
             self.fail(SHORT_CIRCUIT, f"a binary carries '{value.op}'", span)
         for part in r.operands_of(value):
             if isinstance(part, (p.Copy, p.Move, p.Const)):

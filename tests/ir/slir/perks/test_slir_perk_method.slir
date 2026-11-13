@@ -28,7 +28,7 @@ fn C.bump(_1: C @inout, _2: i32 @guaranteed) -> ~ {
     let _0: ~
 
   bb0:
-    (_1.0) = copy (_1.0) + copy _2
+    (_1.0) = user copy (_1.0) + copy _2
     _0 = const ~
     return
 }

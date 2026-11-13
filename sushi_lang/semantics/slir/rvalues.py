@@ -166,12 +166,14 @@ class Binary:
     op: BinOp
     left: Operand
     right: Operand
+    user: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Unary:
     op: UnOp
     operand: Operand
+    user: bool = False
 
 
 @dataclass(frozen=True, slots=True)

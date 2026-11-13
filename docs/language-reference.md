@@ -820,8 +820,8 @@ on a `u8` is 144, and `~0` on a `u32` is 4294967295.
 An `as` cast is the escape. It asks for the bit pattern, so it truncates: `300 as u8` is
 44. A wider type is the other answer.
 
-**Run time is not checked.** Only an expression the compiler reads is checked, so two
-locals wrap:
+**Run time does not check `+`, `-`, `*` and unary minus.** Only an expression the
+compiler reads is checked, so two locals wrap:
 
 ```sushi
 fn main() i32:
@@ -829,6 +829,19 @@ fn main() i32:
     let u8 b = 100
     let u8 sum = a + b        # 44 at run time, and nothing reports it
     println(sum)
+    return 0
+```
+
+**A division is checked at run time.** An integer `/` or `%` whose divisor is 0 stops the
+program with [RE2030](error-catalog.md#re2030), and on a signed type the smallest value
+over `-1` stops it with [RE2031](error-catalog.md#re2031). The program exits 1. A float
+division by zero gives an infinity or a NaN, and nothing reports it.
+
+```sushi
+fn main(string[] args) i32:
+    let i32 a = 7
+    let i32 b = args.len() - 1    # 0 when the program gets no argument
+    println("{a / b}")            # RE2030: integer division by zero
     return 0
 ```
 

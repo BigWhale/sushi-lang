@@ -1,0 +1,11 @@
+# An unsigned remainder by a zero that the compiler cannot read stops the program.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2030"
+# EXPECT_STDERR_CONTAINS: "integer division by zero"
+
+fn main(string[] args) i32:
+    let u8 a = 7
+    let u8 b = (args.len() - 1) as u8
+    println("{a % b}")
+    return 0

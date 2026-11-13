@@ -93,7 +93,8 @@ class Flow:
             out = self.through(block, states[block.id])
             for target in successors(block.terminator):
                 old = states.get(target)
-                new = out if old is None else tuple(a | b for a, b in zip(old, out, strict=True))
+                new = (out if old is None or old == out
+                       else tuple(a | b for a, b in zip(old, out, strict=True)))
                 if new != old:
                     states[target] = new
                     work.append(target)

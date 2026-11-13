@@ -12,7 +12,7 @@ fn longer(_1: string @guaranteed, _2: string @guaranteed) -> string {
     StorageLive(_4)
     _4 = call builtin string.len(copy _2 @guaranteed)
     StorageLive(_5)
-    _5 = copy _3 >= copy _4
+    _5 = user copy _3 >= copy _4
     StorageDead(_4)
     StorageDead(_3)
     switchInt(copy _5) -> [0: bb2, otherwise: bb1]
@@ -53,7 +53,7 @@ fn head(_1: i32[] @guaranteed, _2: i32 @guaranteed) -> Result@(i32[], Short) {
     StorageLive(_4)
     _4 = call builtin array.len(copy _1 @guaranteed)
     StorageLive(_5)
-    _5 = copy _3 > copy _4
+    _5 = user copy _3 > copy _4
     StorageDead(_4)
     StorageDead(_3)
     switchInt(copy _5) -> [0: bb2, otherwise: bb1]
@@ -195,7 +195,7 @@ fn main() -> i32 {
     StorageLive(_7)
     _7 = call @count(copy _6 @guaranteed, const 2_i32 @guaranteed)
     StorageLive(_8)
-    _8 = neg const 1_i32
+    _8 = const -1_i32
     StorageLive(_9)
     _10 = discriminant(_7)
     switchInt(copy _10) -> [0: bb1, otherwise: bb2]
@@ -221,7 +221,7 @@ fn main() -> i32 {
     StorageLive(_13)
     _13 = call @count(copy _6 @guaranteed, const 9_i32 @guaranteed)
     StorageLive(_14)
-    _14 = neg const 1_i32
+    _14 = const -1_i32
     StorageLive(_15)
     _16 = discriminant(_13)
     switchInt(copy _16) -> [0: bb4, otherwise: bb5]

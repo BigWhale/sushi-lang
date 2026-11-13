@@ -96,6 +96,27 @@ _add(ErrorMessage("RE2029", Severity.ERROR,
     "it. Use `??`, `.realise(default)` or `match` when a caller can handle the failure "
     "(docs/design/ir.md 8.8)."))
 
+# An integer division or remainder by zero (#1295)
+_add(ErrorMessage("RE2030", Severity.ERROR,
+    "integer division by zero",
+    Category.RUNTIME, "`a / b` or `a % b` on an integer type found `b` equal to 0 at run "
+    "time. A division by zero has no answer, so the program stops with exit code 1 in every "
+    "overflow mode (docs/adr/0002-overflow-mode.md). A divisor of 0 that the compiler can "
+    "read is the compile error CE0112, in a constant and in a body. A divisor that is a "
+    "constant other than 0 gets no check. A float division by zero is not this error: it "
+    "gives an infinity or a NaN."))
+
+# A signed MIN / -1 or MIN % -1 (#1295)
+_add(ErrorMessage("RE2031", Severity.ERROR,
+    "integer division overflow: the smallest value of a signed type divided by -1",
+    Category.RUNTIME, "`a / b` or `a % b` on a signed integer type found `a` equal to the "
+    "smallest value of the type and `b` equal to -1 at run time. The quotient is one more "
+    "than the largest value, so the type cannot hold it, and the machine instruction of "
+    "`%` divides first. The program stops with exit code 1. This is a code of its own, and "
+    "not RE2030, because the divisor is not 0. It is the division case of the integer "
+    "overflow rule (docs/adr/0002-overflow-mode.md): when the overflow modes come, `trap` "
+    "keeps this stop, and `wrap` gives the smallest value for `/` and 0 for `%`."))
+
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,
     "a foreign call returned a null pointer where its declaration says non-null",

@@ -24,7 +24,7 @@ fn main() -> i32 {
     StorageDead(_3)
     StorageLive(_5)
     _5 = call builtin string.len(const "Mostly Harmless" @guaranteed)
-    _0 = copy _5 - const 15_i32
+    _0 = user copy _5 - const 15_i32
     StorageDead(_5)
     return
 }

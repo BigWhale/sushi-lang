@@ -27,7 +27,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.const_eval import emit_string_plus
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.operators import (
-    ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, DIVISION_OPS, SHIFT_OPS, TYPE_KEEPING_UNARY)
+    ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, COMPLEMENT_OP, DIVISION_OPS, LOGICAL_OPS,
+    NEG_OP, NOT_OP, SHIFT_OPS, TYPE_KEEPING_UNARY)
 from sushi_lang.semantics.passes.types.expressions import (
     is_string_plus, reject_impossible_shift_count,
     reject_mixed_numeric_operands, reject_non_bool_condition, reject_non_integer_operands,
@@ -43,7 +44,6 @@ from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 
-_LOGICAL = ("and", "or", "xor")
 #: The binary operators whose two operands have the type of the operation.
 _SAME_TYPE = ARITHMETIC_OPS + BITWISE_OPS
 
@@ -59,20 +59,20 @@ def check_condition(validator: TypeValidator, cond: e.ShirExpr) -> bool:
 def check_unary(validator: TypeValidator, node: e.Unary,
                 expected: Optional[Type]) -> Optional[Type]:
     operand = node.operand
-    if node.op == "not":
+    if node.op == NOT_OP:
         ty = visit.check_expr(validator, operand, _offered(validator, operand, BuiltinType.BOOL))
         if not _rejects_a_pointer(validator, node, ty):
             reject_non_bool_condition(validator, operand, ty)
         return BuiltinType.BOOL
     position = _numeric(expected)
-    if node.op == "neg" and isinstance(operand, e.Lit):
+    if node.op == NEG_OP and isinstance(operand, e.Lit):
         negated = _type_negated_literal(validator, node, operand, position)
         if negated is not None:
             return visit.answer(validator, operand, negated, wraps=True)
     ty = visit.check_expr(validator, operand, _given(operand, position))
     if ty is None or _rejects_a_pointer(validator, node, ty):
         return None
-    if node.op == "~":
+    if node.op == COMPLEMENT_OP:
         reject_non_integer_operands(validator, "~", [(operand, ty)])
         return ty
     if reject_non_numeric_arithmetic(validator, "-", [(operand, ty)]):
@@ -97,7 +97,7 @@ def check_binary(validator: TypeValidator, node: e.Binary,
     pointer = (_rejects_a_pointer(validator, node, left)
                or _rejects_a_pointer(validator, node, right))
     op = node.op
-    if op in _LOGICAL:
+    if op in LOGICAL_OPS:
         if not pointer:
             reject_non_bool_condition(validator, node.lhs, left)
             reject_non_bool_condition(validator, node.rhs, right)
@@ -147,7 +147,7 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
                     expected: Optional[Type]) -> tuple[Optional[Type], Optional[Type]]:
     """The types of the two operands, each checked at the type of its position."""
     lhs, rhs = node.lhs, node.rhs
-    if node.op in _LOGICAL:
+    if node.op in LOGICAL_OPS:
         return (visit.check_expr(validator, lhs, _offered(validator, lhs, BuiltinType.BOOL)),
                 visit.check_expr(validator, rhs, _offered(validator, rhs, BuiltinType.BOOL)))
     if node.op in COMPARISON_OPS:

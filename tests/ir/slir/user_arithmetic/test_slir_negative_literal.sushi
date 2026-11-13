@@ -1,0 +1,14 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-128 -5 5 -1\n"
+# EXPECT_DUMP_SLIR: test_slir_negative_literal.slir
+#
+# A negative integer literal is one constant of its type: `-128` at `i8` is `const -128_i8`,
+# never a negation of `128`, which `i8` does not hold. A negation of a value is a `neg` that
+# the user wrote, and it carries the `user` mark.
+
+fn main() i32:
+    let i8 low = -128
+    let i32 five = -5
+    let i32 back = -five
+    println("{low} {five} {back} {five + 4}")
+    return 0

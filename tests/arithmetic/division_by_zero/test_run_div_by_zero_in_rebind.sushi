@@ -1,0 +1,14 @@
+# A division by zero in a rebind, on a parameter of a function, stops the program.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2030"
+# EXPECT_STDERR_CONTAINS: "integer division by zero"
+
+fn halve(i64 value, i64 by) i64:
+    let i64 result = value
+    result := result / by
+    return result
+
+fn main(string[] args) i32:
+    println("{halve(7, (args.len() - 1) as i64)}")
+    return 0

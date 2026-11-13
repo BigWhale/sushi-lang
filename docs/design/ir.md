@@ -685,7 +685,7 @@ the value of a pattern (7.8). That covers more than types:
 | the display type of each hole of an `Interp`, and of a `print` argument | the node's `shir_id`, per part |
 | the scrutinee type of a `Match`, and its integer type for literal and range arms | the `Match`'s `shir_id` |
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
-| the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
+| the value that an integer literal holds (8.5), the value of a negated integer literal, and the value of the constant that a `ConstRef` names | the `Lit`'s, the negation's or the `ConstRef`'s `shir_id` |
 | the symbol of the global of the `var` that a `StorageRef` names (`global_symbol`) | the `StorageRef`'s `shir_id` |
 | the source positions of a call of a function or a method with a `peek` return: the arguments whose owners the answer borrows (`sources_of`) | the call's `shir_id` |
 
@@ -3118,6 +3118,14 @@ type, so the value is carried unchanged. SLIR lowering makes the `Int` of a `Lit
 value row and decides nothing. The verifier rule "a constant in range" (8.13) holds the
 result.
 
+**A negated integer literal is one constant.** One predicate tells what it is
+(`negated_int_literal`, `semantics/shir/literals.py`). `visit.answer` also writes a value
+row for it: the value of the literal, negated and held at the type (`held_value` with
+`negated`). SLIR lowering makes one `Const` operand of that row (`Lowering.operand`), and no
+`Unary` and no temporary: `_7 = const -128_i8`, and `a / -2` divides by `const -2_i32`. So
+`-128` at `i8` negates no `128`, which `i8` does not hold, a later check of a negation never
+sees it, and the check of a division reads the divisor as a constant.
+
 **The value of a `ConstRef`.** A `ConstRef` is a `Const` operand with any row. Lowering
 reads the value row of the `ConstRef` (7.3), which holds the value of the constant (9.5), and
 makes the `Constant` of that value. A string constant is a `Str`: a literal, which owns no
@@ -3497,8 +3505,8 @@ is a name of the scope pass (`kept_constant_names`), so `typecheck` gives
 
 ```
 Rvalue = Use(Operand)
-       | Binary(op: BinOp, Operand, Operand)     # never `and`/`or` -- see 8.9
-       | Unary(op: UnOp, Operand)
+       | Binary(op: BinOp, Operand, Operand, user: bool)   # never `and`/`or` -- see 8.9
+       | Unary(op: UnOp, Operand, user: bool)
        | Cast(Operand, target: Type)
        | Aggregate(kind: AggKind, parts: [Operand])   # struct, tuple, enum variant, array,
                                                       # closure, iterator
@@ -3511,6 +3519,16 @@ Rvalue = Use(Operand)
 
 `Discriminant` exists because `SwitchInt` needs an integer, and a `match` or a `??` switches
 on a tag.
+
+**The user mark.** `user` on a `Binary` or a `Unary` is true when the user wrote the
+operator. Only the lowering of a SHIR `Binary` or `Unary` sets it. The compiler's own
+arithmetic has no mark: the counter of a counted loop (`+ 1`), the count of a range
+(`end - start`, and `+ 1` for `..=`), the item of a range (`first + k`, `first - k`), the
+inclusive end of a slice (`+ 1`), the bounds checks and the range tests of a `match`. The
+printer writes the mark before the operator text (`_3 = user copy _1 + copy _2`), and the
+verifier accepts both forms. The overflow mode (ADR 0002) checks only the marked
+arithmetic, because the compiler's arithmetic can need a value that the type of the user
+does not hold (the count of `i32.MIN..i32.MAX`).
 
 **An array value.** The kind of an array is `AggArray(ty, runs)`. `ty` is the `T[N]` or the
 `T[]` of the value, and `runs` holds one run for each run of the `ArrayInit`, in order:
@@ -3701,6 +3719,7 @@ backstop of the checker.
 | the concat peephole: a rebind `s := s.concat(x)` of a local whose old value the function holds, where the receiver of `concat` is the local itself | `Call(Builtin(string.concat_in_place), [(copy s @inout), (x @guaranteed)])` into a `~` temporary, and NO `Drop` of the old value: the emitter grows the buffer of `s` in place when `s` owns it, and copies it when `s` does not (`string_append`). The argument is evaluated first, and the call reads `s` after it: when the argument rebinds `s` through a `poke`, the append reads the new value of `s`. The local must hold a value of its own on the straight line: a live local, an `Inout` parameter or a `poke` address local. A local whose state is unknown or moved (a `Guaranteed` parameter before its first rebind) takes the general path (rule 6 of 8.10), and so does a local over which a borrow region is open at the rebind, and a field or an element target (`semantics/slir/lower_rebind.py`) |
 | `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index`. Over an owning element, rule 6 of 8.10: then `Drop(Index(place, i))` of the old element before the store, which moves the temporary (`part_write`, the drop from `drops.py`) |
 | `Slice` | the bounds into locals of the statement (an inclusive end plus one), `end <= len` and `start <= end` as `u32` compares, `&`, `SwitchInt`, `Trap("RE2028", [start, end, length])` on the failing edge, then the `Slice` into a view local; never unchecked. A check that the constant bounds prove is left out |
+| an integer `/` or `%` | the two operands, then `SwitchInt(divisor, [(0, zero_bb)], otherwise: next_bb)`; `zero_bb` ends in `Trap("RE2030", [])`. On a signed type the switch also has `(-1, minus_bb)`, and `minus_bb` is `SwitchInt(dividend, [(MIN, overflow_bb)], otherwise: next_bb)`; `overflow_bb` ends in `Trap("RE2031", [])`. Then the `Binary` in `next_bb`. The switches read the operands, so the check makes no local. A constant operand that proves a case false leaves out that case, and a switch with no case left is not emitted: a divisor of `-1` goes directly to the switch on the dividend |
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
 | `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload. An owning payload of a receiver that is a place is a `Clone(copy <projection>)`, because the receiver is a read (8.3); of a receiver that is a temporary it is a `Move` of the projection, which moves the temporary (8.7). A new value as the receiver is a temporary of its statement, which drops it where it is not moved. The blocks are made in the order fail, next |

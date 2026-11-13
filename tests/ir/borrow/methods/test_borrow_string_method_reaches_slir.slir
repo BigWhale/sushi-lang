@@ -25,7 +25,7 @@ fn main() -> i32 {
   bb1:
     StorageLive(_6)
     _6 = call builtin string.len(copy _1 @guaranteed)
-    _0 = copy _6 + copy _5
+    _0 = user copy _6 + copy _5
     StorageDead(_6)
     StorageDead(_5)
     StorageDead(_4)

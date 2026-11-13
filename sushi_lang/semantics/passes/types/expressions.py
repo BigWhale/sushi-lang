@@ -7,7 +7,7 @@ from sushi_lang.semantics.typesys import (
     BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.conversions import find_conversion
-from sushi_lang.semantics.operators import EQUALITY_OPS
+from sushi_lang.semantics.operators import ADD_OP, EQUALITY_OPS, NEG_OP
 from sushi_lang.semantics.type_predicates import (
     is_error_type, is_instance_of, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.generics.results import result_ok_err
@@ -76,7 +76,7 @@ def _check_cast_operand(validator: 'TypeValidator', operand: 'ShirExpr',
     that the type holds (`300 as u8` holds 44, `visit.answer`). The fold reads the operand
     at the target too (`fold._cast`). Any other operand gets no type from its position.
     """
-    literal = operand.operand if isinstance(operand, Unary) and operand.op == "neg" else operand
+    literal = operand.operand if isinstance(operand, Unary) and operand.op == NEG_OP else operand
     if not (is_integer_type(target) and isinstance(literal, Lit)
             and isinstance(literal.value, IntConst)):
         return visit.check_expr(validator, operand)
@@ -324,7 +324,7 @@ def is_string_plus(op: str, left_type: 'Optional[Type]',
     replaces it. The arithmetic operand rule steps over exactly this pair, because
     one fault reads better as one diagnostic.
     """
-    return op == "+" and BuiltinType.STRING in (left_type, right_type)
+    return op == ADD_OP and BuiltinType.STRING in (left_type, right_type)
 
 
 def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,

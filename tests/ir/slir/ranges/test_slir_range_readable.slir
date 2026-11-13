@@ -63,7 +63,7 @@ fn main() -> i32 {
 
   bb7:
     StorageDead(_9)
-    _7 = copy _7 + const 1_i32
+    _7 = user copy _7 + const 1_i32
     goto -> bb8
 
   bb8:

@@ -1,0 +1,60 @@
+unit test_slir_division_negative_divisor
+
+fn half(_1: i32 @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = user copy _1 / const -2_i32
+    return
+}
+
+fn rest(_1: i32 @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = user copy _1 % const -2_i32
+    return
+}
+
+fn flip(_1: i32 @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    switchInt(copy _1) -> [-2147483648: bb1, otherwise: bb2]
+
+  bb1:
+    trap RE2031
+
+  bb2:
+    _0 = user copy _1 / const -1_i32
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32
+    let _2: i32
+    let _3: i32
+    let _4: string
+    let _5: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @half(const 7_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = call @rest(const 7_i32 @guaranteed)
+    StorageLive(_3)
+    _3 = call @flip(const 7_i32 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin interp@(i32, string, i32, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    StorageDead(_5)
+    Drop(_4)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    _0 = const 0_i32
+    return
+}

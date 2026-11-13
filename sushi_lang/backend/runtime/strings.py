@@ -9,6 +9,7 @@ from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import emit_memcpy_bytes
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.semantics.operators import EQ_OP, NE_OP
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -78,9 +79,9 @@ class StringOperations:
         phi.add_incoming(ir.Constant(self.codegen.i1, 0), entry_block)  # Different sizes = not equal
         phi.add_incoming(data_equal, check_data_block)  # Same size, check data result
 
-        if op == "==":
+        if op == EQ_OP:
             return phi
-        elif op == "!=":
+        elif op == NE_OP:
             return self.codegen.builder.not_(phi)
         else:
             raise_internal_error("CE0009")

@@ -36,6 +36,7 @@ from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.nodes import Hole
 from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type
+from sushi_lang.semantics.operators import COMPLEMENT_OP, NEG_OP, NOT_OP
 
 #: A value that the fold reads.
 Readable: TypeAlias = ScalarConstant | AggregateConstant | RangePlan
@@ -123,15 +124,15 @@ def _unary(folder: Folder, node: e.Unary, ty: Optional[Type]) -> Optional[Readab
     operand = folder.scalar(node.operand, ty)
     if operand is None:
         return None
-    if node.op == "neg":
+    if node.op == NEG_OP:
         negated = negate_constant(operand, leaf=isinstance(node.operand, e.Lit))
         if isinstance(negated, integer_ops.Folded):
             return folder.checked(node, "-", negated, operand.semantic_type)
         return negated
-    if node.op == "~" and is_integer_constant(operand):
+    if node.op == COMPLEMENT_OP and is_integer_constant(operand):
         return ScalarConstant(integer_ops.complement(int(operand.value), operand.semantic_type),
                               operand.semantic_type)
-    if node.op == "not" and is_bool_constant(operand):
+    if node.op == NOT_OP and is_bool_constant(operand):
         return ScalarConstant(not operand.value, BuiltinType.BOOL)
     return None
 

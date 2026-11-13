@@ -1,10 +1,9 @@
 """Runtime Error Emission"""
 
 import llvmlite.ir as ir
-from sushi_lang.internals.errors import message_for
+from sushi_lang.backend.string_constants import pct_s_format, runtime_error_text
 
 from .libc_declarations import declare_fprintf, declare_exit
-from .string_helpers import create_string_constant
 from ._platform import get_platform_module
 
 
@@ -30,13 +29,11 @@ def emit_runtime_error(
 
     stderr_ptr = builder.load(stderr_global, name="stderr_file")
 
-    # Same form the backend emits: "Runtime Error RE2021: message\n".
-    # create_string_constant does NOT process escapes, so this must be a real
-    # newline -- the old "\\n" here emitted a literal backslash-n.
-    full_message = f"Runtime Error {error_code}: {message_for(error_code, **params)}\n"
-    msg_str = create_string_constant(module, builder, full_message, name=f"err_{error_code}")
+    zero = ir.Constant(ir.IntType(32), 0)
+    msg_str = runtime_error_text(module, error_code, **params).gep([zero, zero])
+    pct_s = pct_s_format(module).gep([zero, zero])
 
-    builder.call(fprintf_fn, [stderr_ptr, msg_str])
+    builder.call(fprintf_fn, [stderr_ptr, pct_s, msg_str])
 
     i32 = ir.IntType(32)
     exit_code = ir.Constant(i32, 1)

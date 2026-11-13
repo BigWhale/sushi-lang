@@ -18,7 +18,7 @@ fn main() -> i32 {
     StorageLive(_1)
     _1 = call @<sys/env>.setenv(const "SLIR_STDLIB_ROW" @guaranteed, const "Mostly Harmless" @guaranteed)
     StorageLive(_2)
-    _2 = neg const 1_i32
+    _2 = const -1_i32
     StorageLive(_3)
     _4 = discriminant(_1)
     switchInt(copy _4) -> [0: bb1, otherwise: bb2]

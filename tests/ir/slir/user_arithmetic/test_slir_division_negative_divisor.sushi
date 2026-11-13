@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-3 1 -7\n"
+# EXPECT_DUMP_SLIR: test_slir_division_negative_divisor.slir
+#
+# A negative integer literal is a constant operand. A divisor of `-2` gets no check. A
+# divisor of `-1` on a signed type gets no zero check, but the dividend gets the check for
+# the smallest value of the type.
+
+fn half(i32 a) i32:
+    return a / -2
+
+fn rest(i32 a) i32:
+    return a % -2
+
+fn flip(i32 a) i32:
+    return a / -1
+
+fn main() i32:
+    println("{half(7)} {rest(7)} {flip(7)}")
+    return 0
