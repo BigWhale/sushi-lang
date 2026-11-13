@@ -25,7 +25,7 @@ from sushi_lang.backend.runtime.strings import literal_fat_pointer
 from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
-from sushi_lang.backend.string_constants import StringConstantManager
+from sushi_lang.backend.string_constants import StringConstantManager, text_global
 from sushi_lang.backend.stdlib_linker import StdlibLinker
 from sushi_lang.backend.slir import emit as slir_emit
 from sushi_lang.backend.slir.closures import declare_lifted
@@ -418,16 +418,7 @@ class LLVMCodegen:
         `owned = 0` on every one: the bytes live in a read-only global, so RAII must
         never free them (#145).
         """
-        string_data = text.encode('utf-8')
-        size = len(string_data)
-
-        array_type = ir.ArrayType(self.i8, size)
-        data_global = ir.GlobalVariable(self.module, array_type, name=data_name)
-        data_global.linkage = 'internal'
-        data_global.global_constant = True
-        data_global.initializer = ir.Constant(array_type, bytearray(string_data))
-        data_global.unnamed_addr = True
-        return literal_fat_pointer(data_global)
+        return literal_fat_pointer(text_global(self.module, data_name, text, nul=False))
 
     def _register_global_constant(self, name: str, llvm_type: ir.Type,
                                   value: Optional[ir.Constant],

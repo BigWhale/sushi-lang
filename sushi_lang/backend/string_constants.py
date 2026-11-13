@@ -24,16 +24,18 @@ def content_digest(text: str) -> str:
     return hashlib.blake2b(text.encode("utf-8"), digest_size=4).hexdigest()
 
 
-def text_global(module: ir.Module, name: str, text: str) -> ir.GlobalVariable:
-    """The private constant `name` that holds `text` and a NUL; one global for each name."""
+def text_global(module: ir.Module, name: str, text: str, nul: bool = True) -> ir.GlobalVariable:
+    """The private constant `name` that holds the bytes of `text`, with a NUL after them
+    when `nul` is set; one global for each name."""
     existing = module.globals.get(name)
     if isinstance(existing, ir.GlobalVariable):
         return existing
-    data = bytearray(text.encode("utf-8") + b"\0")
+    data = bytearray(text.encode("utf-8") + (b"\0" if nul else b""))
     ty = ir.ArrayType(ir.IntType(8), len(data))
     global_str = ir.GlobalVariable(module, ty, name=name)
     global_str.linkage = "private"
     global_str.global_constant = True
+    global_str.unnamed_addr = True
     global_str.initializer = ir.Constant(ty, data)
     return global_str
 
@@ -71,32 +73,9 @@ class StringConstantManager:
         if key_str in self._cache:
             return self._cache[key_str]
 
-        global_name = self._make_global_name(value, null_terminated)
-
-        existing = self.codegen.module.globals.get(global_name)
-        if existing is not None:
-            self._cache[key_str] = existing
-            return existing
-
-        string_data = bytearray(value.encode('utf-8'))
-        if null_terminated:
-            string_data.append(0)
-
-        i8 = self.codegen.types.i8
-        const_type = ir.ArrayType(i8, len(string_data))
-        const_value = ir.Constant(const_type, string_data)
-
-        global_var = ir.GlobalVariable(
-            self.codegen.module,
-            const_type,
-            name=global_name
-        )
-
-        global_var.initializer = const_value
-        global_var.global_constant = True
-        global_var.linkage = 'private'
-        global_var.unnamed_addr = True
-
+        global_var = text_global(self.codegen.module,
+                                 self._make_global_name(value, null_terminated), value,
+                                 nul=null_terminated)
         self._cache[key_str] = global_var
         return global_var
 
