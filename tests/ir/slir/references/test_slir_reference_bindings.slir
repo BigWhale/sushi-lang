@@ -110,8 +110,8 @@ fn main() -> i32 {
     StorageLive(_22)
     _22 = call builtin array.len(copy _20 @guaranteed)
     StorageLive(_23)
-    _23 = copy _21 + copy _22
-    _19 = copy _23 + const 1_i32
+    _23 = user copy _21 + copy _22
+    _19 = user copy _23 + const 1_i32
     EndBorrow(b4)
     EndBorrow(b3)
     StorageDead(_23)

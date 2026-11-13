@@ -143,8 +143,8 @@ evaluator makes the value. Lowering carries it through.
 | Class | Fields | Meaning |
 |---|---|---|
 | `Use` | `operand` | An operand alone. |
-| `Binary` | `op`, `left`, `right` | A binary operator. It never carries `and` or `or`: a short circuit is control flow. |
-| `Unary` | `op`, `operand` | A unary operator. |
+| `Binary` | `op`, `left`, `right`, `user` | A binary operator. It never carries `and` or `or`: a short circuit is control flow. `user` is true when the user wrote it; the printer shows it as `user` before the operands. |
+| `Unary` | `op`, `operand`, `user` | A unary operator, with `user` as for a `Binary`. A negated integer literal is no `Unary`: it is one constant of its type. |
 | `Cast` | `operand`, `target` | A cast. |
 | `Aggregate` | `kind`, `parts` | A built value. `kind` is an `AggKind`. `parts` are operands. |
 | `Discriminant` | `place` | The tag of the enum in `place`, as an `i32`. |

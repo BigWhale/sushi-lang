@@ -28,7 +28,7 @@ fn bump(_1: i32 @inout) -> i32 {
     let _0: i32
 
   bb0:
-    _1 = copy _1 + const 1_i32
+    _1 = user copy _1 + const 1_i32
     _0 = copy _1
     return
 }
@@ -120,7 +120,7 @@ fn main() -> i32 {
     StorageLive(_18)
     _18 = call @bump(copy _16 @inout)
     StorageLive(_19)
-    _19 = copy _18 - const 9_i32
+    _19 = user copy _18 - const 9_i32
     StorageLive(_20)
     _20 = Point(copy _17, move _19)
     StorageDead(_19)

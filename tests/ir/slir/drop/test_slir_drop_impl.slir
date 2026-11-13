@@ -70,7 +70,7 @@ fn main() -> i32 {
     StorageLive(_6)
     _6 = call @fail()
     StorageLive(_7)
-    _7 = neg const 1_i32
+    _7 = const -1_i32
     StorageLive(_8)
     _9 = discriminant(_6)
     switchInt(copy _9) -> [0: bb1, otherwise: bb2]
@@ -98,7 +98,7 @@ fn main() -> i32 {
     StorageLive(_12)
     _12 = call builtin println@(string)(const "Mostly Harmless" @guaranteed)
     StorageDead(_12)
-    _0 = copy (_2.1) - const 1_i32
+    _0 = user copy (_2.1) - const 1_i32
     StorageDead(_4)
     Drop(_2)
     StorageDead(_2)
@@ -111,7 +111,7 @@ fn Res.drop(_1: Res @inout) -> ~ {
     let _3: ~
 
   bb0:
-    (_1.1) = copy (_1.1) + const 0_i32
+    (_1.1) = user copy (_1.1) + const 0_i32
     StorageLive(_2)
     _2 = call builtin interp@(string, string)(const "drop " @guaranteed, copy (_1.0) @guaranteed)
     StorageLive(_3)

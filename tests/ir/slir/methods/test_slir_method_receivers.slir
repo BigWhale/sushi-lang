@@ -42,7 +42,7 @@ fn main() -> i32 {
     StorageDead(_8)
     StorageLive(_10)
     _10 = call @Counter.done(copy _1 @owned)
-    _0 = copy _10 + const 6_i32
+    _0 = user copy _10 + const 6_i32
     StorageDead(_10)
     Drop(_7)
     StorageDead(_7)
@@ -70,7 +70,7 @@ fn Counter.seen(_1: Counter @in_guaranteed) -> i32 {
     let _0: i32
 
   bb0:
-    _0 = copy (_1.0) + const 100_i32
+    _0 = user copy (_1.0) + const 100_i32
     return
 }
 
@@ -78,7 +78,7 @@ fn Counter.bump(_1: Counter @inout, _2: i32 @guaranteed) -> ~ {
     let _0: ~
 
   bb0:
-    (_1.0) = copy (_1.0) + copy _2
+    (_1.0) = user copy (_1.0) + copy _2
     _0 = const ~
     return
 }
@@ -87,7 +87,7 @@ fn Counter.done(_1: Counter @owned) -> i32 {
     let _0: i32
 
   bb0:
-    _0 = copy (_1.0) * const 2_i32
+    _0 = user copy (_1.0) * const 2_i32
     return
 }
 

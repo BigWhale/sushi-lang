@@ -109,7 +109,7 @@ fn main() -> i32 {
     StorageLive(_12)
     _12 = call @read(copy _11 @guaranteed)
     StorageLive(_13)
-    _13 = neg const 1_i32
+    _13 = const -1_i32
     StorageLive(_14)
     _15 = discriminant(_12)
     switchInt(copy _15) -> [0: bb4, otherwise: bb5]
@@ -134,7 +134,7 @@ fn main() -> i32 {
     StorageDead(_12)
     StorageLive(_18)
     _18 = call builtin list.len(copy _1 @guaranteed)
-    _0 = copy _18 - const 2_i32
+    _0 = user copy _18 - const 2_i32
     StorageDead(_18)
     Drop(_11)
     StorageDead(_11)

@@ -54,7 +54,7 @@ fn user_main.__lambda_0(_1: __closure_env@(i32) @in_guaranteed, _2: i32 @guarant
     let _0: i32
 
   bb0:
-    _0 = copy _2 + copy (_1.0)
+    _0 = user copy _2 + copy (_1.0)
     return
 }
 

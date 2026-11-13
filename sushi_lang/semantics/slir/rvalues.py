@@ -163,15 +163,20 @@ class Use:
 
 @dataclass(frozen=True, slots=True)
 class Binary:
+    """`user` is true when the user wrote the operator; the compiler's own arithmetic (a
+    loop counter, a range count, a slice end) has no mark."""
     op: BinOp
     left: Operand
     right: Operand
+    user: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Unary:
+    """`user` is true when the user wrote the operator, as for a `Binary`."""
     op: UnOp
     operand: Operand
+    user: bool = False
 
 
 @dataclass(frozen=True, slots=True)

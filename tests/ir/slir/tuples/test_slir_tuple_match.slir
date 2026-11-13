@@ -99,7 +99,7 @@ fn pick(_1: (i32, i32) @guaranteed) -> i32 {
     _3 = copy (_1.0)
     StorageLive(_4)
     _4 = copy (_1.1)
-    _0 = copy _3 * copy _4
+    _0 = user copy _3 * copy _4
     StorageDead(_4)
     StorageDead(_3)
     return
@@ -119,7 +119,7 @@ fn go(_1: (Dir, i32) @guaranteed) -> i32 {
   bb1:
     StorageLive(_3)
     _3 = copy (_1.1)
-    _0 = copy _3 + const 1_i32
+    _0 = user copy _3 + const 1_i32
     StorageDead(_3)
     return
 
@@ -130,7 +130,7 @@ fn go(_1: (Dir, i32) @guaranteed) -> i32 {
   bb3:
     StorageLive(_5)
     _5 = copy (_1.1)
-    _0 = copy _5 - const 1_i32
+    _0 = user copy _5 - const 1_i32
     StorageDead(_5)
     return
 
@@ -382,7 +382,7 @@ fn main() -> i32 {
   bb6:
     StorageDead(_40)
     StorageLive(_48)
-    _48 = copy _33 + copy _34
+    _48 = user copy _33 + copy _34
     StorageLive(_49)
     _49 = (copy _33, move _48)
     StorageLive(_50)
@@ -439,19 +439,19 @@ fn main() -> i32 {
     StorageLive(_60)
     _60 = const 0_i32
     StorageLive(_61)
-    _61 = neg const 1_i32
+    _61 = const -1_i32
     goto -> bb13
 
   bb13:
     StorageLive(_62)
-    _62 = copy _61 < const 6_i32
+    _62 = user copy _61 < const 6_i32
     switchInt(copy _62) -> [0: bb15, otherwise: bb14]
 
   bb14:
     StorageDead(_62)
-    _61 = copy _61 + const 1_i32
+    _61 = user copy _61 + const 1_i32
     StorageLive(_63)
-    _63 = copy _61 % const 2_i32
+    _63 = user copy _61 % const 2_i32
     StorageLive(_64)
     _64 = (move _63, copy _61)
     switchInt(copy (_64.0)) -> [0: bb17, otherwise: bb19]
@@ -486,7 +486,7 @@ fn main() -> i32 {
   bb20:
     StorageLive(_65)
     _65 = copy (_64.1)
-    _60 = copy _60 + copy _65
+    _60 = user copy _60 + copy _65
     StorageDead(_65)
     goto -> bb24
 
@@ -499,7 +499,7 @@ fn main() -> i32 {
     goto -> bb16
 
   bb23:
-    _60 = copy _60 + const 100_i32
+    _60 = user copy _60 + const 100_i32
     goto -> bb24
 
   bb24:

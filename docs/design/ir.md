@@ -685,7 +685,7 @@ the value of a pattern (7.8). That covers more than types:
 | the display type of each hole of an `Interp`, and of a `print` argument | the node's `shir_id`, per part |
 | the scrutinee type of a `Match`, and its integer type for literal and range arms | the `Match`'s `shir_id` |
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
-| the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
+| the value that an integer literal holds (8.5), the value of a negated integer literal, and the value of the constant that a `ConstRef` names | the `Lit`'s, the negation's or the `ConstRef`'s `shir_id` |
 | the symbol of the global of the `var` that a `StorageRef` names (`global_symbol`) | the `StorageRef`'s `shir_id` |
 | the source positions of a call of a function or a method with a `peek` return: the arguments whose owners the answer borrows (`sources_of`) | the call's `shir_id` |
 
@@ -3118,6 +3118,12 @@ type, so the value is carried unchanged. SLIR lowering makes the `Int` of a `Lit
 value row and decides nothing. The verifier rule "a constant in range" (8.13) holds the
 result.
 
+**A negated integer literal is one constant.** `visit.answer` also writes a value row for
+the negation of an integer literal: the value of the operand, negated and held at the type
+(`integer_ops.cast`). SLIR lowering makes one `Int` of that row (`_7 = const -128_i8`), and
+no `Unary`. So `-128` at `i8` negates no `128`, which `i8` does not hold, and a later check
+of a negation never sees it.
+
 **The value of a `ConstRef`.** A `ConstRef` is a `Const` operand with any row. Lowering
 reads the value row of the `ConstRef` (7.3), which holds the value of the constant (9.5), and
 makes the `Constant` of that value. A string constant is a `Str`: a literal, which owns no
@@ -3497,8 +3503,8 @@ is a name of the scope pass (`kept_constant_names`), so `typecheck` gives
 
 ```
 Rvalue = Use(Operand)
-       | Binary(op: BinOp, Operand, Operand)     # never `and`/`or` -- see 8.9
-       | Unary(op: UnOp, Operand)
+       | Binary(op: BinOp, Operand, Operand, user: bool)   # never `and`/`or` -- see 8.9
+       | Unary(op: UnOp, Operand, user: bool)
        | Cast(Operand, target: Type)
        | Aggregate(kind: AggKind, parts: [Operand])   # struct, tuple, enum variant, array,
                                                       # closure, iterator
@@ -3511,6 +3517,16 @@ Rvalue = Use(Operand)
 
 `Discriminant` exists because `SwitchInt` needs an integer, and a `match` or a `??` switches
 on a tag.
+
+**The user mark.** `user` on a `Binary` or a `Unary` is true when the user wrote the
+operator. Only the lowering of a SHIR `Binary` or `Unary` sets it. The compiler's own
+arithmetic has no mark: the counter of a counted loop (`+ 1`), the count of a range
+(`end - start`, and `+ 1` for `..=`), the item of a range (`first + k`, `first - k`), the
+inclusive end of a slice (`+ 1`), the bounds checks and the range tests of a `match`. The
+printer writes the mark before the operator text (`_3 = user copy _1 + copy _2`), and the
+verifier accepts both forms. The overflow mode (ADR 0002) checks only the marked
+arithmetic, because the compiler's arithmetic can need a value that the type of the user
+does not hold (the count of `i32.MIN..i32.MAX`).
 
 **An array value.** The kind of an array is `AggArray(ty, runs)`. `ty` is the `T[N]` or the
 `T[]` of the value, and `runs` holds one run for each run of the `ArrayInit`, in order:

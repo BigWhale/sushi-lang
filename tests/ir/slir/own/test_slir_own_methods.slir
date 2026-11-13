@@ -93,7 +93,7 @@ fn main() -> i32 {
     StorageLive(_19)
     BeginBorrow(b3, _17, poke)
     _19 = ref poke (*(((_17 as Full).0).0))
-    (_19.0) = copy (_19.0) + const 41_i32
+    (_19.0) = user copy (_19.0) + const 41_i32
     StorageLive(_20)
     _20 = clone(const "big")
     Drop((_19.1))

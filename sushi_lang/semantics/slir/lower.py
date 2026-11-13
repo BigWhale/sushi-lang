@@ -52,6 +52,7 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span, display_filename
+from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
@@ -525,10 +526,14 @@ class Lowering:
         if node.op in ("and", "or"):
             return ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
         lhs = agg.settled(self, node.lhs, self.operand(node.lhs), (node.rhs,))
-        return r.Binary(node.op, lhs, self.operand(node.rhs))
+        return r.Binary(node.op, lhs, self.operand(node.rhs), user=True)
 
     def unary(self, node: e.Unary) -> Value:
-        return r.Unary(node.op, self.operand(node.operand))
+        """A negated integer literal is one constant of its type, from its value row."""
+        value = self.typeck.value_of(node.shir_id)
+        if isinstance(value, ScalarConstant):
+            return r.Use(p.Const(k.of_scalar(value)))
+        return r.Unary(node.op, self.operand(node.operand), user=True)
 
     def enum_init(self, node: e.EnumInit) -> Value:
         """An enum variant as an aggregate of its instance type (L10)."""

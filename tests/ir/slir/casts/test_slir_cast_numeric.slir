@@ -38,7 +38,7 @@ fn main() -> i32 {
     StorageLive(_6)
     _6 = copy _1 as f64
     StorageLive(_7)
-    _7 = copy _6 / const 2.0_f64
+    _7 = user copy _6 / const 2.0_f64
     StorageDead(_6)
     StorageLive(_8)
     _8 = call builtin println@(u8)(copy _3 @guaranteed)
@@ -50,7 +50,7 @@ fn main() -> i32 {
     _10 = call builtin println@(i32)(copy _5 @guaranteed)
     StorageDead(_10)
     StorageLive(_11)
-    _11 = copy _7 > const 100.0_f64
+    _11 = user copy _7 > const 100.0_f64
     StorageLive(_12)
     _12 = call builtin println@(bool)(copy _11 @guaranteed)
     StorageDead(_12)
