@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from sushi_lang.backend.stored_width import as_stored_i64, as_surface_i32
+
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -76,34 +78,15 @@ def _descriptor_field(
         array_struct_ptr, [zero, ir.Constant(i32, field_index)], name=name)
 
 
-def _as_surface_i32(builder: 'ir.IRBuilder', stored: 'ir.Value', name: str) -> 'ir.Value':
-    """The stored i64 count as the i32 that `len()` and `capacity()` answer.
-
-    Every write of a count extends an i32, so the stored value is in the i32 range and the
-    truncation loses nothing (docs/adr/0001, the expand step).
-    """
-    from llvmlite import ir
-    return builder.trunc(stored, ir.IntType(32), name=name)
-
-
-def _as_stored_i64(builder: 'ir.IRBuilder', value: 'ir.Value') -> 'ir.Value':
-    """A count as the i64 that the header stores. An i64 is stored as it is."""
-    from llvmlite import ir
-    i64 = ir.IntType(64)
-    if isinstance(value, ir.Constant) and isinstance(value.type, ir.IntType):
-        return ir.Constant(i64, value.constant)
-    return value if value.type == i64 else builder.sext(value, i64)
-
-
 def _load_count(codegen, header_ptr, field, name, builder) -> 'ir.Value':
     b = _builder_of(codegen, builder)
     field_ptr = _descriptor_field(codegen, header_ptr, field, "", b)
-    return _as_surface_i32(b, b.load(field_ptr), name)
+    return as_surface_i32(b, b.load(field_ptr), name)
 
 
 def _store_count(codegen, header_ptr, value, field, builder) -> None:
     b = _builder_of(codegen, builder)
-    b.store(_as_stored_i64(b, value), _descriptor_field(codegen, header_ptr, field, "", b))
+    b.store(as_stored_i64(b, value), _descriptor_field(codegen, header_ptr, field, "", b))
 
 
 def load_len(codegen: 'LLVMCodegen | None', header_ptr: 'ir.Value', name: str = "len",
@@ -134,28 +117,28 @@ def extract_len(codegen: 'LLVMCodegen | None', header: 'ir.Value', name: str = "
                 builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
     """The length of the `T[]` or `List@(T)` VALUE `header`, as an i32."""
     b = _builder_of(codegen, builder)
-    return _as_surface_i32(b, b.extract_value(header, _DESCRIPTOR_LEN), name)
+    return as_surface_i32(b, b.extract_value(header, _DESCRIPTOR_LEN), name)
 
 
 def extract_cap(codegen: 'LLVMCodegen | None', header: 'ir.Value', name: str = "cap",
                 builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
     """The capacity of the `T[]` or `List@(T)` VALUE `header`, as an i32."""
     b = _builder_of(codegen, builder)
-    return _as_surface_i32(b, b.extract_value(header, _DESCRIPTOR_CAP), name)
+    return as_surface_i32(b, b.extract_value(header, _DESCRIPTOR_CAP), name)
 
 
 def insert_len(codegen: 'LLVMCodegen | None', header: 'ir.Value', value: 'ir.Value',
                builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
     """The VALUE `header` with its length replaced by `value`."""
     b = _builder_of(codegen, builder)
-    return b.insert_value(header, _as_stored_i64(b, value), _DESCRIPTOR_LEN)
+    return b.insert_value(header, as_stored_i64(b, value), _DESCRIPTOR_LEN)
 
 
 def insert_cap(codegen: 'LLVMCodegen | None', header: 'ir.Value', value: 'ir.Value',
                builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
     """The VALUE `header` with its capacity replaced by `value`."""
     b = _builder_of(codegen, builder)
-    return b.insert_value(header, _as_stored_i64(b, value), _DESCRIPTOR_CAP)
+    return b.insert_value(header, as_stored_i64(b, value), _DESCRIPTOR_CAP)
 
 
 def gep_dynamic_array_data(

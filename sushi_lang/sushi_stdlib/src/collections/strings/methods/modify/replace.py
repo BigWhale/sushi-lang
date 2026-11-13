@@ -9,7 +9,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_replace(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_replace({i8*, i32} str, {i8*, i32} old, {i8*, i32} new)`."""
+    """Emit `{i8*, i64, i8} string_replace({i8*, i64, i8} str, {i8*, i64, i8} old, {i8*, i64, i8} new)`."""
     func_name = "string_replace"
 
     if func_name in module.globals:

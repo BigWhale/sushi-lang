@@ -50,7 +50,7 @@ def _emit_char_transform_loop(
 
 
 def emit_string_upper(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_upper({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_upper({i8*, i64, i8} str)`."""
     func_name = "string_upper"
 
     if func_name in module.globals:
@@ -80,7 +80,7 @@ def emit_string_upper(module: ir.Module) -> ir.Function:
 
 
 def emit_string_lower(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_lower({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_lower({i8*, i64, i8} str)`."""
     func_name = "string_lower"
 
     if func_name in module.globals:
@@ -110,7 +110,7 @@ def emit_string_lower(module: ir.Module) -> ir.Function:
 
 
 def emit_string_cap(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_cap({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_cap({i8*, i64, i8} str)`."""
     func_name = "string_cap"
 
     if func_name in module.globals:

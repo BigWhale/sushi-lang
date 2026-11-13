@@ -287,7 +287,7 @@ def generate_run(module: ir.Module) -> None:
 
     b.position_at_end(argv_body)
     i_val = b.load(i_slot)
-    elem = b.load(b.gep(arg_data, [i_val]))                       # {i8*,i32} fat pointer
+    elem = b.load(b.gep(arg_data, [i_val]))                       # {i8*, i64, i8} string
     elem_cstr = fat_pointer_to_cstr(module, b, elem)
     b.store(elem_cstr, b.gep(argv, [b.add(i_val, one_i32)]))
     b.store(b.add(i_val, one_i32), i_slot)

@@ -320,7 +320,7 @@ def generate_peer(module: ir.Module) -> None:
 
 
 def generate_peer_ip(module: ir.Module) -> None:
-    """Emit `Result<{i8*,i32,i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`.
+    """Emit `Result<{i8*, i64, i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`.
 
     getnameinfo with NI_NUMERICHOST renders the address and never asks a
     resolver, so this makes no network request and works for either family.

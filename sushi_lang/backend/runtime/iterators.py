@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 from llvmlite import ir
 
 from sushi_lang.backend import gep_utils
+from sushi_lang.backend.stored_width import as_stored_i64
 from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.memory.heap import emit_free, emit_malloc
@@ -196,13 +197,8 @@ def emit_lent_cursor(codegen: 'LLVMCodegen', source: CursorSource, length: ir.Va
 def _store_cursor(codegen: 'LLVMCodegen', cursor_ptr: ir.Value, index: ir.Value,
                   length: ir.Value, data: ir.Value, source: CursorSource) -> None:
     b = codegen.builder
-    i64 = codegen.types.i64
-
-    def wide(v: ir.Value) -> ir.Value:
-        return v if v.type == i64 else b.sext(v, i64)
-
-    b.store(wide(index), gep_utils.gep_struct_field(codegen, cursor_ptr, _INDEX, "iter_index"))
-    b.store(wide(length), gep_utils.gep_struct_field(codegen, cursor_ptr, _LENGTH,
+    b.store(as_stored_i64(b, index), gep_utils.gep_struct_field(codegen, cursor_ptr, _INDEX, "iter_index"))
+    b.store(as_stored_i64(b, length), gep_utils.gep_struct_field(codegen, cursor_ptr, _LENGTH,
                                                      "iter_length"))
     b.store(b.bitcast(data, ir.PointerType(source.data_type)),
             gep_utils.gep_struct_field(codegen, cursor_ptr, _DATA, "iter_data"))

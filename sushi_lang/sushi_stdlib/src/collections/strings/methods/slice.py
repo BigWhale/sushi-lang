@@ -9,7 +9,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_ss(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_ss({i8*, i32} str, i32 start, i32 length)`."""
+    """Emit `{i8*, i64, i8} string_ss({i8*, i64, i8} str, i32 start, i32 length)`."""
     func_name = "string_ss"
 
     if func_name in module.globals:
@@ -101,7 +101,7 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
 
 
 def emit_string_sleft(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_sleft({i8*, i32} str, i32 n)`."""
+    """Emit `{i8*, i64, i8} string_sleft({i8*, i64, i8} str, i32 n)`."""
     func_name = "string_sleft"
 
     if func_name in module.globals:
@@ -159,7 +159,7 @@ def emit_string_sleft(module: ir.Module) -> ir.Function:
 
 
 def emit_string_sright(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_sright({i8*, i32} str, i32 n)`."""
+    """Emit `{i8*, i64, i8} string_sright({i8*, i64, i8} str, i32 n)`."""
     func_name = "string_sright"
 
     if func_name in module.globals:
@@ -220,7 +220,7 @@ def emit_string_sright(module: ir.Module) -> ir.Function:
 
 
 def emit_string_char_at(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_char_at({i8*, i32} str, i32 index)`."""
+    """Emit `{i8*, i64, i8} string_char_at({i8*, i64, i8} str, i32 index)`."""
     func_name = "string_char_at"
 
     if func_name in module.globals:
@@ -288,7 +288,7 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
 
 
 def emit_string_s(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_s({i8*, i32} str, i32 start, i32 end)`."""
+    """Emit `{i8*, i64, i8} string_s({i8*, i64, i8} str, i32 start, i32 end)`."""
     func_name = "string_s"
 
     if func_name in module.globals:

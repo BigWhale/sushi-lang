@@ -11,7 +11,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_repeat(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_repeat({i8*, i32} str, i32 n)`."""
+    """Emit `{i8*, i64, i8} string_repeat({i8*, i64, i8} str, i32 n)`."""
     func_name = "string_repeat"
 
     if func_name in module.globals:
@@ -92,7 +92,7 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
 
 
 def emit_string_pad_left(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_pad_left({i8*, i32} str, i32 width, {i8*, i32} pad_char)`."""
+    """Emit `{i8*, i64, i8} string_pad_left({i8*, i64, i8} str, i32 width, {i8*, i64, i8} pad_char)`."""
     func_name = "string_pad_left"
 
     if func_name in module.globals:
@@ -186,7 +186,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
 
 
 def emit_string_pad_right(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_pad_right({i8*, i32} str, i32 width, {i8*, i32} pad_char)`."""
+    """Emit `{i8*, i64, i8} string_pad_right({i8*, i64, i8} str, i32 width, {i8*, i64, i8} pad_char)`."""
     func_name = "string_pad_right"
 
     if func_name in module.globals:

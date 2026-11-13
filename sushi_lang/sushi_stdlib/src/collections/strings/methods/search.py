@@ -15,7 +15,7 @@ from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
 def emit_string_starts_with(module: ir.Module) -> ir.Function:
-    """Emit `i8 string_starts_with({i8*, i32} str, {i8*, i32} prefix)`."""
+    """Emit `i8 string_starts_with({i8*, i64, i8} str, {i8*, i64, i8} prefix)`."""
     func_name = "string_starts_with"
 
     if func_name in module.globals:
@@ -76,7 +76,7 @@ def emit_string_starts_with(module: ir.Module) -> ir.Function:
 
 
 def emit_string_ends_with(module: ir.Module) -> ir.Function:
-    """Emit `i8 string_ends_with({i8*, i32} str, {i8*, i32} suffix)`."""
+    """Emit `i8 string_ends_with({i8*, i64, i8} str, {i8*, i64, i8} suffix)`."""
     func_name = "string_ends_with"
 
     if func_name in module.globals:
@@ -172,7 +172,7 @@ def _emit_search(
     carry: Optional[tuple[str, ir.Constant]] = None,
     reverse: bool = False,
 ) -> ir.Function:
-    """Emit `return_type func_name({i8*, i32} str, {i8*, i32} needle)` as a naive byte search.
+    """Emit `return_type func_name({i8*, i64, i8} str, {i8*, i64, i8} needle)` as a naive byte search.
 
     `on_found` ends the search at the first match, and an empty needle is a match at the
     start of the scan. `on_match` continues the search at the position it gives, with
@@ -314,7 +314,7 @@ def _ret_maybe_none(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType) -> 
 
 
 def emit_string_contains(module: ir.Module) -> ir.Function:
-    """Emit `i8 string_contains({i8*, i32} str, {i8*, i32} needle)`."""
+    """Emit `i8 string_contains({i8*, i64, i8} str, {i8*, i64, i8} needle)`."""
     func = _defined(module, "string_contains")
     if func is not None:
         return func
@@ -347,17 +347,17 @@ def _emit_string_find_at(module: ir.Module, func_name: str, reverse: bool) -> ir
 
 
 def emit_string_find(module: ir.Module) -> ir.Function:
-    """Emit `{i32, [1 x i64]} string_find({i8*, i32} str, {i8*, i32} needle)`."""
+    """Emit `{i32, [1 x i64]} string_find({i8*, i64, i8} str, {i8*, i64, i8} needle)`."""
     return _emit_string_find_at(module, "string_find", reverse=False)
 
 
 def emit_string_find_last(module: ir.Module) -> ir.Function:
-    """Emit `{i32, [1 x i64]} string_find_last({i8*, i32} str, {i8*, i32} needle)`."""
+    """Emit `{i32, [1 x i64]} string_find_last({i8*, i64, i8} str, {i8*, i64, i8} needle)`."""
     return _emit_string_find_at(module, "string_find_last", reverse=True)
 
 
 def emit_string_count(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_count({i8*, i32} str, {i8*, i32} needle)`; matches do not overlap."""
+    """Emit `i32 string_count({i8*, i64, i8} str, {i8*, i64, i8} needle)`; matches do not overlap."""
     func = _defined(module, "string_count")
     if func is not None:
         return func

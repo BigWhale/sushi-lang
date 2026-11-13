@@ -10,7 +10,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_to_bytes(module: ir.Module) -> ir.Function:
-    """Emit `{i64 len, i64 cap, u8* data} string_to_bytes({i8*, i32} str)`."""
+    """Emit `{i64 len, i64 cap, u8* data} string_to_bytes({i8*, i64, i8} str)`."""
     func_name = "string_to_bytes"
 
     if func_name in module.globals:
@@ -51,7 +51,7 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
 
 
 def emit_string_split(module: ir.Module) -> ir.Function:
-    """Emit `{i32 len, i32 cap, {i8*,i32}* data} string_split({i8*, i32} str, {i8*, i32} delim)`.
+    """Emit `{i64 len, i64 cap, {i8*, i64, i8}* data} string_split({i8*, i64, i8} str, {i8*, i64, i8} delim)`.
     """
     func_name = "string_split"
 
@@ -297,7 +297,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
 
 
 def emit_string_join(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_join({i8*, i32} sep, {i64, i64, {i8*,i32}*} parts)`."""
+    """Emit `{i8*, i64, i8} string_join({i8*, i64, i8} sep, {i64, i64, {i8*, i64, i8}*} parts)`."""
     func_name = "string_join"
 
     if func_name in module.globals:

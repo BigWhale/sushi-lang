@@ -40,7 +40,7 @@ field. The backend type mapper and the stdlib generators both get the type from 
 | `string_size(b, s)` | the size of a value, as the surface `i32` |
 | `string_size_i64(b, s)` | the size of a value at the stored width, for a byte count |
 | `string_size_at(b, p)` | the size of the string at an address, as the surface `i32` |
-| `with_string_size(b, s, n)` | a value with a new size (an `i32` size is zero-extended) |
+| `with_string_size(b, s, n)` | a value with a new size (an `i32` size is sign-extended, `backend/stored_width.py`) |
 | `string_value(b, data, n, owned)` | a new value |
 | `string_constant(data, n, owned)` | a new constant |
 | `STRING_BYTES`, `SIZE_OFFSET`, `OWNED_OFFSET` | the ABI size and the byte offsets |

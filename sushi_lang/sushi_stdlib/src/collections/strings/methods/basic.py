@@ -10,7 +10,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc, emit
 
 
 def emit_string_size(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_size({i8*, i32} str)`."""
+    """Emit `i32 string_size({i8*, i64, i8} str)`."""
     func_name = "string_size"
 
     if func_name in module.globals:
@@ -34,7 +34,7 @@ def emit_string_size(module: ir.Module) -> ir.Function:
 
 
 def emit_string_len(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_len({i8*, i32} str)`."""
+    """Emit `i32 string_len({i8*, i64, i8} str)`."""
     func_name = "string_len"
 
     if func_name in module.globals:
@@ -63,7 +63,7 @@ def emit_string_len(module: ir.Module) -> ir.Function:
 
 
 def emit_string_concat(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_concat({i8*, i32} str1, {i8*, i32} str2)`."""
+    """Emit `{i8*, i64, i8} string_concat({i8*, i64, i8} str1, {i8*, i64, i8} str2)`."""
     func_name = "string_concat"
 
     if func_name in module.globals:
@@ -107,7 +107,7 @@ def emit_string_concat(module: ir.Module) -> ir.Function:
 
 
 def emit_string_append(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_append({i8*, i32} str1, {i8*, i32} str2)`.
+    """Emit `{i8*, i64, i8} string_append({i8*, i64, i8} str1, {i8*, i64, i8} str2)`.
 
     The backend calls it for `s := s.concat(x)` (docs/design/string-representation.md):
     `str1` is the value the rebind would destroy, so an owned buffer grows in place. A

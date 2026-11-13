@@ -16,7 +16,7 @@ from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
 def emit_string_to_i32(module: ir.Module) -> ir.Function:
-    """Emit `Maybe<i32> string_to_i32({i8*, i32} str)`."""
+    """Emit `Maybe<i32> string_to_i32({i8*, i64, i8} str)`."""
     func_name = "string_to_i32"
 
     if func_name in module.globals:
@@ -126,7 +126,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
 
 
 def emit_string_to_i64(module: ir.Module) -> ir.Function:
-    """Emit `Maybe<i64> string_to_i64({i8*, i32} str)`."""
+    """Emit `Maybe<i64> string_to_i64({i8*, i64, i8} str)`."""
     func_name = "string_to_i64"
 
     if func_name in module.globals:
@@ -222,7 +222,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
 
 
 def emit_string_to_f64(module: ir.Module) -> ir.Function:
-    """Emit `Maybe<f64> string_to_f64({i8*, i32} str)`."""
+    """Emit `Maybe<f64> string_to_f64({i8*, i64, i8} str)`."""
     func_name = "string_to_f64"
 
     if func_name in module.globals:

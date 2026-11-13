@@ -11,12 +11,13 @@ from typing import Union
 
 from llvmlite import ir
 
+from sushi_lang.backend.stored_width import STORED_TYPE, as_stored_i64, as_surface_i32
+
 DATA_FIELD = 0
 SIZE_FIELD = 1
 OWNED_FIELD = 2
 
-SIZE_TYPE = ir.IntType(64)
-SURFACE_SIZE_TYPE = ir.IntType(32)
+SIZE_TYPE = STORED_TYPE
 _OWNED_TYPE = ir.IntType(8)
 
 # The ABI layout: data at 0, size at 8, owned at 16, padding to the alignment 8. A string
@@ -35,7 +36,7 @@ def string_type() -> ir.LiteralStructType:
 def string_size(builder: ir.IRBuilder, value: ir.Value, name: str = "") -> ir.Value:
     """The size of a string value as the surface i32."""
     stored = builder.extract_value(value, SIZE_FIELD, name=f"{name}_i64" if name else "")
-    return _surface(builder, stored, name)
+    return as_surface_i32(builder, stored, name)
 
 
 def string_size_i64(builder: ir.IRBuilder, value: ir.Value, name: str = "") -> ir.Value:
@@ -48,13 +49,13 @@ def string_size_at(builder: ir.IRBuilder, address: ir.Value, name: str = "") -> 
     i32 = ir.IntType(32)
     slot = builder.gep(address, [ir.Constant(i32, 0), ir.Constant(i32, SIZE_FIELD)])
     stored = builder.load(slot, name=f"{name}_i64" if name else "")
-    return _surface(builder, stored, name)
+    return as_surface_i32(builder, stored, name)
 
 
 def with_string_size(builder: ir.IRBuilder, value: ir.Value, size: ir.Value,
                      name: str = "") -> ir.Value:
-    """`value` with the size `size`; an i32 size is zero-extended."""
-    return builder.insert_value(value, _stored(builder, size), SIZE_FIELD, name=name)
+    """`value` with the size `size`; an i32 size is sign-extended."""
+    return builder.insert_value(value, as_stored_i64(builder, size), SIZE_FIELD, name=name)
 
 
 def string_value(builder: ir.IRBuilder, data: ir.Value, size: ir.Value,
@@ -72,16 +73,3 @@ def string_constant(data: ir.Constant, size: int, owned: int = 0) -> ir.Constant
     poisons the other."""
     return ir.Constant.literal_struct([
         data, ir.Constant(SIZE_TYPE, size), ir.Constant(_OWNED_TYPE, 1 if owned else 0)])
-
-
-def _surface(builder: ir.IRBuilder, stored: ir.Value, name: str) -> ir.Value:
-    """The stored size as the surface i32. Every write extends an i32 size, so the value is
-    in the i32 range and the truncation loses nothing."""
-    return builder.trunc(stored, SURFACE_SIZE_TYPE, name=name)
-
-
-def _stored(builder: ir.IRBuilder, size: ir.Value) -> ir.Value:
-    """`size` at the stored width."""
-    if size.type.width == SIZE_TYPE.width:
-        return size
-    return builder.zext(size, SIZE_TYPE)

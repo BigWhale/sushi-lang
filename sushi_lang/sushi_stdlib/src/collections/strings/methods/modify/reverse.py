@@ -10,7 +10,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_reverse(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_reverse({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_reverse({i8*, i64, i8} str)`."""
     func_name = "string_reverse"
 
     if func_name in module.globals:

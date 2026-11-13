@@ -9,7 +9,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_strip_prefix({i8*, i32} str, {i8*, i32} prefix)`."""
+    """Emit `{i8*, i64, i8} string_strip_prefix({i8*, i64, i8} str, {i8*, i64, i8} prefix)`."""
     func_name = "string_strip_prefix"
 
     if func_name in module.globals:
@@ -88,7 +88,7 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
 
 
 def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_strip_suffix({i8*, i32} str, {i8*, i32} suffix)`."""
+    """Emit `{i8*, i64, i8} string_strip_suffix({i8*, i64, i8} str, {i8*, i64, i8} suffix)`."""
     func_name = "string_strip_suffix"
 
     if func_name in module.globals:

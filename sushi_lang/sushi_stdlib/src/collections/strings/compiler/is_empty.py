@@ -6,7 +6,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_is_empty_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit `i8 llvm_string_is_empty({i8*, i32} str)`."""
+    """Emit `i8 llvm_string_is_empty({i8*, i64, i8} str)`."""
     func_name = "llvm_string_is_empty"
 
     if func_name in module.globals:

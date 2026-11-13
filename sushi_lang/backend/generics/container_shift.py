@@ -1,4 +1,4 @@
-"""`insert(i, v)` and `remove(i)` over a `{i32 len, i32 cap, T* data}` descriptor.
+"""`insert(i, v)` and `remove(i)` over a `{i64 len, i64 cap, T* data}` descriptor.
 
 A `List@(T)` and a `T[]` have the same descriptor, so the two containers share these two
 emitters. Each caller evaluates its own arguments first and consumes the element, so a

@@ -9,7 +9,7 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_string_tleft(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_tleft({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_tleft({i8*, i64, i8} str)`."""
     func_name = "string_tleft"
 
     if func_name in module.globals:
@@ -70,7 +70,7 @@ def emit_string_tleft(module: ir.Module) -> ir.Function:
 
 
 def emit_string_tright(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_tright({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_tright({i8*, i64, i8} str)`."""
     func_name = "string_tright"
 
     if func_name in module.globals:
@@ -132,7 +132,7 @@ def emit_string_tright(module: ir.Module) -> ir.Function:
 
 
 def emit_string_trim(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_trim({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_trim({i8*, i64, i8} str)`."""
     func_name = "string_trim"
 
     if func_name in module.globals:
