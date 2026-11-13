@@ -555,7 +555,8 @@ arr.push(9)         # reuses the buffer
 Set the length to `n`. When `n` is less than the length, the tail is removed, and each
 removed element is destroyed as `.truncate(n)` destroys it. When `n` is more than the
 length, `n - len()` slots are added at the end, and each new slot takes its own copy of
-`value`. When `n` equals the length, nothing changes. A negative `n` counts as zero.
+`value`. When `n` equals the length, nothing changes. A negative `n` counts as zero, and
+an `n` above the `i32` range stops the program with RE2033.
 
 The value is a **borrow**, as for `.fill()`: it stays usable, and it can be a slot of the
 same array (`arr.resize(10, arr[0])`), because the value is read before the buffer grows.
