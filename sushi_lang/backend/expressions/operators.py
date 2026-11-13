@@ -167,10 +167,12 @@ def _emit_trapping(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Va
         intrinsic = ir.Function(codegen.module,
                                 ir.FunctionType(answer, [left.type, left.type]), name=name)
     pair = builder.call(intrinsic, [left, right])
-    with builder.if_then(builder.extract_value(pair, 1)):
-        codegen.runtime.errors.emit_runtime_error(
-            "RE2032", op=op, type=display_type(ty) if ty is not None else str(left.type))
-        builder.unreachable()
+    trap = codegen.runtime.errors.exit_block(
+        builder.function, "RE2032", op=op,
+        type=display_type(ty) if ty is not None else str(left.type))
+    held = builder.append_basic_block(name="no_overflow")
+    builder.cbranch(builder.extract_value(pair, 1), trap, held)
+    builder.position_at_end(held)
     return builder.extract_value(pair, 0)
 
 

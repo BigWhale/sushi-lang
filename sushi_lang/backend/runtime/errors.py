@@ -19,6 +19,7 @@ class RuntimeErrors:
     def __init__(self, codegen: LLVMCodegen) -> None:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
+        self._exit_blocks: dict[tuple[str, str], ir.Block] = {}
 
     def emit_runtime_error(self, error_code: str, **params) -> None:
         """Emit runtime error message to stderr and exit program."""
@@ -37,6 +38,20 @@ class RuntimeErrors:
         stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
         builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr] + list(values))
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
+
+    def exit_block(self, fn: ir.Function, error_code: str, **params) -> ir.Block:
+        """ONE block of `fn` that stops with `error_code`, for every site of `fn` that
+        branches to it."""
+        text = runtime_error_text(self.codegen.module, error_code, **params)
+        key = (fn.name, text.name)
+        block = self._exit_blocks.get(key)
+        if block is None or block.parent is not fn:
+            block = fn.append_basic_block(name=f"exit_{error_code}")
+            builder = ir.IRBuilder(block)
+            builder.call(self._shared_exit(text), [])
+            builder.unreachable()
+            self._exit_blocks[key] = block
+        return block
 
     def _call_shared_exit(self, text: ir.GlobalVariable) -> None:
         """A message with no run-time value is printed by ONE private function for each
