@@ -33,6 +33,7 @@ from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
+from sushi_lang.semantics.operators import AND_OP
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering
@@ -494,7 +495,7 @@ def short_circuit(low: Lowering, place: p.Place, value: ShortCircuit) -> None:
     span = value.span
     low.write(place, r.Use(value.lhs), span)
     right, join = low.new_block(), low.new_block()
-    skip, other = (join, right) if value.op == "and" else (right, join)
+    skip, other = (join, right) if value.op == AND_OP else (right, join)
     low.jump(tm.SwitchInt(p.Copy(place), ((0, skip.id),), other.id, span))
     among, at_branch, switch = low.placement.in_scope(), low.placement.state(), low.block
     low.block = right

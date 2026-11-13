@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.operators import EQUALITY_OPS
+from sushi_lang.semantics.operators import (
+    COMPLEMENT_OP, EQUALITY_OPS, EQ_OP, NEG_OP, NE_OP, NOT_OP, SHIFT_OPS, SHL_OP)
 from sushi_lang.semantics.type_predicates import is_unsigned_int
 
 if TYPE_CHECKING:
@@ -19,20 +20,20 @@ def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
 
 def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool) -> ir.Value:
     """A unary operator over one LLVM value: the SLIR emitter calls it for a `Unary`."""
-    if op == "neg":
+    if op == NEG_OP:
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
         else:
             return codegen.builder.sub(ir.Constant(val.type, 0), val)
 
-    if op == "not":
+    if op == NOT_OP:
         if to_i1:
             i1v = codegen.utils.as_i1(val)
             return codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1))
         i1v = codegen.utils.as_i1(val)
         return codegen.builder.zext(codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1)), codegen.i8)
 
-    if op == "~":
+    if op == COMPLEMENT_OP:
         return codegen.builder.not_(val)
 
     raise NotImplementedError(f"unknown UnaryOp: {op!r}")
@@ -53,9 +54,9 @@ def emit_contract_relation(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: 
     `==` and `!=` read the `Eq` contract, the order operators read the `Ord` contract. A
     value of a type that moves by address may be its address."""
     from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
-    if op == "==":
+    if op == EQ_OP:
         return emit_value_eq(codegen, lhs, rhs, ty)
-    if op == "!=":
+    if op == NE_OP:
         return codegen.builder.not_(emit_value_eq(codegen, lhs, rhs, ty))
     order = emit_value_compare(codegen, lhs, rhs, ty)
     return codegen.builder.icmp_signed(op, order, ir.Constant(order.type, 0))
@@ -124,7 +125,7 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
 
 def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
     """Emit bitwise operations on integer values. Two constants are an instruction too."""
-    if (op in ("<<", ">>")
+    if (op in SHIFT_OPS
             and isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType)):
         return _emit_shift(codegen, op, left, right, left_type)
 
@@ -174,7 +175,7 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
         places = count
     places = builder.and_(places, ir.Constant(value.type, width - 1))
 
-    if op == "<<":
+    if op == SHL_OP:
         shifted = builder.shl(value, places)
         emptied = ir.Constant(value.type, 0)
     elif is_unsigned_int(value_type):

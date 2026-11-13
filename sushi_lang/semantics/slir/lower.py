@@ -78,6 +78,7 @@ from sushi_lang.semantics.slir import lower_division as division
 from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_globals as globals_
+from sushi_lang.semantics.operators import DIVISION_OPS, SHORT_CIRCUIT_OPS
 from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_takes as takes
 from sushi_lang.semantics.slir import lower_try as tries
@@ -527,11 +528,11 @@ class Lowering:
         return r.Use(self.operand(expr, in_place=True))
 
     def binary(self, node: e.Binary) -> Value:
-        if node.op in ("and", "or"):
+        if node.op in SHORT_CIRCUIT_OPS:
             return ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
         lhs = agg.settled(self, node.lhs, self.operand(node.lhs), (node.rhs,))
         rhs = self.operand(node.rhs)
-        if node.op in ("/", "%"):
+        if node.op in DIVISION_OPS:
             division.check_division(self, lhs, rhs, self.type_of(node), node.loc)
         return r.Binary(node.op, lhs, rhs, user=True)
 

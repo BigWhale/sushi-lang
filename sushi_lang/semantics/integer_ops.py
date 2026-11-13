@@ -29,6 +29,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
 from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.operators import DIVISION_OPS, DIV_OP, ORDERING_OPS, SHIFT_OPS, SHR_OP
 
 
 @dataclass(frozen=True)
@@ -59,8 +60,8 @@ _BITWISE: Mapping[str, Callable[[int, int], int]] = {
 }
 
 #: The overflow-checked binary operators and the width-defined ones.
-OVERFLOW_CHECKED = frozenset({*_EXACT, "/", "%"})
-WIDTH_DEFINED = frozenset({*_BITWISE, "<<", ">>"})
+OVERFLOW_CHECKED = frozenset({*_EXACT, *DIVISION_OPS})
+WIDTH_DEFINED = frozenset({*_BITWISE, *SHIFT_OPS})
 
 _COMPARISONS: Mapping[str, Callable[[Any, Any], bool]] = {
     "==": operator.eq, "!=": operator.ne,
@@ -69,7 +70,7 @@ _COMPARISONS: Mapping[str, Callable[[Any, Any], bool]] = {
 
 #: The comparison operators, and the ones of them that ORDER their operands.
 COMPARISONS = frozenset(_COMPARISONS)
-ORDERINGS = frozenset({"<", "<=", ">", ">="})
+ORDERINGS = frozenset(ORDERING_OPS)
 
 
 def binary(op: str, left: int, right: int, ty: Type) -> Answer:
@@ -77,11 +78,11 @@ def binary(op: str, left: int, right: int, ty: Type) -> Answer:
     width = _width(ty)
     if op in _EXACT:
         return _checked(_EXACT[op](left, right), ty)
-    if op in ("/", "%"):
+    if op in DIVISION_OPS:
         return _divide(op, left, right, ty)
     if op in _BITWISE:
         return Folded(wrap_to_integer_type(_BITWISE[op](left, right), ty))
-    if op in ("<<", ">>"):
+    if op in SHIFT_OPS:
         return _shift(op, left, right, ty, width)
     er.raise_internal_error("CE0000", detail=f"no integer operator {op!r}")
 
@@ -135,7 +136,7 @@ def _divide(op: str, left: int, right: int, ty: Type) -> Answer:
         return Refusal.DIVISION_BY_ZERO
     magnitude = abs(left) // abs(right)
     quotient = -magnitude if (left < 0) != (right < 0) else magnitude
-    if op == "/" or not fits_integer_type(quotient, ty):
+    if op == DIV_OP or not fits_integer_type(quotient, ty):
         return _checked(quotient, ty)
     remainder = abs(left) % abs(right)
     return _checked(-remainder if left < 0 else remainder, ty)
@@ -151,6 +152,6 @@ def _shift(op: str, value: int, count: int, ty: Type, width: int) -> Answer:
     """
     if count < 0:
         return Refusal.NEGATIVE_SHIFT
-    if op == ">>":
+    if op == SHR_OP:
         return Folded(value >> min(count, width))
     return Folded(0 if count >= width else wrap_to_integer_type(value << count, ty))

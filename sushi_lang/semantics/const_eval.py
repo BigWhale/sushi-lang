@@ -33,6 +33,8 @@ from sushi_lang.semantics.namespaces import NamespaceRef, NamespaceTable, UnitSc
 from sushi_lang.semantics.passes.collect import ConstantTable
 from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.operators import (
+    ADD_OP, COMPLEMENT_OP, DIVISION_OPS, NEG_OP, NOT_OP, SHIFT_OPS)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.stdlib_registry import StdlibFunction
@@ -218,7 +220,7 @@ def float_arithmetic(op: str, left: ScalarConstant,
     """`left op right` for `+ - * / %` where an operand is a float, or None for a division
     by zero. The value has the type of the left operand; a pair of two kinds is CE2510's
     to report."""
-    if op in ('/', '%') and right.value == 0:
+    if op in DIVISION_OPS and right.value == 0:
         return None
     return ScalarConstant(_FLOAT_ARITHMETIC[op](float(left.value), float(right.value)),
                           left.semantic_type)
@@ -635,7 +637,7 @@ class ConstantEvaluator:
         if left_val is None or right_val is None:
             return None
 
-        if expr.op == '+' and BuiltinType.STRING in (left_val.semantic_type,
+        if expr.op == ADD_OP and BuiltinType.STRING in (left_val.semantic_type,
                                                      right_val.semantic_type):
             emit_string_plus(self.reporter, span)
             return None
@@ -661,7 +663,7 @@ class ConstantEvaluator:
         if operand is None:
             return None
 
-        if expr.op == 'neg':
+        if expr.op == NEG_OP:
             negated = (None if not isinstance(operand, ScalarConstant)
                        else negate_constant(operand, leaf=isinstance(expr.expr, IntLit)))
             if negated is None:
@@ -674,7 +676,7 @@ class ConstantEvaluator:
                                       negated.semantic_type)
             return negated
 
-        elif expr.op == '~':
+        elif expr.op == COMPLEMENT_OP:
             if is_integer_constant(operand):
                 result = integer_ops.complement(operand.value, operand.semantic_type)  # type: ignore[arg-type]
                 return ScalarConstant(result, operand.semantic_type)
@@ -682,7 +684,7 @@ class ConstantEvaluator:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='bitwise NOT on non-integer type')
                 return None
 
-        elif expr.op == 'not':
+        elif expr.op == NOT_OP:
             if is_bool_constant(operand):
                 return ScalarConstant(not operand.value, BuiltinType.BOOL)
             else:
@@ -914,7 +916,7 @@ class ConstantEvaluator:
         the one a body writes).
         """
         if not is_integer_constant(left) or not is_integer_constant(right):
-            what = 'shift' if op in ('<<', '>>') else f'bitwise {op}'
+            what = 'shift' if op in SHIFT_OPS else f'bitwise {op}'
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'{what} on non-integer type')
             return None
 

@@ -23,6 +23,7 @@ from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Conversion
+from sushi_lang.semantics.operators import SHORT_CIRCUIT_OPS
 
 from . import arms
 from .borrows import BY_ADDRESS, check_borrow as borrow_place
@@ -35,9 +36,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
 
     from . import BorrowChecker
-
-
-SHORT_CIRCUIT = frozenset({"and", "or"})
 
 
 def check_leaf(_checker: 'BorrowChecker',
@@ -84,7 +82,7 @@ def check_binary(checker: 'BorrowChecker', node: e.Binary) -> None:
     """The right operand of `and` and of `or` runs on some paths only: the path that
     skips it and the path through it join, as the two blocks of an `if` do."""
     arms.check(checker, node.lhs)
-    if node.op not in SHORT_CIRCUIT:
+    if node.op not in SHORT_CIRCUIT_OPS:
         arms.check(checker, node.rhs)
         return
     skips = snapshot_flow(checker)
