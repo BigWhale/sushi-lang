@@ -1,0 +1,83 @@
+# The count of a range from the smallest i32 to the largest is the arithmetic of the
+# compiler: it is computed at 64 bits, and the overflow mode does not check it. So the walk
+# does not trap, it starts at the smallest value, and a range near the largest value walks
+# the right number of values. Each form is here: literal bounds, run-time bounds, `..=`,
+# `.rev()`, and a range as a value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-2147483648 -2147483647 -2147483646\n-2147483648 -2147483647 -2147483646\n-2147483648 -2147483647 -2147483646\n2147483646 2147483645 2147483644\n2147483645 2147483646\n2147483645 2147483646 2147483647\n2147483646 2147483645\n-2147483648 -2147483647\n"
+
+use <collections/iter>
+
+fn add(string seen, i32 i) string:
+    if (seen == ""):
+        return "{i}"
+    return "{seen} {i}"
+
+fn first_three(i32 low, i32 high) string:
+    let string seen = ""
+    let i32 n = 0
+    foreach(i in low..high):
+        seen := add(seen, i)
+        n := n + 1
+        if (n == 3):
+            break
+    return seen
+
+fn main() i32:
+    let string literal = ""
+    let i32 n = 0
+    foreach(i in -2147483648..2147483647):
+        literal := add(literal, i)
+        n := n + 1
+        if (n == 3):
+            break
+    println(literal)
+
+    let i32 low = -2147483648
+    let i32 high = 2147483647
+    println(first_three(low, high))
+
+    let string inclusive = ""
+    n := 0
+    foreach(i in low..=high):
+        inclusive := add(inclusive, i)
+        n := n + 1
+        if (n == 3):
+            break
+    println(inclusive)
+
+    let string down = ""
+    n := 0
+    foreach(i in (low..high).rev()):
+        down := add(down, i)
+        n := n + 1
+        if (n == 3):
+            break
+    println(down)
+
+    let i32 below = high - 2
+    let string near = ""
+    foreach(i in below..high):
+        near := add(near, i)
+    println(near)
+
+    let string near_inclusive = ""
+    foreach(i in below..=high):
+        near_inclusive := add(near_inclusive, i)
+    println(near_inclusive)
+
+    let string near_down = ""
+    foreach(i in (below..high).rev()):
+        near_down := add(near_down, i)
+    println(near_down)
+
+    let string as_value = ""
+    let Iterator@(i32) it = low..high
+    n := 0
+    foreach(i in it):
+        as_value := add(as_value, i)
+        n := n + 1
+        if (n == 2):
+            break
+    println(as_value)
+    return 0

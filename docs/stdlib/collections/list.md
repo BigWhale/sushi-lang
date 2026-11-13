@@ -4,6 +4,12 @@
 
 Generic growable array with automatic memory management.
 
+An index or a count argument, which the signatures below write as `i32`, is an index
+position: it takes a value of any integer type, and a bare literal there takes `i64` (see
+[ADR 0001](../../adr/0001-index-width-i64.md)). This holds for `with_capacity`, `get`, `insert`, `remove`, `reserve` and
+`index_of_from`. A capacity is an `i32`, so a count of `with_capacity` or `reserve` above
+the `i32` range stops the program with RE2033.
+
 ## Import
 
 ```sushi

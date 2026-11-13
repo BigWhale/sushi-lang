@@ -5,6 +5,13 @@
 Comprehensive string manipulation methods. Sushi strings are UTF-8 encoded fat pointers
 with three fields: `{i8* data, i32 size, i8 owned}`.
 
+An index or a count argument, which the signatures below write as `i32`, is an index
+position: it takes a value of any integer type, and a bare literal there takes `i64` (see
+[ADR 0001](../../adr/0001-index-width-i64.md)). This holds for `sleft`, `sright`, `char_at`, `repeat`, `s`, `ss`,
+`pad_left` and `pad_right`. An index or a bound above the `i32` range clamps as any value
+above the size does. The count of `repeat` and the width of `pad_left` and `pad_right` set
+the length of the result, so a value above the `i32` range stops the program with RE2033.
+
 ## String Literals
 
 Sushi supports two string literal syntaxes:

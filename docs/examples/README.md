@@ -70,7 +70,7 @@ Named parameter syntax for struct construction - order-independent, prevents boo
 
 ### 30-tuples.sushi
 Tuples - a function with two results, a destructure, a tuple pattern, and the stdlib
-functions that answer a tuple (`divmod`, `split_once`, `enumerate`, `zip`, `pairs()`).
+functions and methods that answer a tuple (`divmod`, `split_once`, `enumerate`, `zip`, `pairs()`).
 
 ## Advanced Features
 

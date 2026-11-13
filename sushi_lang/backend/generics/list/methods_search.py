@@ -35,5 +35,5 @@ def emit_list_index_of_from(codegen: Any, list_ptr: ir.Value, list_type: StructT
     """`list.index_of_from(v, start)` as `Maybe@(i32)`; the start is clamped."""
     length, data = list_slots(codegen, list_ptr)
     return search.emit_array_index_of_from(codegen, data, length, args[0],
-                                           codegen.utils.require_i32(args[1]),
+                                           codegen.utils.index_as_i32(args[1]),
                                            extract_element_type(list_type, codegen))

@@ -101,11 +101,13 @@ fn Words.next(_1: Words @inout) -> Maybe@(string) {
     let _3: i32
     let _4: bool
     let _5: i32
-    let _6: i32
-    let _7: u32
-    let _8: u32
-    let _9: bool
-    let _10: string
+    let _6: i64
+    let _7: i32
+    let _8: i64
+    let _9: u64
+    let _10: u64
+    let _11: bool
+    let _12: string
 
   bb0:
     StorageLive(_2)
@@ -132,20 +134,26 @@ fn Words.next(_1: Words @inout) -> Maybe@(string) {
     StorageLive(_5)
     _5 = user copy (_1.1) - const 1_i32
     StorageLive(_6)
-    _6 = len((_1.0))
-    _7 = copy _5 as u32
-    _8 = copy _6 as u32
-    _9 = copy _7 < copy _8
-    switchInt(copy _9) -> [0: bb4, otherwise: bb5]
+    _6 = copy _5 as i64
+    StorageLive(_7)
+    _7 = len((_1.0))
+    StorageLive(_8)
+    _8 = copy _7 as i64
+    _9 = copy _6 as u64
+    _10 = copy _8 as u64
+    _11 = copy _9 < copy _10
+    switchInt(copy _11) -> [0: bb4, otherwise: bb5]
 
   bb4:
-    trap RE2020(copy _5, copy _6)
+    trap RE2020(copy _6, copy _8)
 
   bb5:
-    StorageLive(_10)
-    _10 = clone(copy ((_1.0)[copy _5]))
-    _0 = Maybe::Some(move _10)
-    StorageDead(_10)
+    StorageLive(_12)
+    _12 = clone(copy ((_1.0)[copy _6]))
+    _0 = Maybe::Some(move _12)
+    StorageDead(_12)
+    StorageDead(_8)
+    StorageDead(_7)
     StorageDead(_6)
     StorageDead(_5)
     return

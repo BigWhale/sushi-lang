@@ -1,8 +1,0 @@
-# A byte literal is a u8 value from 0 to 255. Its negation is out of range for u8, also
-# in an i32 position: only a bare byte literal takes i32 from an index.
-# EXPECT_ERROR_CODES_EXACT: CE2073
-# EXPECT_STDERR_CONTAINS: literal -1 out of range for u8
-fn main() i32:
-    let i32[] a = from([1, 2, 3])
-    println(a[-a'\x01'])
-    return 0

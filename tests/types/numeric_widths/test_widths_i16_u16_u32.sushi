@@ -1,5 +1,7 @@
 # A cast into i16, u16 and u32 keeps the low bits, a compare reads the sign of the width,
-# and a print shows the value at the width.
+# and a print shows the value at the width. The sum of two u16 wraps, so the build is
+# `--overflow=wrap`.
+# COMPILER_FLAGS: --overflow=wrap
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "1234\n-31072\n34464\n65525\ntrue\nfalse\n40000\n-5\n4294967291\ntrue\ntrue\nfalse\n1\n4294967295\n3000000000\ntrue\n4464\n-25536\n705032704\nfalse\n"
 

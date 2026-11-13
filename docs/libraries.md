@@ -647,7 +647,8 @@ example that drifts out of date says so. `--lib-info --docs` prints the example 
 caption; the plain `--lib-info` report prints no doc block.
 
 ```sushi
-use <math>
+public error AddError:
+    Overflow
 
 ##:
 Adds two integers.
@@ -655,9 +656,9 @@ Adds two integers.
 - Parameter a: The first addend.
 - Parameter b: The second addend.
 - Returns: The sum.
-- Errors: `MathError.Overflow` when the sum does not fit an `i32`.
+- Errors: `AddError.Overflow` when the sum does not fit an `i32`.
 :##
-public fn safe_add(i32 a, i32 b) i32 | MathError:
+public fn safe_add(i32 a, i32 b) i32 | AddError:
     return Result.Ok(a + b)
 ```
 

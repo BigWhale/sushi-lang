@@ -55,14 +55,14 @@ return and error types:
 | `fn(i32) -> i32` | takes an `i32`, returns `i32`; bare, no error channel |
 | `fn(i32, string) -> bool` | two parameters, returns `bool` |
 | `fn() -> ~` | no parameters, blank (`~`) return |
-| `fn(i32) -> i32 \| MathError` | an error channel: a call answers `Result@(i32, MathError)` (the `\| E` mirrors `fn f() i32 \| MathError`) |
+| `fn(i32) -> i32 \| EnvError` | an error channel: a call answers `Result@(i32, EnvError)` (the `\| E` mirrors `fn f() i32 \| EnvError`) |
 
 The arrow `->` is required, and the return type is mandatory. Function types nest and compose
 like any other type — they work as parameter types, struct fields, and generic type arguments
 (`List@(fn(i32) -> i32)`).
 
 A function type has an error channel only when it writes `| E`. The channel is part of the type,
-so `fn(i32) -> i32` and `fn(i32) -> i32 | MathError` do not convert ([CE2002](error-catalog.md#ce2002)). A `| E` written
+so `fn(i32) -> i32` and `fn(i32) -> i32 | EnvError` do not convert ([CE2002](error-catalog.md#ce2002)). A `| E` written
 after a function type belongs to that function type. Thus a function with a channel that returns
 a function type writes the explicit form, `fn make() Result@(fn(i32) -> i32, StdError):`. The
 form `fn make() fn(i32) -> i32 | StdError:` is a BARE function that returns a function type with

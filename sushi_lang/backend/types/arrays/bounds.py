@@ -21,12 +21,16 @@ def emit_bounds_check(
 ) -> None:
     """Emit an `index >= 0 && index < size` guard around the current position.
 
-    One unsigned compare is the guard: a size is a non-negative i32, and a negative index
-    read as unsigned is above every such size.
+    The index and the size are sign-extended to i64, and one unsigned compare is the guard:
+    a size is not negative, and a negative index read as unsigned is above every size. The
+    index of an index position is an i64 (docs/adr/0001), so an index above 2^32 fails too,
+    and RE2020 prints the two i64 values.
 
     `inclusive` admits `index == size` too: an insert position may be one past the end.
     """
     builder = codegen.builder
+    index_value = sign_extend_to_i64(codegen, index_value)
+    size_value = sign_extend_to_i64(codegen, size_value)
 
     bounds_ok = builder.icmp_unsigned("<=" if inclusive else "<", index_value, size_value,
                                       name=f"{prefix}_in_bounds")
@@ -47,6 +51,12 @@ def emit_bounds_check(
         on_fail()
 
     builder.position_at_end(ok_block)
+
+
+def sign_extend_to_i64(codegen: 'LLVMCodegen', value: ir.Value) -> ir.Value:
+    """`value`, a signed integer, sign-extended to i64."""
+    i64 = ir.IntType(64)
+    return value if value.type == i64 else codegen.builder.sext(value, i64)
 
 
 def emit_checked_maybe(

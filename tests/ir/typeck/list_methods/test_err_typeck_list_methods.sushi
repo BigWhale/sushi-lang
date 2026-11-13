@@ -1,10 +1,10 @@
 # EXPECT_ERROR_CODES_EXACT: CE2006
-# EXPECT_STDERR_CONTAINS: "argument type mismatch at position 1: expected i32, got bool"
+# EXPECT_STDERR_CONTAINS: "argument type mismatch at position 1: expected an integer, got bool"
 # EXPECT_DUMP_SHIR: test_err_typeck_list_methods.shir
 #
 # A method of `List@(T)` is a `Builtin` callee of the `list` family, and it answers the
 # type of its row. A slot of `push` and each argument of `insert` take their value by
-# position (`Owned`); each other argument borrows (`Guaranteed`). An index is an i32, an
+# position (`Owned`); each other argument borrows (`Guaranteed`). An index takes any integer type, an
 # element has the type `T`, and a search needle has the type `T` too. A wrong index
 # type is CE2006 at the argument.
 

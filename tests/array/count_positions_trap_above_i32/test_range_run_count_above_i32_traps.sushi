@@ -1,0 +1,12 @@
+# The count of a range run is computed at 64 bits. A range from the smallest i32 to the
+# largest has more values than an i32 length can hold, so the array stops the program. The
+# count does not wrap to -1 and give an empty array.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2033: count 4294967295 is too large for a length"
+fn main() i32:
+    let i32 low = -2147483648
+    let i32 high = 2147483647
+    let i32[] a = from([low..high])
+    println(a.len())
+    return 0

@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.integer_width import integer_range
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import terminators as tm
@@ -17,7 +18,9 @@ if TYPE_CHECKING:
 
 def check_division(low: Lowering, left: p.Operand, right: p.Operand, ty: Type,
                    span: Span) -> None:
-    """The checks of `left / right` and `left % right` at the type `ty`."""
+    """The checks of `left / right` and `left % right` at the type `ty`. A divisor of 0
+    traps in each overflow mode; the smallest signed value over -1 traps in `trap` mode
+    alone, and in `wrap` mode the backend gives its wrapped answer."""
     limits = integer_range(ty)
     if limits is None:
         return
@@ -26,7 +29,8 @@ def check_division(low: Lowering, left: p.Operand, right: p.Operand, ty: Type,
     cases: list[tuple[int, BlockId]] = []
     if divisor is None or divisor == 0:
         cases.append((0, _trap(low, tm.Trap("RE2030", (), span))))
-    overflow = smallest < 0 and divisor in (None, -1) and dividend in (None, smallest)
+    overflow = (low.overflow is OverflowMode.TRAP and smallest < 0
+                and divisor in (None, -1) and dividend in (None, smallest))
     if not cases and not overflow:
         return
     minus_one = low.new_block() if overflow and divisor is None else None

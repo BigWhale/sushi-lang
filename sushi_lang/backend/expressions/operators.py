@@ -4,8 +4,11 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.integer_ops import EXACT_OPS
+from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.operators import (
-    COMPLEMENT_OP, EQUALITY_OPS, EQ_OP, NEG_OP, NE_OP, NOT_OP, SHIFT_OPS, SHL_OP)
+    COMPLEMENT_OP, DIVISION_OPS, DIV_OP, EQUALITY_OPS, EQ_OP, NEG_OP, NE_OP, NOT_OP,
+    SHIFT_OPS, SHL_OP, SUB_OP)
 from sushi_lang.semantics.type_predicates import is_unsigned_int
 
 if TYPE_CHECKING:
@@ -18,13 +21,18 @@ def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
     return codegen.builder.fneg(val)
 
 
-def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool) -> ir.Value:
-    """A unary operator over one LLVM value: the SLIR emitter calls it for a `Unary`."""
+def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool,
+                     operand_type: 'Optional[Type]' = None, checked: bool = False) -> ir.Value:
+    """A unary operator over one LLVM value: the SLIR emitter calls it for a `Unary`.
+    `checked` is the user mark: an integer negation that the user wrote follows the
+    overflow mode."""
     if op == NEG_OP:
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
-        else:
-            return codegen.builder.sub(ir.Constant(val.type, 0), val)
+        zero = ir.Constant(val.type, 0)
+        if _follows(codegen, checked, OverflowMode.TRAP):
+            return _emit_trapping(codegen, SUB_OP, zero, val, operand_type)
+        return codegen.builder.sub(zero, val)
 
     if op == NOT_OP:
         if to_i1:
@@ -88,12 +96,19 @@ def _require_one_width(op: str, left: ir.Value, right: ir.Value) -> None:
         raise_internal_error("CE0139", op=op, left=str(left.type), right=str(right.type))
 
 
-def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
+def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value,
+                    left_type: 'Optional[Type]' = None, checked: bool = False) -> ir.Value:
     """Emit arithmetic operations on integer or floating-point values.
 
     Two constant operands are emitted as the instruction too. The backend computes no
     integer operator of its own: the constant evaluator is the one compile-time home
     of the semantics, and LLVM folds the instruction at run time's level (#681).
+
+    `checked` is the user mark: an integer operation that the user wrote follows the
+    overflow mode (docs/adr/0002-overflow-mode.md). In `trap` mode, `+ - *` stop the
+    program with RE2032 on a result that the type cannot hold; SLIR lowering checks `/`
+    and `%` before the operation. In `wrap` mode, a signed `/` by -1 is the negation and
+    a signed `%` by -1 is 0, so the smallest value over -1 has an answer.
     """
     if isinstance(left.type, (ir.FloatType, ir.DoubleType)):
         float_ops = {
@@ -110,6 +125,10 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
         # signedness (the same-type binop rule guarantees both operands share
         # one signedness, so the left operand's type suffices).
         unsigned = is_unsigned_int(left_type)
+        if _follows(codegen, checked, OverflowMode.TRAP) and op in EXACT_OPS:
+            return _emit_trapping(codegen, op, left, right, left_type)
+        if _follows(codegen, checked, OverflowMode.WRAP) and op in DIVISION_OPS and not unsigned:
+            return _emit_wrapping_division(codegen, op, left, right)
         int_ops = {
             "+": codegen.builder.add,
             "-": codegen.builder.sub,
@@ -121,6 +140,53 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
             return int_ops[op](left, right)
 
     raise NotImplementedError(f"arithmetic op not supported yet: {op!r}")
+
+
+_OVERFLOW_INTRINSICS = {"+": "add", "-": "sub", "*": "mul"}
+
+
+def _follows(codegen: 'LLVMCodegen', checked: bool, mode: OverflowMode) -> bool:
+    """Whether an operation follows the overflow mode `mode`: the user wrote it
+    (`checked`), and the build has that mode."""
+    return checked and codegen.overflow is mode
+
+
+def _emit_trapping(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value,
+                   ty: 'Optional[Type]') -> ir.Value:
+    """`left op right` for `+ - *` through the `with.overflow` intrinsic of the sign of
+    `ty`. A result that `ty` cannot hold stops the program with RE2032, which names the
+    operator `op` (a negation is `0 - x`, and its text names `-`)."""
+    from sushi_lang.semantics.generics.type_display import display_type
+    builder = codegen.builder
+    signed = not is_unsigned_int(ty)
+    kind = _OVERFLOW_INTRINSICS[op]
+    name = f"llvm.{'s' if signed else 'u'}{kind}.with.overflow.{left.type.intrinsic_name}"
+    intrinsic = codegen.module.globals.get(name)
+    if intrinsic is None:
+        answer = ir.LiteralStructType([left.type, ir.IntType(1)])
+        intrinsic = ir.Function(codegen.module,
+                                ir.FunctionType(answer, [left.type, left.type]), name=name)
+    pair = builder.call(intrinsic, [left, right])
+    trap = codegen.runtime.errors.exit_block(
+        builder.function, "RE2032", op=op,
+        type=display_type(ty) if ty is not None else str(left.type))
+    held = builder.append_basic_block(name="no_overflow")
+    builder.cbranch(builder.extract_value(pair, 1), trap, held)
+    builder.position_at_end(held)
+    return builder.extract_value(pair, 0)
+
+
+def _emit_wrapping_division(codegen: 'LLVMCodegen', op: str, left: ir.Value,
+                            right: ir.Value) -> ir.Value:
+    """A signed `/` or `%` in `wrap` mode. A divisor of -1 gives `0 - left` or 0 with no
+    `sdiv`, because the machine instruction has no answer for the smallest value over -1."""
+    builder = codegen.builder
+    minus_one = builder.icmp_signed("==", right, ir.Constant(right.type, -1))
+    divisor = builder.select(minus_one, ir.Constant(right.type, 1), right)
+    if op == DIV_OP:
+        return builder.select(minus_one, builder.sub(ir.Constant(left.type, 0), left),
+                              builder.sdiv(left, divisor))
+    return builder.select(minus_one, ir.Constant(left.type, 0), builder.srem(left, divisor))
 
 
 def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:

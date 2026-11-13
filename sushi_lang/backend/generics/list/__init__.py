@@ -63,7 +63,7 @@ def _iter(*_operands: Any) -> ir.Value:
 LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "new": ContainerMethod(lambda c, _v, t, _a: emit_list_new(c, t), static=True),
     "with_capacity": ContainerMethod(
-        lambda c, _v, t, a: emit_list_with_capacity(c, c.utils.require_i32(a[0]), t),
+        lambda c, _v, t, a: emit_list_with_capacity(c, c.utils.count_as_i32(a[0]), t),
         static=True),
     "len": ContainerMethod(lambda c, v, _t, _a: emit_list_len(c, v)),
     "capacity": ContainerMethod(lambda c, v, _t, _a: emit_list_capacity(c, v)),

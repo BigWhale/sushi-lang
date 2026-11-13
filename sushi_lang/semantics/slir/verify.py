@@ -91,7 +91,8 @@ if TYPE_CHECKING:
 _TERMINATORS = get_args(tm.SlirTerminator)
 
 #: The type of the operand that each printf conversion of a runtime text takes (ir.md 8.8).
-TRAP_OPERAND_TYPES: dict[str, Type] = {"%d": BuiltinType.I32, "%.*s": BuiltinType.STRING}
+TRAP_OPERAND_TYPES: dict[str, Type] = {"%d": BuiltinType.I32, "%lld": BuiltinType.I64,
+                                       "%.*s": BuiltinType.STRING}
 
 
 def _of_a_part(held: Type) -> Type:
@@ -569,13 +570,14 @@ class Check:
         return base.part(parts[place.index])
 
     def index_place(self, place: p.Index, span: Span) -> _Typed:
-        """An element of an array or of a `List@(T)`, or a byte of a string, at an `i32`
-        index. The element type of a `List@(T)` is its type argument, which the tables
-        resolve."""
+        """An element of an array or of a `List@(T)`, or a byte of a string, at an `i64`
+        index, or at the `i32` counter of a walk. The element type of a `List@(T)` is its
+        type argument, which the tables resolve."""
         base, ty = self.base(place, span)
         self.operand(place.index, span)
-        if self.operand_type(place.index, span) not in (BuiltinType.I32, None):
-            self.fail(TYPED_PLACES, f"{show(place)} has an index that is no i32", span)
+        if self.operand_type(place.index, span) not in (BuiltinType.I64, BuiltinType.I32,
+                                                        None):
+            self.fail(TYPED_PLACES, f"{show(place)} has an index that is no i64", span)
         if ty == BuiltinType.STRING:
             return base.part(BuiltinType.U8, index=place.index)
         if is_instance_of(ty, "List"):

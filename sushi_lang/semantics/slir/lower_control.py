@@ -348,15 +348,19 @@ def _counted(low: Lowering, stmt: s.Loop, source: s.Items, range_: e.Range) -> N
     (see `_while`), exit."""
     count, item = _range_formula(low, range_)
     counted_walk(low, stmt, count, lambda at: () if isinstance(source.binder, s.Discard) else (
-        (None, ((source.binder, item(at)),)),))
+        (None, ((source.binder, item(at)),)),), wide=True)
 
 
 def counted_walk(low: Lowering, stmt: s.Loop, count: p.Operand,
-                 binds: Callable[[p.Operand], tuple[Binds, ...]]) -> None:
+                 binds: Callable[[p.Operand], tuple[Binds, ...]], wide: bool = False) -> None:
     """The counter `k` at 0, a header that compares it with `count`, the body, which writes
-    the binders of `binds` at `k`, a step block that adds one to `k`, and the exit block."""
+    the binders of `binds` at `k`, a step block that adds one to `k`, and the exit block.
+    A `wide` count is an i64 (a range): `k` is an i64 too, and `binds` gets an i32 copy of
+    `k` that steps with it and wraps, because an item of a range is in the i32 range."""
     span = stmt.loc
-    counter = low.temporary(r.Use(i32(0)), BuiltinType.I32, span)
+    counter = low.temporary(r.Use(i64(0) if wide else i32(0)),
+                            BuiltinType.I64 if wide else BuiltinType.I32, span)
+    at = low.temporary(r.Use(i32(0)), BuiltinType.I32, span) if wide else counter
     header = enter_header(low, stmt)
     among, at_header = header_state(low, stmt)
     low.placement.open_statement()
@@ -365,9 +369,11 @@ def counted_walk(low: Lowering, stmt: s.Loop, count: p.Operand,
     done = None if local is None else low.new_block()
     exit_ = low.new_block()
     rounds(low, stmt, (cond, local, span), body, step, done, exit_, (among, at_header),
-           binds(p.Copy(p.Local(counter))))
-    step.statements.append(st.Assign(
-        p.Local(counter), r.Binary("+", p.Copy(p.Local(counter)), i32(1)), span))
+           binds(p.Copy(p.Local(at))))
+    steps = [(counter, i64(1) if wide else i32(1))] + ([(at, i32(1))] if wide else [])
+    for local, one in steps:
+        step.statements.append(st.Assign(
+            p.Local(local), r.Binary("+", p.Copy(p.Local(local)), one), span))
     step.terminator = tm.Goto(header.id, span)
 
 
@@ -386,18 +392,21 @@ def _range_formula(low: Lowering, range_: e.Range
 def range_operands(low: Lowering, range_: e.Range, start: p.Operand,
                    end: p.Operand) -> tuple[p.Operand, p.Operand]:
     """The first value and the count of a range with the bounds `start` and `end`
-    (`semantics/ranges.py`), for a counted loop and for a run of an array. Two constant bounds
-    give the first value and the count of `plan_range`. Else the count is `end - start`,
-    plus one when inclusive, and a count below one walks nothing; the first value is
+    (`semantics/ranges.py`), for a counted loop and for a run of an array. The first value
+    is an i32 and the count an i64: `i32.MIN..=i32.MAX` has 2^32 values. Two constant bounds
+    give the first value and the count of `plan_range`. Else the count is `end - start` at
+    64 bits, plus one when inclusive, and a count below one walks nothing; the first value is
     `start`, or with `.rev()` the last value: `end`, less one when exclusive."""
     low_value, high_value = int_of(start), int_of(end)
     if low_value is not None and high_value is not None:
         plan = plan_range(low_value, high_value, range_.inclusive, range_.reverse, range_.loc)
-        return i32(plan.first), i32(plan.count)
+        return i32(plan.first), i64(plan.count)
     span = range_.loc
-    count = low.temporary(r.Binary("-", end, start), BuiltinType.I32, span)
+    wide_start = widen_index(low, start, BuiltinType.I32, span)
+    wide_end = widen_index(low, end, BuiltinType.I32, span)
+    count = low.temporary(r.Binary("-", wide_end, wide_start), BuiltinType.I64, span)
     if range_.inclusive:
-        low.emit([st.Assign(p.Local(count), r.Binary("+", p.Copy(p.Local(count)), i32(1)),
+        low.emit([st.Assign(p.Local(count), r.Binary("+", p.Copy(p.Local(count)), i64(1)),
                             span)])
     first = start
     if range_.reverse:
@@ -407,17 +416,52 @@ def range_operands(low: Lowering, range_: e.Range, start: p.Operand,
 
 
 def bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
-    """An `i32` as a constant, or in a local of the statement that later code cannot
+    """An integer as a constant, or in a local of the statement that later code cannot
     change: a bound of a counted loop, an index, a bound of a slice."""
     value = low.value(expr)
     if isinstance(value, r.Use) and isinstance(value.operand, p.Const):
         return value.operand
-    return p.Copy(p.Local(low.temporary(value, BuiltinType.I32, expr.loc)))
+    return p.Copy(p.Local(low.temporary(value, low.type_of(expr), expr.loc)))
+
+
+def index_operand(low: Lowering, expr: e.ShirExpr) -> p.Operand:
+    """The value of an index position as an `i64` (docs/adr/0001): `bound`, then
+    `widen_index`."""
+    return widen_index(low, bound(low, expr), low.type_of(expr), expr.loc)
+
+
+def widen_index(low: Lowering, operand: p.Operand, ty: Type, span: Span) -> p.Operand:
+    """`operand`, of the integer type `ty`, as an `i64`: a constant stays a constant, and
+    any other value goes through a `Cast`, which sign-extends a signed type and zero-extends
+    an unsigned one. A `u64` above the `i64` maximum saturates to that maximum, so it stays
+    too large and never reads as negative: `(x | (x >> 63)) & MAX`."""
+    value = int_of(operand)
+    if value is not None:
+        return i64(min(value, I64_MAX))
+    if ty == BuiltinType.I64:
+        return operand
+
+    def temporary(rvalue: r.Rvalue) -> p.Operand:
+        return p.Copy(p.Local(low.temporary(rvalue, BuiltinType.I64, span)))
+
+    wide = temporary(r.Cast(operand, BuiltinType.I64))
+    if ty != BuiltinType.U64:
+        return wide
+    sign = temporary(r.Binary(">>", wide, i64(63)))
+    return temporary(r.Binary("&", temporary(r.Binary("|", wide, sign)), i64(I64_MAX)))
+
+
+I64_MAX = (1 << 63) - 1
 
 
 def i32(value: int) -> p.Const:
     """The operand of the `i32` constant `value`."""
     return p.Const(k.Int(value, BuiltinType.I32))
+
+
+def i64(value: int) -> p.Const:
+    """The operand of the `i64` constant with the bits of `value`."""
+    return p.Const(k.Int((value + (1 << 63)) % (1 << 64) - (1 << 63), BuiltinType.I64))
 
 
 def int_of(operand: p.Operand) -> int | None:

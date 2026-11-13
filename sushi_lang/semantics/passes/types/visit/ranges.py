@@ -5,12 +5,12 @@ index of a slice, and a position that expects `Iterator@(i32)`. The `foreach` ar
 its range with `check_range_iterable`: the range is no value, so its loop is a
 `CountedRange`. A run is no value either (`check_range_run`), and the reader of the runs
 says when it goes down. A slice has no `Range` node, and its arm checks its two bounds with
-`check_bounds`. A range in any other position comes to the arm of the table,
+`check_slice_bounds`. A range in any other position comes to the arm of the table,
 `check_range`: in a position that expects an `Iterator@(i32)` the range is a value, and any
-other position is CE2122. Each bound is an i32 position
-(`semantics/passes/types/arrays.py`): a bound that is no number is CE2072, and a number of
-another type is CE2121. Readable bounds of a `foreach` range must go up (CE2125,
-`semantics/ranges.py`).
+other position is CE2122. Each bound of a range is an i32: a bound that is no number is
+CE2072, and a number of another type is CE2121. A slice bound is an index position
+(`semantics/passes/types/arrays.py`), which takes any integer type. Readable bounds of a
+`foreach` range must go up (CE2125, `semantics/ranges.py`).
 """
 from __future__ import annotations
 
@@ -20,7 +20,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arrays import (
-    RANGE_BOUND, check_i32_operand, reject_non_i32)
+    SLICE_BOUND, check_index_operand, is_byte_literal, reject_negated_byte,
+    reject_non_index, reject_non_i32_bound)
 from sushi_lang.semantics.ranges import RangePlan, reject_a_range_that_goes_down
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_numeric_type
@@ -72,11 +73,28 @@ def _reject_going_down(validator: TypeValidator, node: e.Range) -> None:
 
 
 def check_bounds(validator: TypeValidator, bounds: tuple[e.ShirExpr, e.ShirExpr]) -> None:
-    """Each bound at i32, the start first; the bounds are checked before either reports."""
-    walked = [(bound, check_i32_operand(validator, bound)) for bound in bounds]
+    """Each bound at i32, the start first; the bounds are checked before either reports. A
+    bare byte literal (`a'x'`), also under a negation, takes i32 from the bound."""
+    walked = [(bound, _check_i32_bound(validator, bound)) for bound in bounds]
     for bound, ty in walked:
         if ty is not None and not is_numeric_type(ty):
             er.emit(validator.reporter, er.ERR.CE2072, bound.loc, got=display_type(ty),
                     expected="integer type")
             continue
-        reject_non_i32(validator, bound, ty, position=RANGE_BOUND)
+        reject_non_i32_bound(validator, bound, ty)
+
+
+def check_slice_bounds(validator: TypeValidator,
+                       bounds: tuple[e.ShirExpr, e.ShirExpr]) -> None:
+    """Each bound of a slice is an index position, the start first; the bounds are checked
+    before either reports."""
+    walked = [(bound, check_index_operand(validator, bound)) for bound in bounds]
+    for bound, ty in walked:
+        reject_non_index(validator, bound, ty, position=SLICE_BOUND)
+
+
+def _check_i32_bound(validator: TypeValidator, node: e.ShirExpr) -> Optional[Type]:
+    if not is_byte_literal(node):
+        return visit.check_expr(validator, node, None)
+    reject_negated_byte(validator, node)
+    return visit.check_expr(validator, node, BuiltinType.I32)

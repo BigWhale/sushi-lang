@@ -78,7 +78,7 @@ fn main() -> i32 {
     StorageDead(_12)
     StorageLive(_14)
     BeginBorrow(b0, _11, peek, for _14)
-    _14 = call builtin list.get(copy _11 @guaranteed, const 0_i32 @guaranteed)
+    _14 = call builtin list.get(copy _11 @guaranteed, const 0_i64 @guaranteed)
     StorageLive(_15)
     _15 = clone(copy _14)
     EndBorrow(b0)

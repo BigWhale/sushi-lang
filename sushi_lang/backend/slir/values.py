@@ -335,7 +335,7 @@ def _binary(state: FunctionState, rvalue: r.Binary) -> ir.Value:
     right = operand_value(state, rvalue.right)
     op = rvalue.op
     if op in ARITHMETIC_OPS:
-        return emit_arithmetic(codegen, op, left, right, ty)
+        return emit_arithmetic(codegen, op, left, right, ty, checked=rvalue.user)
     if op in BITWISE_OPS + SHIFT_OPS:
         return emit_bitwise(codegen, op, left, right, ty)
     if op in COMPARISON_OPS:
@@ -362,9 +362,9 @@ def _is_contract_relation(state: FunctionState, rvalue: r.Binary) -> bool:
 
 
 def _unary(state: FunctionState, rvalue: r.Unary) -> ir.Value:
-    _scalar_type(state, rvalue, type_of_operand(state, rvalue.operand))
+    ty = _scalar_type(state, rvalue, type_of_operand(state, rvalue.operand))
     return emit_unary_value(state.codegen, rvalue.op, operand_value(state, rvalue.operand),
-                            to_i1=False)
+                            to_i1=False, operand_type=ty, checked=rvalue.user)
 
 
 def _cast(state: FunctionState, rvalue: r.Cast) -> ir.Value:

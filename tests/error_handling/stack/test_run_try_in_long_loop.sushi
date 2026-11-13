@@ -14,6 +14,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # TIMEOUT_SECONDS: 120
+# COMPILER_FLAGS: --overflow=wrap
 
 enum Tag:
     Some(i32)

@@ -1,10 +1,8 @@
-# `divmod` takes two arguments.
+# `a.divmod(b)` takes one argument, the divisor.
 # EXPECT_ERROR_CODE: CE2009
-use <math>
 
 fn main() i32:
     let i32 a = 7
-    match divmod(a):
-        Result.Ok(_) -> println("ok")
-        Result.Err(_) -> println("failed")
+    let (q, r) = a.divmod()
+    println("{q} {r}")
     return 0

@@ -28,9 +28,11 @@ fn sum_two(i32 a, i32 b) i32:
 
 # The error channel is OPT-IN (docs/design/error-channel.md): `| E` gives a Result, and
 # no `| E` is BARE. A function that can fail writes the channel -- that is the normal form.
-fn divide(i32 a, i32 b) i32 | MathError:    # call yields Result@(i32, MathError)
+error DivError:
+    DivisionByZero
+fn divide(i32 a, i32 b) i32 | DivError:     # call yields Result@(i32, DivError)
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)
+        return Result.Err(DivError.DivisionByZero)
     return Result.Ok(a / b)
 fn parse_port(string s) i32 | StdError:     # no default error type: write StdError
     return Result.Ok(s.len())

@@ -4,6 +4,24 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **`divmod` is a method of each integer type, and it answers a bare `(T, T)`.** Write
+  `a.divmod(b)`. The method needs no import. A divisor of 0 stops the program with
+  `RE2030`, and a signed `MIN.divmod(-1)` stops it with `RE2031`, the same as `/`. The
+  free function `divmod(a, b)` and its `| MathError` channel are removed. BREAKING
+  (#1300).
+- **`MathError` is removed.** No stdlib function answered it after the change to
+  `divmod`. A program that names it declares its own error type with `error`. BREAKING
+  (#1300).
+- **An index position takes any integer type.** `arr[i]`, `s[i]`, a slice bound, a repeat
+  count and the position or count argument of a built-in method of `T[]`, `List@(T)` and
+  `string` take a value of any integer type, so a `u8` or an `i64` needs no `as i32`. A
+  bare literal there is an `i64`. The bounds check compares the index and the length at 64
+  bits, so a negative index and an index of 2^32 both stop the program with `RE2020`, which
+  prints the 64-bit index. A range bound is still `i32`, and `len()` still answers `i32`
+  (docs/adr/0001-index-width-i64.md, #1298).
+
 ### Fixed
 
 - **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is
@@ -18,6 +36,17 @@ All notable changes to Sushi Lang will be documented in this file.
   now joins the path that skips it with the path through it, as for the two blocks of an
   `if`. The local is freed one time on each path. Before, a program such as
   `if (n < 3 and take(nom s)):` stopped with an internal error `CE0000`.
+
+### Added
+
+- **`--overflow=trap|wrap`, and integer overflow traps by default.** At run time, an
+  integer `+`, `-`, `*` or unary minus whose result the type cannot hold stops the program
+  with `RE2032`, which names the operator and the type (`integer overflow: '+' on i32`).
+  `.add_up()` on an integer array follows the same rule. `--overflow=wrap` keeps the old
+  behaviour: the bits that leave the type are lost, and the smallest signed value over -1
+  gives that value for `/` and 0 for `%`. A division by zero stops the program in both
+  modes. The arithmetic that the compiler makes (the count of a range) is not checked. The
+  mode is part of the cache key. See `docs/adr/0002-overflow-mode.md` (#1299).
 
 ## [0.17.0] - 2026-11-11
 

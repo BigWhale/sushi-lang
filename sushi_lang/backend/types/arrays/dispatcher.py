@@ -75,12 +75,12 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
                                                   to_i1=False)
             if name == "index_of_from":
                 return search.emit_array_index_of_from(codegen, data, count, needle,
-                                                       _index(codegen, args[1]), element)
+                                                       _clamped(codegen, args[1]), element)
             return search.emit_array_index_of(codegen, data, count, needle, element)
 
         case "starts_with" | "eq_range":
             # `starts_with(prefix)` is `eq_range(0, prefix)`.
-            start = zero if name == "starts_with" else _index(codegen, args[0])
+            start = zero if name == "starts_with" else _clamped(codegen, args[0])
             other_data, other_len = _source(codegen, args[-1])
             data, count = state()
             return emit_array_eq_range(codegen, data, count, start, other_data, other_len,
@@ -109,7 +109,9 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
 
         case "clear" | "truncate" | "resize":
             # Only `resize` has a fill value, a borrow: each added slot takes its own copy.
-            new_len = zero if name == "clear" else _index(codegen, args[0])
+            new_len = (zero if name == "clear"
+                       else codegen.utils.count_as_i32(args[0][0]) if name == "resize"
+                       else _clamped(codegen, args[0]))
             fill = args[1][0] if name == "resize" else None
             return core.emit_dynamic_array_resize(codegen,
                                                   _descriptor(receiver, array_type, name),
@@ -164,7 +166,7 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
             descriptor = _descriptor(receiver, array_type, name)
             source_data, source_len = _source(codegen, args[0])
             if name == "extend_range":
-                start, count = _index(codegen, args[1]), _index(codegen, args[2])
+                start, count = _clamped(codegen, args[1]), _clamped(codegen, args[2])
             else:
                 start, count = zero, source_len
             return core.emit_dynamic_array_extend(codegen, descriptor,
@@ -187,12 +189,12 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
             descriptor = _descriptor(receiver, array_type, name)
             return emit_dynamic_array_extend_back(
                 codegen, descriptor, codegen.types.ll_type(element),
-                _index(codegen, args[0]), _index(codegen, args[1]), element)
+                _clamped(codegen, args[0]), _clamped(codegen, args[1]), element)
 
         case "s" | "ss":
             # Two spellings of one copy: `.s` takes an exclusive END, `.ss` a LENGTH. The
             # bounds go to `clamp_range` as written, which clamps the start first.
-            start, extent = _index(codegen, args[0]), _index(codegen, args[1])
+            start, extent = _clamped(codegen, args[0]), _clamped(codegen, args[1])
             data, count = state()
             return core.emit_dynamic_array_slice(
                 codegen, codegen.types.ll_type(element), data, count, start, extent,
@@ -202,8 +204,15 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
 
 
 def _index(codegen: 'LLVMCodegen', arg: Argument) -> ir.Value:
-    """An index, a count or a bound: an i32 (#870, the typecheck pass admits no other)."""
-    return codegen.utils.require_i32(arg[0])
+    """An index that a bounds check reads: the i64 of the index position, which the check
+    compares at 64 bits (docs/adr/0001)."""
+    return codegen.utils.require_index(arg[0])
+
+
+def _clamped(codegen: 'LLVMCodegen', arg: Argument) -> ir.Value:
+    """A count, a start or a bound that clamps: the i64 of the index position, saturated
+    to i32 (`index_as_i32`)."""
+    return codegen.utils.index_as_i32(arg[0])
 
 
 def _descriptor(receiver: ir.Value, array_type: Type, name: str) -> ir.Value:

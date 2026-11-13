@@ -92,7 +92,7 @@ fn main() -> i32 {
     StorageDead(_8)
     StorageDead(_7)
     StorageLive(_14)
-    _14 = iterator range step 1, heap: true(const 7_i32, const 1_i32)
+    _14 = iterator range step 1, heap: true(const 7_i32, const 1_i64)
     StorageLive(_15)
     _15 = move _14
     StorageLive(_16)

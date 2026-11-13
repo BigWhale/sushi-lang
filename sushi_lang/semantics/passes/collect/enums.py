@@ -115,7 +115,7 @@ class EnumCollector:
                     self._collect_enum_def(enum)
 
     def register_predefined_enums(self) -> None:
-        """The nine synthesized enums: in the table, in order, each with its stamp."""
+        """The eight synthesized enums: in the table, in order, each with its stamp."""
         for enum in predefined_enums():
             self.enums.by_name[enum.name] = enum
             self.enums.order.append(enum.name)

@@ -721,7 +721,7 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
         library_linker=library_linker,
         lints=options.lints,
         generated_symbols=_generated_symbols(compilation_order), is_library=options.lib,
-        dont_panic=options.dont_panic)
+        dont_panic=options.dont_panic, overflow=options.overflow)
     analyzer.check()
     if options.dont_panic and not analyzer.marked and not reporter.has_errors:
         from sushi_lang.compiler.cli import COMMAND_LINE
@@ -862,6 +862,7 @@ def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit],
                      perk_impl_table=tables.perk_impls)
     cg.external_table = tables.externals
     cg.library_linker = library_linker
+    cg.overflow = analyzer.overflow
     cg.library_registry = analyzer.library_registry
     cg.decls = declarations(units, tables, analyzer.shir,
                             copies=analyzer.monomorphized_extensions,

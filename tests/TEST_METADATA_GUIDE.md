@@ -355,10 +355,20 @@ Compares a dump of the program with a golden file beside the fixture:
 
 #### TIMEOUT_SECONDS
 
-Override the default test timeout (default: 10 seconds).
+Override the default test timeout (default: 10 seconds). It is the limit of the run of the
+binary, not of the compilation.
 
 ```sushi
 # TIMEOUT_SECONDS: 10
+```
+
+#### COMPILE_TIMEOUT_SECONDS
+
+Override the limit of each compilation of the fixture (default: 30 seconds). Use it only for
+a fixture that tests the time of a large compilation.
+
+```sushi
+# COMPILE_TIMEOUT_SECONDS: 60
 ```
 
 #### No TEST_TYPE directive
@@ -476,6 +486,9 @@ fixture file itself, because the one set of directives describes both steps.
   library. A comma/space separated list; the directive may be repeated. When either is
   present, every unit the compiler reports must be named in one of the two, so an
   unexpected rebuild fails the fixture too.
+- `REBUILD_FLAGS` -- extra `sushic` flags for the SECOND compilation alone (for example
+  `--overflow=wrap`). It proves that a flag in the cache key rebuilds the units. A flag
+  the runner owns is refused, as in `COMPILER_FLAGS`, and `--lib` is refused too.
 - A rebuild directive in a fixture whose directory holds no `v2/` fails the fixture.
 
 #### RUN_IN_FIXTURE_DIR

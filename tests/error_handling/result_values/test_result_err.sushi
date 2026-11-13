@@ -2,11 +2,12 @@
 # EXPECT_RUNTIME_EXIT: 0
 
 
-use <math>
+error DivError:
+    DivisionByZero
 
-fn maybe_divide(i32 a, i32 b) i32 | MathError:
+fn maybe_divide(i32 a, i32 b) i32 | DivError:
   if (b == 0):
-    return Result.Err(MathError.DivisionByZero)
+    return Result.Err(DivError.DivisionByZero)
   return Result.Ok(a / b)
 
 fn main() i32:

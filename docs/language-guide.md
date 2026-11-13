@@ -705,9 +705,12 @@ fn main() i32:
 `.hash()`, and the bulk copies `.extend(src)`, `.extend_range(src, start, count)`,
 `.s(start, end)` and `.ss(start, count)`. See [Arrays](stdlib/collections/arrays.md).
 
-**Indices are `i32`**: an index, a count and a range bound are `i32` positions. A bare literal
-is an `i32`; a typed value of another integer type is [`CE2121`](error-catalog.md#ce2121) ([`CE2006`](error-catalog.md#ce2006) as a method argument,
-for example to `.get()`), and the fix is `as i32`.
+**An index takes any integer type**: an index, a slice bound, a repeat count and the position or
+count argument of a built-in method (`.get()`, `.insert()`, `.sleft()`) take a value of any integer
+type, so a `u8` or an `i64` needs no cast. A bare literal there is an `i64`. A float is
+[`CE2121`](error-catalog.md#ce2121) ([`CE2006`](error-catalog.md#ce2006) as a method argument). The bounds check compares at 64 bits, so a negative
+index and an index of 2^32 both stop the program with [`RE2020`](error-catalog.md#re2020). A range bound (`a..b`) is still an `i32`,
+and `len()` still answers `i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
 index is bounds-checked exactly like a read, so an index past the end aborts with [`RE2020`](error-catalog.md#re2020) (and an
@@ -1051,7 +1054,7 @@ fn main() i32:
 - **The type and the literal** are both written in parentheses: `(i32, string)` and
   `(42, "Arthur")`. A tuple type stands wherever a type does: a parameter, a field, a type
   argument (`List@((string, i32))`), an array element, and a return with a channel
-  (`fn divmod(i32 a, i32 b) (i32, i32) | MathError`)
+  (`fn split(i32 a, i32 b) (i32, i32) | EnvError`)
 - **Element access** is `.0`, `.1`, ... and `.0.1` for a nested tuple. The index is a
   literal, so `t[i]` is not a tuple access
 - **A destructure** takes a typed binder (`i32 q`), a bare binder (`q`), a `_` that
@@ -1098,11 +1101,11 @@ The standard library answers a tuple where a function has two results. A destruc
 them apart at the call:
 
 ```sushi
-use <math>
 use <collections/iter>
 
 fn main() i32:
-    let (i32 q, i32 r) = divmod(17, 5).realise((0, 0))
+    let i32 total = 17
+    let (i32 q, i32 r) = total.divmod(5)
     println("{q} {r}")                                   # 3 2
     let (key, value) = "port=8080".split_once("=").realise(("", ""))
     println("{key}: {value}")                            # port: 8080

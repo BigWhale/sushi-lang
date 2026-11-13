@@ -36,6 +36,7 @@ from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
+from sushi_lang.semantics.slir.lower_control import widen_index
 from sushi_lang.semantics.slir.lower_generics import free_callee_name, unqualified
 from sushi_lang.semantics.slir.lower_symbols import callee_symbol
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
@@ -184,12 +185,16 @@ def arguments(low: Lowering, node: e.Call,
 
 def argument(low: Lowering, node: e.Call, index: int,
              arg: e.Arg) -> tuple[p.Operand, Convention]:
-    """An argument with the convention of its typecheck row (L8)."""
+    """An argument with the convention of its typecheck row (L8). The value of an index
+    position is widened to `i64` (docs/adr/0001)."""
     convention = low.typeck.convention_of(node.shir_id, index)
     if convention is None:
         er.raise_internal_error("CE0000", span=arg.value.loc,
                                 detail="an argument with no convention reached SLIR")
-    return _by_convention(low, arg.value, convention, node.args[index + 1:]), convention
+    operand = _by_convention(low, arg.value, convention, node.args[index + 1:])
+    if low.typeck.is_index_position(arg.value.shir_id):
+        operand = widen_index(low, operand, low.type_of(arg.value), arg.value.loc)
+    return operand, convention
 
 
 def _by_convention(low: Lowering, value: e.ShirExpr, convention: Convention,

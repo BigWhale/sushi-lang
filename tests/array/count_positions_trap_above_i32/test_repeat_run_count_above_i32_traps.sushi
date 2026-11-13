@@ -1,0 +1,10 @@
+# A repeat count that an i32 length cannot hold stops the program. A saturation to the
+# i32 maximum gave a length of 2147483647 in place of the count that the program asked for.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2033: count 4294967297 is too large for a length"
+fn main() i32:
+    let i64 big = 4294967297
+    let i32[] a = from([7; big])
+    println(a.len())
+    return 0

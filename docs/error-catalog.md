@@ -1041,10 +1041,10 @@ A condition takes a 'bool' and nothing else. Sushi converts no type to a truth v
 
 **Help:**
 
-- `convert it with 'as i32'`
+- `convert it with 'as i64'`
 - `` borrow it at the call site: `{mode} {place}` ``
 
-A function call argument type does not match the corresponding parameter type. A generic body is checked where it is written: an argument of a type parameter is compared with the parameter of the callee as written, so `T` is not `i32` whatever a call gives for it. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+A function call argument type does not match the corresponding parameter type. The position or count argument of a built-in method (`get(i)`, `insert(i, v)`, `with_capacity(n)`, `sleft(n)`) is an index position, which takes any integer type (see [ADR 0001](adr/0001-index-width-i64.md)); the text then gives the expected type as "an integer". A generic body is checked where it is written: an argument of a type parameter is compared with the parameter of the callee as written, so `T` is not `i32` whatever a call gives for it. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2007 {#ce2007}
 
@@ -1503,7 +1503,7 @@ An integer literal arm needs an integer scrutinee, a string literal arm needs a 
 
 **Help:** `use a wider type, or compute in one and cast the result with 'as'`
 
-An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. For example, a u8 constant of '200 + 100' is this error. The overflow-checked operators are + - \* / % and unary minus; & | ^ ~ &lt;&lt; >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. Run time does not change: two locals still wrap.
+An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. For example, a u8 constant of '200 + 100' is this error. The overflow-checked operators are + - \* / % and unary minus; & | ^ ~ &lt;&lt; >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. This check is the same in each overflow mode. At run time, a value that the compiler cannot read (two locals) follows the overflow mode: the default 'trap' stops the program with [RE2032](#re2032) ([RE2031](#re2031) for / and %), and '--overflow=wrap' loses the bits that leave the type.
 
 ### CE2080 {#ce2080}
 
@@ -1847,17 +1847,17 @@ An integer literal and a string literal are legal in every pattern position: a l
 
 **Message:** `the destructure names {count} elements, but '{type}' has {arity}`
 
-A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = divmod(7, 2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
+A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = n.divmod(2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
 
 ### CE2121 {#ce2121}
 
 **Error** · type
 
-**Message:** `{position} is i32, got {got}`
+**Message:** `{position} is {expected}, got {got}`
 
-**Help:** `convert it with 'as i32'`
+**Help:** `convert it with 'as i64'`
 
-An index, a count and a range bound are i32 positions: an array index `a[i]`, a repeat count `[v; n]`, and each bound of a range `a..b`, in a `foreach` and in an array literal (`[a..b]`) alike. A bare literal takes i32 there. A value of any other type is refused, and nothing widens it. Convert the value with `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an i32 position (`get`, `insert`, `truncate`, `s`) is [CE2006](#ce2006), which names the argument; an assignment of the wrong type is [CE2002](#ce2002).
+An index position takes a value of any integer type, of any width and any sign (see [ADR 0001](adr/0001-index-width-i64.md)): an array index `a[i]`, a string index `s[i]`, a slice bound `a[i..j]` and a repeat count `[v; n]`. A bare literal takes i64 there. A value of another type (a float, a bool, a string) is refused. The value is widened to i64, and the bounds check compares it with the length at 64 bits, so a negative index and an index above 2^32 both stop the program ([RE2020](#re2020)). A range bound is still i32 (`a..b`, in a `foreach` and in an array literal alike), and a range bound of another type is this error too, with the help `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an index position (`get`, `insert`, `truncate`, `s`, `sleft`) is [CE2006](#ce2006), which names the argument; an assignment of the wrong type is [CE2002](#ce2002).
 
 ### CE2122 {#ce2122}
 
@@ -3694,9 +3694,9 @@ A compiled program gives a runtime error when it stops on a trap. The program wr
 
 **Error** · runtime
 
-**Message:** `array index %d out of bounds for array of size %d`
+**Message:** `array index %lld out of bounds for array of size %lld`
 
-Array access with index outside valid range \[0, size).
+Array access with index outside valid range \[0, size). The index may be of any integer type, and the check compares it and the size as 64-bit values read unsigned, so a negative index and an index that a u32 cannot hold both fail (see [ADR 0001](adr/0001-index-width-i64.md)).
 
 ### RE2021 {#re2021}
 
@@ -3750,7 +3750,7 @@ An `assert(cond)` or `assert(cond, message)` found its condition false. The text
 
 **Error** · runtime
 
-**Message:** `slice %d..%d is out of bounds for an array of size %d`
+**Message:** `slice %lld..%lld is out of bounds for an array of size %lld`
 
 A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` the elements a to b (see [the slice design](design/slices.md)). The range must hold `0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of range does ([RE2020](#re2020)). This is not the clamp rule of `.s()` and `.ss()`, which are the copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go down are the compile error [CE2125](#ce2125); computed bounds that go down are this error, and not an empty view. The `dont_panic` marker does not remove this check: a bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length. The check runs once, when the slice is made.
 
@@ -3776,7 +3776,23 @@ A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` 
 
 **Message:** `integer division overflow: the smallest value of a signed type divided by -1`
 
-`a / b` or `a % b` on a signed integer type found `a` equal to the smallest value of the type and `b` equal to -1 at run time. The quotient is one more than the largest value, so the type cannot hold it, and the machine instruction of `%` divides first. The program stops with exit code 1. This is a code of its own, and not [RE2030](#re2030), because the divisor is not 0. It is the division case of the integer overflow rule: when the overflow modes come, `trap` keeps this stop, and `wrap` gives the smallest value for `/` and 0 for `%`.
+`a / b` or `a % b` on a signed integer type found `a` equal to the smallest value of the type and `b` equal to -1 at run time. The quotient is one more than the largest value, so the type cannot hold it, and the machine instruction of `%` divides first. The program stops with exit code 1. This is a code of its own, and not [RE2030](#re2030), because the divisor is not 0. It is the division case of the integer overflow rule: the default mode `trap` keeps this stop, and `--overflow=wrap` gives the smallest value for `/` and 0 for `%`.
+
+### RE2032 {#re2032}
+
+**Error** · runtime
+
+**Message:** `integer overflow: '{op}' on {type}`
+
+`a + b`, `a - b`, `a * b` or `-a` on an integer type gave a result that the type cannot hold, at run time. The default overflow mode is `trap`, so the program stops with exit code 1. The text names the operator and the type, for example `integer overflow: '+' on i32`. `.add_up()` on an integer array is a `+` for this rule. Build with `--overflow=wrap` to lose the bits that leave the type in place of the stop. The checked operators are the [CE2077](#ce2077) set; for `/` and `%` the overflow is [RE2031](#re2031), and a division by zero is [RE2030](#re2030) in both modes. The arithmetic that the compiler makes (the count of a range, a loop counter) gets no check. `~`, `&`, `|`, `^` and `as` are width-defined, and a wider type or a cast is the escape.
+
+### RE2033 {#re2033}
+
+**Error** · runtime
+
+**Message:** `count %lld is too large for a length: a length holds at most 2147483647`
+
+A count position (the count of a repeat run `[x; n]` or of a range run, `T[].resize`, `List.with_capacity`, `List.reserve`, `string.repeat`, and the width of `pad_left` and `pad_right`) takes any integer type (see [the index-width decision](adr/0001-index-width-i64.md)), but a length is still an i32. A count above the i32 maximum stops the program with exit code 1, because the program asked for more elements than the value can hold, and a smaller length is a wrong answer. A u64 count above the i64 maximum prints as the i64 maximum. A negative count of a signed type is not this error: it counts as zero. An index or a clamped bound out of the i32 range is not this error either: the bounds check ([RE2020](#re2020)) or the clamp answers it.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 

@@ -1,0 +1,12 @@
+# A division by zero stops the program in the wrap mode too.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2030"
+
+fn div(i32 a, i32 b) i32:
+    return a / b
+
+fn main(string[] args) i32:
+    println("{div(7, args.len() - 1)}")
+    return 0

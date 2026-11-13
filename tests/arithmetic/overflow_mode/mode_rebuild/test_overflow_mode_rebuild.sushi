@@ -1,0 +1,11 @@
+# A build with --overflow=wrap after a build in the default mode reuses no cached
+# object: v2/ holds the same source, and the mode alone rebuilds each unit.
+# REBUILD_FLAGS: --overflow=wrap
+# EXPECT_REBUILT: bump, test_overflow_mode_rebuild
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-2147483648\n"
+use "bump"
+
+fn main(string[] args) i32:
+    println("{bump(2147483646 + args.len())}")
+    return 0

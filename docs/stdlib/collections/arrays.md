@@ -4,6 +4,10 @@
 
 Built-in methods for fixed-size and dynamic arrays.
 
+An index or a count argument, which the signatures below write as `i32`, is an index
+position: it takes a value of any integer type, and a bare literal there takes `i64` (see
+[ADR 0001](../../adr/0001-index-width-i64.md)). A bounds check compares the index and the length at 64 bits.
+
 ## Import
 
 Arrays are built-in types and require no import. For dynamic array construction from literals, arrays are available by default.
@@ -408,7 +412,7 @@ an element type that owns a resource. `swap(i, i)` changes nothing.
 Each index is checked as the index of `arr[i]` is. An index out of range is the run-time
 error [RE2020](../../error-catalog.md#re2020). On a fixed array, an index that the compiler can read and that is out of
 range is a compile-time error: [CE2056](../../error-catalog.md#ce2056) when it is negative and [CE2012](../../error-catalog.md#ce2012) when it is past
-the end. Each index is an i32 position.
+the end. Each index takes any integer type, and the check compares at 64 bits.
 
 ```sushi
 fn main() i32:
@@ -429,8 +433,9 @@ ordered, so a NaN after element 0 is never chosen.
 ### `.add_up() -> T`
 
 The total of a numeric array: the elements added from left to right with the run-time `+`
-of the element type. An empty array answers zero. An integer total wraps, and a float
-total follows IEEE. The method is named `add_up` and not `sum`, so a user extension named
+of the element type. An empty array answers zero. An integer total follows the overflow
+mode: by default a total that the type cannot hold stops the program with RE2032, and with
+`--overflow=wrap` it wraps. A float total follows IEEE. The method is named `add_up` and not `sum`, so a user extension named
 `sum` on an array stays legal.
 
 ```sushi
@@ -550,7 +555,8 @@ arr.push(9)         # reuses the buffer
 Set the length to `n`. When `n` is less than the length, the tail is removed, and each
 removed element is destroyed as `.truncate(n)` destroys it. When `n` is more than the
 length, `n - len()` slots are added at the end, and each new slot takes its own copy of
-`value`. When `n` equals the length, nothing changes. A negative `n` counts as zero.
+`value`. When `n` equals the length, nothing changes. A negative `n` counts as zero, and
+an `n` above the `i32` range stops the program with RE2033.
 
 The value is a **borrow**, as for `.fill()`: it stays usable, and it can be a slot of the
 same array (`arr.resize(10, arr[0])`), because the value is read before the buffer grows.

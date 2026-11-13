@@ -71,7 +71,7 @@ fn main() -> i32 {
     StorageDead(_2)
     StorageLive(_4)
     BeginBorrow(b0, _1, peek, for _4)
-    _4 = call builtin list.get(copy _1 @guaranteed, const 0_i32 @guaranteed)
+    _4 = call builtin list.get(copy _1 @guaranteed, const 0_i64 @guaranteed)
     StorageLive(_5)
     _5 = call builtin maybe.is_some(copy _4 @guaranteed)
     StorageLive(_6)

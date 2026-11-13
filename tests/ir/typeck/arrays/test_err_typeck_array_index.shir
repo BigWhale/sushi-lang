@@ -2,7 +2,7 @@ unit test_err_typeck_array_index
 
 ShirBody main
   params : []
-  locals : [_0 "grid": i32[2][2], _1 "xs": i32[], _2 "s": string, _3 "first": u8, _4 "view": i32[], _5 "part": i32[], _6 "big": i64]
+  locals : [_0 "grid": i32[2][2], _1 "xs": i32[], _2 "s": string, _3 "first": u8, _4 "view": i32[], _5 "part": i32[], _6 "big": f64]
   block  :
     Assign(LocalRef(_0), ArrayInit(Fixed, [Single(ArrayInit(Fixed, [Single(Lit(1)), Single(Lit(2))])), Single(ArrayInit(Fixed, [Single(Lit(3)), Single(Lit(4))]))]), is_init: true)
     Assign(LocalRef(_1), ArrayInit(Dynamic, [Single(Lit(5)), Single(Lit(6)), Single(Lit(7))]), is_init: true)
@@ -12,6 +12,6 @@ ShirBody main
     Assign(Index(LocalRef(_1), Lit(0), unchecked: false), Index(Index(LocalRef(_0), Lit(0), unchecked: false), Lit(1), unchecked: false), is_init: false)
     Assign(LocalRef(_4), Slice(LocalRef(_1), Lit(0), Lit(2), inclusive: false), is_init: true)
     Assign(LocalRef(_5), Slice(Index(LocalRef(_0), Lit(1), unchecked: false), Lit(0), Lit(1), inclusive: true), is_init: true)
-    Assign(LocalRef(_6), Lit(1), is_init: true)
+    Assign(LocalRef(_6), Lit(1.0), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Index(LocalRef(_1), LocalRef(_6), unchecked: false), Guaranteed)]))
     Return(Binary(+, Binary(+, Index(LocalRef(_4), Lit(0), unchecked: false), Index(LocalRef(_5), Lit(1), unchecked: false)), Cast(LocalRef(_3), i32)))

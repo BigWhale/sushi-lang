@@ -24,7 +24,7 @@ from sushi_lang.semantics.method_effects import argument_conventions
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     argument_span, check_argument, marked_type, record_builtin_conventions)
-from sushi_lang.semantics.passes.types.arrays import reject_non_i32
+from sushi_lang.semantics.passes.types.arrays import check_index_operand, reject_non_index
 from sushi_lang.semantics.passes.types.calls.statics import emit_no_source, spell_names
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.passes.types.utils import names_no_type
@@ -34,7 +34,7 @@ from sushi_lang.semantics.shir.callee import BuiltinStatic
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.statics import CONTAINER_STATIC_FAMILIES, is_builtin_static
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.typesys import BuiltinType, Type, UnknownType, deref_type
+from sushi_lang.semantics.typesys import Type, UnknownType, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -87,9 +87,9 @@ def _check_values(validator: TypeValidator, node: e.Call, name: str, instance: T
         return check_argument(validator, name, node.args[0], 1, own_payload_type(instance),
                               mismatch_code=er.ERR.CE2006)
     count = node.args[0]
-    got = marked_type(count, visit.check_expr(validator, count.value, BuiltinType.I32))
-    return got is not None and not reject_non_i32(validator, count.value, got, argument=1,
-                                                  span=argument_span(count))
+    got = marked_type(count, check_index_operand(validator, count.value))
+    return got is not None and not reject_non_index(validator, count.value, got, argument=1,
+                                                    span=argument_span(count))
 
 
 def _record_conventions(validator: TypeValidator, node: e.Call, callee: BuiltinStatic) -> None:

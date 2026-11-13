@@ -52,13 +52,15 @@ def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
 def slice_value(codegen: 'LLVMCodegen', base: ir.Value, ty: Type, start: ir.Value,
                 end: ir.Value) -> ir.Value:
     """`data[start..end]`: the descriptor `{end - start, end - start, data + start}`, by
-    value. It owns nothing: the array keeps its storage (#1226)."""
+    value. It owns nothing: the array keeps its storage (#1226). The bounds are i64, and the
+    check before the slice proved `0 <= start <= end <= len`, so the length fits the i32
+    of the descriptor."""
     from sushi_lang.backend.types.arrays.utils import descriptor
 
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
         raise_internal_error("CE0000", detail=f"a slice of {ty}, which is no array")
     data = gep_utils.gep_array_element(codegen, array_data(codegen, base, ty), start, "slice_data")
-    length = codegen.builder.sub(end, start, name="slice_len")
+    length = codegen.utils.checked_as_i32(codegen.builder.sub(end, start, name="slice_len"))
     return descriptor(codegen, codegen.types.ll_type(ty.base_type), length, length, data)
 
 

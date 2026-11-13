@@ -1,0 +1,13 @@
+# A bare literal in an index position takes i64, so a literal above the i32 range is legal.
+# A count above the i32 range clamps as a large count does: 4294967298 is not cut to 2.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "none\n-1\nRun\n"
+fn main() i32:
+    let string[] a = from(["one"])
+    println(a.get(4294967296).realise("none"))
+    let List@(i32) l = List.new()
+    l.push(1)
+    println("{l.get(8589934592).realise(-1)}")
+    let string w = "Run"
+    println(w.sright(4294967298))
+    return 0

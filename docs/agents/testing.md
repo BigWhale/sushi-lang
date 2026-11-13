@@ -78,7 +78,9 @@ Each step has a runner test under `tests/unit/runner/`.
   `--clean-cache` and `--lib-info`, so these directives state what a fixture cannot pass:
   the REBUILD form (a `v2/` directory beside the fixture is copied over it for a second
   build with the same cache; `EXPECT_REBUILT` / `EXPECT_CACHED` /
-  `EXPECT_STDOUT_EXACT_BEFORE_REBUILD`); `RUN_IN_FIXTURE_DIR` (start `sushic` in a copy of
+  `EXPECT_STDOUT_EXACT_BEFORE_REBUILD`; `REBUILD_FLAGS` adds flags to the second build
+  alone); `COMPILE_TIMEOUT_SECONDS` (the limit of each compilation, default 30; `TIMEOUT_SECONDS`
+  is the limit of the run alone); `RUN_IN_FIXTURE_DIR` (start `sushic` in a copy of
   the fixture's directory); `BUILD_LIB: x.sushi` (a source `.slib` on `SUSHI_LIB_PATH`),
   `BUILD_LIB_BINARY` / `BUILD_LIB_HYBRID` (the same, built `--lib-kind binary` / `hybrid`),
   each with a `-> name.slib` and an `@ version` form, built in written order and required

@@ -1,0 +1,10 @@
+# A u64 count above the i64 maximum is not a negative count: it is too large, and it stops
+# the program. Before, it widened to -1 and gave an empty array with no error.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2033: count 9223372036854775807 is too large for a length"
+fn main() i32:
+    let u64 big = 18446744073709551615
+    let i32[] a = from([7; big])
+    println(a.len())
+    return 0

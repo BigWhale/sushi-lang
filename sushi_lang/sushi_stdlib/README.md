@@ -64,11 +64,15 @@ compiled like user code instead of precompiled to bitcode. Among them:
   first source module that depends on a `.bc` string unit
   (`collections/strings`).
 - `collections/strings` (`src_sushi/collections/strings.sushi`) — the Sushi
-  half of the string module, and the one module with TWO halves: its built-in
+  half of the string module, a module with TWO halves: its built-in
   methods are the `.bc` unit of the same name, and this file adds the methods
   that are written in Sushi (the strict parses, the number formatters,
-  `StringBuilder`). One `use <collections/strings>` loads both. It is the only
-  source module that is not in `_virtual_units`, because it has a `.bc`.
+  `StringBuilder`). One `use <collections/strings>` loads both. It is not in
+  `_virtual_units`, because it has a `.bc`.
+- `math` (`src_sushi/math.sushi`) — the Sushi half of `<math>`, the other
+  module with TWO halves: the functions and the constants are the `.bc` unit,
+  and this file adds `divmod` on each integer type. It is not in
+  `_virtual_units`, because it has a `.bc`.
 - `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
   unsigned integers in a `u8[]` and back, in either byte order, as extension
   methods on `u8[]`.

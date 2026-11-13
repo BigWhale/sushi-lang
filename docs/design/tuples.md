@@ -23,11 +23,12 @@ because a struct names its fields and a tuple does not.
 ## 2. The surface
 
 ```sushi
-use <math>
+error DivError:
+    DivisionByZero
 
-fn divmod(i32 a, i32 b) (i32, i32) | MathError:
+fn divmod(i32 a, i32 b) (i32, i32) | DivError:
     if (b == 0):
-        return Result.Err(MathError.DivisionByZero)
+        return Result.Err(DivError.DivisionByZero)
     return Result.Ok((a / b, a % b))
 
 fn main() i32:

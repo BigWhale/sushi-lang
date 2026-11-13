@@ -80,8 +80,10 @@ from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
-    NOTHING_TYPED, Parameters, check_arguments, reject_misplaced_spread)
-from sushi_lang.semantics.passes.types.arrays import check_array_method
+    NOTHING_TYPED, Parameters, argument_span, check_arguments, marked_type,
+    reject_misplaced_spread)
+from sushi_lang.semantics.passes.types.arrays import (
+    check_array_method, check_index_operand, reject_non_index)
 from sushi_lang.semantics.passes.types.calls.dotcall import (
     PRIMITIVE_STATICS, MethodRung, PrimitiveStatic, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
@@ -498,23 +500,41 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
     if not miscount and spec is not None:
         _check_builtin_arguments(validator, node, name, family, spec.arg_types,
                                  er.ERR.CE2006, callee_name=spec.name,
-                                 also_accepts=spec.also_accepts)
+                                 also_accepts=spec.also_accepts,
+                                 typed=_index_arguments(validator, node, spec.indexes,
+                                                        spec.arg_types))
     yielded = string_method_return_type(validator, name)
     return yielded
+
+
+def _index_arguments(validator: TypeValidator, node: e.Call, indexes: frozenset,
+                     params: Sequence[Type]) -> Mapping[int, Optional[Type]]:
+    """Each argument in an index position through the index seam (`arrays.py`). One that it
+    takes answers the type of its row, so the argument check compares it as a fit; one that
+    it refuses answers None, and the argument check reports nothing more."""
+    typed: dict[int, Optional[Type]] = {}
+    for at in sorted(indexes):
+        arg = node.args[at]
+        got = marked_type(arg, check_index_operand(validator, arg.value))
+        refused = got is None or reject_non_index(validator, arg.value, got, argument=at + 1,
+                                                  span=argument_span(arg))
+        typed[at] = None if refused else params[at]
+    return typed
 
 
 def _check_builtin_arguments(validator: TypeValidator, node: e.Call, name: str,
                              family: MethodFamily, params: Sequence[Type],
                              mismatch_code: er.ErrorMessage, *,
                              callee_name: Optional[str] = None,
-                             also_accepts: Sequence[Sequence[Type]] = ()) -> None:
+                             also_accepts: Sequence[Sequence[Type]] = (),
+                             typed: Mapping[int, Optional[Type]] = NOTHING_TYPED) -> None:
     """The arguments of the built-in method `name` whose count fits, through the one
     argument check: each argument at the type of its row, with the mode of its row."""
     modes = family.modes.of(name, len(node.args)) or ()
     declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
     check_arguments(validator, callee_name or name, params, node.args, node.loc,
                     mismatch_code=mismatch_code, arity_code=er.ERR.CE2009,
-                    declared=declared, also_accepts=also_accepts)
+                    declared=declared, also_accepts=also_accepts, typed=typed)
 
 
 def _check_result_method(validator: TypeValidator, node: e.Call, receiver: Type,

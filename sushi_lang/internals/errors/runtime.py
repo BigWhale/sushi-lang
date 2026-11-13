@@ -10,7 +10,7 @@ from sushi_lang.internals.errors.registry import (
     _add,
 )
 
-_CONVERSION = re.compile(r"%(?:%|[-+ #0-9.*]*[a-zA-Z])")
+_CONVERSION = re.compile(r"%(?:%|[-+ #0-9.*]*(?:hh|h|ll|l|z|j|t)?[a-zA-Z])")
 
 
 def printf_conversions(text: str) -> tuple[str, ...]:
@@ -19,16 +19,16 @@ def printf_conversions(text: str) -> tuple[str, ...]:
     return tuple(hit for hit in _CONVERSION.findall(text) if hit != "%%")
 
 
-# Array bounds errors. The text is the printf format: two %d, matching the
-# (index, size) pair the bounds check passes.
+# Array bounds errors. The text is the printf format: two %lld, matching the
+# (index, size) pair the bounds check passes, each an i64.
 _add(ErrorMessage("RE2020", Severity.ERROR,
-    "array index %d out of bounds for array of size %d",
-    Category.RUNTIME, "Array access with index outside valid range [0, size)."))
+    "array index %lld out of bounds for array of size %lld",
+    Category.RUNTIME, "Array access with index outside valid range [0, size). The index may be of any integer type, and the check compares it and the size as 64-bit values read unsigned, so a negative index and an index that a u32 cannot hold both fail (docs/adr/0001-index-width-i64.md)."))
 
-# A slice range outside the array. The text is the printf format: three %d, matching the
-# (start, exclusive end, size) triple the range check passes.
+# A slice range outside the array. The text is the printf format: three %lld, matching the
+# (start, exclusive end, size) triple the range check passes, each an i64.
 _add(ErrorMessage("RE2028", Severity.ERROR,
-    "slice %d..%d is out of bounds for an array of size %d",
+    "slice %lld..%lld is out of bounds for an array of size %lld",
     Category.RUNTIME, "A slice `data[a..b]` views the elements a to b-1 of an array, and "
     "`data[a..=b]` the elements a to b (#1226, docs/design/slices.md). The range must hold "
     "`0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of "
@@ -39,6 +39,20 @@ _add(ErrorMessage("RE2028", Severity.ERROR,
     "not an empty view. The `dont_panic` marker does not remove this check (S7): a bad "
     "slice is a descriptor with a wrong length that leaves the marked body, and every "
     "callee checks against that length. The check runs once, when the slice is made."))
+
+# A count that a length cannot hold. The text is the printf format: one %lld, the count as
+# an i64.
+_add(ErrorMessage("RE2033", Severity.ERROR,
+    "count %lld is too large for a length: a length holds at most 2147483647",
+    Category.RUNTIME, "A count position (the count of a repeat run `[x; n]`, `T[].resize`, "
+    "`List.with_capacity`, `List.reserve`, `string.repeat`, and the width of `pad_left` and "
+    "`pad_right`) takes any integer type (docs/adr/0001-index-width-i64.md), but a length "
+    "is still an i32. A count above the i32 maximum stops the program, because the "
+    "program asked for more elements than the value can hold, and a smaller length is a "
+    "wrong answer. A u64 count above the i64 maximum prints as the i64 maximum. A negative "
+    "count of a signed type is not this error: it counts as zero (#478). An index or a "
+    "clamped bound out of the i32 range is not this error either: it is out of range, so "
+    "the bounds check or the clamp answers it."))
 
 # Memory allocation errors
 _add(ErrorMessage("RE2021", Severity.ERROR,
@@ -114,8 +128,21 @@ _add(ErrorMessage("RE2031", Severity.ERROR,
     "than the largest value, so the type cannot hold it, and the machine instruction of "
     "`%` divides first. The program stops with exit code 1. This is a code of its own, and "
     "not RE2030, because the divisor is not 0. It is the division case of the integer "
-    "overflow rule (docs/adr/0002-overflow-mode.md): when the overflow modes come, `trap` "
-    "keeps this stop, and `wrap` gives the smallest value for `/` and 0 for `%`."))
+    "overflow rule (docs/adr/0002-overflow-mode.md): the default mode `trap` "
+    "keeps this stop, and `--overflow=wrap` gives the smallest value for `/` and 0 for `%`."))
+
+# An integer + - * or unary minus whose result leaves its type, in trap mode (#1299)
+_add(ErrorMessage("RE2032", Severity.ERROR,
+    "integer overflow: '{op}' on {type}",
+    Category.RUNTIME, "`a + b`, `a - b`, `a * b` or `-a` on an integer type gave a result "
+    "that the type cannot hold, at run time. The default overflow mode is `trap`, so the "
+    "program stops with exit code 1 (docs/adr/0002-overflow-mode.md). The text names the "
+    "operator and the type at compile time. `.add_up()` on an integer array is a `+` for "
+    "this rule. Build with `--overflow=wrap` to lose the bits that leave the type in place "
+    "of the stop. The checked operators are the CE2077 set; for `/` and `%` the overflow "
+    "is RE2031. The arithmetic that the compiler makes (the count of a range, a loop "
+    "counter) gets no check. `~`, `&`, `|`, `^` and `as` are width-defined, and a wider "
+    "type or a cast is the escape."))
 
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,

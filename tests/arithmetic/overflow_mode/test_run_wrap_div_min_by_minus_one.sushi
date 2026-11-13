@@ -1,0 +1,15 @@
+# With --overflow=wrap, the smallest i32 divided by -1 is the smallest i32, and the
+# remainder is 0.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-2147483648 0\n"
+
+fn div(i32 a, i32 b) i32:
+    return a / b
+
+fn rem(i32 a, i32 b) i32:
+    return a % b
+
+fn main(string[] args) i32:
+    println("{div(-2147483648, -args.len())} {rem(-2147483648, -args.len())}")
+    return 0

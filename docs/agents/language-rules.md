@@ -230,9 +230,17 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - **Byte literal** `a'x'`: one byte, one character from 0 to 127 or one escape (`\n \t \r \0
   \\ \' \" \xNN`); a character above 127 is CE6015, any other malformed form CE6014. It is an
   `IntLit` with `byte_spelling`, default `u8`, with the DECIMAL range rule (`a'\xc8'` is no
-  `i8`). Beside a bare number literal the number takes `u8`; in an i32 position (index,
-  count, range bound) it takes `i32`. It is legal in an expression, a `const` and a `match`
+  `i8`). Beside a bare number literal the number takes `u8`; in an index position (index,
+  slice bound, count) it takes `i64`, as every bare literal there; in a range bound it
+  takes `i32`. It is legal in an expression, a `const` and a `match`
   arm; not as an array size or a negative arm. The `a` touches the quote (`a '/'` is CE6001).
+- **An index position takes any integer type** (docs/adr/0001-index-width-i64.md, the Go
+  rule): `arr[i]`, `s[i]`, a slice bound, a repeat count, and the position or count
+  argument of a built-in method of `T[]`, `List@(T)` and `string`. A bare literal there takes
+  `i64`. A float is CE2121 (CE2006 as a method argument). The bounds check compares the
+  index and the length at 64 bits, so a negative index and an index of 2^32 both trap
+  (RE2020). A range bound (`a..b`) is still `i32`, `len()` still answers `i32`, and a `ptr`
+  offset is no index position.
 - **A bool prints as `true`/`false`** everywhere: a hole, `print`, `println` and a constant.
   Never 1/0 (#514, #523).
 
