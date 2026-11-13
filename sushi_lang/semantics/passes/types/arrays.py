@@ -143,16 +143,8 @@ def reject_non_index(validator: 'TypeValidator', node: 'ShirExpr', got: Optional
     if is_integer_type(got):
         validator.body_answers().record_index_position(node.shir_id)
         return False
-    loc = node.loc if span is None else span
-    if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc, position=position,
-                              expected=_AN_INTEGER, got=display_type(got))
-    else:
-        report = er.emit_with(validator.reporter, er.ERR.CE2006, loc, index=argument,
-                              expected=_AN_INTEGER, got=display_type(got))
-    if is_numeric_type(got):
-        report = report.help("convert it with 'as i64'")
-    report.emit()
+    _refuse(validator, node.loc if span is None else span, got, _AN_INTEGER, BuiltinType.I64,
+            position=position, argument=argument)
     return True
 
 
@@ -162,12 +154,25 @@ def reject_non_i32_bound(validator: 'TypeValidator', node: 'ShirExpr',
     the bound was refused."""
     if got is None or got == BuiltinType.I32:
         return False
-    report = er.emit_with(validator.reporter, er.ERR.CE2121, node.loc, position=RANGE_BOUND,
-                          expected=display_type(BuiltinType.I32), got=display_type(got))
-    if is_numeric_type(got):
-        report = report.help("convert it with 'as i32'")
-    report.emit()
+    _refuse(validator, node.loc, got, display_type(BuiltinType.I32), BuiltinType.I32,
+            position=RANGE_BOUND)
     return True
+
+
+def _refuse(validator: 'TypeValidator', loc: Optional[Span], got: Type, expected: str,
+            cast: Type, *, position: Optional[str] = None,
+            argument: Optional[int] = None) -> None:
+    """The one report of a refused index position or range bound: CE2006 at a method
+    `argument`, else CE2121 at `position`, with the help `as cast` for a number."""
+    if argument is None:
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc, position=position,
+                              expected=expected, got=display_type(got))
+    else:
+        report = er.emit_with(validator.reporter, er.ERR.CE2006, loc, index=argument,
+                              expected=expected, got=display_type(got))
+    if is_numeric_type(got):
+        report = report.help(f"convert it with 'as {display_type(cast)}'")
+    report.emit()
 
 
 def reject_index_out_of_range(validator: 'TypeValidator', index: 'ShirExpr',

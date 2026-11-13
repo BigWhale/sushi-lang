@@ -117,7 +117,7 @@ class TypeckResults(SideTable):
     _globals: dict[ShirId, str] = row_table()
     _source_rows: dict[ShirId, tuple[int, ...]] = row_table()
     _iterator_nexts: dict[ShirId, ResolvedCall] = row_table()
-    _index_positions: dict[ShirId, bool] = row_table()
+    _index_positions: dict[ShirId, None] = row_table()
 
     # -- the read API: None when the table holds no answer ------------------------------
 
@@ -157,7 +157,7 @@ class TypeckResults(SideTable):
     def is_index_position(self, node: ShirId) -> bool:
         """Whether an expression is the value of an index position, which SLIR widens to
         i64 (docs/adr/0001)."""
-        return self._index_positions.get(node, False)
+        return node in self._index_positions
 
     def conversion_of(self, node: ShirId) -> Optional[ConversionChoice]:
         """What a `Cast` or a `Try` calls."""
@@ -230,7 +230,7 @@ class TypeckResults(SideTable):
         write_once(self._range_values, node, is_value, "typecheck", "range value")
 
     def record_index_position(self, node: ShirId) -> None:
-        self._index_positions[node] = True
+        write_once(self._index_positions, node, None, "typecheck", "index position")
 
     def record_conversion(self, node: ShirId, conversion: ConversionChoice) -> None:
         write_once(self._conversions, node, conversion, "typecheck", "conversion")

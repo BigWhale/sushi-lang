@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.backend.platform_detect import default_triple
 
 from sushi_lang import __version__ as compiler_version
+from sushi_lang.semantics.overflow_mode import OverflowMode
 
 if TYPE_CHECKING:
     from sushi_lang.compiler.options import BuildOptions
@@ -47,7 +48,8 @@ class CacheManager:
     """Manages the incremental compilation cache directory."""
 
     def __init__(self, project_root: Path, opt_level: str = "mem2reg",
-                 cache_dir: Optional[Path] = None, overflow: str = "trap") -> None:
+                 cache_dir: Optional[Path] = None,
+                 overflow: OverflowMode = OverflowMode.TRAP) -> None:
         self.opt_level = opt_level
         self.overflow = overflow
         self.cache_path = cache_dir or (project_root / CACHE_DIR_NAME)
@@ -63,14 +65,14 @@ class CacheManager:
         against the user's directory, else `__sushi_cache__/` in `project_root`."""
         cache_dir = Path(options.cache_dir).resolve() if options.cache_dir else None
         return cls(project_root, opt_level=options.opt, cache_dir=cache_dir,
-                   overflow=options.overflow.value)
+                   overflow=options.overflow)
 
     @property
     def global_key(self) -> str:
         """Digest of the settings every cached object depends on."""
         from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
         material = (
-            f"{compiler_version}|{self._target_triple}|{self.opt_level}|{self.overflow}"
+            f"{compiler_version}|{self._target_triple}|{self.opt_level}|{self.overflow.value}"
             f"|{compute_compiler_source_fingerprint()}"
         )
         return hashlib.sha1(material.encode("utf-8")).hexdigest()[:_KEY_LEN]

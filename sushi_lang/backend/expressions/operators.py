@@ -30,7 +30,7 @@ def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
         zero = ir.Constant(val.type, 0)
-        if checked and codegen.overflow is OverflowMode.TRAP:
+        if _follows(codegen, checked, OverflowMode.TRAP):
             return _emit_trapping(codegen, SUB_OP, zero, val, operand_type)
         return codegen.builder.sub(zero, val)
 
@@ -125,10 +125,9 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
         # signedness (the same-type binop rule guarantees both operands share
         # one signedness, so the left operand's type suffices).
         unsigned = is_unsigned_int(left_type)
-        if checked and codegen.overflow is OverflowMode.TRAP and op in EXACT_OPS:
+        if _follows(codegen, checked, OverflowMode.TRAP) and op in EXACT_OPS:
             return _emit_trapping(codegen, op, left, right, left_type)
-        if (checked and codegen.overflow is OverflowMode.WRAP and op in DIVISION_OPS
-                and not unsigned):
+        if _follows(codegen, checked, OverflowMode.WRAP) and op in DIVISION_OPS and not unsigned:
             return _emit_wrapping_division(codegen, op, left, right)
         int_ops = {
             "+": codegen.builder.add,
@@ -144,6 +143,12 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
 
 
 _OVERFLOW_INTRINSICS = {"+": "add", "-": "sub", "*": "mul"}
+
+
+def _follows(codegen: 'LLVMCodegen', checked: bool, mode: OverflowMode) -> bool:
+    """Whether an operation follows the overflow mode `mode`: the user wrote it
+    (`checked`), and the build has that mode."""
+    return checked and codegen.overflow is mode
 
 
 def _emit_trapping(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value,
