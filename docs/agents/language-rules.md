@@ -212,6 +212,12 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   element); the AST builder folds it into `RangeExpr.reverse`, so a range stays one node. One
   formula: `semantics/ranges.py`, with its SLIR twin `range_operands` in
   `semantics/slir/lower_control.py`.
+- **A range has the type of its bounds** (docs/adr/0001-index-width-i64.md, #1301): a literal
+  bound takes the type of the other bound (`0..n` with a `u8 n` is a `u8` range), two literal
+  bounds take `i32`, and two typed bounds of different integer types are CE2121 with the help
+  `as`. The `foreach` variable has the type of the range, and a range value is
+  `Iterator@(T)`; a value position gives its `T` to literal bounds. One rule: `range_item`,
+  `semantics/passes/types/visit/ranges.py`. A run of an array literal is still an `i32` run.
 - **Patterns**: four errors, one per fault (#741): the SCRUTINEE's rule alone, an arm or a
   nested pattern that names an enum the value is not (the scrutinee in a note), a nested
   pattern over a payload that is not an enum, and an `Own(...)` pattern over a value that is
@@ -232,15 +238,15 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   `IntLit` with `byte_spelling`, default `u8`, with the DECIMAL range rule (`a'\xc8'` is no
   `i8`). Beside a bare number literal the number takes `u8`; in an index position (index,
   slice bound, count) it takes `i64`, as every bare literal there; in a range bound it
-  takes `i32`. It is legal in an expression, a `const` and a `match`
+  takes the type of the range. It is legal in an expression, a `const` and a `match`
   arm; not as an array size or a negative arm. The `a` touches the quote (`a '/'` is CE6001).
 - **An index position takes any integer type** (docs/adr/0001-index-width-i64.md, the Go
   rule): `arr[i]`, `s[i]`, a slice bound, a repeat count, and the position or count
   argument of a built-in method of `T[]`, `List@(T)` and `string`. A bare literal there takes
   `i64`. A float is CE2121 (CE2006 as a method argument). The bounds check compares the
   index and the length at 64 bits, so a negative index and an index of 2^32 both trap
-  (RE2020). A range bound (`a..b`) is still `i32`, `len()` still answers `i32`, and a `ptr`
-  offset is no index position.
+  (RE2020). A range bound (`a..b`) is no index position (the range has the type of its
+  bounds), `len()` still answers `i32`, and a `ptr` offset is no index position.
 - **A bool prints as `true`/`false`** everywhere: a hole, `print`, `println` and a constant.
   Never 1/0 (#514, #523).
 

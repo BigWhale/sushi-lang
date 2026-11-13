@@ -380,7 +380,7 @@ def check_if(validator: TypeValidator, node: s.If) -> None:
 
 def check_loop(validator: TypeValidator, node: s.Loop) -> None:
     """A `while` loop, a counted loop or a direct walk (`visit/walks.py`): its source, its
-    kind and its body. A counted loop walks a range with a bare binder, which is an i32; `_`
+    kind and its body. A counted loop walks a range with a bare binder, of the item type of the range; `_`
     binds nothing. A range makes its values and has no storage for them, so a `peek` or a
     `poke` binder over one is CE2423 at the marker, and the body is not checked."""
     source = node.source
@@ -393,9 +393,9 @@ def check_loop(validator: TypeValidator, node: s.Loop) -> None:
         er.emit(validator.reporter, er.ERR.CE2423, source.by.loc or node.loc)
         return
     elif isinstance(source.iterable, e.Range) and isinstance(source.by, s.Bare):
-        check_range_iterable(validator, source.iterable)
+        item = check_range_iterable(validator, source.iterable)
         if not isinstance(source.binder, s.Discard):
-            answers.record_local(source.binder, BuiltinType.I32)
+            answers.record_local(source.binder, item)
         answers.record_loop_kind(node.shir_id, CountedRange())
     elif not check_iterator_walk(validator, node, source):
         return

@@ -439,9 +439,22 @@ iterator made by `Iterator.new` over a value that holds a resource has no deep c
 the type of the iterator does not show it: the program stops there with
 **[RE2027](../error-catalog.md#re2027)**. Beside `clone()`, an iterator has the adapters of ruling 11.
 
-**A range is a value** in every position where `Iterator@(i32)` is expected, written or
-propagated: a `let`, an argument, a `return`, a constructor field, a payload, a container
-element. The propagation phase stamps `RangeExpr.is_value`, and the backend makes an owned
+**A range has the type of its bounds** (docs/adr/0001-index-width-i64.md, #1301). In
+`a..b` and `a..=b`, a literal bound takes the type of the other bound, two literal bounds
+take `i32`, and two typed bounds of different integer types are
+**[CE2121](../error-catalog.md#ce2121)**, with the help `as` and a note at the bound that gave
+the type. The `foreach` variable over a range has the type `T` of the range. The count of a
+range is an `i64`, and the counter is an `i64` too; the item is `first + k` at `T`, with a
+copy of `k` at `T` that wraps with it (`counted_walk`, `semantics/slir/lower_control.py`).
+The state of a range value is `{i64 k, i64 count, T first, T step}`, one `next_fn` for each
+`T` (`backend/runtime/iterators.py`). A range of `i64` or `u64` bounds that are more than the
+`i64` maximum apart has a count that wraps. A run of an array literal is still an `i32`
+run.
+
+**A range is a value** in every position where an `Iterator@(T)` of an integer `T` is
+expected, written or propagated: a `let`, an argument, a `return`, a constructor field, a
+payload, a container element. The position gives its `T` to the literal bounds:
+`let Iterator@(i64) r = 0..5` is an `i64` range. The propagation phase stamps `RangeExpr.is_value`, and the backend makes an owned
 iterator over the formula of `emit_range`. In an array literal a range keeps its meaning
 as a run of elements (`from([0..3])` is 0, 1, 2). A generic `T` that nothing else solves
 stays **[CE2122](../error-catalog.md#ce2122)**, and so does every other position.
