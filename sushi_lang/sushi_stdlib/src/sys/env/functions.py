@@ -26,8 +26,6 @@ def generate_getenv(module: ir.Module) -> None:
 
     libc_strlen = declare_libc(module, "strlen")
 
-    # Maybe<string> type: {i32 tag, [2 x i64] data} (#300 phase 2)
-    # data must hold a string fat pointer (16 bytes -> K=2 i64 words)
     maybe_string_type = get_maybe_type(string_type)
 
     # The key arrives already marshalled as a C string, and the CALLER frees it (#292). The

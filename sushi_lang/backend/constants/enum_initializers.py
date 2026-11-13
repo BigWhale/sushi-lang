@@ -32,11 +32,12 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
     BuiltinType, StructType, EnumType, EnumVariantInfo, ArrayType, Type, deref_type)
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
+from sushi_lang.backend.string_layout import OWNED_OFFSET, SIZE_OFFSET, SIZE_TYPE
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import AggregateConstant
 
-# `(text, data_name)` -> the `{i8* data, i32 size, i8 owned}` constant, with its backing
+# `(text, data_name)` -> the string constant, with its backing
 # bytes placed in the module.
 StringFinisher = Callable[[str, str], ir.Constant]
 
@@ -48,10 +49,6 @@ Fault = Callable[[str], NoReturn]
 
 WORD_BYTES = 8
 
-# The string fat pointer's layout, `{i8* data, i32 size, i8 owned}`
-# (docs/design/string-representation.md): the data word at 0, the size at 8, owned at 12.
-STRING_SIZE_OFFSET = 8
-STRING_OWNED_OFFSET = 12
 
 _INTEGER_TYPES = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
                   BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
@@ -323,9 +320,9 @@ def _write(blob: _PayloadBytes, offset: int, ty: Type, value: k.Constant, types,
         text = value.value.decode("utf-8", "surrogatepass")
         data_pointer, size, owned = finish_string(text, data_name).constant
         blob.pointers[offset // WORD_BYTES] = data_pointer
-        size_at = offset + STRING_SIZE_OFFSET
-        blob.bytes[size_at:size_at + 4] = size.constant.to_bytes(4, "little")
-        blob.bytes[offset + STRING_OWNED_OFFSET] = owned.constant
+        size_at, size_bytes = offset + SIZE_OFFSET, SIZE_TYPE.width // 8
+        blob.bytes[size_at:size_at + size_bytes] = size.constant.to_bytes(size_bytes, "little")
+        blob.bytes[offset + OWNED_OFFSET] = owned.constant
         return True
 
     return False

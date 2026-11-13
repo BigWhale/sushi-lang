@@ -10,8 +10,8 @@
 # EXPECT_IR_LACKS: user_main store [64 x [64 x i32]]
 # EXPECT_IR_LACKS: user_main load [1000 x { i32, i32, ptr }]
 # EXPECT_IR_LACKS: user_main store [1000 x { i32, i32, ptr }]
-# EXPECT_IR_LACKS: user_main load [32 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: user_main store [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: user_main load [32 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: user_main store [32 x { ptr, i64, i8 }]
 # EXPECT_IR_HOLDS: user_main run0_fill
 fn main() i32:
     let i32[64][64] g = [[1; 64]; 64]

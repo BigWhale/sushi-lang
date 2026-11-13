@@ -209,7 +209,7 @@ A function value lowers to `{ i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_p
 value's `clone_ptr` is `null`, so `.clone()`-ing a bare `fn` reference is a runtime-guarded no-op
 that hands back an equivalent fat value, exactly like `drop_ptr`'s guarded free.
 
-This mirrors the existing **string** fat pointer (`{i8*, i32, i8}`, see
+This mirrors the existing **string** fat pointer (`{i8*, i64, i8}`, see
 `docs/design/string-representation.md`), applying the same insert_value/extract_value/store/load
 idioms.
 

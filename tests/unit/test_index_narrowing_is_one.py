@@ -37,6 +37,9 @@ KNOWN_TRUNCS = {
     ("functions/main_wrapper.py", "_return_exit_code"),
     # The i64 counter of a range as a value: the item of a range is in the i32 range.
     ("runtime/iterators.py", "body"),
+    # The i64 size of a string as the surface i32 of `size()` and `len()`: every write
+    # extends an i32 size, so the value is in the i32 range. #1306 removes the row.
+    ("string_layout.py", "_surface"),
 }
 
 

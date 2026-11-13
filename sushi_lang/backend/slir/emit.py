@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Optional
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_size
 
 from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
@@ -349,7 +350,7 @@ def _trap(state: FunctionState, terminator: tm.Trap) -> None:
                                    terminator.args, strict=True):
         value = operand_value(state, operand)
         if conversion == "%.*s":
-            values += [builder.extract_value(value, 1), builder.extract_value(value, 0)]
+            values += [string_size(builder, value), builder.extract_value(value, 0)]
         else:
             values.append(value)
     state.codegen.runtime.errors.emit_runtime_error_with_values(terminator.code, *values)

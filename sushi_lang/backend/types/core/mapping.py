@@ -28,6 +28,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.types.core.resolution import require_generic_instance
 from sushi_lang.semantics.type_resolution import require_named_type
+from sushi_lang.backend.string_layout import string_type
 
 
 class TypeMapper:
@@ -65,10 +66,9 @@ class TypeMapper:
         self.str_ptr: ir.PointerType = ir.PointerType(self.i8)
         self.void: ir.VoidType = ir.VoidType()
 
-        # `{i8* data, i32 size, i8 owned}`. `owned` is the runtime discriminator (#145):
-        # 0 = literal or borrow, never freed; 1 = heap, freed by RAII. LLVM sizeof stays 16,
-        # so every embedding layout is byte-identical to the old `{i8*, i32}`.
-        self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
+        # `{i8* data, i64 size, i8 owned}`, from `backend/string_layout.py`. `owned` is the
+        # runtime discriminator (#145): 0 = literal or borrow, never freed; 1 = heap.
+        self.string_struct: ir.LiteralStructType = string_type()
 
         # `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}`. `clone_ptr` is
         # `drop_ptr`'s twin: capture is erased from the `fn(...)` type, so a value cloned
@@ -95,14 +95,6 @@ class TypeMapper:
             BuiltinType.STRING: self.string_struct,
             BuiltinType.BLANK: self.i32,
         }
-
-    def _create_string_struct_type(self) -> ir.LiteralStructType:
-        """Create LLVM struct type for fat pointer strings: {i8* data, i32 size, i8 owned}"""
-        return ir.LiteralStructType([
-            ir.PointerType(self.i8),
-            self.i32,
-            self.i8,  # owned: 1 = heap (RAII frees), 0 = literal/borrow (never freed)
-        ])
 
     def ll_type(self, t: Ty) -> ir.Type:
         """Map language type to corresponding LLVM IR type."""

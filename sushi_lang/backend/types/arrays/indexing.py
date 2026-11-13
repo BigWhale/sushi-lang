@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_size_at
 
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_len_ptr
@@ -20,7 +21,7 @@ from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayTyp
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
-_STRING_DATA, _STRING_SIZE = 0, 1
+_STRING_DATA = 0
 
 
 def element_address(codegen: 'LLVMCodegen', base: ir.Value, ty: Type,
@@ -42,8 +43,7 @@ def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
         return codegen.builder.load(gep_utils.gep_dynamic_array_len(codegen, base),
                                     name="array_len")
     if ty == BuiltinType.STRING:
-        return codegen.builder.load(gep_utils.gep_struct_field(codegen, base, _STRING_SIZE),
-                                    name="string_len")
+        return string_size_at(codegen.builder, base, name="string_len")
     if is_instance_of(ty, "List"):
         return codegen.builder.load(get_list_len_ptr(codegen.builder, base), name="list_len")
     raise_internal_error("CE0000", detail=f"the length of {ty}, which is no array")

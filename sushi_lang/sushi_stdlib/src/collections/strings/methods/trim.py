@@ -1,6 +1,7 @@
 """Trim String Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from ..intrinsics import declare_isspace_intrinsic
 from ..common import declare_malloc, declare_memcpy, allocate_substring
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -33,7 +34,7 @@ def emit_string_tleft(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     start_ptr = entry_alloca(builder, i32, name="start_ptr")
     builder.store(ir.Constant(i32, 0), start_ptr)
@@ -62,7 +63,7 @@ def emit_string_tleft(module: ir.Module) -> ir.Function:
     final_start = builder.load(start_ptr, name="final_start")
     new_size = builder.sub(size, final_start, name="new_size")
 
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, final_start, new_size, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, final_start, new_size, i32, i64)
     builder.ret(result)
 
     return func
@@ -94,7 +95,7 @@ def emit_string_tright(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     end_ptr = entry_alloca(builder, i32, name="end_ptr")
     builder.store(size, end_ptr)
@@ -124,7 +125,7 @@ def emit_string_tright(module: ir.Module) -> ir.Function:
     final_end = builder.load(end_ptr, name="final_end")
 
     zero_offset = ir.Constant(i32, 0)
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, zero_offset, final_end, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, zero_offset, final_end, i32, i64)
     builder.ret(result)
 
     return func
@@ -158,7 +159,7 @@ def emit_string_trim(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     start_ptr = entry_alloca(builder, i32, name="start_ptr")
     end_ptr = entry_alloca(builder, i32, name="end_ptr")
@@ -212,7 +213,7 @@ def emit_string_trim(module: ir.Module) -> ir.Function:
     final_end = builder.load(end_ptr, name="final_end")
     new_size = builder.sub(final_end, final_start, name="new_size")
 
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, final_start, new_size, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, final_start, new_size, i32, i64)
     builder.ret(result)
 
     return func

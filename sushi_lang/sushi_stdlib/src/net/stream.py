@@ -1,5 +1,6 @@
 """Operations on a socket descriptor, whatever transport made it."""
 from llvmlite import ir
+from sushi_lang.backend.string_layout import STRING_BYTES
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.net import addr
@@ -377,4 +378,4 @@ def generate_peer_ip(module: ir.Module) -> None:
     memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)
-    builder.ret(emit_ok_result(builder, result_type, text, 16))
+    builder.ret(emit_ok_result(builder, result_type, text, STRING_BYTES))

@@ -1,0 +1,23 @@
+# The string value is `{i8*, i64 size, i8 owned}` (ADR 0001, expand step). The size field
+# is an i64. At the surface, `size()` and `len()` still answer an i32, so the read truncates.
+# COMPILER_FLAGS: --opt none
+# EXPECT_IR_HOLDS: measure { ptr, i64, i8 } %
+# EXPECT_IR_LACKS: measure { ptr, i32, i8 }
+# EXPECT_IR_HOLDS: join_two { ptr, i64, i8 }
+# EXPECT_IR_LACKS: join_two { ptr, i32, i8 }
+# EXPECT_STDOUT_EXACT: "15 15\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn measure(string s) i32:
+    return s.size()
+
+fn join_two(string a, string b) string:
+    return a.concat(b)
+
+fn main() i32:
+    let string text = join_two("Mostly ", "Harmless")
+    let i32 bytes = measure(text)
+    let i32 chars = text.len()
+    println("{bytes} {chars}")
+    return 0

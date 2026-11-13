@@ -53,7 +53,7 @@ class TypeSizing:
                 case BuiltinType.I64 | BuiltinType.U64 | BuiltinType.F64:
                     return 8
                 case BuiltinType.STRING:
-                    return FAT_POINTER_SIZE_BYTES  # Fat pointer {i8*, i32, i8 owned} aligned sizeof = 16 (#145)
+                    return FAT_POINTER_SIZE_BYTES
                 case _:
                     raise_internal_error("CE0021", type=str(semantic_type))
 

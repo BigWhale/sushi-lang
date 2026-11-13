@@ -6,6 +6,7 @@ rendering is getnameinfo with NI_NUMERICHOST, which asks no resolver of its
 own, so this walk makes exactly one network request.
 """
 from llvmlite import ir
+from sushi_lang.backend.string_layout import STRING_BYTES
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
@@ -70,7 +71,7 @@ def generate_resolve(module: ir.Module) -> None:
 
     zero = ir.Constant(i32, 0)
     null = ir.Constant(i8_ptr, None)
-    string_stride = ir.Constant(i64, 16)
+    string_stride = ir.Constant(i64, STRING_BYTES)
 
     # Every alloca is here, in the entry block. One inside the walk below would
     # grow the frame per answer, and the host buffer is a kilobyte each time.

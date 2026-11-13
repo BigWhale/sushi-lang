@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_value
 
 from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.generics.hashmap import emit_hashmap_static
@@ -164,11 +165,8 @@ def _string_from_bytes(state: FunctionState, statement: st.Call) -> ir.Value:
     (value, ty), = parts
     codegen = state.codegen
     address = as_array_address(codegen, value)
-    string = ir.Constant(codegen.types.string_struct, ir.Undefined)
-    string = state.builder.insert_value(string, array_data(codegen, address, ty), 0)
-    string = state.builder.insert_value(string, array_length(codegen, address, ty), 1)
-    return state.builder.insert_value(string, ir.Constant(codegen.i8, 1), 2,
-                                      name="from_bytes")
+    return string_value(state.builder, array_data(codegen, address, ty),
+                        array_length(codegen, address, ty), owned=1, name="from_bytes")
 
 
 #: The emitter of a container static: the codegen, the value of each operand, and the

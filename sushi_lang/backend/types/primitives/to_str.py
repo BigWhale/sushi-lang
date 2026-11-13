@@ -5,6 +5,7 @@ bool).
 from typing import Any, Callable, Optional, Sequence
 from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
 from sushi_lang.sushi_stdlib.src import conversions, ir_common
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
@@ -97,7 +98,7 @@ def generate_module_ir() -> ir.Module:
 def _emit_string_copy(module: ir.Module, builder: ir.IRBuilder, value: ir.Value) -> ir.Value:
     """A fresh owned copy of a string: `to_str()` answers a second value, never its receiver."""
     copy = fat_pointer_to_cstr(module, builder, value)
-    size = builder.extract_value(value, 1, name="copy_size")
+    size = string_size(builder, value, name="copy_size")
     return cstr_to_fat_pointer_with_len(builder, copy, size, owned=1)
 
 

@@ -7,18 +7,18 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "Mostly Harmless 1\nb c\nd e\nf g\nh h\ni j 2\n"
-# EXPECT_IR_LACKS: dup_list load [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_list store [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_array load [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_array store [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_map load [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_map store [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_own load [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: dup_own store [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: grow load [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: grow store [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone load [8 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone store [8 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: dup_list load [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_list store [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_array load [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_array store [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_map load [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_map store [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_own load [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: dup_own store [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: grow load [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: grow store [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone load [8 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone store [8 x { ptr, i64, i8 }]
 # EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone load %"__closure_env
 # EXPECT_IR_LACKS: __closure_env<string[8]>.__closure_clone store %"__closure_env
 use <collections/hashmap>

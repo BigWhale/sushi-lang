@@ -3,6 +3,7 @@
 from typing import Any, Sequence
 from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
@@ -88,7 +89,7 @@ def _emit_string_hash_fnv1a(codegen: Any, string_value: ir.Value) -> ir.Value:
     u64 = ir.IntType(INT64_BIT_WIDTH)
 
     string_ptr = builder.extract_value(string_value, 0, name="str_ptr")
-    str_len_i32 = builder.extract_value(string_value, 1, name="str_len")
+    str_len_i32 = string_size(builder, string_value, name="str_len")
     str_len_u64 = builder.zext(str_len_i32, u64)
 
     hash_value = entry_alloca(builder, u64, name="hash")

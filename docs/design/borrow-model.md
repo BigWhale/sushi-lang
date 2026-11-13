@@ -82,8 +82,8 @@ A mismatch between the two ends is a diagnostic, not a coercion:
 
 ## 4. The representation
 
-A by-value `string` parameter lowers to `{i8*, i32, i8}`
-and is passed into a fresh alloca. **The 16-byte descriptor is copied. The `data` pointer
+A by-value `string` parameter lowers to `{i8*, i64, i8}`
+and is passed into a fresh alloca. **The 24-byte descriptor is copied. The `data` pointer
 aliases the caller's buffer.** Two descriptors, one buffer.
 
 ```

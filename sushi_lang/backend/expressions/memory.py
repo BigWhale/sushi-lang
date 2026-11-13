@@ -4,6 +4,7 @@ import enum
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_size_i64
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.semantics.typesys import (
@@ -77,7 +78,7 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     """The ABI size in bytes of an LLVM type, padding included, as the data layout gives it.
 
     A struct is laid out field by field at each field's alignment, then rounded up to its
-    own alignment, so a string `{i8*, i32, i8}` is 16 and not 13 (#145), and a tuple
+    own alignment, so a string `{i8*, i64, i8}` is 24 and not 17 (#145), and a tuple
     `(i32, u64, u64, i32)` is 32 and not 24. A generator copies this many bytes into a
     Result or Maybe payload, so a short answer cuts the last field off.
     """
@@ -482,10 +483,9 @@ def _at_least_capacity(codegen: 'LLVMCodegen', current_cap: ir.Value,
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
     """Deep-copy a string's buffer, UNCONDITIONALLY."""
     b = codegen.builder
-    size = b.extract_value(fat, 1, name="clone_str_size")
+    size_i64 = string_size_i64(b, fat, name="clone_str_size")
     data = b.extract_value(fat, 0, name="clone_str_data")
 
-    size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
     new_data = emit_malloc(codegen, codegen.builder, size_i64)  # i8*
     emit_memcpy_bytes(codegen, new_data, data, size_i64)
     cloned = b.insert_value(fat, new_data, 0)

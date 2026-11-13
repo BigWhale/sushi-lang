@@ -97,8 +97,8 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   the function owns, it spends the WHOLE receiver, and `drop()` does NOT run. `??` over a
   NAMED owning wrapper spends it (S10d). A `peek T` return with no source is CE2438 (S10h).
 - `main`'s `string[] args` is a borrowed argv view; a move of it is an error.
-- Representation traps: a string is `{i8* data, i32 size, i8 owned}`, so zext the `i32` size
-  to `i64` before you use it as a `mem*` length
+- Representation traps: a string is `{i8* data, i64 size, i8 owned}`; read and write the size
+  only through `backend/string_layout.py`, and use the `i64` size as a `mem*` length
   ([`string-representation.md`](../design/string-representation.md)); a `T[]` is its
   descriptor BY VALUE ([`array-representation.md`](../design/array-representation.md)).
 

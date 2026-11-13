@@ -3,7 +3,7 @@
 [← Back to Standard Library](../../standard-library.md)
 
 Comprehensive string manipulation methods. Sushi strings are UTF-8 encoded fat pointers
-with three fields: `{i8* data, i32 size, i8 owned}`.
+with three fields: `{i8* data, i64 size, i8 owned}`.
 
 An index or a count argument, which the signatures below write as `i32`, is an index
 position: it takes a value of any integer type, and a bare literal there takes `i64` (see

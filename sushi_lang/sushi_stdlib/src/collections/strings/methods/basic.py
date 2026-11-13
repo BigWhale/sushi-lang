@@ -1,6 +1,7 @@
 """Basic String Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from ..intrinsics import declare_utf8_count_intrinsic
 from ..common import declare_malloc, declare_memcpy, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -26,7 +27,7 @@ def emit_string_size(module: ir.Module) -> ir.Function:
     entry_block = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry_block)
 
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
     builder.ret(size)
 
     return func
@@ -53,7 +54,7 @@ def emit_string_len(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     char_count = builder.call(utf8_count, [data, size], name="char_count")
     builder.ret(char_count)
@@ -84,9 +85,9 @@ def emit_string_concat(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data1 = builder.extract_value(func.args[0], 0, name="data1")
-    size1 = builder.extract_value(func.args[0], 1, name="size1")
+    size1 = string_size(builder, func.args[0], name="size1")
     data2 = builder.extract_value(func.args[1], 0, name="data2")
-    size2 = builder.extract_value(func.args[1], 1, name="size2")
+    size2 = string_size(builder, func.args[1], name="size2")
 
     total_size = builder.add(size1, size2, name="total_size")
 
@@ -99,7 +100,7 @@ def emit_string_concat(module: ir.Module) -> ir.Function:
     offset_ptr = builder.gep(new_data, [size1], name="offset_ptr")
     builder.call(memcpy, [offset_ptr, data2, builder.zext(size2, ir.IntType(64)), is_volatile])
 
-    result = build_string_struct(builder, string_type, new_data, total_size, owned=1)
+    result = build_string_struct(builder, new_data, total_size, owned=1)
     builder.ret(result)
 
     return func
@@ -144,9 +145,9 @@ def emit_string_append(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(grow_block)
     data1 = builder.extract_value(func.args[0], 0, name="data1")
-    size1 = builder.extract_value(func.args[0], 1, name="size1")
+    size1 = string_size(builder, func.args[0], name="size1")
     data2 = builder.extract_value(func.args[1], 0, name="data2")
-    size2 = builder.extract_value(func.args[1], 1, name="size2")
+    size2 = string_size(builder, func.args[1], name="size2")
     total_size = builder.add(size1, size2, name="total_size")
 
     start1 = builder.ptrtoint(data1, i64, name="start1")
@@ -167,6 +168,6 @@ def emit_string_append(module: ir.Module) -> ir.Function:
     tail = builder.gep(new_data, [size1], name="tail")
     builder.call(memcpy, [tail, source, builder.zext(size2, i64), ir.Constant(ir.IntType(1), 0)])
 
-    builder.ret(build_string_struct(builder, string_type, new_data, total_size, owned=1))
+    builder.ret(build_string_struct(builder, new_data, total_size, owned=1))
 
     return func

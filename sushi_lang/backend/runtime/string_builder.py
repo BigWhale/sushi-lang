@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size, string_value
 
 from sushi_lang.backend.expressions.memory import emit_memcpy_bytes, emit_realloc_call
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -51,7 +52,7 @@ def emit_push_string(codegen: 'LLVMCodegen', buffer: ir.Value, fat: ir.Value) ->
     """Append the bytes of a string value."""
     builder = codegen.builder
     emit_push(codegen, buffer, builder.extract_value(fat, 0, name="piece_data"),
-              builder.extract_value(fat, 1, name="piece_len"))
+              string_size(builder, fat, name="piece_len"))
 
 
 def emit_push_text(codegen: 'LLVMCodegen', buffer: ir.Value, text: str) -> None:
@@ -67,10 +68,7 @@ def emit_finish(codegen: 'LLVMCodegen', buffer: ir.Value) -> ir.Value:
     data = builder.load(builder.gep(buffer, [zero, zero]), name="built_data")
     length = builder.load(builder.gep(buffer, [zero, ir.Constant(codegen.types.i32, 1)]),
                           name="built_len")
-    fat = ir.Constant(codegen.types.string_struct, ir.Undefined)
-    fat = builder.insert_value(fat, data, 0)
-    fat = builder.insert_value(fat, length, 1)
-    return builder.insert_value(fat, ir.Constant(codegen.types.i8, 1), 2)
+    return string_value(builder, data, length, owned=1)
 
 
 def _push_func(codegen: 'LLVMCodegen') -> ir.Function:

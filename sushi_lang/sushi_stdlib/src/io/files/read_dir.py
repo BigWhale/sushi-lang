@@ -1,5 +1,6 @@
 """The directory listing of <io/files>: one opendir/readdir walk."""
 from llvmlite import ir
+from sushi_lang.backend.string_layout import STRING_BYTES
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_result_type, get_unit_enum_type,
     get_dynamic_array_type, get_string_type,
@@ -41,7 +42,7 @@ def generate_read_dir(module: ir.Module) -> None:
     string_type = get_string_type()
     string_ptr = string_type.as_pointer()
     array_type = get_dynamic_array_type(string_type)
-    STRING_STRIDE = 16  # {i8*, i32, i8} padded to 16; string_split uses the same stride
+    STRING_STRIDE = STRING_BYTES
 
     result_type = get_result_type(array_type, get_unit_enum_type())
 

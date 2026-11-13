@@ -4,7 +4,8 @@ from __future__ import annotations
 import typing
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.string_layout import string_constant, string_size, string_value
+from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import emit_memcpy_bytes
 from sushi_lang.internals.errors import raise_internal_error
@@ -16,15 +17,10 @@ if typing.TYPE_CHECKING:
 
 
 def literal_fat_pointer(data: ir.GlobalVariable) -> ir.Constant:
-    """The `{i8* data, i32 size, i8 owned}` constant over the global byte array `data` of a
-    literal. The bytes live in a read-only global, so the owned field is 0 and RAII never
-    frees them (#145). Every field is concrete: on ARM64 `size` and `owned` share one
-    by-value argument register, so an undef owned field poisons `size`."""
+    """The string constant over the global byte array `data` of a literal. The bytes live
+    in a read-only global, so the owned field is 0 and RAII never frees them (#145)."""
     zero = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 0)
-    return ir.Constant.literal_struct([
-        data.gep([zero, zero]),
-        ir.Constant(ir.IntType(INT32_BIT_WIDTH), data.value_type.count),
-        ir.Constant(ir.IntType(INT8_BIT_WIDTH), 0)])
+    return string_constant(data.gep([zero, zero]), data.value_type.count, owned=0)
 
 
 class StringOperations:
@@ -53,9 +49,9 @@ class StringOperations:
             raise_internal_error("CE0009")
 
         lhs_data = self.codegen.builder.extract_value(lhs, 0)
-        lhs_size = self.codegen.builder.extract_value(lhs, 1)
+        lhs_size = string_size(self.codegen.builder, lhs)
         rhs_data = self.codegen.builder.extract_value(rhs, 0)
-        rhs_size = self.codegen.builder.extract_value(rhs, 1)
+        rhs_size = string_size(self.codegen.builder, rhs)
 
         sizes_equal = self.codegen.builder.icmp_signed('==', lhs_size, rhs_size)
 
@@ -97,9 +93,9 @@ class StringOperations:
         builder = self.codegen.builder
 
         lhs_data = builder.extract_value(lhs, 0)
-        lhs_size = builder.extract_value(lhs, 1)
+        lhs_size = string_size(builder, lhs)
         rhs_data = builder.extract_value(rhs, 0)
-        rhs_size = builder.extract_value(rhs, 1)
+        rhs_size = string_size(builder, rhs)
 
         lhs_shorter = builder.icmp_unsigned('<', lhs_size, rhs_size)
         common = builder.select(lhs_shorter, lhs_size, rhs_size)
@@ -147,9 +143,9 @@ class StringOperations:
             raise_internal_error("CE0009")
 
         data1 = self.codegen.builder.extract_value(str1, 0)
-        size1 = self.codegen.builder.extract_value(str1, 1)
+        size1 = string_size(self.codegen.builder, str1)
         data2 = self.codegen.builder.extract_value(str2, 0)
-        size2 = self.codegen.builder.extract_value(str2, 1)
+        size2 = string_size(self.codegen.builder, str2)
 
         total_size = self.codegen.builder.add(size1, size2)
 
@@ -160,14 +156,7 @@ class StringOperations:
         offset_ptr = self.codegen.builder.gep(new_data, [size1])
         emit_memcpy_bytes(self.codegen, offset_ptr, data2, size2)
 
-        string_struct_type = self.codegen.types.string_struct
-        undef_struct = ir.Constant(string_struct_type, ir.Undefined)
-        struct_with_data = self.codegen.builder.insert_value(undef_struct, new_data, 0)
-        struct_with_size = self.codegen.builder.insert_value(struct_with_data, total_size, 1)
-        struct_complete = self.codegen.builder.insert_value(
-            struct_with_size, ir.Constant(self.codegen.i8, 1), 2)
-
-        return struct_complete
+        return string_value(self.codegen.builder, new_data, total_size, owned=1)
 
     def emit_to_cstr(self, string_struct: ir.Value) -> ir.Value:
         """Convert fat pointer string to null-terminated C string."""
@@ -175,7 +164,7 @@ class StringOperations:
             raise_internal_error("CE0009")
 
         data_ptr = self.codegen.builder.extract_value(string_struct, 0)
-        size = self.codegen.builder.extract_value(string_struct, 1)
+        size = string_size(self.codegen.builder, string_struct)
 
         size_plus_one = self.codegen.builder.add(size, ir.Constant(self.codegen.i32, 1))
         size_i64 = self.codegen.builder.zext(size_plus_one, ir.IntType(INT64_BIT_WIDTH))
@@ -195,14 +184,7 @@ class StringOperations:
 
         size = self.codegen.builder.call(self.codegen.runtime.libc_strings.strlen, [c_str])
 
-        string_struct_type = self.codegen.types.string_struct
-        undef_struct = ir.Constant(string_struct_type, ir.Undefined)
-        struct_with_data = self.codegen.builder.insert_value(undef_struct, c_str, 0)
-        struct_with_size = self.codegen.builder.insert_value(struct_with_data, size, 1)
-        struct_complete = self.codegen.builder.insert_value(
-            struct_with_size, ir.Constant(self.codegen.i8, 1 if owned else 0), 2)
-
-        return struct_complete
+        return string_value(self.codegen.builder, c_str, size, owned)
 
     def emit_cstr_to_owned_fat_pointer(self, c_str: ir.Value) -> ir.Value:
         """Copy a foreign C `char*` into a fresh Sushi-owned buffer (owned=1)."""
@@ -217,12 +199,7 @@ class StringOperations:
 
         emit_memcpy_bytes(self.codegen, new_data, c_str, size_i64)
 
-        string_struct_type = self.codegen.types.string_struct
-        s = ir.Constant(string_struct_type, ir.Undefined)
-        s = b.insert_value(s, new_data, 0)
-        s = b.insert_value(s, size, 1)
-        s = b.insert_value(s, ir.Constant(self.codegen.i8, 1), 2)
-        return s
+        return string_value(b, new_data, size_i64, owned=1)
 
     def _declare_and_define_utf8_char_count(self) -> None:
         """Declare and define the utf8_char_count function for Unicode-aware string length."""

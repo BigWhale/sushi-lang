@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_size
 
 from sushi_lang.backend.utils.validation import require_builder
 from sushi_lang.internals.errors import raise_internal_error
@@ -178,7 +179,7 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
             descriptor = _descriptor(receiver, array_type, name)
             text = args[0][0]
             text_data = builder.extract_value(text, 0, name="extend_str_data")
-            text_size = builder.extract_value(text, 1, name="extend_str_size")
+            text_size = string_size(builder, text, name="extend_str_size")
             return core.emit_dynamic_array_extend(codegen, descriptor,
                                                   _struct_type(codegen, array_type),
                                                   text_data, text_size, zero, text_size,

@@ -257,4 +257,6 @@ def generate_recv_from(module: ir.Module) -> None:
     datagram = builder.insert_value(datagram, descriptor, 0, name="dg_data")
     datagram = builder.insert_value(datagram, text, 1, name="dg_peer_ip")
     datagram = builder.insert_value(datagram, peer_port, 2, name="datagram")
-    builder.ret(emit_ok_result(builder, result_type, datagram, 40))
+    from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
+    builder.ret(emit_ok_result(builder, result_type, datagram,
+                               calculate_llvm_type_size(datagram_ty)))

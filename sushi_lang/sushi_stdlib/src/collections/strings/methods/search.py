@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from ..common import allocate_substring
 from ..intrinsics import declare_utf8_count_intrinsic
 from sushi_lang.sushi_stdlib.src.type_definitions import (
@@ -38,9 +39,9 @@ def emit_string_starts_with(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     prefix_data = builder.extract_value(func.args[1], 0, name="prefix_data")
-    prefix_size = builder.extract_value(func.args[1], 1, name="prefix_size")
+    prefix_size = string_size(builder, func.args[1], name="prefix_size")
     builder.branch(size_check_block)
 
     builder = ir.IRBuilder(size_check_block)
@@ -99,9 +100,9 @@ def emit_string_ends_with(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     suffix_data = builder.extract_value(func.args[1], 0, name="suffix_data")
-    suffix_size = builder.extract_value(func.args[1], 1, name="suffix_size")
+    suffix_size = string_size(builder, func.args[1], name="suffix_size")
     builder.branch(size_check_block)
 
     builder = ir.IRBuilder(size_check_block)
@@ -209,9 +210,9 @@ def _emit_search(
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     needle_data = builder.extract_value(func.args[1], 0, name="needle_data")
-    needle_size = builder.extract_value(func.args[1], 1, name="needle_size")
+    needle_size = string_size(builder, func.args[1], name="needle_size")
     builder.branch(empty_needle_check)
 
     builder = ir.IRBuilder(empty_needle_check)
@@ -401,9 +402,9 @@ def _emit_string_split_at(module: ir.Module, func_name: str, reverse: bool) -> i
     def on_found(builder: ir.IRBuilder, scan: _Scan, found_pos: Callable[[], ir.Value]) -> None:
         at = found_pos()
         after = builder.add(at, scan.needle_size, name="after")
-        head = allocate_substring(builder, malloc, memcpy, string_type, scan.str_data,
+        head = allocate_substring(builder, malloc, memcpy, scan.str_data,
                                   ir.Constant(i32, 0), at, i32, i64)
-        tail = allocate_substring(builder, malloc, memcpy, string_type, scan.str_data,
+        tail = allocate_substring(builder, malloc, memcpy, scan.str_data,
                                   after, builder.sub(scan.str_size, after, name="tail_size"),
                                   i32, i64)
         pair = builder.insert_value(ir.Constant(pair_type, ir.Undefined), head, 0)

@@ -193,7 +193,7 @@ is a clean type error (**[`CE2507`](error-catalog.md#ce2507)**), as it is on the
 ### String auto-marshalling (and the no-leak contract)
 
 A Sushi `string` is a UTF-8 fat pointer with three fields,
-`{i8* data, i32 size, i8 owned}`. C expects a null-terminated `char*`. At the boundary the compiler marshals automatically:
+`{i8* data, i64 size, i8 owned}`. C expects a null-terminated `char*`. At the boundary the compiler marshals automatically:
 
 - A `string` **argument** is copied into a fresh null-terminated `char*` for the
   call. That temporary is registered in a per-scope cleanup list and freed via
