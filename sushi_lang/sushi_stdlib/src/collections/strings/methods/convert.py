@@ -306,7 +306,6 @@ def emit_string_join(module: ir.Module) -> ir.Function:
             return func
 
     i8, i8_ptr, i32, i64, string_type = get_string_types()
-    string_ptr = string_type.as_pointer()
     dyn_array_type = get_dynamic_array_type(string_type)
 
     malloc = declare_malloc(module)
