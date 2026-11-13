@@ -30,6 +30,8 @@ ALLOWED = {
     ("runtime/closures.py", "get_or_create_env_drop"): "the glue takes the environment only",
     ("runtime/closures.py", "get_or_create_env_clone"): "the glue takes the environment only",
     ("functions/signature.py", "call_signature"): "the seam itself",
+    ("expressions/operators.py", "_emit_trapping"): "a with.overflow intrinsic has the "
+                                                    "fixed signature of LLVM",
     ("destructors.py", "emit_function_value_destructor_from_value"): "the drop glue of a "
                                                                     "function value takes "
                                                                     "the environment only",

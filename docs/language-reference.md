@@ -820,21 +820,32 @@ on a `u8` is 144, and `~0` on a `u32` is 4294967295.
 An `as` cast is the escape. It asks for the bit pattern, so it truncates: `300 as u8` is
 44. A wider type is the other answer.
 
-**Run time does not check `+`, `-`, `*` and unary minus.** Only an expression the
-compiler reads is checked, so two locals wrap:
+**Run time follows the overflow mode.** A value that the compiler cannot read, such as
+the sum of two locals, is checked when the program runs. The flag
+`--overflow=trap|wrap` sets the mode, and `trap` is the default
+([compiler reference](compiler-reference.md#integer-overflow)):
+
+- `trap`: a `+`, `-`, `*` or unary minus whose result the type cannot hold stops the
+  program with [RE2032](error-catalog.md#re2032), which names the operator and the type
+  (`integer overflow: '+' on u8`). The program exits 1.
+- `wrap`: the bits that leave the type are lost, and nothing reports it.
 
 ```sushi
 fn main() i32:
     let u8 a = 200
     let u8 b = 100
-    let u8 sum = a + b        # 44 at run time, and nothing reports it
+    let u8 sum = a + b        # RE2032 by default; 44 with --overflow=wrap
     println(sum)
     return 0
 ```
 
+`.add_up()` on an integer array follows the mode too. The arithmetic that the compiler
+makes, for example the count of a range, is never checked.
+
 **A division is checked at run time.** An integer `/` or `%` whose divisor is 0 stops the
-program with [RE2030](error-catalog.md#re2030), and on a signed type the smallest value
-over `-1` stops it with [RE2031](error-catalog.md#re2031). The program exits 1. A float
+program with [RE2030](error-catalog.md#re2030) in both modes. On a signed type the
+smallest value over `-1` stops it with [RE2031](error-catalog.md#re2031) in `trap` mode;
+in `wrap` mode `/` gives the smallest value and `%` gives 0. The program exits 1. A float
 division by zero gives an infinity or a NaN, and nothing reports it.
 
 ```sushi

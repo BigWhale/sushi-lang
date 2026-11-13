@@ -114,8 +114,21 @@ _add(ErrorMessage("RE2031", Severity.ERROR,
     "than the largest value, so the type cannot hold it, and the machine instruction of "
     "`%` divides first. The program stops with exit code 1. This is a code of its own, and "
     "not RE2030, because the divisor is not 0. It is the division case of the integer "
-    "overflow rule (docs/adr/0002-overflow-mode.md): when the overflow modes come, `trap` "
-    "keeps this stop, and `wrap` gives the smallest value for `/` and 0 for `%`."))
+    "overflow rule (docs/adr/0002-overflow-mode.md): the default mode `trap` "
+    "keeps this stop, and `--overflow=wrap` gives the smallest value for `/` and 0 for `%`."))
+
+# An integer + - * or unary minus whose result leaves its type, in trap mode (#1299)
+_add(ErrorMessage("RE2032", Severity.ERROR,
+    "integer overflow: '{op}' on {type}",
+    Category.RUNTIME, "`a + b`, `a - b`, `a * b` or `-a` on an integer type gave a result "
+    "that the type cannot hold, at run time. The default overflow mode is `trap`, so the "
+    "program stops with exit code 1 (docs/adr/0002-overflow-mode.md). The text names the "
+    "operator and the type at compile time. `.add_up()` on an integer array is a `+` for "
+    "this rule. Build with `--overflow=wrap` to lose the bits that leave the type in place "
+    "of the stop. The checked operators are the CE2077 set; for `/` and `%` the overflow "
+    "is RE2031. The arithmetic that the compiler makes (the count of a range, a loop "
+    "counter) gets no check. `~`, `&`, `|`, `^` and `as` are width-defined, and a wider "
+    "type or a cast is the escape."))
 
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,

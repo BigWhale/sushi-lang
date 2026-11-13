@@ -31,6 +31,7 @@ from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
 from sushi_lang.semantics.slir.function import SlirProgram
 from sushi_lang.semantics.slir.lower import SlirStage
+from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
@@ -147,7 +148,8 @@ class SemanticAnalyzer:
 
     def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, lints: Optional[Lints] = None,
                  generated_symbols: frozenset[str] = frozenset(),
-                 is_library: bool = False, dont_panic: bool = False) -> None:
+                 is_library: bool = False, dont_panic: bool = False,
+                 overflow: OverflowMode = OverflowMode.TRAP) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
@@ -170,6 +172,8 @@ class SemanticAnalyzer:
         # nothing (D13).
         self.dont_panic = dont_panic
         self.marked: list[str] = []
+        # `--overflow`: the SLIR of each unit and the backend read it.
+        self.overflow = overflow
         # The whole program's symbol tables, and the ONE home of each of them: the
         # `namespaces` a unit may write behind a dot are `tables.namespaces`, and so on
         # for the other eighteen. Empty until the collect loop replaces them with what
@@ -879,7 +883,7 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
-        slir = SlirStage(self.shir, self.slir, unit=unit.name,
+        slir = SlirStage(self.shir, self.slir, unit=unit.name, overflow=self.overflow,
                          failed=lambda: self.reporter.has_errors or reporter.has_errors)
         borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir,
                                next_stage=slir.lower_body,

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.units import Unit
+from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
@@ -97,6 +98,10 @@ class LLVMCodegen:
         self.is_library_mode: bool = False
 
         self.library_linker: Optional['LibraryResolver'] = None
+
+        # `--overflow` (`codegen_for`): what a checked integer operator does with a result
+        # that its type cannot hold.
+        self.overflow: OverflowMode = OverflowMode.TRAP
 
         self.library_registry: Optional[LibraryRegistry] = None
 

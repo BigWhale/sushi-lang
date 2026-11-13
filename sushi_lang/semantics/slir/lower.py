@@ -57,6 +57,7 @@ from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.iterators import answers_an_iterator
+from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
@@ -117,6 +118,7 @@ class SlirStage:
     shir: LoweredProgram
     slir: SlirProgram
     unit: str
+    overflow: OverflowMode
     failed: Callable[[], bool]
     verifier: SlirVerifier = field(default_factory=SlirVerifier)
 
@@ -135,7 +137,8 @@ class SlirStage:
         drops = drop_type_names(tables.perk_impls)
         function = lower_function(decl, self.shir.tables_of(body), decls=self.shir.decls,
                                   name=name, unit=self.unit, tables=tables, drops=drops,
-                                  label=display_filename(filename or "<input>"))
+                                  label=display_filename(filename or "<input>"),
+                                  overflow=self.overflow)
         for each in (function, *function.lifted):
             self.verifier.verify(each, tables=tables, drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
@@ -162,9 +165,10 @@ Arrival: TypeAlias = tuple[Optional[Block], FlowState]
 
 def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name: str,
                    unit: str, tables: SymbolTables, drops: frozenset[str],
-                   label: str) -> SlirFunction:
+                   label: str, overflow: OverflowMode = OverflowMode.TRAP) -> SlirFunction:
     """The `SlirFunction` of one body that `borrow` finished, from the body and its tables.
-    `label` names the file of the body in the position of a trap.
+    `label` names the file of the body in the position of a trap, and `overflow` is the
+    mode of the build.
     """
     body = answers.body
     if isinstance(body.origin, TemplateCheck):
@@ -177,7 +181,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
 
     def lower_once(learned: Learned) -> tuple[Lowering, tuple[tuple[LocalId, Convention], ...]]:
         lowering = Lowering(answers, decls, drops, shir_locals, learned, label, tables,
-                            unit=unit if home is None else home)
+                            unit=unit if home is None else home, overflow=overflow)
         lowering.new_local(ret, None, None, view=(borrows and lowering.owns(ret)
                                                   and not answers_an_iterator(ret)))
         params = lowering.parameters()
@@ -221,6 +225,7 @@ class Lowering:
     channel_expression: bool = False
     unit: str = ""
     walked: Optional[ShirBlock] = None
+    overflow: OverflowMode = OverflowMode.TRAP
 
     def __post_init__(self) -> None:
         self.block = self.blocks[0]

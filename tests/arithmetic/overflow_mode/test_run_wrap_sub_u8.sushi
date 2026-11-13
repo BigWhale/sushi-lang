@@ -1,0 +1,11 @@
+# With --overflow=wrap, a u8 difference below 0 wraps to the top of the type.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "255\n"
+
+fn sub(u8 a, u8 b) u8:
+    return a - b
+
+fn main(string[] args) i32:
+    println("{sub(0, args.len() as u8)}")
+    return 0

@@ -476,6 +476,9 @@ fixture file itself, because the one set of directives describes both steps.
   library. A comma/space separated list; the directive may be repeated. When either is
   present, every unit the compiler reports must be named in one of the two, so an
   unexpected rebuild fails the fixture too.
+- `REBUILD_FLAGS` -- extra `sushic` flags for the SECOND compilation alone (for example
+  `--overflow=wrap`). It proves that a flag in the cache key rebuilds the units. A flag
+  the runner owns is refused, as in `COMPILER_FLAGS`, and `--lib` is refused too.
 - A rebuild directive in a fixture whose directory holds no `v2/` fails the fixture.
 
 #### RUN_IN_FIXTURE_DIR

@@ -10,6 +10,7 @@ from sushi_lang.internals.diagnostics import InternalCompilerError, SushiError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals.styling import COLOUR_CHOICES, set_colour_override
 from sushi_lang.internals.version import print_banner
+from sushi_lang.semantics.overflow_mode import OverflowMode
 
 
 def _find_toolchain_tool(name: str) -> Optional[Path]:
@@ -96,6 +97,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         choices=["none", "mem2reg", "O1", "O2", "O3"],
         default="mem2reg",
         help="Optimization level. 'mem2reg' promotes locals to SSA without a full pipeline.",
+    )
+    build.add_argument(
+        "--overflow",
+        choices=[mode.value for mode in OverflowMode],
+        help="What an integer + - * / %% or unary minus does with a result that its type "
+             "cannot hold: 'trap' (the default) stops the program, 'wrap' loses the bits "
+             "that leave the type. A division by zero stops the program in both modes.",
     )
     build.add_argument(
         "--no-verify",
@@ -205,6 +213,8 @@ _NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ..
     ("docs", "--docs", lambda a: not a.lib_info, "without --lib-info"),
     ("dont_panic", "--dont-panic", lambda a: a.lib_info,
      "with --lib-info: a report compiles no function"),
+    ("overflow", "--overflow", lambda a: a.lib_info,
+     "with --lib-info: a report compiles no function"),
     ("dump_shir", "--dump-shir", lambda a: a.lib_info,
      "with --lib-info: a report compiles no function"),
     ("dump_slir", "--dump-slir", lambda a: a.lib_info,
@@ -226,6 +236,8 @@ def _validate_args(args: argparse.Namespace, reporter: Reporter) -> None:
                     flag=flag, reason=reason)
     if args.lib_kind is None:
         args.lib_kind = "source"
+    if args.overflow is None:
+        args.overflow = OverflowMode.TRAP.value
 
 
 def _run(session: Session) -> int:

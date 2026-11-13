@@ -1,0 +1,11 @@
+# With --overflow=wrap, an i32 sum loses the bits that leave the type.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-2147483648\n"
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main(string[] args) i32:
+    println("{add(2147483647, args.len())}")
+    return 0

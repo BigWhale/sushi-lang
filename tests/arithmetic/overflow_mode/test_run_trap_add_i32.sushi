@@ -1,0 +1,12 @@
+# An i32 sum that the type cannot hold stops the program in the default mode.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2032"
+# EXPECT_STDERR_CONTAINS: "integer overflow: '+' on i32"
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main(string[] args) i32:
+    println("{add(2147483647, args.len())}")
+    return 0

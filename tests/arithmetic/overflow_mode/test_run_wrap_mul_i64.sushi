@@ -1,0 +1,11 @@
+# With --overflow=wrap, an i64 product loses the bits that leave the type.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-9223372036854775808\n"
+
+fn mul(i64 a, i64 b) i64:
+    return a * b
+
+fn main(string[] args) i32:
+    println("{mul(4611686018427387904, (args.len() + 1) as i64)}")
+    return 0

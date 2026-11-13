@@ -46,6 +46,22 @@ when you add or change a flag, change the driver, compare IR, or build a library
   a stdlib import (R2).
 - Both lint flags ride on one `Lints` record.
 
+## The overflow mode
+
+- `--overflow {trap,wrap}`; `trap` is the default. It does not depend on `--opt`.
+- `BuildOptions.overflow` is an `OverflowMode` (`semantics/overflow_mode.py`). The
+  pipeline gives it to the `SemanticAnalyzer`, and `codegen_for` copies
+  `analyzer.overflow` to `LLVMCodegen.overflow`. So SLIR lowering and the backend read one
+  value.
+- SLIR lowering leaves out the RE2031 check of `/` and `%` in `wrap` mode. The backend
+  reads the `user` mark of a SLIR `Binary` or `Unary`: in `trap` mode a marked `+ - *` or
+  negation goes through a `with.overflow` intrinsic and stops with RE2032; in `wrap` mode
+  a marked signed `/` or `%` gives the wrapped answer for a divisor of -1.
+- The compiler's own arithmetic has no mark and is never checked.
+- The mode is in `CacheManager.global_key`. A stdlib Sushi module compiles with the mode
+  of the program. The stdlib generators are prebuilt and do not follow it.
+- With `--lib-info` the flag warns CW0003.
+
 ## Other flags
 
 `--opt {none,mem2reg,O1,O2,O3}`, `--no-verify`, `--keep-object`, `--no-incremental`,

@@ -1,0 +1,10 @@
+# An `.add_up()` total that an i32 cannot hold stops the program in the default mode.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2032"
+# EXPECT_STDERR_CONTAINS: "integer overflow: '+' on i32"
+
+fn main(string[] args) i32:
+    let i32[] xs = from([2147483647, args.len()])
+    println("{xs.add_up()}")
+    return 0

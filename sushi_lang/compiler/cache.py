@@ -47,8 +47,9 @@ class CacheManager:
     """Manages the incremental compilation cache directory."""
 
     def __init__(self, project_root: Path, opt_level: str = "mem2reg",
-                 cache_dir: Optional[Path] = None) -> None:
+                 cache_dir: Optional[Path] = None, overflow: str = "trap") -> None:
         self.opt_level = opt_level
+        self.overflow = overflow
         self.cache_path = cache_dir or (project_root / CACHE_DIR_NAME)
         self.units_path = self.cache_path / UNITS_DIR
         self.stdlib_path = self.cache_path / STDLIB_DIR
@@ -61,14 +62,15 @@ class CacheManager:
         """The cache of one compilation: `--cache-dir` when given, made absolute
         against the user's directory, else `__sushi_cache__/` in `project_root`."""
         cache_dir = Path(options.cache_dir).resolve() if options.cache_dir else None
-        return cls(project_root, opt_level=options.opt, cache_dir=cache_dir)
+        return cls(project_root, opt_level=options.opt, cache_dir=cache_dir,
+                   overflow=options.overflow.value)
 
     @property
     def global_key(self) -> str:
         """Digest of the settings every cached object depends on."""
         from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
         material = (
-            f"{compiler_version}|{self._target_triple}|{self.opt_level}"
+            f"{compiler_version}|{self._target_triple}|{self.opt_level}|{self.overflow}"
             f"|{compute_compiler_source_fingerprint()}"
         )
         return hashlib.sha1(material.encode("utf-8")).hexdigest()[:_KEY_LEN]

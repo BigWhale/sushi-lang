@@ -429,8 +429,9 @@ ordered, so a NaN after element 0 is never chosen.
 ### `.add_up() -> T`
 
 The total of a numeric array: the elements added from left to right with the run-time `+`
-of the element type. An empty array answers zero. An integer total wraps, and a float
-total follows IEEE. The method is named `add_up` and not `sum`, so a user extension named
+of the element type. An empty array answers zero. An integer total follows the overflow
+mode: by default a total that the type cannot hold stops the program with RE2032, and with
+`--overflow=wrap` it wraps. A float total follows IEEE. The method is named `add_up` and not `sum`, so a user extension named
 `sum` on an array stays legal.
 
 ```sushi

@@ -1,0 +1,11 @@
+# With --overflow=wrap, the negation of the smallest i32 is the smallest i32.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-2147483648\n"
+
+fn negate(i32 a) i32:
+    return -a
+
+fn main() i32:
+    println("{negate(-2147483648)}")
+    return 0

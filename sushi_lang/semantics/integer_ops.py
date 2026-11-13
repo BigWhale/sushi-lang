@@ -59,8 +59,10 @@ _BITWISE: Mapping[str, Callable[[int, int], int]] = {
     "&": operator.and_, "|": operator.or_, "^": operator.xor,
 }
 
-#: The overflow-checked binary operators and the width-defined ones.
-OVERFLOW_CHECKED = frozenset({*_EXACT, *DIVISION_OPS})
+#: The overflow-checked binary operators and the width-defined ones. `EXACT_OPS` are the
+#: checked operators that have a result for every pair of operands.
+EXACT_OPS = frozenset(_EXACT)
+OVERFLOW_CHECKED = frozenset({*EXACT_OPS, *DIVISION_OPS})
 WIDTH_DEFINED = frozenset({*_BITWISE, *SHIFT_OPS})
 
 _COMPARISONS: Mapping[str, Callable[[Any, Any], bool]] = {

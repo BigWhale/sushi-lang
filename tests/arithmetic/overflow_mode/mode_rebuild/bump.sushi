@@ -1,0 +1,2 @@
+public fn bump(i32 a) i32:
+    return a + 1

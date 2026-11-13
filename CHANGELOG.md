@@ -19,6 +19,17 @@ All notable changes to Sushi Lang will be documented in this file.
   `if`. The local is freed one time on each path. Before, a program such as
   `if (n < 3 and take(nom s)):` stopped with an internal error `CE0000`.
 
+### Added
+
+- **`--overflow=trap|wrap`, and integer overflow traps by default.** At run time, an
+  integer `+`, `-`, `*` or unary minus whose result the type cannot hold stops the program
+  with `RE2032`, which names the operator and the type (`integer overflow: '+' on i32`).
+  `.add_up()` on an integer array follows the same rule. `--overflow=wrap` keeps the old
+  behaviour: the bits that leave the type are lost, and the smallest signed value over -1
+  gives that value for `/` and 0 for `%`. A division by zero stops the program in both
+  modes. The arithmetic that the compiler makes (the count of a range) is not checked. The
+  mode is part of the cache key. See `docs/adr/0002-overflow-mode.md` (#1299).
+
 ## [0.17.0] - 2026-11-11
 
 The compiler has a new pipeline. The semantic passes and the backend now work on two
