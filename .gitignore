@@ -70,3 +70,4 @@ descriptor_seq_probe.txt
 descriptor_lines_probe.txt
 descriptor_seek_probe.txt
 descriptor_tty_probe.txt
+.envrc
