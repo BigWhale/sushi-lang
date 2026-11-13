@@ -39,6 +39,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.const_eval import is_integer_constant
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.exprs import ConstRef, IntConst, Lit, Unary
+from sushi_lang.semantics.shir.literals import negated_int_literal
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           Type, deref_type)
 from sushi_lang.semantics.type_predicates import is_numeric_type
@@ -93,10 +94,10 @@ def _reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
     """CE2073 at the negation of a byte literal whose value is below zero. A byte literal
     is a `u8` value, so its negation is out of range for `u8`, also in a position that gives
     it i32."""
-    if not (isinstance(node, Unary) and node.op == "neg" and isinstance(node.operand, Lit)
-            and isinstance(node.operand.value, IntConst)):
+    literal = negated_int_literal(node)
+    if literal is None:
         return
-    const = node.operand.value
+    const = literal.value
     value = -const.value
     if value < 0:
         er.emit(validator.reporter, er.ERR.CE2073, node.loc, literal=str(value),

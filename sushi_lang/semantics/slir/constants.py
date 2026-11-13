@@ -71,9 +71,10 @@ def text(value: str) -> Str:
     return Str(value.encode("utf-8", "surrogatepass"))
 
 
-def of_literal(lit: e.Lit, typeck: TypeckResults) -> Constant:
-    """The constant of a literal. An integer literal takes its value row; any other literal
-    is its written value, at the type that typecheck gave it."""
+def of_literal(lit: e.Lit, typeck: TypeckResults, node: e.ShirExpr | None = None) -> Constant:
+    """The constant of a literal, or of the negated integer literal `node` that holds it
+    (`negated_int_literal`). An integer literal takes the value row of `node`, else its own;
+    any other literal is its written value, at the type that typecheck gave it."""
     value = lit.value
     if isinstance(value, e.BoolConst):
         return Bool(value.value)
@@ -82,7 +83,7 @@ def of_literal(lit: e.Lit, typeck: TypeckResults) -> Constant:
     if isinstance(value, e.StrConst):
         return text(value.value)
     if isinstance(value, e.IntConst):
-        held = typeck.value_of(lit.shir_id)
+        held = typeck.value_of((lit if node is None else node).shir_id)
         if not isinstance(held, ScalarConstant):
             er.raise_internal_error("CE0000", span=lit.loc,
                                     detail="an integer literal with no value reached SLIR")

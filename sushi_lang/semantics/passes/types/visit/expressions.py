@@ -104,13 +104,16 @@ def type_int_literal(validator: TypeValidator, const: e.IntConst, expected: Opti
     return default
 
 
-def held_value(const: e.IntConst, ty: Type, wraps: bool) -> int:
-    """The value that an integer literal holds at its integer type `ty` (ir.md 8.5).
+def held_value(const: e.IntConst, ty: Type, wraps: bool, negated: bool = False) -> int:
+    """The value that an integer literal holds at its integer type `ty` (ir.md 8.5), and
+    with `negated` the value of its negation `-N`, which is one value with its sign.
 
     A literal that spells bits (a radix other than 10) holds the value that its type holds,
     and so does the operand of a cast or of a negation (`wraps`), where the range check of
     the literal is not the range of its type. Any other literal is in the range of its type.
     """
+    if negated:
+        return integer_ops.cast(-const.value, ty)
     if wraps or const.radix != 10:
         return integer_ops.cast(const.value, ty)
     return const.value

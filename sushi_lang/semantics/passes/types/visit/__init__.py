@@ -45,12 +45,12 @@ from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types import matching as mt
 from sushi_lang.semantics.passes.types.matching import PositionNote
-from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.passes.types.exhaustiveness import Pat
 from sushi_lang.semantics.passes.types.expressions import check_cast, check_try
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.literals import negated_int_literal
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import Hole
@@ -110,20 +110,16 @@ def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
     with its sign, the arm of a cast for an integer literal directly under it, and the
     tuple arm for a tuple that a destructure checks part by part (`fields.check_tuple_at`),
     and the range of a `foreach` (`ranges.check_range_iterable`).
-    The arms of a negation and of a cast set `wraps`. The value row of an integer literal is written here too, at its type
-    (`ex.held_value`, ir.md 8.5), and so is the value row of a negated integer literal: one
-    value with its sign, so that lowering makes one constant and negates no `128` at `i8`."""
+    The arms of a negation and of a cast set `wraps`. The value row of an integer literal,
+    and of a negated one (`negated_int_literal`), is written here too, at its type
+    (`ex.held_value`, ir.md 8.5)."""
     if ty is not None:
         answers = validator.body_answers()
         answers.record_type(node.shir_id, ty)
-        if isinstance(node, e.Lit) and isinstance(node.value, e.IntConst):
-            answers.record_value(node.shir_id,
-                                 ScalarConstant(ex.held_value(node.value, ty, wraps), ty))
-        elif isinstance(node, e.Unary) and node.op == "neg" and isinstance(node.operand, e.Lit):
-            held = answers.value_of(node.operand.shir_id)
-            if isinstance(held, ScalarConstant):
-                answers.record_value(node.shir_id,
-                                     ScalarConstant(integer_ops.cast(-held.value, ty), ty))
+        literal = node if isinstance(node, e.Lit) else negated_int_literal(node)
+        if literal is not None and isinstance(literal.value, e.IntConst):
+            held = ex.held_value(literal.value, ty, wraps, negated=literal is not node)
+            answers.record_value(node.shir_id, ScalarConstant(held, ty))
     return ty
 
 

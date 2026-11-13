@@ -52,7 +52,6 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span, display_filename
-from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
@@ -66,6 +65,7 @@ from sushi_lang.semantics.shir.paths import reached_statements
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.shir.literals import negated_int_literal
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
@@ -497,6 +497,9 @@ class Lowering:
                                     detail=f"a move row on a {type(expr).__name__}, which is no place")
         if isinstance(expr, e.Lit):
             return p.Const(k.of_literal(expr, self.typeck))
+        literal = negated_int_literal(expr)
+        if literal is not None:
+            return p.Const(k.of_literal(literal, self.typeck, expr))
         if isinstance(expr, e.ConstRef):
             return p.Const(self.constant(expr))
         temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc,
@@ -529,14 +532,12 @@ class Lowering:
         lhs = agg.settled(self, node.lhs, self.operand(node.lhs), (node.rhs,))
         rhs = self.operand(node.rhs)
         if node.op in ("/", "%"):
-            division.check_divisor(self, lhs, rhs, self.type_of(node), node.loc)
+            division.check_division(self, lhs, rhs, self.type_of(node), node.loc)
         return r.Binary(node.op, lhs, rhs, user=True)
 
     def unary(self, node: e.Unary) -> Value:
-        """A negated integer literal is one constant of its type, from its value row."""
-        value = self.typeck.value_of(node.shir_id)
-        if isinstance(value, ScalarConstant):
-            return r.Use(p.Const(k.of_scalar(value)))
+        if negated_int_literal(node) is not None:
+            return r.Use(self.operand(node))
         return r.Unary(node.op, self.operand(node.operand), user=True)
 
     def enum_init(self, node: e.EnumInit) -> Value:

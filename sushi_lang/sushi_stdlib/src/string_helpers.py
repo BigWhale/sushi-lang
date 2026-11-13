@@ -1,19 +1,13 @@
 """String Helper Functions"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_constants import text_global
 from .libc_declarations import declare_malloc, declare_strlen
 
 
 def create_string_constant(module: ir.Module, builder: ir.IRBuilder, value: str, name: str = "str") -> ir.Value:
     """Create a global string constant and return a pointer to it."""
-    str_bytes = bytearray(value.encode("utf-8") + b'\0')
-    str_ty = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-    global_str = ir.GlobalVariable(module, str_ty, name=module.get_unique_name(name))
-    global_str.linkage = 'internal'
-    global_str.global_constant = True
-    global_str.initializer = ir.Constant(str_ty, str_bytes)
-
+    global_str = text_global(module, module.get_unique_name(name), value)
     i32 = ir.IntType(32)
     zero = ir.Constant(i32, 0)
     return builder.gep(global_str, [zero, zero], inbounds=True)

@@ -116,20 +116,19 @@ fn main() -> i32 {
     let _4: ~
     let _5: i32
     let _6: ~
-    let _7: i8
-    let _8: i32
-    let _9: ~
-    let _10: i32
-    let _11: ~
-    let _12: i32
-    let _13: ~
-    let _14: i32
-    let _15: ~
-    let _16: i32
+    let _7: i32
+    let _8: ~
+    let _9: i32
+    let _10: ~
+    let _11: i32
+    let _12: ~
+    let _13: i32
+    let _14: ~
+    let _15: i32
+    let _16: ~
     let _17: ~
     let _18: ~
     let _19: ~
-    let _20: ~
 
   bb0:
     StorageLive(_1)
@@ -151,47 +150,44 @@ fn main() -> i32 {
     StorageDead(_6)
     StorageDead(_5)
     StorageLive(_7)
-    _7 = const -1_i8
+    _7 = call @kind(const -1_i8 @guaranteed)
     StorageLive(_8)
-    _8 = call @kind(copy _7 @guaranteed)
-    StorageLive(_9)
-    _9 = call builtin println@(i32)(copy _8 @guaranteed)
-    StorageDead(_9)
+    _8 = call builtin println@(i32)(copy _7 @guaranteed)
     StorageDead(_8)
     StorageDead(_7)
+    StorageLive(_9)
+    _9 = call @kind(const 100_i8 @guaranteed)
     StorageLive(_10)
-    _10 = call @kind(const 100_i8 @guaranteed)
-    StorageLive(_11)
-    _11 = call builtin println@(i32)(copy _10 @guaranteed)
-    StorageDead(_11)
+    _10 = call builtin println@(i32)(copy _9 @guaranteed)
     StorageDead(_10)
+    StorageDead(_9)
+    StorageLive(_11)
+    _11 = call @letter(const 97_u8 @guaranteed)
     StorageLive(_12)
-    _12 = call @letter(const 97_u8 @guaranteed)
-    StorageLive(_13)
-    _13 = call builtin println@(i32)(copy _12 @guaranteed)
-    StorageDead(_13)
+    _12 = call builtin println@(i32)(copy _11 @guaranteed)
     StorageDead(_12)
+    StorageDead(_11)
+    StorageLive(_13)
+    _13 = call @letter(const 99_u8 @guaranteed)
     StorageLive(_14)
-    _14 = call @letter(const 99_u8 @guaranteed)
-    StorageLive(_15)
-    _15 = call builtin println@(i32)(copy _14 @guaranteed)
-    StorageDead(_15)
+    _14 = call builtin println@(i32)(copy _13 @guaranteed)
     StorageDead(_14)
+    StorageDead(_13)
+    StorageLive(_15)
+    _15 = call @letter(const 122_u8 @guaranteed)
     StorageLive(_16)
-    _16 = call @letter(const 122_u8 @guaranteed)
-    StorageLive(_17)
-    _17 = call builtin println@(i32)(copy _16 @guaranteed)
-    StorageDead(_17)
+    _16 = call builtin println@(i32)(copy _15 @guaranteed)
     StorageDead(_16)
+    StorageDead(_15)
+    StorageLive(_17)
+    _17 = call @pick(const 0_i32 @guaranteed)
+    StorageDead(_17)
     StorageLive(_18)
-    _18 = call @pick(const 0_i32 @guaranteed)
+    _18 = call @pick(const 1_i32 @guaranteed)
     StorageDead(_18)
     StorageLive(_19)
-    _19 = call @pick(const 1_i32 @guaranteed)
+    _19 = call @pick(const 2_i32 @guaranteed)
     StorageDead(_19)
-    StorageLive(_20)
-    _20 = call @pick(const 2_i32 @guaranteed)
-    StorageDead(_20)
     _0 = const 0_i32
     return
 }
