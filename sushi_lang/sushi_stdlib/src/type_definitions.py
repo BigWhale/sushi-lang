@@ -3,6 +3,8 @@
 import llvmlite.ir as ir
 from typing import Iterable, Tuple
 
+from sushi_lang.backend.string_layout import STRING_BYTES, string_type
+
 
 def get_basic_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntType]:
     """Get commonly used basic LLVM types."""
@@ -14,17 +16,8 @@ def get_basic_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTyp
 
 
 def get_string_type() -> ir.LiteralStructType:
-    """The string fat pointer `{i8* data, i32 size, i8 owned}`.
-
-    `owned` is a runtime discriminator: 1 = heap (RAII frees), 0 = literal or borrow (never
-    freed). LLVM sizeof stays 16, so this is byte-compatible with the old `{i8*, i32}`
-    wherever a string embeds. Must stay in lockstep with backend
-    mapping.py:_create_string_struct_type. See docs/design/string-representation.md.
-    """
-    i8 = ir.IntType(8)
-    i8_ptr = i8.as_pointer()
-    i32 = ir.IntType(32)
-    return ir.LiteralStructType([i8_ptr, i32, i8])
+    """The string value; `backend/string_layout.py` is its one definition."""
+    return string_type()
 
 
 def get_string_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntType, ir.LiteralStructType]:
@@ -35,10 +28,9 @@ def get_string_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTy
 
 
 def get_dynamic_array_type(element_type: ir.Type) -> ir.LiteralStructType:
-    """Get the dynamic array struct type for a given element type."""
-    i32 = ir.IntType(32)
-    element_ptr = element_type.as_pointer()
-    return ir.LiteralStructType([i32, i32, element_ptr])
+    """The `T[]` descriptor `{i64 len, i64 cap, T* data}` for a given element type."""
+    i64 = ir.IntType(64)
+    return ir.LiteralStructType([i64, i64, element_type.as_pointer()])
 
 
 def get_byte_array_type() -> ir.LiteralStructType:
@@ -56,7 +48,7 @@ def get_process_output_type() -> ir.LiteralStructType:
 
 def _process_output_size_bytes() -> int:
     """Aligned size of ProcessOutput, mirroring backend sizing.py `_calculate_struct_size`."""
-    string_size = 16  # fat pointer {i8*, i32, i8 owned} aligned sizeof (backend FAT_POINTER_SIZE_BYTES) (#145)
+    string_size = STRING_BYTES
     fields = [(4, 4), (string_size, 8), (string_size, 8)]
     offset = 0
     max_align = 1
@@ -84,8 +76,8 @@ def get_datagram_type() -> ir.LiteralStructType:
 
 def _datagram_size_bytes() -> int:
     """Aligned size of Datagram, mirroring backend sizing.py `_calculate_struct_size`."""
-    array_size = 16   # {i32 len, i32 cap, T* data}, aligned
-    string_size = 16  # fat pointer {i8*, i32, i8 owned}, aligned
+    array_size = 24   # {i64 len, i64 cap, T* data}, aligned
+    string_size = STRING_BYTES
     fields = [(array_size, 8), (string_size, 8), (4, 4)]
     offset = 0
     max_align = 1

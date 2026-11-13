@@ -4,6 +4,7 @@ import enum
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_size_i64
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.semantics.typesys import (
@@ -77,7 +78,7 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     """The ABI size in bytes of an LLVM type, padding included, as the data layout gives it.
 
     A struct is laid out field by field at each field's alignment, then rounded up to its
-    own alignment, so a string `{i8*, i32, i8}` is 16 and not 13 (#145), and a tuple
+    own alignment, so a string `{i8*, i64, i8}` is 24 and not 17 (#145), and a tuple
     `(i32, u64, u64, i32)` is 32 and not 24. A generator copies this many bytes into a
     Result or Maybe payload, so a short answer cuts the last field off.
     """
@@ -150,8 +151,8 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     """Clone a dynamic array struct value (creates deep copy with independent memory)."""
     zero = ir.Constant(codegen.types.i32, 0)
 
-    source_len = codegen.builder.extract_value(array_struct, 0)
-    source_cap = codegen.builder.extract_value(array_struct, 1)
+    source_len = gep_utils.extract_len(codegen, array_struct, "source_len")
+    source_cap = gep_utils.extract_cap(codegen, array_struct, "source_cap")
     source_data_ptr = codegen.builder.extract_value(array_struct, 2)
 
     element_llvm_type = codegen.types.ll_type(element_type)
@@ -168,8 +169,8 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     codegen.builder.position_at_end(empty_clone_bb)
     null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
     empty_array = ir.Constant(array_struct_type, ir.Undefined)
-    empty_array = codegen.builder.insert_value(empty_array, zero, 0)
-    empty_array = codegen.builder.insert_value(empty_array, zero, 1)
+    empty_array = gep_utils.insert_len(codegen, empty_array, zero)
+    empty_array = gep_utils.insert_cap(codegen, empty_array, zero)
     empty_array = codegen.builder.insert_value(empty_array, null_ptr, 2)
     codegen.builder.branch(clone_merge_bb)
 
@@ -194,8 +195,8 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     copy_exit = codegen.builder.block
 
     new_array = ir.Constant(array_struct_type, ir.Undefined)
-    new_array = codegen.builder.insert_value(new_array, source_len, 0)
-    new_array = codegen.builder.insert_value(new_array, source_cap, 1)
+    new_array = gep_utils.insert_len(codegen, new_array, source_len)
+    new_array = gep_utils.insert_cap(codegen, new_array, source_cap)
     new_array = codegen.builder.insert_value(new_array, new_data_ptr, 2)
     codegen.builder.branch(clone_merge_bb)
 
@@ -414,7 +415,7 @@ _LARGEST_DOUBLING_CAP = 0x3FFFFFFF
 
 
 def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr: ir.Value,
-                     cap_ptr: ir.Value, current_cap: ir.Value, count: ir.Value,
+                     header: ir.Value, current_cap: ir.Value, count: ir.Value,
                      element_llvm_type: ir.Type, policy: GrowPolicy) -> ir.Value:
     """Grow a contiguous buffer so that it holds enough elements; answer its data pointer.
 
@@ -426,7 +427,8 @@ def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr
     is not a positive i32, the capacity becomes `count`. A need that is not a positive
     i32 (a `len + count` that wrapped) is the allocation failure RE2021, because no i32
     capacity holds it. The byte size is an i64 (`emit_byte_size`). The new capacity and
-    data pointer are stored through `cap_ptr` and `data_ptr_ptr`; the answer is
+    data pointer are stored in the `header` (the `T[]` or `List@(T)`) and through
+    `data_ptr_ptr`; the answer is
     `data_ptr` or the grown pointer, whichever is live.
     """
     b = codegen.builder
@@ -457,7 +459,7 @@ def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr
         new_data_ptr = emit_realloc_call(codegen, data_ptr, new_total_size)
         typed_new_data_ptr = b.bitcast(new_data_ptr, ir.PointerType(element_llvm_type),
                                        name="typed_new_data_ptr")
-        b.store(new_cap, cap_ptr)
+        gep_utils.store_cap(codegen, header, new_cap)
         b.store(typed_new_data_ptr, data_ptr_ptr)
         after_growth = b.block
 
@@ -482,10 +484,9 @@ def _at_least_capacity(codegen: 'LLVMCodegen', current_cap: ir.Value,
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
     """Deep-copy a string's buffer, UNCONDITIONALLY."""
     b = codegen.builder
-    size = b.extract_value(fat, 1, name="clone_str_size")
+    size_i64 = string_size_i64(b, fat, name="clone_str_size")
     data = b.extract_value(fat, 0, name="clone_str_data")
 
-    size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
     new_data = emit_malloc(codegen, codegen.builder, size_i64)  # i8*
     emit_memcpy_bytes(codegen, new_data, data, size_i64)
     cloned = b.insert_value(fat, new_data, 0)
@@ -543,8 +544,8 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
     b = codegen.builder
     elem_ty = extract_element_type(value_type, codegen)
     elem_llvm = codegen.types.ll_type(elem_ty)
-    length = b.extract_value(value, 0, name="clone_list_len")
-    cap = b.extract_value(value, 1, name="clone_list_cap")
+    length = gep_utils.extract_len(codegen, value, "clone_list_len")
+    cap = gep_utils.extract_cap(codegen, value, "clone_list_cap")
     data = b.extract_value(value, 2, name="clone_list_data")  # T*
 
     slot = entry_alloca(b, value.type, name="clone_list_slot")

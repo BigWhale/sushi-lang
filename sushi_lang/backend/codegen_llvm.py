@@ -418,7 +418,7 @@ class LLVMCodegen:
             _declare_one(sig, name, unit)
 
     def _constant_string_value(self, text: str, data_name: str) -> ir.Constant:
-        """A `{i8*, i32, i8 owned}` constant, with its backing byte array global.
+        """A string constant, with its backing byte array global.
 
         `owned = 0` on every one: the bytes live in a read-only global, so RAII must
         never free them (#145).

@@ -36,7 +36,7 @@ there was no other spelling.
 | **S8** | A slice of a temporary lives for one statement. `send(make()[0..4])` is legal: the temporary lives until the end of the statement. `let u8[] h = make()[0..4]` is an error, because the array is freed at the end of the statement. A slice never copies, in any position. An index of a temporary is different: `let string s = make()[1]` takes the one element, and that stays |
 
 **The value.** A slice is a BORROWED `T[]`, not a new type. Its descriptor is
-`{b - a, b - a, data + a}`, the `{i32 len, i32 cap, T* data}` layout of every `T[]`
+`{b - a, b - a, data + a}`, the `{i64 len, i64 cap, T* data}` layout of every `T[]`
 ([array representation](array-representation.md)). An index read is already a borrow, so
 a `let` of a slice is a let-borrow: the owner is frozen while the slice lives, and a
 consuming use and a write through the slice are refused. No lifetimes are necessary.

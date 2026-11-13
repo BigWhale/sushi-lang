@@ -1,0 +1,32 @@
+# A string is 24 bytes, so the payload of `Maybe@(string)` and of `Result@(string, E)` is
+# `[3 x i64]` (ADR 0001, expand step). The tag stays an i32 at offset 0.
+# COMPILER_FLAGS: --opt none
+# EXPECT_IR_HOLDS: pick { i32, [3 x i64] }
+# EXPECT_IR_LACKS: pick { i32, [2 x i64] }
+# EXPECT_IR_HOLDS: checked { i32, [3 x i64] }
+# EXPECT_IR_LACKS: checked { i32, [2 x i64] }
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nempty\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+error WordError:
+    Empty
+
+fn pick(string s) Maybe@(string):
+    if (s == ""):
+        return Maybe.None()
+    return Maybe.Some(s.concat(" Harmless"))
+
+fn checked(string s) string | WordError:
+    if (s == ""):
+        return Result.Err(WordError.Empty)
+    return Result.Ok(s.concat(""))
+
+fn main() i32:
+    match pick("Mostly"):
+        Maybe.Some(word) -> println(word)
+        Maybe.None() -> println("none")
+    match checked(""):
+        Result.Ok(word) -> println(word)
+        Result.Err(_) -> println("empty")
+    return 0

@@ -1,6 +1,7 @@
 """String Parsing Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_free,
     declare_malloc,
@@ -15,7 +16,7 @@ from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
 def emit_string_to_i32(module: ir.Module) -> ir.Function:
-    """Emit `Maybe<i32> string_to_i32({i8*, i32} str)`."""
+    """Emit `Maybe<i32> string_to_i32({i8*, i64, i8} str)`."""
     func_name = "string_to_i32"
 
     if func_name in module.globals:
@@ -45,7 +46,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
 
     size_plus_one = builder.add(str_size, ir.Constant(i32, 1), name="size_plus_one")
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
@@ -125,7 +126,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
 
 
 def emit_string_to_i64(module: ir.Module) -> ir.Function:
-    """Emit `Maybe<i64> string_to_i64({i8*, i32} str)`."""
+    """Emit `Maybe<i64> string_to_i64({i8*, i64, i8} str)`."""
     func_name = "string_to_i64"
 
     if func_name in module.globals:
@@ -153,7 +154,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
 
     size_plus_one = builder.add(str_size, ir.Constant(i32, 1), name="size_plus_one")
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
@@ -221,7 +222,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
 
 
 def emit_string_to_f64(module: ir.Module) -> ir.Function:
-    """Emit `Maybe<f64> string_to_f64({i8*, i32} str)`."""
+    """Emit `Maybe<f64> string_to_f64({i8*, i64, i8} str)`."""
     func_name = "string_to_f64"
 
     if func_name in module.globals:
@@ -250,7 +251,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
 
     size_plus_one = builder.add(str_size, ir.Constant(i32, 1), name="size_plus_one")
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")

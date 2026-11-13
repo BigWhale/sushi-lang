@@ -18,7 +18,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.printer import show
-from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.type_predicates import is_instance_of, is_integer_type
 from sushi_lang.semantics.slir.verify_rules import ARRAY_VALUE, LENGTH_SLICE, OWNING_DROP, VIEW
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, Type, owns_resource,
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span: Span) -> None:
     """The parts fit the runs: a value of the element type and an `i64` count of a repeat,
-    an `i32` first value and an `i64` count of a sequence of `i32` slots. The value of a repeat run is a borrow, never
+    a first value of the element type and an `i64` count of a sequence of integer slots. The value of a repeat run is a borrow, never
     a `Move`. The counts of a `T[N]` are constants that add up to `N`."""
     ty = kind.ty
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
@@ -47,11 +47,11 @@ def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span
             check.fail(ARRAY_VALUE, f"a repeat run of {display_type(ty)} moves its value "
                                     f"{show(parts[at])}, which it borrows", span)
         at += r.run_width(run)
-        if isinstance(run, r.RunSequence) and ty.base_type != BuiltinType.I32:
+        if isinstance(run, r.RunSequence) and not is_integer_type(ty.base_type):
             check.fail(ARRAY_VALUE, f"a sequence fills {display_type(ty)}, whose element "
-                                    f"is no i32", span)
-        first = BuiltinType.I32 if isinstance(run, r.RunSequence) else ty.base_type
-        wanted += [first] if isinstance(run, r.RunOne) else [first, BuiltinType.I64]
+                                    f"is no integer", span)
+        wanted += [ty.base_type] if isinstance(run, r.RunOne) else [ty.base_type,
+                                                                      BuiltinType.I64]
     check.parts_fit(ARRAY_VALUE, display_type(ty), wanted,
                     [check.operand_type(part, span) for part in parts], span)
     if isinstance(ty, ArrayType):

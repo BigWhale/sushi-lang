@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
+from sushi_lang.backend import gep_utils
+from sushi_lang.sushi_stdlib.src.type_definitions import get_dynamic_array_type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -38,14 +40,10 @@ def emit_dynamic_array_of_length(codegen: 'LLVMCodegen', element_llvm_type: ir.T
 def descriptor(codegen: 'LLVMCodegen', element_llvm_type: ir.Type, length: ir.Value,
                capacity: ir.Value, data_ptr: ir.Value) -> ir.Value:
     """The `{len, cap, data}` descriptor, built by value."""
-    array_struct_type = ir.LiteralStructType([
-        codegen.types.i32,
-        codegen.types.i32,
-        ir.PointerType(element_llvm_type)
-    ])
+    array_struct_type = get_dynamic_array_type(element_llvm_type)
     array_struct = ir.Constant(array_struct_type, ir.Undefined)
-    array_struct = codegen.builder.insert_value(array_struct, length, 0)
-    array_struct = codegen.builder.insert_value(array_struct, capacity, 1)
+    array_struct = gep_utils.insert_len(codegen, array_struct, length)
+    array_struct = gep_utils.insert_cap(codegen, array_struct, capacity)
     return codegen.builder.insert_value(array_struct, data_ptr, 2)
 
 
@@ -86,7 +84,7 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_llvm_type
         capacity *= 2
 
     # The LLVM ABI ALLOC size, which is the stride GEP uses. A padded type's data size is
-    # smaller -- a string fat pointer is 12 bytes of data in a 16-byte slot -- so sizing by
+    # smaller -- a string fat pointer is 17 bytes of data in a 24-byte slot -- so sizing by
     # data size while GEP strides by alloc size overflows the buffer (#24, #29).
     capacity_val = ir.Constant(codegen.types.i32, capacity)
     total_bytes = memory.emit_byte_size(codegen, capacity_val, element_llvm_type,

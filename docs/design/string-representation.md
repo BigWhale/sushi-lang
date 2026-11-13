@@ -1,21 +1,52 @@
 # String Value Representation
 
-Status: **Decided** (keep the 3-field fat pointer).
+Status: **Decided** (keep the 3-field fat pointer; the size is an `i64`).
 
 ## Decision
 
 A `string` value is a **3-field fat pointer**:
 
 ```
-{ i8* data, i32 size, i8 owned }   // 16 bytes (aligned)
+{ i8* data, i64 size, i8 owned }   // 24 bytes (aligned)
 ```
+
+| Field | Offset | Type |
+|---|---|---|
+| `data` | 0 | `i8*` |
+| `size` | 8 | `i64` |
+| `owned` | 16 | `i8` |
+| padding | 17..24 | |
 
 `owned` is a runtime ownership discriminator: `1` = heap buffer (RAII frees at scope
 exit), `0` = global-backed literal or borrow (never freed). The destructor is
 bit-guarded: `if owned: free(data)`.
 
+The `size` field is an `i64` (ADR 0001, the index type is `i64`). This is the expand step
+of that change: the surface `size()` and `len()` still answer an `i32`. A read truncates
+the `i64` to the `i32`, and a write zero-extends an `i32` size. A later step changes the
+surface type.
+
 We keep this representation. We do **not** switch to packing `owned` into the high bit
-of `size` (the 2-field / 12-byte alternative).
+of `size` (the 2-field alternative).
+
+### The one seam
+
+`sushi_lang/backend/string_layout.py` is the one definition of the type and of its size
+field. The backend type mapper and the stdlib generators both get the type from it.
+
+| Entry | What it does |
+|---|---|
+| `string_type()` | the LLVM type |
+| `string_size(b, s)` | the size of a value, as the surface `i32` |
+| `string_size_i64(b, s)` | the size of a value at the stored width, for a byte count |
+| `string_size_at(b, p)` | the size of the string at an address, as the surface `i32` |
+| `with_string_size(b, s, n)` | a value with a new size (an `i32` size is sign-extended, `backend/stored_width.py`) |
+| `string_value(b, data, n, owned)` | a new value |
+| `string_constant(data, n, owned)` | a new constant |
+| `STRING_BYTES`, `SIZE_OFFSET`, `OWNED_OFFSET` | the ABI size and the byte offsets |
+
+The gate `tests/unit/test_string_size_is_one_seam.py` refuses a raw access to field 1
+outside this module, and a second spelling of the type.
 
 ## Why a runtime ownership bit at all
 
@@ -39,48 +70,52 @@ Given a runtime bit, the only sub-choice is where to store it:
 
 | | 3-field `{data, size, owned}` (chosen) | High-bit in `size` |
 |---|---|---|
-| String size | 16 B | 12 B |
-| `Result@(string, E)`/`Maybe@(string)` enum | 24 B (`{i32, [2 x i64]}`) | 24 B (also `[2 x i64]`) |
-| `size` reads | clean `i32`, no masking | **every** read must mask off the ownership bit |
-| Failure mode of a missed site | a memcpy/memmove *length* is wrong → **loud crash**, easy to find | a masked *size* read is wrong by 2^31 → **silent corruption** |
-| Number of hazard sites | few (mem* length arguments) | many (`.len()`, `%.*s` precision, comparison, bounds, every method) |
-| `size` max | full `i32` | `2^31 - 1` |
+| String size | 24 B | 16 B |
+| `Result@(string, E)`/`Maybe@(string)` enum | 32 B (`{i32, [3 x i64]}`) | 24 B (`[2 x i64]`) |
+| `size` reads | clean integer, no masking | **every** read must mask off the ownership bit |
+| Failure mode of a missed site | a type mismatch in the IR → **loud crash**, easy to find | a masked *size* read is wrong by 2^63 → **silent corruption** |
+| Number of hazard sites | few, all in the one seam | many (`.len()`, `%.*s` precision, comparison, bounds, every method) |
 
 Every enum is `{i32 tag, [K x i64] data}` with the payload at offset 8, so
-`Result@(string, StdError)` is `{i32, [2 x i64]}`, 24 bytes, and the 12-byte alternative also
-needs `[2 x i64]`. The enum row does not separate the two choices; the other rows do.
+`Result@(string, StdError)` and `Maybe@(string)` are `{i32, [3 x i64]}`, 32 bytes. The
+3-field shape costs one word more than the high-bit shape, here and in each `string[]`
+element.
 
 High-bit packing trades a small, closed, **loud** problem for a large, open, **silent**
 one. It would have to mask the ownership bit at every one of the dozens of places that
-read a string's size; missing one yields a length off by 2^31 that corrupts rather than
-crashes. The 3-field shape keeps `size` a clean `i32`, keeps `owned` orthogonal and
+read a string's size; missing one yields a wrong length that corrupts rather than
+crashes. The 3-field shape keeps `size` a clean integer, keeps `owned` orthogonal and
 inspectable, and is simpler.
 
 ## The ABI fallout, and why it does not justify switching
 
-The 16-byte, 3-field shape has two ABI hazards, and both are **guardable**:
+The 24-byte, 3-field shape has two ABI hazards, and both are **guardable**:
 
 - **Manual payload byte-copies.** The enum layout `{i32 tag, [K x i64] data}` puts the
   payload base at an 8-aligned offset, and every payload offset is naturally aligned
   (`TypeSizing.payload_field_offsets` is the one authority), so the `owned` byte and the
-  size survive every payload store and load.
-- **Manual `mem*` lengths.** A string's raw `i32 size` sits next to `owned` and padding, so
-  as a `mem*` length it can carry garbage upper bits into libc's SIMD routines. The backend
-  uses the `i64`-length `llvm.memcpy`/`memmove` intrinsics with the `i32` size
-  zero-extended. The by-value passing/return of the enum itself is handled correctly by
-  LLVM's target ABI lowering; the backend has no manual `sret`/`byval`, so there is no
-  separate aggregate-ABI hazard.
+  size survive every payload store and load. A generator that copies a string into a
+  payload by hand copies `STRING_BYTES`, never a number it spells itself.
+- **Manual `mem*` lengths.** The backend uses the `i64`-length `llvm.memcpy`/`memmove`
+  intrinsics. A size read as the surface `i32` is zero-extended; `string_size_i64` gives
+  the stored `i64` directly. The by-value passing/return of the enum itself is handled
+  correctly by LLVM's target ABI lowering; the backend has no manual `sret`/`byval`, so
+  there is no separate aggregate-ABI hazard.
 
-The risk is recurrence: a *new* site that passes a string's `i32` size
-to a `mem*` routine. A CI gate prevents it: `tests/unit/test_mem_intrinsic_is_one_seam.py`
-refuses an `llvm.mem*` declaration outside the one seam (`backend/expressions/memory.py`)
-and any declaration with an `i32` length. That is a proportionate guardrail, not a reason to
-rebuild the string ABI and take on the pervasive masking obligation above.
+Two CI gates prevent a recurrence. `tests/unit/test_mem_intrinsic_is_one_seam.py` refuses
+an `llvm.mem*` declaration outside the one seam (`backend/expressions/memory.py`) and any
+declaration with an `i32` length. `tests/unit/test_string_size_is_one_seam.py` refuses a
+raw read or write of the size field outside `backend/string_layout.py`.
 
 ## Consequence
 
-The rule for compiler code touching strings: **never pass a string's `i32` size field
-directly as a `mem*` length — zero-extend to `i64` and use the `i64`-length intrinsic.**
+The rules for compiler code touching strings:
+
+- Read and write the size only through `backend/string_layout.py`.
+- **Never pass a size as a `mem*` length without the `i64` width**: use
+  `string_size_i64`, or zero-extend the `i32` from `string_size`, and use the
+  `i64`-length intrinsic.
+
 See `sushi_lang/backend/runtime/strings.py` and the stdlib `declare_memcpy` helper
 (`sushi_lang/sushi_stdlib/src/libc_declarations.py`) for the pattern.
 
@@ -127,7 +162,8 @@ the operator once, so all four operators share a single path:
 3. Otherwise the byte difference is `memcmp(lhs.data, rhs.data, n)`, with `n` zero-extended
    from `i32` to `i64` — the standing rule of this document.
 4. The answer is the byte difference when it is non-zero, and `lhs.size - rhs.size` otherwise.
-   A size is a non-negative `i32`, so that subtraction cannot overflow.
+   The sizes are read as the surface `i32`, and a size is non-negative, so that subtraction
+   cannot overflow.
 
 `memcmp` compares as `unsigned char`. That is what makes the order a byte order rather than a
 signed-char order, and UTF-8 keeps code points in numerical order, so the byte order and the

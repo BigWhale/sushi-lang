@@ -22,6 +22,12 @@ A lent part of the answer of a step (the `peeks` of the iterator) owns nothing o
 so it needs no `Drop`. The rule is read after each other rule of the dataflow.
 
 The structure check of `verify.py` runs first and gives the dataflow its facts (`Check`).
+
+The state of a block holds each local whose state a rule reads past a write: an owning
+local, a guarded local and its flag, a parameter and `_0`. Any other local is in the state
+only where it is live: where a path reaches a read of it before its next write or storage
+(`_live_plain`). Elsewhere no rule reads its state, so the state of a block grows with the
+live locals, not with all the locals of the function.
 """
 from __future__ import annotations
 
@@ -53,7 +59,9 @@ if TYPE_CHECKING:
 _UNINIT, _LIVE, _MOVED, _DROPPED, _LENT = "uninit", "live", "moved", "dropped", "lent"
 _NO_FLAG, _UNSET, _TRUE, _FALSE, _UNKNOWN = "none", "unset", "true", "false", "unknown"
 _Config: TypeAlias = tuple[str, str]
-_State: TypeAlias = tuple[frozenset[_Config], ...]
+_Configs: TypeAlias = frozenset[_Config]
+_State: TypeAlias = dict[int, _Configs]
+_NO_VALUE: _Configs = frozenset({(_UNINIT, _NO_FLAG)})
 
 
 def successors(term: tm.SlirTerminator) -> list[BlockId]:
@@ -76,25 +84,35 @@ class Flow:
     dropped_parts: dict[LocalId, list[p.Place]] = field(default_factory=dict)
     left_parts: list[tuple[str, Span]] = field(default_factory=list)
     lent: dict[LocalId, list[p.Place]] = field(default_factory=dict)
+    tracked: frozenset[int] = frozenset()
 
     def run(self) -> None:
         check = self.check
         for local, flag in check.guards.items():
             self.flagged[flag] = (*self.flagged.get(flag, ()), local)
         self.lent = _lent_parts(check)
-        start = tuple(frozenset({(self.entry_state(local.id),
-                                  _UNSET if local.id in check.guards else _NO_FLAG)})
-                      for local in check.function.locals)
+        self.tracked = frozenset(
+            local.index for local in (*check.owning, *check.guards, *check.guards.values(),
+                                      *check.conventions, LocalId(0)))
+        live = _live_plain(check, self.tracked)
         entry = check.function.entry
+        start = {local.id.index: frozenset({(self.entry_state(local.id),
+                                             _UNSET if local.id in check.guards else _NO_FLAG)})
+                 for local in check.function.locals
+                 if local.id.index in self.tracked or local.id.index in live[entry]}
         states: dict[BlockId, _State] = {entry: start}
         work = [entry]
         while work:
             block = check.blocks[work.pop()]
             out = self.through(block, states[block.id])
             for target in successors(block.terminator):
+                kept = live[target]
+                out_here = {index: configs for index, configs in out.items()
+                            if index in self.tracked or index in kept}
                 old = states.get(target)
-                new = (out if old is None or old == out
-                       else tuple(a | b for a, b in zip(old, out, strict=True)))
+                new = (out_here if old is None or old == out_here
+                       else {index: old.get(index, _NO_VALUE) | out_here.get(index, _NO_VALUE)
+                             for index in old.keys() | out_here.keys()})
                 if new != old:
                     states[target] = new
                     work.append(target)
@@ -106,7 +124,7 @@ class Flow:
             self.violate(DROP_ONCE, detail, span)
 
     def through(self, block: SlirBlock, state: _State) -> _State:
-        configs = list(state)
+        configs = dict(state)
         self.parts.clear()
         self.dropped_parts.clear()
         for stmt in block.statements:
@@ -114,7 +132,7 @@ class Flow:
         self.terminator(configs, block.terminator)
         for local in list(self.parts):
             self.end_take(local)
-        return tuple(configs)
+        return configs
 
     def entry_state(self, local: LocalId) -> str:
         """A parameter holds a value at the entry: a `Guaranteed` one that owns holds the
@@ -132,7 +150,7 @@ class Flow:
 
     # -- the transfer --------------------------------------------------------------------
 
-    def statement(self, configs: list[frozenset[_Config]], stmt: st.SlirStatement) -> None:
+    def statement(self, configs: _State, stmt: st.SlirStatement) -> None:
         span = stmt.span
         if isinstance(stmt, st.Assign):
             for part in r.operands_of(stmt.rvalue):
@@ -166,7 +184,7 @@ class Flow:
                                     detail=f"the dataflow of the SLIR verifier has no row for "
                                            f"the class {type(stmt).__name__}")
 
-    def terminator(self, configs: list[frozenset[_Config]], term: tm.SlirTerminator) -> None:
+    def terminator(self, configs: _State, term: tm.SlirTerminator) -> None:
         if isinstance(term, tm.SwitchInt):
             self.operand(configs, term.operand, term.span)
         elif isinstance(term, tm.Trap):
@@ -175,7 +193,7 @@ class Flow:
         elif isinstance(term, tm.Return):
             self.leave(configs, term.span)
 
-    def operand(self, configs: list[frozenset[_Config]], part: p.Operand | p.Place,
+    def operand(self, configs: _State, part: p.Operand | p.Place,
                 span: Span) -> None:
         if isinstance(part, p.Const):
             return
@@ -186,7 +204,7 @@ class Flow:
         else:
             self.read(configs, part, span)
 
-    def root(self, configs: list[frozenset[_Config]], place: p.Place,
+    def root(self, configs: _State, place: p.Place,
              span: Span) -> Optional[LocalId]:
         """The root local of `place`, after the read of each index in it."""
         typed = self.check.place(place, span)
@@ -194,12 +212,12 @@ class Flow:
             self.operand(configs, index, span)
         return typed.root.id if isinstance(typed.root, p.Local) else None
 
-    def read(self, configs: list[frozenset[_Config]], place: p.Place, span: Span) -> None:
+    def read(self, configs: _State, place: p.Place, span: Span) -> None:
         local = self.root(configs, place, span)
         if local is not None:
             self.spent(configs, local, f"reads {show(place)}", span)
 
-    def spent(self, configs: list[frozenset[_Config]], local: LocalId, what: str,
+    def spent(self, configs: _State, local: LocalId, what: str,
               span: Span) -> None:
         states = {state for state, _ in configs[local.index]}
         if _UNINIT in states:
@@ -209,7 +227,7 @@ class Flow:
         if _DROPPED in states:
             self.violate(USE_AFTER_MOVE, f"{what} after a drop of _{local.index}", span)
 
-    def move(self, configs: list[frozenset[_Config]], place: p.Place, span: Span) -> None:
+    def move(self, configs: _State, place: p.Place, span: Span) -> None:
         local = self.root(configs, place, span)
         if local is None:
             return
@@ -222,12 +240,12 @@ class Flow:
             self.parts[local].append(place)
             return
         self.spent(configs, local, f"moves {show(place)}", span)
-        configs[local.index] = frozenset((_MOVED, flag) for _, flag in configs[local.index])
+        _relabel(configs, local, _MOVED)
         if place != p.Local(local):
             self.parts[local] = [place]
             self.taken_at[local] = span
 
-    def another_part(self, configs: list[frozenset[_Config]], local: LocalId,
+    def another_part(self, configs: _State, local: LocalId,
                      place: p.Place) -> bool:
         """Whether `place` is a part of `local` that one take moves after another part of
         it, earlier in this block: the parts are disjoint (ir.md 8.13)."""
@@ -236,7 +254,7 @@ class Flow:
                 and all(not _within(one, place) and not _within(place, one)
                         for one in taken))
 
-    def write(self, configs: list[frozenset[_Config]], place: p.Place, span: Span,
+    def write(self, configs: _State, place: p.Place, span: Span,
               value: Optional[r.Rvalue]) -> None:
         if not isinstance(place, p.Local):
             self.read(configs, place, span)
@@ -249,18 +267,18 @@ class Flow:
         self.end_take(local)
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
             self.violate(DROP_ONCE, f"writes _{local.index} while it holds a value", span)
-        configs[local.index] = frozenset((_LIVE, flag) for _, flag in configs[local.index])
+        _relabel(configs, local, _LIVE)
         written = _UNKNOWN
         if (isinstance(value, r.Use) and isinstance(value.operand, p.Const)
                 and isinstance(value.operand.constant, k.Bool)):
             written = _TRUE if value.operand.constant.value else _FALSE
         self.set_flag(configs, local, written)
 
-    def set_flag(self, configs: list[frozenset[_Config]], flag: LocalId, value: str) -> None:
+    def set_flag(self, configs: _State, flag: LocalId, value: str) -> None:
         for guarded in self.flagged.get(flag, ()):
             configs[guarded.index] = frozenset((s, value) for s, _ in configs[guarded.index])
 
-    def drop(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
+    def drop(self, configs: _State, local: LocalId, span: Span) -> None:
         states = {s for s, _ in configs[local.index]}
         if self.borrowed(local) or _LENT in states:
             self.violate(DROP_ONCE, f"drops the parameter _{local.index}, which the function "
@@ -272,9 +290,9 @@ class Flow:
         if _UNINIT in states:
             self.violate(DROP_ONCE, f"drops _{local.index}, which holds no value", span)
         self.end_take(local)
-        configs[local.index] = frozenset((_DROPPED, flag) for _, flag in configs[local.index])
+        _relabel(configs, local, _DROPPED)
 
-    def drop_if_set(self, configs: list[frozenset[_Config]], local: LocalId, flag: LocalId,
+    def drop_if_set(self, configs: _State, local: LocalId, flag: LocalId,
                     span: Span) -> None:
         after = set()
         for state, value in configs[local.index]:
@@ -291,17 +309,17 @@ class Flow:
         self.end_take(local)
         configs[local.index] = frozenset(after)
 
-    def storage(self, configs: list[frozenset[_Config]], local: LocalId, span: Span,
+    def storage(self, configs: _State, local: LocalId, span: Span,
                 verb: str) -> None:
         """`StorageLive` and `StorageDead`: each leaves the local with no value."""
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
             self.violate(DROP_ONCE, f"{verb} the storage of _{local.index} while it holds a "
                                     f"value", span)
         self.end_take(local)
-        configs[local.index] = frozenset((_UNINIT, flag) for _, flag in configs[local.index])
+        _relabel(configs, local, _UNINIT)
         self.set_flag(configs, local, _UNSET)
 
-    def leave(self, configs: list[frozenset[_Config]], span: Span) -> None:
+    def leave(self, configs: _State, span: Span) -> None:
         """The `return`: no owning local holds a value, except `_0` and an `Inout` parameter,
         which must hold one, and a `Guaranteed` parameter that holds the value of the caller.
         `_0` holds a value on every path."""
@@ -335,6 +353,85 @@ class Flow:
         """Whether `local` is an `InGuaranteed` parameter: a view of the place of the
         caller."""
         return self.check.conventions.get(local) is Convention.IN_GUARANTEED
+
+
+def _relabel(configs: _State, local: LocalId, state: str) -> None:
+    """Give `local` the state `state` on each path, and keep the value of its flag."""
+    configs[local.index] = frozenset(
+        (state, flag) for _, flag in configs.get(local.index, _NO_VALUE))
+
+
+def _live_plain(check: Check, tracked: frozenset[int]) -> dict[BlockId, frozenset[int]]:
+    """For each block, the locals outside `tracked` that are live at its entry: a path from
+    the entry reaches a read, a move or a drop of the local before a write of it or its
+    storage. A local that a statement names counts as read there, so the set holds each
+    local whose state a rule can read."""
+    gen: dict[BlockId, frozenset[int]] = {}
+    kill: dict[BlockId, frozenset[int]] = {}
+    preds: dict[BlockId, list[BlockId]] = {block.id: [] for block in check.function.blocks}
+    for block in check.function.blocks:
+        used: set[int] = set()
+        written: set[int] = set()
+        for stmt in block.statements:
+            used |= {index for index in _named(stmt)
+                     if index not in tracked and index not in written}
+            written |= {index for index in _written(stmt) if index not in tracked}
+        used |= {index for index in _named_by(block.terminator)
+                 if index not in tracked and index not in written}
+        gen[block.id], kill[block.id] = frozenset(used), frozenset(written)
+        for target in successors(block.terminator):
+            preds[target].append(block.id)
+    live: dict[BlockId, frozenset[int]] = {block.id: gen[block.id]
+                                           for block in check.function.blocks}
+    work = [block.id for block in check.function.blocks]
+    while work:
+        block = check.blocks[work.pop()]
+        out = frozenset().union(*(live[target] for target in successors(block.terminator)))
+        new = gen[block.id] | (out - kill[block.id])
+        if new != live[block.id]:
+            live[block.id] = new
+            work.extend(preds[block.id])
+    return live
+
+
+def _read_locals(part: p.Operand | p.Place) -> tuple[int, ...]:
+    if isinstance(part, p.Const):
+        return ()
+    place = part.place if isinstance(part, (p.Copy, p.Move)) else part
+    return tuple(local.index for local in p.locals_read(place))
+
+
+def _named(stmt: st.SlirStatement) -> list[int]:
+    """The locals that `stmt` names, but not the local that it writes whole."""
+    named = [index for part in st.operands_of(stmt) for index in _read_locals(part)]
+    if isinstance(stmt, (st.Assign, st.Call)):
+        dest = stmt.place if isinstance(stmt, st.Assign) else stmt.dest
+        if not isinstance(dest, p.Local):
+            named.extend(_read_locals(dest))
+    elif isinstance(stmt, (st.Drop, st.BeginBorrow)):
+        named.extend(_read_locals(stmt.place))
+    elif isinstance(stmt, st.DropIfSet):
+        named.extend((*_read_locals(stmt.place), stmt.flag.index))
+    return named
+
+
+def _written(stmt: st.SlirStatement) -> list[int]:
+    """The local that `stmt` writes whole, or whose storage it starts or ends."""
+    if isinstance(stmt, (st.StorageLive, st.StorageDead)):
+        return [stmt.local.index]
+    if isinstance(stmt, (st.Assign, st.Call)):
+        dest = stmt.place if isinstance(stmt, st.Assign) else stmt.dest
+        if isinstance(dest, p.Local):
+            return [dest.id.index]
+    return []
+
+
+def _named_by(term: tm.SlirTerminator) -> list[int]:
+    if isinstance(term, tm.SwitchInt):
+        return list(_read_locals(term.operand))
+    if isinstance(term, tm.Trap):
+        return [index for arg in term.args for index in _read_locals(arg)]
+    return []
 
 
 def _within(outer: p.Place, place: p.Place) -> bool:

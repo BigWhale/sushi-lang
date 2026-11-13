@@ -1,6 +1,7 @@
 """String Slice Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from ..intrinsics import declare_utf8_count_intrinsic, declare_utf8_byte_offset_intrinsic
 from ..common import declare_malloc, declare_memcpy, allocate_substring, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -8,7 +9,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_ss(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_ss({i8*, i32} str, i32 start, i32 length)`."""
+    """Emit `{i8*, i64, i8} string_ss({i8*, i64, i8} str, i32 start, i32 length)`."""
     func_name = "string_ss"
 
     if func_name in module.globals:
@@ -33,7 +34,7 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     char_count = builder.call(utf8_count_fn, [data, size], name="char_count")
 
@@ -94,13 +95,13 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
         name="byte_length_final"
     )
 
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, start_byte_final, byte_length_final, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, start_byte_final, byte_length_final, i32, i64)
     builder.ret(result)
     return func
 
 
 def emit_string_sleft(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_sleft({i8*, i32} str, i32 n)`."""
+    """Emit `{i8*, i64, i8} string_sleft({i8*, i64, i8} str, i32 n)`."""
     func_name = "string_sleft"
 
     if func_name in module.globals:
@@ -124,7 +125,7 @@ def emit_string_sleft(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     char_count = builder.call(utf8_count_fn, [data, size], name="char_count")
 
@@ -152,13 +153,13 @@ def emit_string_sleft(module: ir.Module) -> ir.Function:
     )
 
     zero_offset = ir.Constant(i32, 0)
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, zero_offset, byte_length, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, zero_offset, byte_length, i32, i64)
     builder.ret(result)
     return func
 
 
 def emit_string_sright(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_sright({i8*, i32} str, i32 n)`."""
+    """Emit `{i8*, i64, i8} string_sright({i8*, i64, i8} str, i32 n)`."""
     func_name = "string_sright"
 
     if func_name in module.globals:
@@ -182,7 +183,7 @@ def emit_string_sright(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     char_count = builder.call(utf8_count_fn, [data, size], name="char_count")
 
@@ -213,13 +214,13 @@ def emit_string_sright(module: ir.Module) -> ir.Function:
 
     byte_length = builder.sub(size, start_byte_final, name="byte_length")
 
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, start_byte_final, byte_length, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, start_byte_final, byte_length, i32, i64)
     builder.ret(result)
     return func
 
 
 def emit_string_char_at(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_char_at({i8*, i32} str, i32 index)`."""
+    """Emit `{i8*, i64, i8} string_char_at({i8*, i64, i8} str, i32 index)`."""
     func_name = "string_char_at"
 
     if func_name in module.globals:
@@ -246,7 +247,7 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     start_byte = builder.call(utf8_byte_offset_fn, [data, size, func.args[1]], name="start_byte")
 
@@ -267,13 +268,13 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
 
     char_length = builder.sub(end_byte_final, start_byte, name="char_length")
 
-    result_valid = allocate_substring(builder, malloc, memcpy, string_type, data, start_byte, char_length, i32, i64)
+    result_valid = allocate_substring(builder, malloc, memcpy, data, start_byte, char_length, i32, i64)
     valid_end = builder.block
     builder.branch(merge_block)
 
     builder.position_at_end(invalid_index_block)
     empty_data = emit_checked_malloc(builder, malloc, ir.Constant(i64, 1), name="empty_data")
-    result_invalid = build_string_struct(builder, string_type, empty_data, zero, owned=1)
+    result_invalid = build_string_struct(builder, empty_data, zero, owned=1)
     invalid_end = builder.block
     builder.branch(merge_block)
 
@@ -287,7 +288,7 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
 
 
 def emit_string_s(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_s({i8*, i32} str, i32 start, i32 end)`."""
+    """Emit `{i8*, i64, i8} string_s({i8*, i64, i8} str, i32 start, i32 end)`."""
     func_name = "string_s"
 
     if func_name in module.globals:
@@ -312,7 +313,7 @@ def emit_string_s(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
 
     data = builder.extract_value(func.args[0], 0, name="data")
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     char_count = builder.call(utf8_count_fn, [data, size], name="char_count")
 
@@ -369,6 +370,6 @@ def emit_string_s(module: ir.Module) -> ir.Function:
         name="byte_length_final"
     )
 
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, start_byte_final, byte_length_final, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, data, start_byte_final, byte_length_final, i32, i64)
     builder.ret(result)
     return func

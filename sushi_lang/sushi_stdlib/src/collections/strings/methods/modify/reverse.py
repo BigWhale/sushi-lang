@@ -1,6 +1,7 @@
 """String Reverse Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...intrinsics import declare_utf8_count_intrinsic, declare_utf8_byte_offset_intrinsic
@@ -9,7 +10,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_reverse(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_reverse({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_reverse({i8*, i64, i8} str)`."""
     func_name = "string_reverse"
 
     if func_name in module.globals:
@@ -39,7 +40,7 @@ def emit_string_reverse(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     builder.branch(empty_check)
 
     builder = ir.IRBuilder(empty_check)
@@ -103,12 +104,12 @@ def emit_string_reverse(module: ir.Module) -> ir.Function:
     builder.branch(loop_cond)
 
     builder = ir.IRBuilder(loop_done)
-    result_string = build_string_struct(builder, string_type, result_data, str_size, owned=1)
+    result_string = build_string_struct(builder, result_data, str_size, owned=1)
     builder.ret(result_string)
 
     # Return original: reversal is identity here, but clone so the result is independently
     # owned (aliasing the input's buffer would double-free under string RAII, issue #145).
     builder = ir.IRBuilder(return_original)
-    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
+    builder.ret(clone_string_to_owned(builder, module, func.args[0]))
 
     return func

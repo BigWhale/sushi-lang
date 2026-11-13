@@ -21,8 +21,8 @@ def fixed_array_slots(count: int) -> Callable[['LLVMCodegen', ir.Value], tuple[i
 
 
 def descriptor_slots(codegen: 'LLVMCodegen', descriptor: ir.Value) -> tuple[ir.Value, ir.Value]:
-    """The length and the data of a `{i32 len, i32 cap, T* data}` at an address."""
+    """The length and the data of a `{i64 len, i64 cap, T* data}` at an address."""
     b = codegen.builder
-    length = b.load(gep_utils.gep_dynamic_array_len(codegen, descriptor), name="length")
+    length = gep_utils.load_len(codegen, descriptor, "length", builder=b)
     data = b.load(gep_utils.gep_dynamic_array_data(codegen, descriptor), name="data")
     return length, data

@@ -100,7 +100,7 @@ The trap path does not free the message or the other values in scope: the proces
   a constant string, `file:line:col`, and it ends in `: ` when a message follows. A bare
   `assert` gives the empty string as its message. So both forms print the text that they
   printed before SLIR, and the file name never goes into the format string.
-- **The message is a run-time value.** A Sushi string is `{i8* data, i32 size, i8 owned}`
+- **The message is a run-time value.** A Sushi string is `{i8* data, i64 size, i8 owned}`
   and has no NUL terminator, so the trap emitter prints each `%.*s` operand from its size
   and its data, then the newline.
 - **The message is a value of the fail block.** It is built in that block, and the `Trap`

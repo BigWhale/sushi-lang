@@ -371,6 +371,25 @@ def test_a_read_of_a_local_after_the_end_of_its_storage_is_refused():
              "no use of a local outside its storage")
 
 
+def test_a_read_after_the_end_of_the_storage_through_a_block_that_does_not_name_it_is_refused():
+    _refused(_function([BLANK, I32, I32, I32],
+                       _block(0, _goto(1), _live(1), _set(1, r.Use(p.Const(k.Int(1, I32)))),
+                              _dead(1)),
+                       _block(1, _goto(2), _set(2, r.Use(p.Const(k.Int(2, I32))))),
+                       _block(2, _ret(), _set(3, r.Use(_copy(1)), BAD),
+                              _set(0, r.Use(p.Const(k.Blank()))))),
+             "no use of a local outside its storage")
+
+
+def test_a_read_after_the_end_of_the_storage_on_the_back_edge_of_a_loop_is_refused():
+    _refused(_function([BLANK, I32, I32],
+                       _block(0, _goto(1), _live(1), _set(1, r.Use(p.Const(k.Int(1, I32))))),
+                       _block(1, _switch(2, 2, 3), _set(2, r.Use(_copy(1)), BAD)),
+                       _block(2, _ret(), _set(0, r.Use(p.Const(k.Blank())))),
+                       _block(3, _goto(1), _dead(1))),
+             "no use of a local outside its storage")
+
+
 def test_a_move_of_a_local_that_holds_no_value_is_refused():
     _refused(_function([BLANK, STRING, STRING],
                        _block(0, _ret(), _set(2, r.Use(_move(1)), BAD), _drop(2),

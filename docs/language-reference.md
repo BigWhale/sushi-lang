@@ -1161,12 +1161,34 @@ range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop call
 it answers `None`, and that is the whole protocol. There is no type to implement and no
 perk to name, so a struct becomes walkable by gaining one method.
 
-**A range is a value only where `Iterator@(i32)` is expected.** It has three positions: a
-`foreach` iterable, an element of an array literal (`from([0..n])`, a run of elements),
-and a position of the type `Iterator@(i32)`, written or propagated: a `let`, an argument,
-a `return`, a constructor field, a payload, a container element. There it is an owned
-iterator (see [The Iterator Type](#the-iterator-type)). A range anywhere else -- an `i32`
-position, an operand, a generic `T` that nothing else solves -- is
+**A range has the type of its bounds** ([ADR 0001](adr/0001-index-width-i64.md)). In
+`a..b` and `a..=b`, a literal bound takes the type of the other bound: `0..n` with a `u8 n`
+is a `u8` range, and `0..arr.len()` has the type of `arr.len()`. Two literal bounds take
+the default `i32`. Two typed bounds of different integer types are
+[`CE2121`](error-catalog.md#ce2121), with help to use `as`. The `foreach` variable over a
+range has the type of the range, and a range as a value is an `Iterator@(T)` for that `T`.
+A value position gives its `T` to the literal bounds: `let Iterator@(i64) r = 0..5` is an
+`i64` range. A run of an array literal (`from([0..n])`) obeys the same rule, and
+its slots have the type of the range. An integer element type of the array is the type of
+two literal bounds: `let i64[] a = from([0..5])` is an `i64` run.
+
+```sushi
+fn main() i32:
+    let i64 big = 3000000000
+    foreach(i in big..big + 2):          # i is an i64: 3000000000 3000000001
+        println(i)
+    let u8 top = 255
+    foreach(b in 250..=top):             # b is a u8: 250 to 255
+        println(b)
+    return 0
+```
+
+**A range is a value only where an `Iterator@(T)` of an integer `T` is expected.** It has
+three positions: a `foreach` iterable, an element of an array literal (`from([0..n])`, a run
+of elements), and a position of the type `Iterator@(T)`, written or propagated: a `let`, an
+argument, a `return`, a constructor field, a payload, a container element. There it is an
+owned iterator (see [The Iterator Type](#the-iterator-type)). A range anywhere else -- an
+`i32` position, an operand, a generic `T` that nothing else solves -- is
 [`CE2122`](error-catalog.md#ce2122). Spell it into an array to keep its elements.
 
 **A range always goes up.** `a..b` is empty when `a >= b`, and `a..=b` is empty when
@@ -1417,8 +1439,9 @@ values, so a negative index and an index of 2^32 are both out of bounds ([`RE202
 prints the 64-bit index). A method that clamps its count (`s`, `sleft`, `truncate`) clamps a
 value above the `i32` range as it clamps any count above the length.
 
-A range bound (`a..b`) is still `i32`: a typed bound of another type is [`CE2121`](error-catalog.md#ce2121) and needs
-`as i32`. `len()` still answers `i32`. A `ptr` offset (`p.load_i64(96)`) is no index position,
+A range bound (`a..b`) is no index position: the range has the type of its bounds (see
+[For-Each Loops](#for-each-loops)), and a typed bound of another type than the range is
+[`CE2121`](error-catalog.md#ce2121). `len()` still answers `i32`. A `ptr` offset (`p.load_i64(96)`) is no index position,
 and it is `i32`.
 
 ### Fixed Arrays
@@ -1567,9 +1590,12 @@ fn main() i32:
     return 0
 ```
 
-A range yields **i32**, exactly as `foreach(i in 0..5)` does, so `let i64[] a =
-from([0..5])` is a type mismatch. It obeys the same position rule as a repeat: a bound in
-a `from()` literal may be any i32 expression, and a fixed array or a constant needs one
+A range has the type of its bounds, exactly as in `foreach(i in 0..5)`: with an `i64 n`,
+`let i64[] a = from([0..n])` is an `i64` run. Two literal bounds take the integer element type
+of the array, so `let i64[] a = from([0..5])` is an `i64` run too, and two typed bounds of
+different types are
+**[CE2121](error-catalog.md#ce2121)**. It obeys the same position rule as a repeat: a bound in
+a `from()` literal may be any integer expression, and a fixed array or a constant needs one
 the compiler can read. A bound it cannot read there is **[CE2019](error-catalog.md#ce2019)**, and so is a readable
 range that yields nothing. A readable range that goes down is **[CE2125](error-catalog.md#ce2125)**:
 

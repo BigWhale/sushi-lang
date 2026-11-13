@@ -1,11 +1,12 @@
 """Inline emission for string.is_empty() method."""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_is_empty_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit `i8 llvm_string_is_empty({i8*, i32} str)`."""
+    """Emit `i8 llvm_string_is_empty({i8*, i64, i8} str)`."""
     func_name = "llvm_string_is_empty"
 
     if func_name in module.globals:
@@ -25,7 +26,7 @@ def emit_string_is_empty_intrinsic(module: ir.Module) -> ir.Function:
     entry_block = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry_block)
 
-    size = builder.extract_value(func.args[0], 1, name="size")
+    size = string_size(builder, func.args[0], name="size")
 
     is_empty = builder.icmp_unsigned("==", size, ir.Constant(i32, 0), name="is_empty")
 

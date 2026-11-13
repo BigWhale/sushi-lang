@@ -2,6 +2,7 @@
 
 from typing import Callable, Optional, Tuple, Any
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 
@@ -15,7 +16,7 @@ class IRStructBuilder:
     ) -> Tuple[ir.Value, ir.Value]:
         """Extract data pointer and size from fat pointer struct."""
         data = builder.extract_value(fat_ptr, 0, name="data")
-        size = builder.extract_value(fat_ptr, 1, name="size")
+        size = string_size(builder, fat_ptr, name="size")
         return data, size
 
 class IRLoopBuilder:

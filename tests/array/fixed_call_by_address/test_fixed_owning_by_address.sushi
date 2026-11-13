@@ -6,15 +6,15 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "Mostly Harmless 32\nHarmless\nMostly\n"
-# EXPECT_IR_LACKS: look load [32 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: look [32 x { ptr, i32, i8 }] %
-# EXPECT_IR_LACKS: take load [32 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: take [32 x { ptr, i32, i8 }] %
-# EXPECT_IR_LACKS: words load [32 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: words [32 x { ptr, i32, i8 }] @
-# EXPECT_IR_LACKS: user_main load [32 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: user_main store [32 x { ptr, i32, i8 }]
-# EXPECT_IR_LACKS: user_main call [32 x { ptr, i32, i8 }]
+# EXPECT_IR_LACKS: look load [32 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: look [32 x { ptr, i64, i8 }] %
+# EXPECT_IR_LACKS: take load [32 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: take [32 x { ptr, i64, i8 }] %
+# EXPECT_IR_LACKS: words load [32 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: words [32 x { ptr, i64, i8 }] @
+# EXPECT_IR_LACKS: user_main load [32 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: user_main store [32 x { ptr, i64, i8 }]
+# EXPECT_IR_LACKS: user_main call [32 x { ptr, i64, i8 }]
 fn look(string[32] w) i32:
     return w.len()
 

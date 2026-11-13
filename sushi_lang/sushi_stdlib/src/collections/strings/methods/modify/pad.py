@@ -1,6 +1,7 @@
 """String Padding and Repeat Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...intrinsics import declare_utf8_count_intrinsic
@@ -10,7 +11,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_repeat(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_repeat({i8*, i32} str, i32 n)`."""
+    """Emit `{i8*, i64, i8} string_repeat({i8*, i64, i8} str, i32 n)`."""
     func_name = "string_repeat"
 
     if func_name in module.globals:
@@ -39,7 +40,7 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     builder.branch(check_n)
 
     builder = ir.IRBuilder(check_n)
@@ -79,19 +80,19 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
     builder.branch(loop_cond)
 
     builder = ir.IRBuilder(loop_done)
-    result_string = build_string_struct(builder, string_type, result_data, total_size, owned=1)
+    result_string = build_string_struct(builder, result_data, total_size, owned=1)
     builder.ret(result_string)
 
     builder = ir.IRBuilder(return_empty)
     null_ptr = ir.Constant(i8_ptr, None)
-    empty_string = build_string_struct(builder, string_type, null_ptr, ir.Constant(i32, 0), owned=0)
+    empty_string = build_string_struct(builder, null_ptr, ir.Constant(i32, 0), owned=0)
     builder.ret(empty_string)
 
     return func
 
 
 def emit_string_pad_left(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_pad_left({i8*, i32} str, i32 width, {i8*, i32} pad_char)`."""
+    """Emit `{i8*, i64, i8} string_pad_left({i8*, i64, i8} str, i32 width, {i8*, i64, i8} pad_char)`."""
     func_name = "string_pad_left"
 
     if func_name in module.globals:
@@ -120,10 +121,10 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     width = func.args[1]
     pad_data = builder.extract_value(func.args[2], 0, name="pad_data")
-    pad_size = builder.extract_value(func.args[2], 1, name="pad_size")
+    pad_size = string_size(builder, func.args[2], name="pad_size")
 
     current_chars = builder.call(utf8_count, [str_data, str_size], name="current_chars")
     needs_padding = builder.icmp_signed("<", current_chars, width, name="needs_padding")
@@ -134,7 +135,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     no_pad_copy = emit_checked_malloc(builder, malloc, str_size_i64, name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [no_pad_copy, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
-    no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
+    no_pad_result = build_string_struct(builder, no_pad_copy, str_size, owned=1)
     no_padding_end = builder.block
     builder.branch(return_block)
 
@@ -172,7 +173,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     final_offset = builder.load(offset_ptr, name="final_offset")
     str_dest_ptr = builder.gep(result_data, [final_offset], name="str_dest_ptr")
     builder.call(memcpy, [str_dest_ptr, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
-    padded_result = build_string_struct(builder, string_type, result_data, total_size, owned=1)
+    padded_result = build_string_struct(builder, result_data, total_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
@@ -185,7 +186,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
 
 
 def emit_string_pad_right(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_pad_right({i8*, i32} str, i32 width, {i8*, i32} pad_char)`."""
+    """Emit `{i8*, i64, i8} string_pad_right({i8*, i64, i8} str, i32 width, {i8*, i64, i8} pad_char)`."""
     func_name = "string_pad_right"
 
     if func_name in module.globals:
@@ -213,10 +214,10 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     width = func.args[1]
     pad_data = builder.extract_value(func.args[2], 0, name="pad_data")
-    pad_size = builder.extract_value(func.args[2], 1, name="pad_size")
+    pad_size = string_size(builder, func.args[2], name="pad_size")
 
     current_chars = builder.call(utf8_count, [str_data, str_size], name="current_chars")
     needs_padding = builder.icmp_signed("<", current_chars, width, name="needs_padding")
@@ -227,7 +228,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     no_pad_copy = emit_checked_malloc(builder, malloc, str_size_i64, name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [no_pad_copy, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
-    no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
+    no_pad_result = build_string_struct(builder, no_pad_copy, str_size, owned=1)
     no_padding_end = builder.block
     builder.branch(return_block)
 
@@ -265,7 +266,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     builder.branch(padding_loop_block)
 
     builder.position_at_end(padding_done_block)
-    padded_result = build_string_struct(builder, string_type, result_data, total_size, owned=1)
+    padded_result = build_string_struct(builder, result_data, total_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)

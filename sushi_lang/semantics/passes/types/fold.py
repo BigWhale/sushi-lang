@@ -35,7 +35,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.shir.nodes import Hole
 from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
-from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type
+from sushi_lang.semantics.typesys import ArrayType, BuiltinType, IteratorType, Type
 from sushi_lang.semantics.operators import COMPLEMENT_OP, NEG_OP, NOT_OP
 
 #: A value that the fold reads.
@@ -209,9 +209,12 @@ def _fixed_array(folder: Folder, node: e.ArrayInit) -> Optional[AggregateConstan
     return AggregateConstant(values, ArrayType(values[0].semantic_type, len(values)))
 
 
-def _range(folder: Folder, node: e.Range, _ty: Optional[Type]) -> Optional[Readable]:
-    start = folder.scalar(node.start, BuiltinType.I32)
-    end = folder.scalar(node.end, BuiltinType.I32)
+def _range(folder: Folder, node: e.Range, ty: Optional[Type]) -> Optional[Readable]:
+    """The plan of a range, its bounds read at its item type: the item of `ty`, an
+    `Iterator@(T)`, else i32."""
+    item = ty.element_type if isinstance(ty, IteratorType) else BuiltinType.I32
+    start = folder.scalar(node.start, item)
+    end = folder.scalar(node.end, item)
     if start is None or end is None or not (
             is_integer_constant(start) and is_integer_constant(end)):
         return None

@@ -21,10 +21,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence
 
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
 
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.generics.container_walk import emit_container_walk
-from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_len_ptr
+from sushi_lang.backend.generics.list.types import get_list_data_ptr
 from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.runtime import string_builder as sb
@@ -188,7 +189,7 @@ def _emit_fmt_body(codegen: 'LLVMCodegen', value: ir.Value, ty: Type,
         builder.store(value, slot)
         _sequence_fmt(codegen, ty.generic_args[0],
                       builder.load(get_list_data_ptr(builder, slot), name="list_data"),
-                      builder.load(get_list_len_ptr(builder, slot), name="list_len"),
+                      gep_utils.load_len(codegen, slot, "list_len", builder=builder),
                       buffer)
     elif isinstance(ty, StructType):
         # A tuple prints its elements alone: `(1, "a")`, the spelling of its literal.
@@ -205,7 +206,7 @@ def _emit_fmt_body(codegen: 'LLVMCodegen', value: ir.Value, ty: Type,
         sb.emit_push_text(codegen, buffer, ")")
     elif isinstance(ty, DynamicArrayType):
         _sequence_fmt(codegen, ty.base_type, builder.extract_value(value, 2),
-                      builder.extract_value(value, 0), buffer)
+                      gep_utils.extract_len(codegen, value, builder=builder), buffer)
     elif isinstance(ty, ArrayType):
         zero = ir.Constant(codegen.types.i32, 0)
         slot = value if by_address else entry_alloca(builder, value.type, name="array_view")

@@ -1,0 +1,18 @@
+# A range of i64 bounds is an i64 range (docs/adr/0001): it walks values above 2^31, and
+# the variable is an i64. A literal bound takes i64 from the other bound.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3000000000\n3000000001\n3000000002\n4294967297\n4294967296\n4294967295\nsum 3\n"
+fn main() i32:
+    let i64 base = 3000000000
+    foreach(i in base..base + 3):
+        let i64 v = i
+        println(v)
+    let i64 top = 4294967297
+    foreach(i in (4294967295..=top).rev()):
+        println(i)
+    let i64 sum = 0
+    let i64 three = 3
+    foreach(i in 0..three):
+        sum := sum + i
+    println("sum {sum}")
+    return 0

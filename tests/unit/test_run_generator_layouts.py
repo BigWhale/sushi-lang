@@ -13,7 +13,9 @@ from llvmlite import ir
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 GEP_UTILS = "backend/gep_utils.py"
-TRIO = {"gep_dynamic_array_len", "gep_dynamic_array_cap", "gep_dynamic_array_data"}
+#: The public `gep_utils` entries of a `T[]` descriptor field: the data address, and the
+#: length and capacity values.
+ENTRIES = {"gep_dynamic_array_data", "load_len", "load_cap", "store_len", "store_cap"}
 
 
 def _module_of(frame) -> str:
@@ -29,7 +31,7 @@ def _is_descriptor_field_gep(ptr, indices) -> bool:
     if not isinstance(pointee, ir.LiteralStructType) or len(pointee.elements) != 3:
         return False
     first, second, third = pointee.elements
-    if first != ir.IntType(32) or second != ir.IntType(32) or not isinstance(third, ir.PointerType):
+    if first != ir.IntType(64) or second != ir.IntType(64) or not isinstance(third, ir.PointerType):
         return False
     if len(indices) != 2 or not all(isinstance(i, ir.Constant) for i in indices):
         return False
@@ -47,7 +49,7 @@ def _generate_run(monkeypatch=None, record=None) -> ir.Function:
             if _is_descriptor_field_gep(ptr, indices):
                 frame = sys._getframe(1)
                 via = [f.f_code.co_name for f in _frames(frame) if _module_of(f) == GEP_UTILS]
-                record.append(bool(via) and via[-1] in TRIO)
+                record.append(bool(via) and via[-1] in ENTRIES)
             return original(self, ptr, indices, *args, **kwargs)
 
         monkeypatch.setattr(ir.IRBuilder, "gep", recording_gep)
@@ -72,7 +74,7 @@ def test_the_args_descriptor_is_read_through_gep_utils(monkeypatch):
     assert record, "control: the generator made no descriptor-shaped GEP"
     assert all(record), (
         f"{record.count(False)} of {len(record)} `T[]` descriptor field GEPs in generate_run "
-        "do not go through the gep_utils trio")
+        "do not go through a gep_utils entry")
 
 
 #: The mallocs `generate_run` does not make itself, by the name of their value: the shared

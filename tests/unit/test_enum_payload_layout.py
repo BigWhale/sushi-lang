@@ -74,9 +74,9 @@ def test_word_count_covers_the_widest_variant():
     )
     assert words * 8 >= widest
     assert words == align_up(widest, 8) // 8
-    # The i32-then-string variant: string at aligned offset 8, so 24 bytes -> 3 words.
+    # The i32-then-string variant: the 24-byte string at aligned offset 8, so 32 bytes -> 4 words.
     assert sizing.payload_field_offsets((BuiltinType.I32, BuiltinType.STRING)) == [0, 8]
-    assert words == 3
+    assert words == 4
 
 
 def test_enum_size_is_the_llvm_sizeof():
@@ -87,7 +87,7 @@ def test_enum_size_is_the_llvm_sizeof():
     holds_i32 = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,)))
     assert sizing.get_type_size_bytes(holds_i32) == 16  # 8 + 1 word
     holds_str = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.STRING,)))
-    assert sizing.get_type_size_bytes(holds_str) == 24  # 8 + 2 words
+    assert sizing.get_type_size_bytes(holds_str) == 32  # 8 + 3 words
 
 
 def test_enum_alignment_is_eight():

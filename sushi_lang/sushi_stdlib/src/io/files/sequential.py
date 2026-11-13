@@ -5,6 +5,9 @@ The design record is `docs/design/stdlib-syscall-layer.md`.
 from dataclasses import dataclass
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import STRING_BYTES, string_size, string_value
+from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_byte_array_type, get_maybe_type, get_result_type,
     get_string_type, get_unit_enum_type,
@@ -24,9 +27,9 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 # reallocations on both paths and the system calls on the chunked one.
 _LINE_CHUNK = 128
 
-# `Maybe<string>` is `{i32 tag, [2 x i64] data}`: four bytes of tag, four of padding and
-# a sixteen-byte fat pointer.
-_MAYBE_STRING_SIZE = 24
+# `Maybe<string>` is `{i32 tag, [3 x i64] data}`: four bytes of tag, four of padding and
+# the string value.
+_MAYBE_STRING_SIZE = 8 + STRING_BYTES
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -91,12 +94,10 @@ def generate_fd_read(module: ir.Module) -> None:
     builder.position_at_end(success_bb)
     got = builder.load(got_slot, name="got_bytes")
     descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = builder.insert_value(descriptor,
-                                      builder.trunc(got, i32, name="got32"), 0,
-                                      name="desc_len")
-    descriptor = builder.insert_value(descriptor, maximum, 1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, got, builder=builder)
+    descriptor = insert_cap(None, descriptor, maximum, builder=builder)
     descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))
 
 
 def _emit_write_all(builder: ir.IRBuilder, func: ir.Function, write_fn: ir.Function,
@@ -177,7 +178,7 @@ def generate_fd_write(module: ir.Module) -> None:
     fd.name, data.name = "fd", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = builder.extract_value(data, 0, name="data_len")
+    length = extract_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
     _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer,
                     builder.zext(length, i64, name="data_len64"))
@@ -203,7 +204,7 @@ def generate_fd_write_str(module: ir.Module) -> None:
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
     buffer = builder.extract_value(text, 0, name="str_data")
-    size = builder.extract_value(text, 1, name="str_size")
+    size = string_size(builder, text, name="str_size")
     _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer,
                     builder.zext(size, i64, name="str_size64"))
 
@@ -302,11 +303,7 @@ def generate_fd_readln(module: ir.Module) -> None:
     builder.store(ir.Constant(i8, 0),
                   builder.gep(final_buf, [final_len], name="terminator"))
 
-    text = ir.Constant(string_ty, ir.Undefined)
-    text = builder.insert_value(text, final_buf, 0, name="str_data")
-    text = builder.insert_value(text, builder.trunc(final_len, i32, name="len32"), 1,
-                                name="str_size")
-    text = builder.insert_value(text, ir.Constant(i8, 1), 2, name="str_owned")
+    text = string_value(builder, final_buf, final_len, owned=1, name="str_owned")
     builder.ret(emit_ok_result(builder, result_type,
                                emit_some(builder, maybe_ty, text), _MAYBE_STRING_SIZE))
 

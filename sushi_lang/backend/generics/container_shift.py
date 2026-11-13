@@ -1,4 +1,4 @@
-"""`insert(i, v)` and `remove(i)` over a `{i32 len, i32 cap, T* data}` descriptor.
+"""`insert(i, v)` and `remove(i)` over a `{i64 len, i64 cap, T* data}` descriptor.
 
 A `List@(T)` and a `T[]` have the same descriptor, so the two containers share these two
 emitters. Each caller evaluates its own arguments first and consumes the element, so a
@@ -51,11 +51,9 @@ def emit_descriptor_insert(codegen: Any, descriptor: ir.Value, index: ir.Value,
     if result_type is None or std_error is None or error_tag is None:
         raise_internal_error("CE0091", type="Result@(~, StdError)")
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, descriptor)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, descriptor)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, descriptor)
-    current_len = codegen.builder.load(len_ptr, name="insert_len")
-    current_cap = codegen.builder.load(cap_ptr, name="insert_cap")
+    current_len = gep_utils.load_len(codegen, descriptor, "insert_len")
+    current_cap = gep_utils.load_cap(codegen, descriptor, "insert_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="insert_data")
 
     err_state: dict = {}
@@ -80,7 +78,7 @@ def emit_descriptor_insert(codegen: Any, descriptor: ir.Value, index: ir.Value,
     index = codegen.utils.checked_as_i32(index)
 
     data_ptr = memory.emit_grow_to_fit(
-        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
+        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, header=descriptor,
         current_cap=current_cap, count=current_len, element_llvm_type=element_llvm_type,
         policy=memory.GrowPolicy.DOUBLE)
 
@@ -91,7 +89,7 @@ def emit_descriptor_insert(codegen: Any, descriptor: ir.Value, index: ir.Value,
 
     insert_ptr = gep_utils.gep_array_element(codegen, data_ptr, index, "insert_ptr")
     codegen.builder.store(element_value, insert_ptr)
-    codegen.builder.store(codegen.builder.add(current_len, one, name="new_len"), len_ptr)
+    gep_utils.store_len(codegen, descriptor, codegen.builder.add(current_len, one, name="new_len"))
 
     ok_enum = build_ok_variant(codegen, result_type, ir.Constant(codegen.types.i32, 0))
     ok_block = codegen.builder.block
@@ -111,9 +109,8 @@ def emit_descriptor_remove(codegen: Any, descriptor: ir.Value, index: ir.Value,
     `Maybe.Some` carries the element's ownership to the caller, because the element falls
     outside `[0, len)`. An index out of range answers `Maybe.None`, and nothing moves.
     """
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, descriptor)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, descriptor)
-    current_len = codegen.builder.load(len_ptr, name="remove_len")
+    current_len = gep_utils.load_len(codegen, descriptor, "remove_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="remove_data")
 
     def remove_element() -> ir.Value:
@@ -124,7 +121,7 @@ def emit_descriptor_remove(codegen: Any, descriptor: ir.Value, index: ir.Value,
         index_plus_one = codegen.builder.add(at, one, name="index_plus_one")
         num_to_move = codegen.builder.sub(current_len, index_plus_one, name="num_to_move")
         _emit_shift(codegen, data_ptr, at, index_plus_one, num_to_move, element_llvm_type)
-        codegen.builder.store(codegen.builder.sub(current_len, one, name="new_len"), len_ptr)
+        gep_utils.store_len(codegen, descriptor, codegen.builder.sub(current_len, one, name="new_len"))
         return element_value
 
     return emit_checked_maybe(codegen, index, current_len, element_type, remove_element,

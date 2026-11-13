@@ -28,6 +28,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.types.core.resolution import require_generic_instance
 from sushi_lang.semantics.type_resolution import require_named_type
+from sushi_lang.backend.string_layout import string_type
 
 
 class TypeMapper:
@@ -65,10 +66,9 @@ class TypeMapper:
         self.str_ptr: ir.PointerType = ir.PointerType(self.i8)
         self.void: ir.VoidType = ir.VoidType()
 
-        # `{i8* data, i32 size, i8 owned}`. `owned` is the runtime discriminator (#145):
-        # 0 = literal or borrow, never freed; 1 = heap, freed by RAII. LLVM sizeof stays 16,
-        # so every embedding layout is byte-identical to the old `{i8*, i32}`.
-        self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
+        # `{i8* data, i64 size, i8 owned}`, from `backend/string_layout.py`. `owned` is the
+        # runtime discriminator (#145): 0 = literal or borrow, never freed; 1 = heap.
+        self.string_struct: ir.LiteralStructType = string_type()
 
         # `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}`. `clone_ptr` is
         # `drop_ptr`'s twin: capture is erased from the `fn(...)` type, so a value cloned
@@ -95,14 +95,6 @@ class TypeMapper:
             BuiltinType.STRING: self.string_struct,
             BuiltinType.BLANK: self.i32,
         }
-
-    def _create_string_struct_type(self) -> ir.LiteralStructType:
-        """Create LLVM struct type for fat pointer strings: {i8* data, i32 size, i8 owned}"""
-        return ir.LiteralStructType([
-            ir.PointerType(self.i8),
-            self.i32,
-            self.i8,  # owned: 1 = heap (RAII frees), 0 = literal/borrow (never freed)
-        ])
 
     def ll_type(self, t: Ty) -> ir.Type:
         """Map language type to corresponding LLVM IR type."""
@@ -160,12 +152,9 @@ class TypeMapper:
                 raise_internal_error("CE0022", type=str(t))
 
     def get_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:
-        """Create LLVM struct type for dynamic arrays: {i32 len, i32 cap, T* data}"""
-        return ir.LiteralStructType([
-            self.i32,
-            self.i32,
-            ir.PointerType(element_type),
-        ])
+        """The `T[]` descriptor `{i64 len, i64 cap, T* data}`."""
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_dynamic_array_type
+        return get_dynamic_array_type(element_type)
 
     def get_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
         """LLVM struct type for Iterator<T>: `{next_fn, state, drop_fn, clone_fn}` (#1259).
@@ -223,11 +212,7 @@ class TypeMapper:
         key_type, value_type = parse_hashmap_types(struct_type, wrapper, on_missing="raise")
         entry_type = get_entry_type(wrapper, key_type, value_type)
 
-        buckets_type = ir.LiteralStructType([
-            self.i32,
-            self.i32,
-            ir.PointerType(entry_type),
-        ])
+        buckets_type = self.get_dynamic_array_struct_type(entry_type)
         llvm_struct = ir.LiteralStructType([
             buckets_type,
             self.i32,

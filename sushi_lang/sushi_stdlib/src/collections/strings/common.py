@@ -1,6 +1,7 @@
 """Common Utilities for String Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size, string_value
 
 
 # ==============================================================================
@@ -44,7 +45,6 @@ def allocate_substring(
     builder: ir.IRBuilder,
     malloc: ir.Function,
     memcpy: ir.Function,
-    string_type: ir.LiteralStructType,
     src_data: ir.Value,
     start_offset: ir.Value,
     byte_length: ir.Value,
@@ -56,31 +56,24 @@ def allocate_substring(
 
     new_data = allocate_and_copy_bytes(builder, malloc, memcpy, src_ptr, byte_length, i64)
 
-    return build_string_struct(builder, string_type, new_data, byte_length, owned=1)
+    return build_string_struct(builder, new_data, byte_length, owned=1)
 
 
 def build_string_struct(
     builder: ir.IRBuilder,
-    string_type: ir.LiteralStructType,
     data_ptr: ir.Value,
     size: ir.Value,
     owned: int,
     name: str = "result",
 ) -> ir.Value:
-    """Build a string fat pointer struct { i8*, i32, i8 owned }."""
-    owned_flag = ir.Constant(ir.IntType(8), 1 if owned else 0)
-    undef_struct = ir.Constant(string_type, ir.Undefined)
-    struct_with_data = builder.insert_value(undef_struct, data_ptr, 0, name="struct_with_data")
-    struct_with_size = builder.insert_value(struct_with_data, size, 1, name="struct_with_size")
-    struct_complete = builder.insert_value(struct_with_size, owned_flag, 2, name=name)
-    return struct_complete
+    """Build a string value over `data_ptr` with `size` bytes."""
+    return string_value(builder, data_ptr, size, owned, name=name)
 
 
 def clone_string_to_owned(
     builder: ir.IRBuilder,
     module: ir.Module,
     string_val: ir.Value,
-    string_type: ir.LiteralStructType,
 ) -> ir.Value:
     """Copy a string fat pointer's bytes into a fresh heap buffer, returning an owned string."""
     malloc = declare_malloc(module)
@@ -88,9 +81,9 @@ def clone_string_to_owned(
     i64 = ir.IntType(64)
 
     src_data = builder.extract_value(string_val, 0, name="clone_src_data")
-    size = builder.extract_value(string_val, 1, name="clone_size")
+    size = string_size(builder, string_val, name="clone_size")
     size_i64 = builder.zext(size, i64, name="clone_size_i64")
     new_data = emit_checked_malloc(builder, malloc, size_i64, name="clone_data")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, src_data, builder.zext(size, ir.IntType(64)), is_volatile])
-    return build_string_struct(builder, string_type, new_data, size, owned=1)
+    return build_string_struct(builder, new_data, size, owned=1)

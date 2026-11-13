@@ -18,7 +18,6 @@ def _emit_char_transform_loop(
     i8: ir.IntType,
     i32: ir.IntType,
     i64: ir.IntType,
-    string_type: ir.LiteralStructType
 ) -> None:
     """Map each byte through transform_fn into a new owned string and return it."""
     size_i64 = builder.zext(size, i64, name="size_i64")
@@ -45,13 +44,13 @@ def _emit_char_transform_loop(
     )
 
     builder = ir.IRBuilder(exit_block)
-    result = build_string_struct(builder, string_type, new_data, size, owned=1,
+    result = build_string_struct(builder, new_data, size, owned=1,
                                  name="struct_complete")
     builder.ret(result)
 
 
 def emit_string_upper(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_upper({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_upper({i8*, i64, i8} str)`."""
     func_name = "string_upper"
 
     if func_name in module.globals:
@@ -74,14 +73,14 @@ def emit_string_upper(module: ir.Module) -> ir.Function:
 
     _emit_char_transform_loop(
         func, builder, data, size, toupper, malloc_fn,
-        i8, i32, i64, string_type
+        i8, i32, i64
     )
 
     return func
 
 
 def emit_string_lower(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_lower({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_lower({i8*, i64, i8} str)`."""
     func_name = "string_lower"
 
     if func_name in module.globals:
@@ -104,14 +103,14 @@ def emit_string_lower(module: ir.Module) -> ir.Function:
 
     _emit_char_transform_loop(
         func, builder, data, size, tolower, malloc_fn,
-        i8, i32, i64, string_type
+        i8, i32, i64
     )
 
     return func
 
 
 def emit_string_cap(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_cap({i8*, i32} str)`."""
+    """Emit `{i8*, i64, i8} string_cap({i8*, i64, i8} str)`."""
     func_name = "string_cap"
 
     if func_name in module.globals:
@@ -143,7 +142,7 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
     builder.cbranch(is_empty, empty_return, first_char_block)
 
     builder = ir.IRBuilder(empty_return)
-    result = build_string_struct(builder, string_type, new_data, size, owned=1,
+    result = build_string_struct(builder, new_data, size, owned=1,
                                  name="struct_complete")
     builder.ret(result)
 
@@ -177,7 +176,7 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
     )
 
     builder = ir.IRBuilder(loop_end_block)
-    result = build_string_struct(builder, string_type, new_data, size, owned=1,
+    result = build_string_struct(builder, new_data, size, owned=1,
                                  name="struct_complete")
     builder.ret(result)
 

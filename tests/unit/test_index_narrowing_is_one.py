@@ -35,8 +35,14 @@ KNOWN_TRUNCS = {
     ("expressions/memory.py", "get_element_size_constant"),
     # The i64 answer of a `main`, cut to the C `int` of the exit code.
     ("functions/main_wrapper.py", "_return_exit_code"),
-    # The i64 counter of a range as a value: the item of a range is in the i32 range.
+    # The i64 counter of a range as a value, cut to the item type: the item of a range is in
+    # the range of its type.
     ("runtime/iterators.py", "body"),
+    # The stored i64 size of a string, or length or capacity of a `T[]` or a `List@(T)`,
+    # read as the surface i32 of `size()`, `len()` and `capacity()`. Each write extends an
+    # i32, so the value is in the i32 range (the expand step of docs/adr/0001; the contract
+    # step removes the row).
+    ("stored_width.py", "as_surface_i32"),
 }
 
 

@@ -1,6 +1,7 @@
 """String Strip/Trim Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...common import build_string_struct, clone_string_to_owned
@@ -8,7 +9,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_strip_prefix({i8*, i32} str, {i8*, i32} prefix)`."""
+    """Emit `{i8*, i64, i8} string_strip_prefix({i8*, i64, i8} str, {i8*, i64, i8} prefix)`."""
     func_name = "string_strip_prefix"
 
     if func_name in module.globals:
@@ -36,9 +37,9 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     prefix_data = builder.extract_value(func.args[1], 0, name="prefix_data")
-    prefix_size = builder.extract_value(func.args[1], 1, name="prefix_size")
+    prefix_size = string_size(builder, func.args[1], name="prefix_size")
     builder.branch(size_check_block)
 
     builder = ir.IRBuilder(size_check_block)
@@ -75,19 +76,19 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [result_data, new_data_ptr, builder.zext(new_size, ir.IntType(64)), is_volatile])
 
-    result = build_string_struct(builder, string_type, result_data, new_size, owned=1)
+    result = build_string_struct(builder, result_data, new_size, owned=1)
     builder.ret(result)
 
     builder = ir.IRBuilder(return_original)
     # Clone rather than alias the input: an aliased owned=1 buffer would double-free under
     # string RAII (issue #145). Every string method returns a fresh, independently owned string.
-    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
+    builder.ret(clone_string_to_owned(builder, module, func.args[0]))
 
     return func
 
 
 def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_strip_suffix({i8*, i32} str, {i8*, i32} suffix)`."""
+    """Emit `{i8*, i64, i8} string_strip_suffix({i8*, i64, i8} str, {i8*, i64, i8} suffix)`."""
     func_name = "string_strip_suffix"
 
     if func_name in module.globals:
@@ -115,9 +116,9 @@ def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     suffix_data = builder.extract_value(func.args[1], 0, name="suffix_data")
-    suffix_size = builder.extract_value(func.args[1], 1, name="suffix_size")
+    suffix_size = string_size(builder, func.args[1], name="suffix_size")
     builder.branch(size_check_block)
 
     builder = ir.IRBuilder(size_check_block)
@@ -155,12 +156,12 @@ def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [result_data, str_data, builder.zext(new_size, ir.IntType(64)), is_volatile])
 
-    result = build_string_struct(builder, string_type, result_data, new_size, owned=1)
+    result = build_string_struct(builder, result_data, new_size, owned=1)
     builder.ret(result)
 
     builder = ir.IRBuilder(return_original)
     # Clone rather than alias the input: an aliased owned=1 buffer would double-free under
     # string RAII (issue #145). Every string method returns a fresh, independently owned string.
-    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
+    builder.ret(clone_string_to_owned(builder, module, func.args[0]))
 
     return func

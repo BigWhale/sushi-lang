@@ -1,0 +1,18 @@
+# A run of i64 bounds fills an i64 array (docs/adr/0001) with values above 2^31: a short
+# run, a run longer than the unroll limit, a literal bound above 2^31 that takes i64 from
+# the other bound, and a reversed run.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3000000000 3000000002\n12 3000000000 3000000011\n3000000000 3000000002\n4294967297 4294967295\n"
+fn main() i32:
+    let i64 base = 3000000000
+    let i64[] a = from([base..base + 3])
+    println("{a[0]} {a[2]}")
+    let i64[] b = from([base..base + 12])
+    println("{b.len()} {b[0]} {b[11]}")
+    let i64[] c = from([base..=3000000002])
+    println("{c[0]} {c[2]}")
+    let i64 top = 4294967297
+    let i64[] d = from([(4294967295..=top).rev()])
+    println("{d[0]} {d[2]}")
+    return 0

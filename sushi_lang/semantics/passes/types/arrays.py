@@ -91,7 +91,7 @@ def check_index_operand(validator: 'TypeValidator', node: 'ShirExpr') -> Optiona
     if is_byte_literal(node):
         reject_negated_byte(validator, node)
     return visit.check_expr(validator, node,
-                            BuiltinType.I64 if _is_int_literal(node) else None)
+                            BuiltinType.I64 if is_int_literal(node) else None)
 
 
 def reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
@@ -114,7 +114,7 @@ def _bare_literal(node: 'ShirExpr') -> 'ShirExpr':
     return node
 
 
-def _is_int_literal(node: 'ShirExpr') -> bool:
+def is_int_literal(node: 'ShirExpr') -> bool:
     node = _bare_literal(node)
     return isinstance(node, Lit) and isinstance(node.value, IntConst)
 
@@ -148,22 +148,26 @@ def reject_non_index(validator: 'TypeValidator', node: 'ShirExpr', got: Optional
     return True
 
 
-def reject_non_i32_bound(validator: 'TypeValidator', node: 'ShirExpr',
-                         got: Optional[Type]) -> bool:
-    """A range bound is i32 (CE2121). A bare literal has its default, i32. Answers whether
-    the bound was refused."""
-    if got is None or got == BuiltinType.I32:
+def reject_other_bound(validator: 'TypeValidator', node: 'ShirExpr', got: Optional[Type],
+                       item: Type, source: Optional[Span] = None) -> bool:
+    """A range bound is of the item type of its range (CE2121), with the help `as item`
+    for a number. `source` is the bound that gave the item type, when a bound gave it.
+    Answers whether the bound was refused."""
+    if got is None or got == item:
         return False
-    _refuse(validator, node.loc, got, display_type(BuiltinType.I32), BuiltinType.I32,
-            position=RANGE_BOUND)
+    _refuse(validator, node.loc, got, display_type(item), item, position=RANGE_BOUND,
+            source=None if source is None else (
+                f"the range takes {display_type(item)} from this bound", source))
     return True
 
 
 def _refuse(validator: 'TypeValidator', loc: Optional[Span], got: Type, expected: str,
             cast: Type, *, position: Optional[str] = None,
-            argument: Optional[int] = None) -> None:
+            argument: Optional[int] = None,
+            source: Optional[tuple[str, Span]] = None) -> None:
     """The one report of a refused index position or range bound: CE2006 at a method
-    `argument`, else CE2121 at `position`, with the help `as cast` for a number."""
+    `argument`, else CE2121 at `position`, with the help `as cast` for a number and the
+    note `source` at the place that gave the expected type."""
     if argument is None:
         report = er.emit_with(validator.reporter, er.ERR.CE2121, loc, position=position,
                               expected=expected, got=display_type(got))
@@ -172,6 +176,9 @@ def _refuse(validator: 'TypeValidator', loc: Optional[Span], got: Type, expected
                               expected=expected, got=display_type(got))
     if is_numeric_type(got):
         report = report.help(f"convert it with 'as {display_type(cast)}'")
+    if source is not None:
+        note, at = source
+        report = report.note_at(note, at)
     report.emit()
 
 

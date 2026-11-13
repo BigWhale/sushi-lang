@@ -4,6 +4,7 @@ from __future__ import annotations
 import typing
 
 from llvmlite import ir
+from sushi_lang.backend.string_layout import string_size
 
 from sushi_lang.backend.constants.llvm_values import make_i64_const
 from sushi_lang.backend.memory.heap import emit_malloc
@@ -83,7 +84,7 @@ class FormattingOperations:
             # place: no format pass, and no heap C-string copy (#141). A string of any
             # length goes out whole, which a frame buffer could not promise.
             data_ptr = self.codegen.builder.extract_value(v, 0)
-            size = self.codegen.builder.extract_value(v, 1)
+            size = string_size(self.codegen.builder, v)
             self.emit_console_write(data_ptr, size)
             if is_line:
                 self._emit_newline()

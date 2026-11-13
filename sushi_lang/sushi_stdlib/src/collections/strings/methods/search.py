@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from ..common import allocate_substring
 from ..intrinsics import declare_utf8_count_intrinsic
 from sushi_lang.sushi_stdlib.src.type_definitions import (
@@ -14,7 +15,7 @@ from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
 def emit_string_starts_with(module: ir.Module) -> ir.Function:
-    """Emit `i8 string_starts_with({i8*, i32} str, {i8*, i32} prefix)`."""
+    """Emit `i8 string_starts_with({i8*, i64, i8} str, {i8*, i64, i8} prefix)`."""
     func_name = "string_starts_with"
 
     if func_name in module.globals:
@@ -38,9 +39,9 @@ def emit_string_starts_with(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     prefix_data = builder.extract_value(func.args[1], 0, name="prefix_data")
-    prefix_size = builder.extract_value(func.args[1], 1, name="prefix_size")
+    prefix_size = string_size(builder, func.args[1], name="prefix_size")
     builder.branch(size_check_block)
 
     builder = ir.IRBuilder(size_check_block)
@@ -75,7 +76,7 @@ def emit_string_starts_with(module: ir.Module) -> ir.Function:
 
 
 def emit_string_ends_with(module: ir.Module) -> ir.Function:
-    """Emit `i8 string_ends_with({i8*, i32} str, {i8*, i32} suffix)`."""
+    """Emit `i8 string_ends_with({i8*, i64, i8} str, {i8*, i64, i8} suffix)`."""
     func_name = "string_ends_with"
 
     if func_name in module.globals:
@@ -99,9 +100,9 @@ def emit_string_ends_with(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     suffix_data = builder.extract_value(func.args[1], 0, name="suffix_data")
-    suffix_size = builder.extract_value(func.args[1], 1, name="suffix_size")
+    suffix_size = string_size(builder, func.args[1], name="suffix_size")
     builder.branch(size_check_block)
 
     builder = ir.IRBuilder(size_check_block)
@@ -171,7 +172,7 @@ def _emit_search(
     carry: Optional[tuple[str, ir.Constant]] = None,
     reverse: bool = False,
 ) -> ir.Function:
-    """Emit `return_type func_name({i8*, i32} str, {i8*, i32} needle)` as a naive byte search.
+    """Emit `return_type func_name({i8*, i64, i8} str, {i8*, i64, i8} needle)` as a naive byte search.
 
     `on_found` ends the search at the first match, and an empty needle is a match at the
     start of the scan. `on_match` continues the search at the position it gives, with
@@ -209,9 +210,9 @@ def _emit_search(
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     needle_data = builder.extract_value(func.args[1], 0, name="needle_data")
-    needle_size = builder.extract_value(func.args[1], 1, name="needle_size")
+    needle_size = string_size(builder, func.args[1], name="needle_size")
     builder.branch(empty_needle_check)
 
     builder = ir.IRBuilder(empty_needle_check)
@@ -313,7 +314,7 @@ def _ret_maybe_none(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType) -> 
 
 
 def emit_string_contains(module: ir.Module) -> ir.Function:
-    """Emit `i8 string_contains({i8*, i32} str, {i8*, i32} needle)`."""
+    """Emit `i8 string_contains({i8*, i64, i8} str, {i8*, i64, i8} needle)`."""
     func = _defined(module, "string_contains")
     if func is not None:
         return func
@@ -346,17 +347,17 @@ def _emit_string_find_at(module: ir.Module, func_name: str, reverse: bool) -> ir
 
 
 def emit_string_find(module: ir.Module) -> ir.Function:
-    """Emit `{i32, [1 x i64]} string_find({i8*, i32} str, {i8*, i32} needle)`."""
+    """Emit `{i32, [1 x i64]} string_find({i8*, i64, i8} str, {i8*, i64, i8} needle)`."""
     return _emit_string_find_at(module, "string_find", reverse=False)
 
 
 def emit_string_find_last(module: ir.Module) -> ir.Function:
-    """Emit `{i32, [1 x i64]} string_find_last({i8*, i32} str, {i8*, i32} needle)`."""
+    """Emit `{i32, [1 x i64]} string_find_last({i8*, i64, i8} str, {i8*, i64, i8} needle)`."""
     return _emit_string_find_at(module, "string_find_last", reverse=True)
 
 
 def emit_string_count(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_count({i8*, i32} str, {i8*, i32} needle)`; matches do not overlap."""
+    """Emit `i32 string_count({i8*, i64, i8} str, {i8*, i64, i8} needle)`; matches do not overlap."""
     func = _defined(module, "string_count")
     if func is not None:
         return func
@@ -401,9 +402,9 @@ def _emit_string_split_at(module: ir.Module, func_name: str, reverse: bool) -> i
     def on_found(builder: ir.IRBuilder, scan: _Scan, found_pos: Callable[[], ir.Value]) -> None:
         at = found_pos()
         after = builder.add(at, scan.needle_size, name="after")
-        head = allocate_substring(builder, malloc, memcpy, string_type, scan.str_data,
+        head = allocate_substring(builder, malloc, memcpy, scan.str_data,
                                   ir.Constant(i32, 0), at, i32, i64)
-        tail = allocate_substring(builder, malloc, memcpy, string_type, scan.str_data,
+        tail = allocate_substring(builder, malloc, memcpy, scan.str_data,
                                   after, builder.sub(scan.str_size, after, name="tail_size"),
                                   i32, i64)
         pair = builder.insert_value(ir.Constant(pair_type, ir.Undefined), head, 0)

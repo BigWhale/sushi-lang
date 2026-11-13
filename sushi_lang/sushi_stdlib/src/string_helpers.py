@@ -1,6 +1,7 @@
 """String Helper Functions"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size, string_value
 from sushi_lang.backend.string_constants import text_global
 from .libc_declarations import declare_malloc, declare_strlen
 
@@ -65,7 +66,7 @@ def cstr_to_fat_pointer(
     c_str: ir.Value,
     owned: int,
 ) -> ir.Value:
-    """Convert null-terminated C string to fat pointer struct {i8*, i32, i8 owned}."""
+    """Convert null-terminated C string to a string value."""
     strlen_fn = declare_strlen(module)
 
     size_i32 = builder.call(strlen_fn, [c_str], name="str_len")
@@ -80,16 +81,7 @@ def cstr_to_fat_pointer_with_len(
     owned: int,
 ) -> ir.Value:
     """Convert C string to fat pointer struct using pre-computed length."""
-    i8_ptr = ir.IntType(8).as_pointer()
-    i32 = ir.IntType(32)
-    i8 = ir.IntType(8)
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32, i8])  # {data, size, owned} (#145)
-    undef_struct = ir.Constant(string_struct_type, ir.Undefined)
-    struct_with_data = builder.insert_value(undef_struct, c_str, 0, name="str_with_data")
-    struct_with_size = builder.insert_value(struct_with_data, length, 1, name="str_with_size")
-    struct_complete = builder.insert_value(struct_with_size, ir.Constant(i8, 1 if owned else 0), 2, name="str_complete")
-
-    return struct_complete
+    return string_value(builder, c_str, length, owned, name="str_complete")
 
 
 def fat_pointer_to_cstr(
@@ -97,7 +89,7 @@ def fat_pointer_to_cstr(
     builder: ir.IRBuilder,
     fat_ptr: ir.Value
 ) -> ir.Value:
-    """Convert fat pointer struct {i8*, i32} to null-terminated C string."""
+    """Convert a string value to a null-terminated C string."""
     from .libc_declarations import declare_memcpy
 
     i8 = ir.IntType(8)
@@ -108,7 +100,7 @@ def fat_pointer_to_cstr(
     memcpy_fn = declare_memcpy(module)
 
     data = builder.extract_value(fat_ptr, 0, name="data")
-    size = builder.extract_value(fat_ptr, 1, name="size")
+    size = string_size(builder, fat_ptr, name="size")
 
     one = ir.Constant(i32, 1)
     cstr_size = builder.add(size, one, name="cstr_size")

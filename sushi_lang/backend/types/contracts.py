@@ -24,10 +24,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
 
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.generics.container_walk import emit_container_search
-from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_len_ptr
+from sushi_lang.backend.generics.list.types import get_list_data_ptr
 from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.internals.errors import raise_internal_error
@@ -298,8 +299,8 @@ def _emit_body(codegen: 'LLVMCodegen', fn: ir.Function, ty: Type, contract: str)
     elif isinstance(ty, DynamicArrayType):
         builder = codegen.builder
         _sequence_body(codegen, steps, ty.base_type,
-                       (builder.extract_value(a, 2), builder.extract_value(a, 0)),
-                       (builder.extract_value(b, 2), builder.extract_value(b, 0)))
+                       (builder.extract_value(a, 2), gep_utils.extract_len(codegen, a)),
+                       (builder.extract_value(b, 2), gep_utils.extract_len(codegen, b)))
     elif isinstance(ty, ArrayType):
         _sequence_body(codegen, steps, ty.base_type, _fixed_view(codegen, a, ty, by_address),
                        _fixed_view(codegen, b, ty, by_address))
@@ -323,7 +324,7 @@ def _list_view(codegen: 'LLVMCodegen', value: ir.Value) -> tuple:
     builder = codegen.builder
     slot = _spill(codegen, value, "list_view")
     return (builder.load(get_list_data_ptr(builder, slot), name="list_data"),
-            builder.load(get_list_len_ptr(builder, slot), name="list_len"))
+            gep_utils.load_len(codegen, slot, "list_len", builder=builder))
 
 
 def _fixed_view(codegen: 'LLVMCodegen', value: ir.Value, ty: ArrayType,

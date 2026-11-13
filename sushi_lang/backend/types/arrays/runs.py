@@ -232,14 +232,13 @@ def fill_runs(codegen: 'LLVMCodegen', data_ptr: ir.Value,
             # Tier 1: literals. Byte for byte what a spelled-out literal emits.
             for offset in range(run.count.constant):
                 slot = gep_utils.gep_array_element(codegen, base, ir.Constant(i32, offset))
-                value = ir.Constant(i32, run.first.constant + run.step * offset)
-                codegen.builder.store(codegen.utils.cast_for_param(value, element_llvm_type),
+                codegen.builder.store(ir.Constant(element_llvm_type,
+                                                  run.first.constant + run.step * offset),
                                       slot)
         else:
             # Tier 2 and 3: a walk. With a constant first value and count, the body is one
             # `mul` and one `add` on the loop index.
-            _walk_range(codegen, base, run.count, run.first, ir.Constant(i32, run.step),
-                        element_llvm_type, number)
+            _walk_range(codegen, base, run.count, run.first, run.step, number)
 
         cursor = codegen.builder.add(cursor, run.count, name=f"cursor{number}") \
             if not (isinstance(cursor, ir.Constant) and isinstance(run.count, ir.Constant)) \
@@ -247,12 +246,17 @@ def fill_runs(codegen: 'LLVMCodegen', data_ptr: ir.Value,
 
 
 def _walk_range(codegen: 'LLVMCodegen', base: ir.Value, count: ir.Value, first: ir.Value,
-                step: ir.Value, element_llvm_type: ir.Type, number: int) -> None:
-    """`slot i holds first + step * i`, over a counted walk."""
+                step: int, number: int) -> None:
+    """`slot i holds first + step * i`, over a counted walk, at the element type of the
+    slots: the type of `first`. The walk index is an i32, and it is cast to that type."""
+    item = first.type
+    step_value = ir.Constant(item, step)
+
     def store_one(slot: ir.Value, index: ir.Value) -> None:
-        offset = codegen.builder.mul(step, index, name=f"run{number}_offset")
-        value = codegen.builder.add(first, offset, name=f"run{number}_value")
-        codegen.builder.store(codegen.utils.cast_for_param(value, element_llvm_type), slot)
+        offset = codegen.builder.mul(step_value, codegen.utils.cast_for_param(index, item),
+                                     name=f"run{number}_offset")
+        codegen.builder.store(codegen.builder.add(first, offset, name=f"run{number}_value"),
+                              slot)
 
     emit_container_walk(codegen, base, count, store_one, prefix=f"run{number}_range")
 

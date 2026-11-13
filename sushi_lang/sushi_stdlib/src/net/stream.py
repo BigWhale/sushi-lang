@@ -1,5 +1,8 @@
 """Operations on a socket descriptor, whatever transport made it."""
 from llvmlite import ir
+from sushi_lang.backend.string_layout import STRING_BYTES
+from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.net import addr
@@ -168,7 +171,7 @@ def generate_send(module: ir.Module) -> None:
     fd.name, data.name = "fd", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = builder.extract_value(data, 0, name="data_len")
+    length = extract_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
     length64 = builder.zext(length, i64, name="data_len64")
 
@@ -233,12 +236,10 @@ def generate_recv(module: ir.Module) -> None:
 
     builder.position_at_end(success_bb)
     descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = builder.insert_value(descriptor,
-                                      builder.trunc(got, i32, name="got32"), 0,
-                                      name="desc_len")
-    descriptor = builder.insert_value(descriptor, maximum, 1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, got, builder=builder)
+    descriptor = insert_cap(None, descriptor, maximum, builder=builder)
     descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))
 
 
 def _emit_getpeername(builder: ir.IRBuilder, module: ir.Module, func: ir.Function,
@@ -319,7 +320,7 @@ def generate_peer(module: ir.Module) -> None:
 
 
 def generate_peer_ip(module: ir.Module) -> None:
-    """Emit `Result<{i8*,i32,i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`.
+    """Emit `Result<{i8*, i64, i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`.
 
     getnameinfo with NI_NUMERICHOST renders the address and never asks a
     resolver, so this makes no network request and works for either family.
@@ -377,4 +378,4 @@ def generate_peer_ip(module: ir.Module) -> None:
     memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)
-    builder.ret(emit_ok_result(builder, result_type, text, 16))
+    builder.ret(emit_ok_result(builder, result_type, text, STRING_BYTES))

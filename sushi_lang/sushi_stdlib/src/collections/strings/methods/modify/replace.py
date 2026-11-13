@@ -1,6 +1,7 @@
 """String Replace Operations"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...common import build_string_struct, clone_string_to_owned
@@ -8,7 +9,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_replace(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_replace({i8*, i32} str, {i8*, i32} old, {i8*, i32} new)`."""
+    """Emit `{i8*, i64, i8} string_replace({i8*, i64, i8} str, {i8*, i64, i8} old, {i8*, i64, i8} new)`."""
     func_name = "string_replace"
 
     if func_name in module.globals:
@@ -53,11 +54,11 @@ def emit_string_replace(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
-    str_size = builder.extract_value(func.args[0], 1, name="str_size")
+    str_size = string_size(builder, func.args[0], name="str_size")
     old_data = builder.extract_value(func.args[1], 0, name="old_data")
-    old_size = builder.extract_value(func.args[1], 1, name="old_size")
+    old_size = string_size(builder, func.args[1], name="old_size")
     new_data = builder.extract_value(func.args[2], 0, name="new_data")
-    new_size = builder.extract_value(func.args[2], 1, name="new_size")
+    new_size = string_size(builder, func.args[2], name="new_size")
     builder.branch(empty_old_check)
 
     builder = ir.IRBuilder(empty_old_check)
@@ -182,12 +183,12 @@ def emit_string_replace(module: ir.Module) -> ir.Function:
     builder.branch(copy_loop_cond)
 
     builder = ir.IRBuilder(copy_done)
-    result_complete = build_string_struct(builder, string_type, result_data, result_size, owned=1)
+    result_complete = build_string_struct(builder, result_data, result_size, owned=1)
     builder.ret(result_complete)
 
     # Return original: no matches / empty old string. Clone so the result is independently
     # owned (aliasing the input would double-free under string RAII, issue #145).
     builder = ir.IRBuilder(return_original)
-    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
+    builder.ret(clone_string_to_owned(builder, module, func.args[0]))
 
     return func

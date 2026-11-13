@@ -1,0 +1,12 @@
+# In a run `[0..n]`, the literal bound takes the type of the typed bound `n`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 0 2\n5 0 4\n"
+fn main() i32:
+    let i64 n = 3
+    let i64[] a = from([0..n])
+    println("{a.len()} {a[0]} {a[2]}")
+    let u16 m = 5
+    let u16[] c = from([0..m])
+    println("{c.len()} {c[0]} {c[4]}")
+    return 0
