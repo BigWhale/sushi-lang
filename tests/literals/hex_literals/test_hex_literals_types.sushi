@@ -1,4 +1,5 @@
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n2130849056\n"
+# COMPILER_FLAGS: --overflow=wrap
 # Test hex literals with various integer types
 
 fn main() i32:
