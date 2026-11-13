@@ -1,0 +1,15 @@
+# A run of u8 bounds fills a u8 array. `250..=top` with `top` at 255 fills the last value
+# of the type, and a run longer than the unroll limit fills to 255 too.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 0 3\n6 250 255\n56 200 255\n"
+fn main() i32:
+    let u8 n = 4
+    let u8[] a = from([0..n])
+    println("{a.len()} {a[0]} {a[3]}")
+    let u8 top = 255
+    let u8[] b = from([250..=top])
+    println("{b.len()} {b[0]} {b[5]}")
+    let u8[] c = from([200..=top])
+    println("{c.len()} {c[0]} {c[55]}")
+    return 0

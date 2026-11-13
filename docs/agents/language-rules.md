@@ -217,7 +217,10 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   bounds take `i32`, and two typed bounds of different integer types are CE2121 with the help
   `as`. The `foreach` variable has the type of the range, and a range value is
   `Iterator@(T)`; a value position gives its `T` to literal bounds. One rule: `range_item`,
-  `semantics/passes/types/visit/ranges.py`. A run of an array literal is still an `i32` run.
+  `semantics/passes/types/visit/ranges.py`. A run of an array literal (`from([0..n])`) obeys
+  the same rule, and its slots have the type `T`: `let i64[] a = from([0..n])` with an
+  `i64 n` is an `i64` run. The array type of the position gives nothing to the bounds, so
+  `let i64[] a = from([0..5])` is an `i32` run and CE2002.
 - **Patterns**: four errors, one per fault (#741): the SCRUTINEE's rule alone, an arm or a
   nested pattern that names an enum the value is not (the scrutinee in a note), a nested
   pattern over a payload that is not an enum, and an `Own(...)` pattern over a value that is

@@ -13,7 +13,7 @@ A range has the type of its bounds (docs/adr/0001): its item type `T`, and the t
 `Iterator@(T)`. `range_item` is the one rule. A literal bound takes the type of the other
 bound, two literal bounds take i32, and a value position gives `T` to both. A bound that is
 no number is CE2072, and a bound of another type than `T` is CE2121. A run of an array
-literal is an i32 run. A slice bound is an index position (`semantics/passes/types/arrays.py`),
+literal has the type of its bounds too, and its slots have the type `T`. A slice bound is an index position (`semantics/passes/types/arrays.py`),
 which takes any integer type. Readable bounds of a `foreach` range must go up (CE2125,
 `semantics/ranges.py`).
 """
@@ -44,9 +44,10 @@ def check_range_iterable(validator: TypeValidator, node: e.Range) -> Type:
     return item
 
 
-def check_range_run(validator: TypeValidator, node: e.Range) -> None:
-    """A run of an array literal: a range that is no value, with i32 bounds."""
-    _check_no_value(validator, node, BuiltinType.I32)
+def check_range_run(validator: TypeValidator, node: e.Range) -> Type:
+    """A run of an array literal: a range that is no value. Answers its item type, the type
+    of each slot that it fills."""
+    return _check_no_value(validator, node, None)
 
 
 def _check_no_value(validator: TypeValidator, node: e.Range, item: Optional[Type]) -> Type:

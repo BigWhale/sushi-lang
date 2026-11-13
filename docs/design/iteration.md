@@ -448,8 +448,10 @@ range is an `i64`, and the counter is an `i64` too; the item is `first + k` at `
 copy of `k` at `T` that wraps with it (`counted_walk`, `semantics/slir/lower_control.py`).
 The state of a range value is `{i64 k, i64 count, T first, T step}`, one `next_fn` for each
 `T` (`backend/runtime/iterators.py`). A range of `i64` or `u64` bounds that are more than the
-`i64` maximum apart has a count that wraps. A run of an array literal is still an `i32`
-run.
+`i64` maximum apart has a count that wraps. A run of an array literal obeys the same rule,
+and its slots have the type `T`: with an `i64 n`, `let i64[] a = from([0..n])` is an `i64`
+run. The element type of the array gives nothing to the bounds. The fill stores each slot at the element type
+(`backend/types/arrays/runs.py`).
 
 **A range is a value** in every position where an `Iterator@(T)` of an integer `T` is
 expected, written or propagated: a `let`, an argument, a `return`, a constructor field, a

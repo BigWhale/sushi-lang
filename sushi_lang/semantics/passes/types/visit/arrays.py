@@ -2,7 +2,7 @@
 
 An `ArrayInit` checks each run at the element type of its position, when the position
 gives an array type: a value, a repeat (the value, then the count, ruling R2) and a range,
-whose slot is an i32. A count is an index position, of any integer type. The one reader of the runs
+whose slot has the item type of the range. A count is an index position, of any integer type. The one reader of the runs
 (`array_runs.plan_runs`) says when a count or a range fills no slot (CE2017, CE2019,
 CE2020, CE2125). An element whose type is not the type of the first is CE2013; when the
 rows of a nested literal do not agree, each row is first measured against the row type of
@@ -83,13 +83,11 @@ def _empty(validator: TypeValidator, node: e.ArrayInit,
 def _check_run(validator: TypeValidator, run: e.ArrayRun,
                element: Optional[Type]) -> Optional[Type]:
     """Check one run, and answer the type that it puts in a slot: the type of its value,
-    or i32 for a range."""
+    or the item type of a range."""
     if isinstance(run, e.RangeRun):
-        check_range_run(validator, run.range)
-        return BuiltinType.I32
+        return check_range_run(validator, run.range)
     if isinstance(run.value, e.Range):
-        check_range_run(validator, run.value)
-        slot: Optional[Type] = BuiltinType.I32
+        slot: Optional[Type] = check_range_run(validator, run.value)
     else:
         slot = visit.check_expr(validator, run.value, element)
     if isinstance(run, e.Repeat):

@@ -1168,7 +1168,8 @@ the default `i32`. Two typed bounds of different integer types are
 [`CE2121`](error-catalog.md#ce2121), with help to use `as`. The `foreach` variable over a
 range has the type of the range, and a range as a value is an `Iterator@(T)` for that `T`.
 A value position gives its `T` to the literal bounds: `let Iterator@(i64) r = 0..5` is an
-`i64` range. A run of an array literal (`from([0..n])`) is still an `i32` run.
+`i64` range. A run of an array literal (`from([0..n])`) obeys the same rule, and
+its slots have the type of the range.
 
 ```sushi
 fn main() i32:
@@ -1588,9 +1589,11 @@ fn main() i32:
     return 0
 ```
 
-A range yields **i32**, exactly as `foreach(i in 0..5)` does, so `let i64[] a =
-from([0..5])` is a type mismatch. It obeys the same position rule as a repeat: a bound in
-a `from()` literal may be any i32 expression, and a fixed array or a constant needs one
+A range has the type of its bounds, exactly as in `foreach(i in 0..5)`: with an `i64 n`,
+`let i64[] a = from([0..n])` is an `i64` run. Two literal bounds take `i32`, so `let i64[]
+a = from([0..5])` is a type mismatch, and two typed bounds of different types are
+**[CE2121](error-catalog.md#ce2121)**. It obeys the same position rule as a repeat: a bound in
+a `from()` literal may be any integer expression, and a fixed array or a constant needs one
 the compiler can read. A bound it cannot read there is **[CE2019](error-catalog.md#ce2019)**, and so is a readable
 range that yields nothing. A readable range that goes down is **[CE2125](error-catalog.md#ce2125)**:
 
