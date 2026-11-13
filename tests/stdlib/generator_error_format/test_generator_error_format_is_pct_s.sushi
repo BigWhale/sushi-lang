@@ -1,0 +1,14 @@
+# a runtime error that a stdlib generator emits gives its message to fprintf as text: the
+# format argument is the constant "%s", and the message is the argument after it. A `%` in
+# the message is then never read as a conversion. `string_upper` comes from a generator,
+# and its RE2021 block (malloc gives null) is the error under test. The IR is read before
+# any pass, because the optimizer can change fprintf with "%s" into fputs.
+# COMPILER_FLAGS: --opt none
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "MOSTLY HARMLESS\n"
+# EXPECT_IR_HOLDS: string_upper @fprintf(ptr %stderr_file, ptr @.runtime_err_pct_s, ptr @err_RE2021
+# EXPECT_IR_LACKS: string_upper @fprintf(ptr %stderr_file, ptr %
+fn main() i32:
+    let string s = "Mostly Harmless".upper()
+    println(s)
+    return 0
