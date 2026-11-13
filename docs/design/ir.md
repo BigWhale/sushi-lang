@@ -1151,7 +1151,7 @@ module)` (`check_stdlib_call`, `passes/types/calls/user_defined.py`). A row of t
 signature table goes through the one argument check at the types of its row, and each
 argument borrows (a `nom` marker is [CE2427](../error-catalog.md#ce2427), and it names
 the parameter by the member of its type, `F64`). A member of a `<math>`
-family (`abs`, `min`, `max`, `divmod`) checks its two arguments as a pair, as the
+family (`abs`, `min`, `max`) checks its two arguments as a pair, as the
 operands of a binary operator are checked (`check_operand_pair`,
 `passes/types/visit/operators.py`), so a lone literal takes the type of the other
 argument ([CE2073](../error-catalog.md#ce2073) when it does not fit). Then a wrong count
@@ -1660,7 +1660,7 @@ same row: `ty` is the instance that the call builds, which its position gives, a
 
 A `Stdlib` callee is a function of a registry stdlib module (each module of 7.3): a
 row of the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
-a member of a `<math>` family (`abs`, `min`, `max`, `divmod`). `decl` names the written
+a member of a `<math>` family (`abs`, `min`, `max`). `decl` names the written
 name, bare or behind an alias, and `module` is the `use` path of the module (`math`). It is
 the `CalleeKind.STDLIB` of `param_modes.py`: a registry row declares no mode, so each
 argument is a borrow (`Guaranteed`). The row of a `Stdlib` callee has no declaring unit.

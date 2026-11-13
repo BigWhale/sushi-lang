@@ -1,0 +1,144 @@
+##:
+math -- the Sushi half of the math module.
+
+The module has two halves. The functions (`sqrt`, `pow`, `abs`, `min`, `max` and the
+others) and the constants are compiled into the stdlib bitcode; the methods of this file
+on the integer types ship as Sushi source. A method of a built-in type needs no import,
+so `a.divmod(b)` works with no `use <math>`.
+:##
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let i8 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend i8 divmod(i8 b) (i8, i8):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let i16 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend i16 divmod(i16 b) (i16, i16):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let i32 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend i32 divmod(i32 b) (i32, i32):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let i64 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend i64 divmod(i64 b) (i64, i64):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let u8 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend u8 divmod(u8 b) (u8, u8):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let u16 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend u16 divmod(u16 b) (u16, u16):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let u32 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend u32 divmod(u32 b) (u32, u32):
+    return (self / b, self % b)
+
+##:
+Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.
+
+A `b` of 0 stops the program with a runtime error, the same as `/`.
+
+- Parameter b: The divisor.
+- Returns: The pair `(self / b, self % b)`.
+- Example:
+  ```sushi
+  let u64 n = 7
+  let (q, r) = n.divmod(2)
+  println("{q} {r}")
+  ```
+:##
+public extend u64 divmod(u64 b) (u64, u64):
+    return (self / b, self % b)

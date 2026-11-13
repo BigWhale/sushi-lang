@@ -54,5 +54,5 @@ def test_a_home_lists_its_enums_as_members():
     assert homed_enums("io/contracts", table) == {"SeekFrom": "enum"}
     assert homed_enums("io/error", table) == {"FileError": "enum", "IoError": "enum"}
     assert homed_enums("net/error", table) == {"NetError": "enum"}
-    assert homed_enums("math", table) == {"MathError": "enum"}
+    assert homed_enums("math", table) == {}
     assert homed_enums("collections/hashmap", table) == {}

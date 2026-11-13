@@ -1,14 +1,14 @@
 # A predefined enum has a HOME module, and the alias over that module holds it (#574,
 # Ruling 3): `fs.FileMode` behind `use <io/fs> as fs`, `io.IoError` behind
-# `use <io/contracts> as io`, and a registry module's `m.MathError` behind `use <math> as m`.
+# `use <io/contracts> as io`, and a registry module's `env.EnvError` behind `use <sys/env> as env`.
 # The dot works in every written-name position: a type, a constructor, a match arm, a
 # channel.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "read\nnot found\nzero\n"
+# EXPECT_STDOUT_EXACT: "read\nnot found\nmissing\n"
 use <io/fs> as fs
 use <io/contracts> as io
-use <math> as m
+use <sys/env> as env
 
 fn mode_name(fs.FileMode mode) string:
     match mode:
@@ -18,9 +18,9 @@ fn mode_name(fs.FileMode mode) string:
 fn fail() i32 | io.IoError:
     return Result.Err(io.IoError.NotFound)
 
-fn halve(i32 v) i32 | m.MathError:
+fn lookup(i32 v) i32 | env.EnvError:
     if (v == 0):
-        return Result.Err(m.MathError.DivisionByZero)
+        return Result.Err(env.EnvError.NotFound)
     return Result.Ok(v / 2)
 
 fn main() i32:
@@ -32,8 +32,8 @@ fn main() i32:
             match e:
                 io.IoError.NotFound -> println("not found")
                 _ -> println("other")
-    match halve(0):
-        Result.Ok(_) -> println("half")
-        Result.Err(m.MathError.DivisionByZero) -> println("zero")
+    match lookup(0):
+        Result.Ok(_) -> println("found")
+        Result.Err(env.EnvError.NotFound) -> println("missing")
         Result.Err(_) -> println("other")
     return 0

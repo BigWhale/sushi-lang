@@ -23,9 +23,9 @@ An import brings a module's NAMES; a method of a built-in type needs NO import (
 **A predefined enum has a HOME, and the import gates the bare name (#574, Ruling 3)**:
 `FileMode` -> `<io/fs>`; `IoError`, `FileError` -> `<io/error>`; `SeekFrom` ->
 `<io/contracts>`; `NetError` -> `<net/error>`; `ProcessError` -> `<sys/process>`;
-`EnvError` -> `<sys/env>`; `MathError` -> `<math>`. `StdError` stays global. The alias
+`EnvError` -> `<sys/env>`. `StdError` stays global. The alias
 holds it (`fs.FileMode.Read()`); the bare name with no import is an unknown-type error with the import
-in the help, the `HashMap` rule. The nine stay synthesized in `passes/collect/enums.py`,
+in the help, the `HashMap` rule. The eight stay synthesized in `passes/collect/enums.py`,
 each stamped (`EnumType.home_module`), and the `namespaces` pass reads the stamp. **The
 home is reached through a `public use` (#586)**: `<io/contracts>` re-exports `<io/error>`;
 `<io/fs>` and `<io/buf>` re-export `<io/contracts>`; `<net/tcp>` re-exports `<net/error>`,
@@ -35,8 +35,8 @@ home is reached through a `public use` (#586)**: `<io/contracts>` re-exports `<i
 the registry module `<io/files>` re-exports `<io/error>` (`REEXPORTS` in
 `files_funcs.py`). So `use <io/fs>` alone writes `| IoError`, `IoError.NotFound`,
 `SeekFrom.Start` and `FileError.NotFound`, `fs.IoError` holds behind the alias, and
-`use <net/tcp>` alone matches `IoError` from a read. `<sys/env>`, `<sys/process>` and
-`<math>` stay their own homes. The conversions `FileError as IoError` and `NetError as
+`use <net/tcp>` alone matches `IoError` from a read. `<sys/env>` and `<sys/process>` stay
+their own homes. The conversions `FileError as IoError` and `NetError as
 IoError` live in `io/error.sushi`, which imports `<net/error>` with a plain `use`: `use <io/fs>`
 loads the `<net/error>` unit and does not bring the name `NetError`.
 `close_socket` (the one guarded `sock_close`) lives in `<net/handle>`, not in `<net/error>`.
@@ -86,8 +86,8 @@ value Result gets a warning at every bare-statement call site.
 
 ## Two results
 
-**A stdlib function with two results answers a TUPLE** (PR #1142): `divmod` (`<math>`,
-integers, `(T, T) | MathError`), `split_once` / `rsplit_once` (`Maybe@((string, string))`),
+**A stdlib function with two results answers a TUPLE** (PR #1142): the method `a.divmod(b)` (`<math>`,
+each integer type, a bare `(T, T)`; a divisor of 0 traps, the same as `/`), `split_once` / `rsplit_once` (`Maybe@((string, string))`),
 `enumerate` / `zip` / `partition` / `unzip` (`<collections/iter>`), HashMap `.pairs()`
 (`Iterator@((K, V))`, beside `.entries()`), `<io/path>` `split` / `split_extension`,
 `TcpStream.peer()`, `BufReader.into_parts()`, `decode_prefix`, `inflate_raw_prefix`. Two
@@ -110,6 +110,11 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   rebuilds a stale stdlib). A `src_sushi` module is in the cache key through the dependency graph.
 - A stdlib symbol that wants a C string takes `i8*` and the CALL SITE marshals it through
   `emit_cstr_arg` (the one seam — see the table above). Do not marshal inside a generated body.
+- **`<math>` has TWO halves, the same way**: the functions and the constants are the `.bc`
+  unit, and `src_sushi/math.sushi` (a `SOURCE_STDLIB_MODULES` row and a
+  `BUILTIN_TYPE_METHOD_MODULES` row) holds the methods on the integer types (`divmod`). The
+  `namespaces` pass hands on the names of the generator half through the source unit
+  (`_stdlib_provider`), so `use <math>` gives both halves.
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,

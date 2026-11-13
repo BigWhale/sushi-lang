@@ -1,4 +1,4 @@
-"""The types the compiler synthesizes: the nine predefined enums and the five generics.
+"""The types the compiler synthesizes: the eight predefined enums and the five generics.
 
 DATA, and one factory per kind. No unit declares any of these, so there is no AST to
 collect them from -- the collect pass registers what this module hands it, in the order
@@ -34,7 +34,7 @@ class PredefinedEnum:
     """One synthesized enum: its name, its HOME module, and its variants in ABI order.
 
     `payloads` names the variants that carry associated data; every variant left out of
-    it is a unit variant. `is_error` marks the seven that are error types; `FileMode` and
+    it is a unit variant. `is_error` marks the six that are error types; `FileMode` and
     `SeekFrom` are not (docs/design/error-conversion.md section 2.2).
     """
     name: str
@@ -137,23 +137,11 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
         "InvalidValue",      # Invalid value
         "PermissionDenied",  # Insufficient permissions
     ), is_error=True),
-    PredefinedEnum("MathError", "math", (
-        "DivisionByZero",  # Division by zero
-        "Overflow",        # Arithmetic overflow
-        "Underflow",       # Arithmetic underflow
-        "InvalidInput",    # Invalid input to math function
-    ), is_error=True),
 )
 
 
-def predefined_variant_tag(enum_name: str, variant: str) -> int:
-    """The runtime tag of a variant of a predefined enum: its index in ABI order."""
-    predefined = next(enum for enum in PREDEFINED_ENUMS if enum.name == enum_name)
-    return predefined.variants.index(variant)
-
-
 def predefined_enums() -> tuple[EnumType, ...]:
-    """The nine synthesized enums, each stamped with its home module."""
+    """The eight synthesized enums, each stamped with its home module."""
     return tuple(
         EnumType(
             name=predefined.name,

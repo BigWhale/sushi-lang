@@ -73,7 +73,7 @@ fn main() i32:
 A function type mirrors the function-declaration return/error syntax:
 
 - `fn(i32) -> i32` — return type `i32`, BARE: no error channel, a call yields the `i32`.
-- `fn(i32) -> i32 | MathError` — an error channel: a call yields `Result@(i32, MathError)`.
+- `fn(i32) -> i32 | EnvError` — an error channel: a call yields `Result@(i32, EnvError)`.
 - `fn() -> ~` — no parameters, blank return.
 
 An array of function values puts the function type in parentheses: `(fn(i32) -> i32)[]` is a
@@ -134,7 +134,7 @@ let fn(i32) -> i32 g = |i32 x|:
     return y + n                         # the type is bare, so the body returns the value
 
 # optional return / error annotation after the closing pipe
-let fn(i32) -> i32 | MathError h = |i32 x| -> i32 | MathError: ...
+let fn(i32) -> i32 | EnvError h = |i32 x| -> i32 | EnvError: ...
 
 # param types inferred from an expected function type (an annotated binding, or an
 # argument to a parameter of a CONCRETE function type)

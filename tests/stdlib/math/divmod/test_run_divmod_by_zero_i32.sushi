@@ -1,0 +1,12 @@
+# A signed `divmod` by a zero that the compiler cannot read stops the program, the same as `/`.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2030"
+# EXPECT_STDERR_CONTAINS: "integer division by zero"
+
+fn main(string[] args) i32:
+    let i32 a = 7
+    let i32 b = args.len() - 1
+    let (q, r) = a.divmod(b)
+    println("{q} {r}")
+    return 0

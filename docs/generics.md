@@ -194,7 +194,7 @@ Sushi has two built-in generic enums.
 
 **Result@(T, E):** a function that writes an error channel returns one.
 `fn divide(...) i32 | StdError` returns `Result@(i32, StdError)`, and
-`fn divide(...) i32 | MathError` returns `Result@(i32, MathError)`. A function with no
+`fn divide(...) i32 | EnvError` returns `Result@(i32, EnvError)`. A function with no
 `| E` is bare and returns its value itself; there is no default error type. A bare
 function is the exception, not the default style (see
 [The error channel is opt-in](design/error-channel.md)):
