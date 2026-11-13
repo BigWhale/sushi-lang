@@ -81,7 +81,7 @@ def element(low: Lowering, base: p.Place, node: e.Index) -> p.Place:
         at, size = int_of(index), int_of(length)
         if at is None or size is None or not 0 <= at < size:
             ok = _compare(low, "<", index, length, node.loc)
-            _guard(low, ok, tm.Trap("RE2020", (index, length), node.loc), node.loc)
+            guard(low, ok, tm.Trap("RE2020", (index, length), node.loc), node.loc)
     return p.Index(base, index)
 
 
@@ -96,8 +96,8 @@ def view(low: Lowering, base: p.Place, node: e.Slice) -> p.Place:
     if first is None or last is None or size is None or not 0 <= first <= last <= size:
         end_ok = _compare(low, "<=", end, length, span)
         start_ok = _compare(low, "<=", start, end, span)
-        ok = _check_local(low, r.Binary("&", end_ok, start_ok), BOOL, span)
-        _guard(low, ok, tm.Trap("RE2028", (start, end, length), span), span)
+        ok = check_local(low, r.Binary("&", end_ok, start_ok), BOOL, span)
+        guard(low, ok, tm.Trap("RE2028", (start, end, length), span), span)
     ident = low.new_local(low.type_of(node), None, None)
     low.placement.temporary(ident, False)
     low.emit([st.StorageLive(ident, span), st.Assign(p.Local(ident),
@@ -118,7 +118,7 @@ def _compare(low: Lowering, op: BinOp, left: p.Operand, right: p.Operand,
              span: Span) -> p.Operand:
     """`left op right` over the two `i32` values read as `u32`: a negative value is above
     every length."""
-    return _check_local(low, r.Binary(op, _unsigned(low, left, span),
+    return check_local(low, r.Binary(op, _unsigned(low, left, span),
                                       _unsigned(low, right, span)), BOOL, span)
 
 
@@ -126,10 +126,10 @@ def _unsigned(low: Lowering, operand: p.Operand, span: Span) -> p.Operand:
     value = int_of(operand)
     if value is not None:
         return p.Const(k.Int(value % (1 << 32), U32))
-    return _check_local(low, r.Cast(operand, U32), U32, span)
+    return check_local(low, r.Cast(operand, U32), U32, span)
 
 
-def _check_local(low: Lowering, value: r.Rvalue, ty: Type, span: Span) -> p.Operand:
+def check_local(low: Lowering, value: r.Rvalue, ty: Type, span: Span) -> p.Operand:
     """A local of a compare: its own block writes it and reads it, so it gets no storage
     marker (ir.md 8.9)."""
     ident = low.new_local(ty, None, None)
@@ -137,7 +137,7 @@ def _check_local(low: Lowering, value: r.Rvalue, ty: Type, span: Span) -> p.Oper
     return p.Copy(p.Local(ident))
 
 
-def _guard(low: Lowering, ok: p.Operand, trap: tm.Trap, span: Span) -> None:
+def guard(low: Lowering, ok: p.Operand, trap: tm.Trap, span: Span) -> None:
     """`switchInt(ok, [(0, fail)], otherwise: next)`; the failing block ends in `trap`,
     which drops nothing. The blocks are made in the order fail, next."""
     fail, next_ = low.new_block(), low.new_block()

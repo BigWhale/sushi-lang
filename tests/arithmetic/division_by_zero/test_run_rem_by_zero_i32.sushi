@@ -1,0 +1,11 @@
+# A signed remainder by a zero that the compiler cannot read stops the program.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2030"
+# EXPECT_STDERR_CONTAINS: "integer division by zero"
+
+fn main(string[] args) i32:
+    let i32 a = 7
+    let i32 b = args.len() - 1
+    println("{a % b}")
+    return 0

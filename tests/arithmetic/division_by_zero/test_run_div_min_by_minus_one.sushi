@@ -1,0 +1,11 @@
+# The smallest i32 divided by -1 has no answer that an i32 holds, so the program stops.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2031"
+# EXPECT_STDERR_CONTAINS: "integer division overflow"
+
+fn main(string[] args) i32:
+    let i32 a = -2147483648
+    let i32 b = args.len() - 2
+    println("{a / b}")
+    return 0

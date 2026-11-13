@@ -73,6 +73,7 @@ from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_closures as closures
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_conversions as conversions
+from sushi_lang.semantics.slir import lower_division as division
 from sushi_lang.semantics.slir import lower_iterators as iterators
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_globals as globals_
@@ -525,7 +526,10 @@ class Lowering:
         if node.op in ("and", "or"):
             return ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
         lhs = agg.settled(self, node.lhs, self.operand(node.lhs), (node.rhs,))
-        return r.Binary(node.op, lhs, self.operand(node.rhs))
+        rhs = self.operand(node.rhs)
+        if node.op in ("/", "%"):
+            division.check_divisor(self, lhs, rhs, self.type_of(node), node.loc)
+        return r.Binary(node.op, lhs, rhs)
 
     def unary(self, node: e.Unary) -> Value:
         return r.Unary(node.op, self.operand(node.operand))
