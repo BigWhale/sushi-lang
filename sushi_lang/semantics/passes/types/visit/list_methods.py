@@ -25,7 +25,7 @@ from sushi_lang.semantics.generics.list import parse_list_types
 from sushi_lang.semantics.passes.types.arguments import (
     argument_span, check_argument, marked_type)
 from sushi_lang.semantics.passes.types.arrays import (
-    check_i32_operand, check_search_needle, reject_non_i32)
+    check_index_operand, check_search_needle, reject_non_index)
 from sushi_lang.semantics.passes.types.method_registry import ListMethodInferrer, MethodFamily
 from sushi_lang.semantics.passes.types.visit.container_methods import (
     ContainerArm, check_container_method)
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 class _Argument(Enum):
     """What one argument of a method is."""
 
-    INDEX = auto()    # an index or a count, an i32 (#870)
+    INDEX = auto()    # an index or a count, of any integer type
     ELEMENT = auto()  # a value of the element type, typed by its position
     NEEDLE = auto()   # the needle of a search, through the one rule of the searches
 
@@ -69,9 +69,9 @@ def _check_arguments(validator: TypeValidator, node: e.Call, element: Type,
             if check_search_needle(validator, node, element):
                 return
         elif kind is _Argument.INDEX:
-            got = marked_type(arg, check_i32_operand(validator, arg.value))
-            reject_non_i32(validator, arg.value, got, argument=position + 1,
-                           span=argument_span(arg))
+            got = marked_type(arg, check_index_operand(validator, arg.value))
+            reject_non_index(validator, arg.value, got, argument=position + 1,
+                             span=argument_span(arg))
         else:
             check_argument(validator, name, arg, position + 1, element,
                            mismatch_code=er.ERR.CE2006)

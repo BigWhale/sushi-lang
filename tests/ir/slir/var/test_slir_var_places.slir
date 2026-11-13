@@ -61,7 +61,7 @@ fn main() -> i32 {
     StorageLive(_3)
     _3 = copy (@test_slir_var_places$origin.1)
     StorageLive(_4)
-    _4 = copy (@test_slir_var_places$table[const 0_i32])
+    _4 = copy (@test_slir_var_places$table[const 0_i64])
     StorageLive(_5)
     _5 = call builtin interp@(i32, string, i32, string, i32, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy _4 @guaranteed)
     StorageLive(_6)
@@ -85,7 +85,7 @@ fn main() -> i32 {
     (@test_slir_var_places$origin.1) = user copy _9 * const 2_i32
     StorageDead(_9)
     StorageLive(_10)
-    _10 = copy (@test_slir_var_places$table[const 2_i32])
+    _10 = copy (@test_slir_var_places$table[const 2_i64])
     StorageLive(_11)
     _11 = copy (@test_slir_var_places$origin.0)
     StorageLive(_12)
@@ -95,10 +95,10 @@ fn main() -> i32 {
     StorageDead(_11)
     StorageDead(_10)
     StorageLive(_13)
-    _13 = copy (@test_slir_var_places$table[const 1_i32])
+    _13 = copy (@test_slir_var_places$table[const 1_i64])
     StorageLive(_14)
     _14 = user copy _13 + const 10_i32
-    (@test_slir_var_places$table[const 1_i32]) = copy _14
+    (@test_slir_var_places$table[const 1_i64]) = copy _14
     StorageDead(_14)
     StorageDead(_13)
     StorageLive(_15)
@@ -112,7 +112,7 @@ fn main() -> i32 {
     StorageLive(_18)
     _18 = copy (@test_slir_var_places$origin.0)
     StorageLive(_19)
-    _19 = copy (@test_slir_var_places$table[const 1_i32])
+    _19 = copy (@test_slir_var_places$table[const 1_i64])
     StorageLive(_20)
     _20 = call builtin interp@(i32, string, i32, string, i32, string, i32)(copy _16 @guaranteed, const " " @guaranteed, copy _17 @guaranteed, const " " @guaranteed, copy _18 @guaranteed, const " " @guaranteed, copy _19 @guaranteed)
     StorageLive(_21)

@@ -705,9 +705,12 @@ fn main() i32:
 `.hash()`, and the bulk copies `.extend(src)`, `.extend_range(src, start, count)`,
 `.s(start, end)` and `.ss(start, count)`. See [Arrays](stdlib/collections/arrays.md).
 
-**Indices are `i32`**: an index, a count and a range bound are `i32` positions. A bare literal
-is an `i32`; a typed value of another integer type is [`CE2121`](error-catalog.md#ce2121) ([`CE2006`](error-catalog.md#ce2006) as a method argument,
-for example to `.get()`), and the fix is `as i32`.
+**An index takes any integer type**: an index, a slice bound, a repeat count and the position or
+count argument of a built-in method (`.get()`, `.insert()`, `.sleft()`) take a value of any integer
+type, so a `u8` or an `i64` needs no cast. A bare literal there is an `i64`. A float is
+[`CE2121`](error-catalog.md#ce2121) ([`CE2006`](error-catalog.md#ce2006) as a method argument). The bounds check compares at 64 bits, so a negative
+index and an index of 2^32 both stop the program with [`RE2020`](error-catalog.md#re2020). A range bound (`a..b`) is still an `i32`,
+and `len()` still answers `i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
 index is bounds-checked exactly like a read, so an index past the end aborts with [`RE2020`](error-catalog.md#re2020) (and an

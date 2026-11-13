@@ -199,7 +199,7 @@ tables below are a map; each module's docstring holds the full rule.
 | Compile-time integer operations | `semantics/integer_ops.py` |
 | One walk over a type; one walk over the AST nodes | `semantics/type_walk.py`, `semantics/ast_walk.py` |
 | A condition, an arithmetic operand, a comparison operand | `semantics/passes/types/expressions.py` |
-| An index, a count or a range bound is `i32` (`reject_non_i32`) | `semantics/passes/types/arrays.py` |
+| An index position takes any integer type (`reject_non_index`); a range bound is `i32` (`reject_non_i32_bound`) | `semantics/passes/types/arrays.py` |
 | Every public-signature rule (the `ptr` fence, the leak fence) | `semantics/passes/types/public_signatures.py` |
 | The early passes do not infer (ruling E4) | `semantics/generics/instantiate/`, `semantics/generics/monomorphize/` |
 

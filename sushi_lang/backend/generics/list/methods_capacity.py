@@ -24,7 +24,7 @@ def emit_list_reserve(codegen: Any, list_ptr: ir.Value, _list_type: StructType,
     current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    needed_cap = codegen.builder.add(current_len, codegen.utils.require_i32(args[0]),
+    needed_cap = codegen.builder.add(current_len, codegen.utils.index_as_i32(args[0]),
                                      name="needed_cap")
 
     memory.emit_grow_to_fit(

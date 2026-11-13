@@ -51,6 +51,7 @@ SPAN = Span(1, 1, 1, 9)
 BAD = Span(7, 5, 7, 20)
 OWNED, GUARANTEED = Convention.OWNED, Convention.GUARANTEED
 I32, STRING, BOOL, BLANK = BuiltinType.I32, BuiltinType.STRING, BuiltinType.BOOL, BuiltinType.BLANK
+I64 = BuiltinType.I64
 PAIR = StructType(name="Pair", fields=(("first", I32), ("second", I32)))
 
 GREET_DECLARED = {
@@ -832,14 +833,14 @@ def test_a_trap_that_names_no_runtime_code_with_its_operand_count_is_refused(cod
 
 
 def test_a_trap_with_the_operands_of_its_text_passes():
-    trap = tm.Trap("RE2020", (p.Const(k.Int(5, I32)), p.Const(k.Int(3, I32))), SPAN)
+    trap = tm.Trap("RE2020", (p.Const(k.Int(5, I64)), p.Const(k.Int(3, I64))), SPAN)
     _passes(_function([BLANK], _block(0, trap)))
 
 
-def test_a_trap_that_reads_an_i32_local_for_a_d_conversion_passes():
-    trap = tm.Trap("RE2020", (_copy(1), p.Const(k.Int(3, I32))), SPAN)
-    _passes(_function([BLANK, I32], _block(0, trap, _live(1),
-                                           _set(1, r.Use(p.Const(k.Int(5, I32)))))))
+def test_a_trap_that_reads_an_i64_local_for_a_lld_conversion_passes():
+    trap = tm.Trap("RE2020", (_copy(1), p.Const(k.Int(3, I64))), SPAN)
+    _passes(_function([BLANK, I64], _block(0, trap, _live(1),
+                                           _set(1, r.Use(p.Const(k.Int(5, I64)))))))
 
 
 @pytest.mark.parametrize("position, message", [
@@ -865,13 +866,13 @@ def test_a_trap_that_moves_an_operand_is_refused():
 
 
 @pytest.mark.parametrize("code, args", [
-    ("RE2020", (p.Const(k.text("5")), p.Const(k.Int(3, I32)))),   # %d takes an i32
-    ("RE2020", (p.Const(k.Int(5, BuiltinType.I64)), p.Const(k.Int(3, I32)))),  # not an i64
+    ("RE2020", (p.Const(k.text("5")), p.Const(k.Int(3, I64)))),   # %lld takes an i64
+    ("RE2020", (p.Const(k.Int(5, I64)), p.Const(k.Int(3, I32)))),  # not an i32
     ("RE2026", (p.Const(k.text("probe.sushi:7:5")), p.Const(k.Int(0, I32)))),  # %.*s, a string
     ("RE2026", (p.Const(k.Bool(True)), p.Const(k.text("")))),     # the position is a string
     ("RE2026", (p.Const(k.text("probe.sushi:7:5")),)),             # its text prints two values
     ("RE2026", ()),                                                 # a bare assert has two
-    ("RE2020", (p.Copy(p.Global("unit$g", STRING)), p.Const(k.Int(3, I32)))),  # a string
+    ("RE2020", (p.Copy(p.Global("unit$g", STRING)), p.Const(k.Int(3, I64)))),  # a string
 ])
 def test_a_trap_operand_of_the_wrong_type_for_its_conversion_is_refused(
         code: str, args: tuple[p.Operand, ...]):

@@ -42,7 +42,7 @@ from sushi_lang.semantics.shir.exprs import ConstRef, IntConst, Lit, Unary
 from sushi_lang.semantics.shir.literals import negated_int_literal
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           Type, deref_type)
-from sushi_lang.semantics.type_predicates import is_numeric_type
+from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -68,32 +68,36 @@ class Receiver(Enum):
     BYTES = "u8[]"
 
 
-# ------------------------------------------------------------------ an i32 position
+# ------------------------------------------------------------- an index position
 
 
 # The positions that are not a method argument, as CE2121 names them.
 ARRAY_INDEX = "an array index"
 STRING_INDEX = "a string index"
 REPEAT_COUNT = "a repeat count"
+SLICE_BOUND = "a slice bound"
 RANGE_BOUND = "a range bound"
 
+#: What an index position takes, as CE2121 and CE2006 name it.
+_AN_INTEGER = "an integer"
 
-def check_i32_operand(validator: 'TypeValidator', node: 'ShirExpr') -> Optional[Type]:
-    """Check the value of an i32 position (an index, a count, a range bound) and answer its
-    type. A bare literal has its default, which is i32 for a number. A bare byte literal
-    (`a'x'`), also under a negation, takes i32 from the position. Any other value gets no
-    type from the position, so a literal that an i32 cannot hold is CE2070."""
+
+def check_index_operand(validator: 'TypeValidator', node: 'ShirExpr') -> Optional[Type]:
+    """Check the value of an index position (an index, a slice bound, a repeat count, the
+    position or count argument of a built-in method) and answer its type. A bare integer
+    literal, also under a negation, takes i64 from the position (docs/adr/0001). Any other
+    value gets no type from the position."""
     from sushi_lang.semantics.passes.types import visit
-    if not _is_byte_literal(node):
-        return visit.check_expr(validator, node, None)
-    _reject_negated_byte(validator, node)
-    return visit.check_expr(validator, node, BuiltinType.I32)
+    if is_byte_literal(node):
+        reject_negated_byte(validator, node)
+    return visit.check_expr(validator, node,
+                            BuiltinType.I64 if _is_int_literal(node) else None)
 
 
-def _reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
+def reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
     """CE2073 at the negation of a byte literal whose value is below zero. A byte literal
     is a `u8` value, so its negation is out of range for `u8`, also in a position that gives
-    it i32."""
+    it i64."""
     literal = negated_int_literal(node)
     if literal is None:
         return
@@ -104,34 +108,62 @@ def _reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
                 type=int_literal_default(const).value)
 
 
-def _is_byte_literal(node: 'ShirExpr') -> bool:
+def _bare_literal(node: 'ShirExpr') -> 'ShirExpr':
     while isinstance(node, Unary) and node.op in TYPE_KEEPING_UNARY:
         node = node.operand
+    return node
+
+
+def _is_int_literal(node: 'ShirExpr') -> bool:
+    node = _bare_literal(node)
+    return isinstance(node, Lit) and isinstance(node.value, IntConst)
+
+
+def is_byte_literal(node: 'ShirExpr') -> bool:
+    node = _bare_literal(node)
     return (isinstance(node, Lit) and isinstance(node.value, IntConst)
             and node.value.byte_spelling is not None)
 
 
-def reject_non_i32(validator: 'TypeValidator', node: 'ShirExpr', got: Optional[Type], *,
-                   position: Optional[str] = None, argument: Optional[int] = None,
-                   span: Optional[Span] = None) -> bool:
-    """The one rule for an index, a count and a range bound: the value is an i32 (#870).
+def reject_non_index(validator: 'TypeValidator', node: 'ShirExpr', got: Optional[Type], *,
+                     position: Optional[str] = None, argument: Optional[int] = None,
+                     span: Optional[Span] = None) -> bool:
+    """The one rule for an index position: the value is of an integer type, any width and
+    any sign (docs/adr/0001, the Go rule). SLIR widens it to i64, and the bounds check
+    compares at 64 bits.
 
-    `got` is the type of `node` (`check_i32_operand`). Any type other than i32 is refused,
-    and there is no implicit widening: the backend used to zero-extend a narrow value, so
-    `-1 as i8` counted 255. A method argument reads CE2006 at its `argument` position;
-    every other position reads CE2121, which names the `position` the caller gives. `span`
-    is where it stands when it is not the span of `node` (a marked argument).
-    Answers whether the value was refused.
+    `got` is the type of `node` (`check_index_operand`). A method argument reads CE2006 at
+    its `argument` position; every other position reads CE2121, which names the `position`
+    the caller gives. `span` is where it stands when it is not the span of `node` (a
+    marked argument). An accepted value gets the index row of `TypeckResults`, which SLIR
+    reads. Answers whether the value was refused.
     """
-    if got is None or got == BuiltinType.I32:
+    if got is None:
+        return False
+    if is_integer_type(got):
+        validator.body_answers().record_index_position(node.shir_id)
         return False
     loc = node.loc if span is None else span
     if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc,
-                              position=position, got=display_type(got))
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc, position=position,
+                              expected=_AN_INTEGER, got=display_type(got))
     else:
         report = er.emit_with(validator.reporter, er.ERR.CE2006, loc, index=argument,
-                              expected=display_type(BuiltinType.I32), got=display_type(got))
+                              expected=_AN_INTEGER, got=display_type(got))
+    if is_numeric_type(got):
+        report = report.help("convert it with 'as i64'")
+    report.emit()
+    return True
+
+
+def reject_non_i32_bound(validator: 'TypeValidator', node: 'ShirExpr',
+                         got: Optional[Type]) -> bool:
+    """A range bound is i32 (CE2121). A bare literal has its default, i32. Answers whether
+    the bound was refused."""
+    if got is None or got == BuiltinType.I32:
+        return False
+    report = er.emit_with(validator.reporter, er.ERR.CE2121, node.loc, position=RANGE_BOUND,
+                          expected=display_type(BuiltinType.I32), got=display_type(got))
     if is_numeric_type(got):
         report = report.help("convert it with 'as i32'")
     report.emit()
@@ -141,8 +173,9 @@ def reject_non_i32(validator: 'TypeValidator', node: 'ShirExpr', got: Optional[T
 def reject_index_out_of_range(validator: 'TypeValidator', index: 'ShirExpr',
                               size: int) -> None:
     """CE2056 for an index that the compiler can read and that is negative, CE2012 for one
-    past the end of a fixed array of `size` elements."""
-    read = validator.body_folder().scalar(index, BuiltinType.I32)
+    past the end of a fixed array of `size` elements. The index is read at its own type."""
+    read = validator.body_folder().scalar(
+        index, validator.body_answers().type_of(index.shir_id) or BuiltinType.I64)
     if read is None or not is_integer_constant(read):
         return
     value = int(read.value)
@@ -162,20 +195,21 @@ def _accepts_anything(validator: 'TypeValidator', node: e.Call,
 
 def _check_an_index(validator: 'TypeValidator', node: e.Call, array_type: ArrayReceiver,
                     position: int, *, bounded: bool = False) -> None:
-    """One index or count, an i32 (CE2006 at the argument). A `bounded` index of a FIXED
-    array (`get(i)`, `swap(i, j)`) is one that the declared size can hold, as for `arr[i]`.
+    """One index or count, of any integer type (CE2006 at the argument). A `bounded` index
+    of a FIXED array (`get(i)`, `swap(i, j)`) is one that the declared size can hold, as for
+    `arr[i]`.
     A start or a count of a range clamps, so it has no bound."""
     from .arguments import marked_type
     arg = node.args[position]
-    got = marked_type(arg, check_i32_operand(validator, arg.value))
-    if reject_non_i32(validator, arg.value, got, argument=position + 1):
+    got = marked_type(arg, check_index_operand(validator, arg.value))
+    if reject_non_index(validator, arg.value, got, argument=position + 1):
         return
     if bounded and isinstance(array_type, ArrayType):
         reject_index_out_of_range(validator, arg.value, array_type.size)
 
 
 def _an_index(validator: 'TypeValidator', node: e.Call, array_type: ArrayReceiver) -> None:
-    """`get(i)`, `remove(i)`, `truncate(n)`: one i32 position."""
+    """`get(i)`, `remove(i)`, `truncate(n)`: one index position."""
     _check_an_index(validator, node, array_type, 0, bounded=True)
 
 
@@ -187,7 +221,7 @@ def _two_indexes(validator: 'TypeValidator', node: e.Call,
 
 
 def _a_range(validator: 'TypeValidator', node: e.Call, array_type: ArrayReceiver) -> None:
-    """`s(start, end)`, `ss(start, count)` and `extend_back(dist, count)`: two i32
+    """`s(start, end)`, `ss(start, count)` and `extend_back(dist, count)`: two index
     positions and no source."""
     for position in (0, 1):
         _check_an_index(validator, node, array_type, position)
@@ -210,7 +244,7 @@ def _an_element(validator: 'TypeValidator', node: e.Call, array_type: ArrayRecei
 
 def _a_length_and_an_element(validator: 'TypeValidator', node: e.Call,
                              array_type: ArrayReceiver) -> None:
-    """`resize(n, v)`: an i32 length, then the value of `fill(v)`, a borrowed element."""
+    """`resize(n, v)`: an integer length, then the value of `fill(v)`, a borrowed element."""
     _check_an_index(validator, node, array_type, 0, bounded=True)
     _check_an_element(validator, node, array_type.base_type, 1, typed_by_position=False)
 
@@ -233,7 +267,7 @@ def _an_element_to_store(validator: 'TypeValidator', node: e.Call,
 
 def _an_index_and_an_element_to_store(validator: 'TypeValidator', node: e.Call,
                                       array_type: ArrayReceiver) -> None:
-    """`insert(i, v)`: an i32 index, then the element that the slot takes."""
+    """`insert(i, v)`: an integer index, then the element that the slot takes."""
     _check_an_index(validator, node, array_type, 0, bounded=True)
     _check_an_element(validator, node, array_type.base_type, 1)
 
@@ -276,7 +310,7 @@ def _a_comparable_element(validator: 'TypeValidator', node: e.Call,
 
 def _a_comparable_element_and_a_start(validator: 'TypeValidator', node: e.Call,
                                       array_type: ArrayReceiver) -> None:
-    """`index_of_from(v, start)`: the needle, then the start, an i32 position."""
+    """`index_of_from(v, start)`: the needle, then the start, an index position."""
     if check_search_needle(validator, node, array_type.base_type):
         return
     _check_an_index(validator, node, array_type, 1)
@@ -350,7 +384,7 @@ def _a_comparable_source(validator: 'TypeValidator', node: e.Call,
 
 def _a_start_and_a_comparable_source(validator: 'TypeValidator', node: e.Call,
                                      array_type: ArrayReceiver) -> None:
-    """`eq_range(start, other)`: an i32 start, then an array of the element type."""
+    """`eq_range(start, other)`: an integer start, then an array of the element type."""
     if _refuses_an_uncomparable_element(validator, node, array_type.base_type):
         return
     _check_an_index(validator, node, array_type, 0)

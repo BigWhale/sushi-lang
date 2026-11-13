@@ -1123,7 +1123,7 @@ All paths are under `semantics/passes/`.
 | `types/control_flow.py`, `types/signatures.py` | the path faults of a SHIR body ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) over the one path predicate `semantics/shir/paths.py`, which the borrow pass reads too, and the declaration signatures |
 | `types/matching.py` | patterns: each arm checked against the scrutinee, the rows for the checker, [CE2040](../error-catalog.md#ce2040) / [CE2074](../error-catalog.md#ce2074) / [CE2118](../error-catalog.md#ce2118) |
 | `types/exhaustiveness.py` | the one exhaustiveness checker for every match: usefulness over a pattern matrix (missing patterns, dead arms) |
-| `types/arrays.py` | the built-in array methods, and `reject_non_i32` for an index, a count or a range bound |
+| `types/arrays.py` | the built-in array methods, `reject_non_index` for an index position, and `reject_non_i32_bound` for a range bound |
 | `types/constants.py` | constant definitions |
 | `types/public_signatures.py` | the fence over every public signature ([CE3009](../error-catalog.md#ce3009), [CE3010](../error-catalog.md#ce3010), the `ptr` fence) |
 | `types/visibility.py` | the pass's view of the visibility seam |

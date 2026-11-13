@@ -10,7 +10,8 @@ from typing import Any
 import llvmlite.ir as ir
 
 from sushi_lang.backend import gep_utils
-from sushi_lang.backend.types.arrays.bounds import emit_bounds_check, emit_checked_maybe
+from sushi_lang.backend.types.arrays.bounds import (
+    checked_i32, emit_bounds_check, emit_checked_maybe)
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 
@@ -77,6 +78,7 @@ def emit_descriptor_insert(codegen: Any, descriptor: ir.Value, index: ir.Value,
     emit_bounds_check(codegen, index, current_len, prefix="insert", on_fail=on_fail,
                       inclusive=True)
     end_block = err_state["end"]
+    index = checked_i32(codegen, index)
 
     data_ptr = memory.emit_grow_to_fit(
         codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
@@ -116,12 +118,13 @@ def emit_descriptor_remove(codegen: Any, descriptor: ir.Value, index: ir.Value,
     data_ptr = codegen.builder.load(data_ptr_ptr, name="remove_data")
 
     def remove_element() -> ir.Value:
-        element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index, "element_ptr")
+        at = checked_i32(codegen, index)
+        element_ptr = gep_utils.gep_array_element(codegen, data_ptr, at, "element_ptr")
         element_value = codegen.builder.load(element_ptr, name="removed_element")
         one = ir.Constant(codegen.types.i32, 1)
-        index_plus_one = codegen.builder.add(index, one, name="index_plus_one")
+        index_plus_one = codegen.builder.add(at, one, name="index_plus_one")
         num_to_move = codegen.builder.sub(current_len, index_plus_one, name="num_to_move")
-        _emit_shift(codegen, data_ptr, index, index_plus_one, num_to_move, element_llvm_type)
+        _emit_shift(codegen, data_ptr, at, index_plus_one, num_to_move, element_llvm_type)
         codegen.builder.store(codegen.builder.sub(current_len, one, name="new_len"), len_ptr)
         return element_value
 

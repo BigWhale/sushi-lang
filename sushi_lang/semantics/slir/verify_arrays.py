@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 
 
 def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span: Span) -> None:
-    """The parts fit the runs: a value of the element type, an `i32` count, an `i32`
-    first value of a sequence of `i32` slots. The value of a repeat run is a borrow, never
+    """The parts fit the runs: a value of the element type and an `i64` count of a repeat,
+    an `i32` first value and an `i32` count of a sequence of `i32` slots. The value of a repeat run is a borrow, never
     a `Move`. The counts of a `T[N]` are constants that add up to `N`."""
     ty = kind.ty
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
@@ -51,7 +51,8 @@ def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span
             check.fail(ARRAY_VALUE, f"a sequence fills {display_type(ty)}, whose element "
                                     f"is no i32", span)
         first = BuiltinType.I32 if isinstance(run, r.RunSequence) else ty.base_type
-        wanted += [first] if isinstance(run, r.RunOne) else [first, BuiltinType.I32]
+        count = BuiltinType.I64 if isinstance(run, r.RunRepeat) else BuiltinType.I32
+        wanted += [first] if isinstance(run, r.RunOne) else [first, count]
     check.parts_fit(ARRAY_VALUE, display_type(ty), wanted,
                     [check.operand_type(part, span) for part in parts], span)
     if isinstance(ty, ArrayType):
@@ -75,7 +76,7 @@ def _fixed_size(check: Check, ty: ArrayType, runs: Sequence[r.ArrayRun],
 
 
 def length_or_slice(check: Check, value: r.Len | r.Slice, span: Span) -> None:
-    """`Len` reads an array, a `List@(T)` or a string; `Slice` reads an array with two `i32`
+    """`Len` reads an array, a `List@(T)` or a string; `Slice` reads an array with two `i64`
     bounds."""
     ty = check.place(value.place, span).ty
     kinds: tuple[type, ...] = (ArrayType, DynamicArrayType)
@@ -85,9 +86,9 @@ def length_or_slice(check: Check, value: r.Len | r.Slice, span: Span) -> None:
         check.fail(LENGTH_SLICE, f"{show(value)} reads a value that is no array", span)
     if isinstance(value, r.Slice):
         for bound in (value.start, value.end):
-            if check.operand_type(bound, span) not in (BuiltinType.I32, None):
+            if check.operand_type(bound, span) not in (BuiltinType.I64, None):
                 check.fail(LENGTH_SLICE, f"the bound {show(bound)} of {show(value)} is no "
-                                         f"i32", span)
+                                         f"i64", span)
 
 
 def part_drop(check: Check, stmt: st.Drop) -> None:

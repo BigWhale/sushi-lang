@@ -922,12 +922,14 @@ answers the element type of its base, or `u8` for a `string`. A base that is no 
 answers `T[]`: a `string` base is [CE2122](../error-catalog.md#ce2122), and readable bounds
 that go down are CE2125. An element write (`a[i] := v`) checks the value at the element
 type. A byte of a `string` is [CE2113](../error-catalog.md#ce2113), and an element of a
-constant is CE2096. Every index, count and range bound goes through ONE seam of an `i32`
-position (`check_i32_operand` and `reject_non_i32`, `passes/types/arrays.py`). A bare byte
-literal, also under a `~` or a negation, takes `i32` from the position, and a negated byte
-literal below zero is [CE2073](../error-catalog.md#ce2073) for `u8` at the negation. Any other value gets no type from the position, and a type that is not `i32` is
-[CE2121](../error-catalog.md#ce2121), or [CE2006](../error-catalog.md#ce2006) for a method
-argument. The array method family has its arm in `FAMILY_ARMS` (`check_array_method`). It
+constant is CE2096. Every index position (an index, a slice bound, a repeat count, the position
+or count argument of a built-in method) goes through ONE seam (`check_index_operand` and
+`reject_non_index`, `passes/types/arrays.py`, docs/adr/0001-index-width-i64.md). A bare
+integer literal, also under a `~` or a negation, takes `i64` from the position, and a negated
+byte literal below zero is [CE2073](../error-catalog.md#ce2073) for `u8` at the negation. Any other value gets no type from the position. A value of any integer type fits, and gets
+the index row of `TypeckResults`, which SLIR reads to widen it to `i64`; a type that is no
+integer is [CE2121](../error-catalog.md#ce2121), or [CE2006](../error-catalog.md#ce2006) for a
+method argument. A range bound is `i32` (`check_bounds`, `visit/ranges.py`). The array method family has its arm in `FAMILY_ARMS` (`check_array_method`). It
 refuses, in this order: a method that changes a constant (CE2096, also behind an alias), a
 receiver of the wrong kind ([CE2023](../error-catalog.md#ce2023)), a wrong count
 ([CE2009](../error-catalog.md#ce2009)), and then each argument by the rule of the row of the

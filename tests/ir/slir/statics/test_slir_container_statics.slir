@@ -56,7 +56,7 @@ fn main() -> i32 {
     StorageLive(_6)
     _6 = call @hold(copy _1 @guaranteed, copy _2 @guaranteed, copy _4 @guaranteed, const 1_i32 @guaranteed)
     StorageLive(_7)
-    _7 = call builtin List.with_capacity@(i32)(const 4_i32 @guaranteed)
+    _7 = call builtin List.with_capacity@(i64)(const 4_i64 @guaranteed)
     StorageLive(_8)
     _8 = call builtin HashMap.new()
     StorageLive(_9)

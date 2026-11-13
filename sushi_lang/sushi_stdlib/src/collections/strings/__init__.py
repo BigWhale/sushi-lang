@@ -80,11 +80,15 @@ class MethodSpec:
 
     `also_accepts` holds, per argument, the other types that the argument takes. Each one
     has the LLVM shape of the declared type, so the back end reads it as that type.
+
+    `indexes` holds the arguments that are an index position: each takes any integer type,
+    and the generated function takes it as an `i32` (docs/adr/0001).
     """
     name: str
     arg_types: tuple
     returns: Any
     also_accepts: tuple = ()
+    indexes: frozenset = frozenset()
 
     @property
     def arg_count(self) -> int:
@@ -92,6 +96,9 @@ class MethodSpec:
 
 
 _S, _I32, _BOOL = BuiltinType.STRING, BuiltinType.I32, BuiltinType.BOOL
+
+#: The mark of an index position in a row.
+_IDX = object()
 
 
 def _maybe(payload: Type | GenericTypeRef) -> GenericTypeRef:
@@ -103,7 +110,9 @@ def _list(element: Type) -> GenericTypeRef:
 
 
 def _spec(name: str, args: tuple, returns: Any, also_accepts: tuple = ()) -> MethodSpec:
-    return MethodSpec(f"string.{name}", args, returns, also_accepts)
+    return MethodSpec(f"string.{name}", tuple(_I32 if arg is _IDX else arg for arg in args),
+                      returns, also_accepts,
+                      frozenset(at for at, arg in enumerate(args) if arg is _IDX))
 
 
 # The ONE spelling of every string method's signature.
@@ -130,13 +139,13 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("strip_prefix", (_S,), _S),
     ("strip_suffix", (_S,), _S),
 
-    ("sleft", (_I32,), _S),
-    ("sright", (_I32,), _S),
-    ("char_at", (_I32,), _S),
-    ("repeat", (_I32,), _S),
+    ("sleft", (_IDX,), _S),
+    ("sright", (_IDX,), _S),
+    ("char_at", (_IDX,), _S),
+    ("repeat", (_IDX,), _S),
 
-    ("s", (_I32, _I32), _S),
-    ("ss", (_I32, _I32), _S),
+    ("s", (_IDX, _IDX), _S),
+    ("ss", (_IDX, _IDX), _S),
 
     ("split", (_S,), DynamicArrayType(_S)),
     ("split_once", (_S,), _maybe(tuple_ref((_S, _S)))),
@@ -144,8 +153,8 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("join", (DynamicArrayType(_S),), _S, ((_list(_S),),)),
 
     ("replace", (_S, _S), _S),
-    ("pad_left", (_I32, _S), _S),
-    ("pad_right", (_I32, _S), _S),
+    ("pad_left", (_IDX, _S), _S),
+    ("pad_right", (_IDX, _S), _S),
 
     ("to_i32", (), _maybe(_I32)),
     ("to_i64", (), _maybe(BuiltinType.I64)),

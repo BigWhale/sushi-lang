@@ -2,7 +2,7 @@
 
 An `ArrayInit` checks each run at the element type of its position, when the position
 gives an array type: a value, a repeat (the value, then the count, ruling R2) and a range,
-whose slot is an i32. A count is an i32 position. The one reader of the runs
+whose slot is an i32. A count is an index position, of any integer type. The one reader of the runs
 (`array_runs.plan_runs`) says when a count or a range fills no slot (CE2017, CE2019,
 CE2020, CE2125). An element whose type is not the type of the first is CE2013; when the
 rows of a nested literal do not agree, each row is first measured against the row type of
@@ -13,10 +13,10 @@ CE2019). A dynamic literal answers `T[]` when its elements agree. An empty `from
 which names the written form.
 
 An `Index` reads an element of a `T[N]` or a `T[]`, or a `u8` of a `string`. The index is
-an i32 position (CE2121). A base of another type is CE2114. An index of a fixed array that
+an index position, of any integer type (CE2121). A base of another type is CE2114. An index of a fixed array that
 the compiler can read is in range (CE2056, CE2012). An index answers its element type also
 after an error of the index. A `Slice` is a `T[]` view of either array kind: its bounds
-are i32 positions, and readable bounds go up (CE2125). A string has no slice (CE2122), and
+are index positions, and readable bounds go up (CE2125). A string has no slice (CE2122), and
 a base of another type is CE2114. A base of a type that the pass has no rule for (a
 type pack, a type whose name the unit lost) is an internal error.
 """
@@ -31,9 +31,9 @@ from sushi_lang.semantics.const_eval import is_integer_constant
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arrays import (
-    ARRAY_INDEX, REPEAT_COUNT, STRING_INDEX, check_i32_operand, reject_index_out_of_range,
-    reject_non_i32)
-from sushi_lang.semantics.passes.types.visit.ranges import check_bounds, check_range_run
+    ARRAY_INDEX, REPEAT_COUNT, STRING_INDEX, check_index_operand, reject_index_out_of_range,
+    reject_non_index)
+from sushi_lang.semantics.passes.types.visit.ranges import check_range_run, check_slice_bounds
 from sushi_lang.semantics.ranges import RangePlan, plan_range, reject_a_range_that_goes_down
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import (
@@ -93,8 +93,8 @@ def _check_run(validator: TypeValidator, run: e.ArrayRun,
     else:
         slot = visit.check_expr(validator, run.value, element)
     if isinstance(run, e.Repeat):
-        reject_non_i32(validator, run.count, check_i32_operand(validator, run.count),
-                       position=REPEAT_COUNT)
+        reject_non_index(validator, run.count, check_index_operand(validator, run.count),
+                         position=REPEAT_COUNT)
     return slot
 
 
@@ -123,7 +123,7 @@ def _plan(validator: TypeValidator, node: e.ArrayInit,
     folder = validator.body_folder()
 
     def count(value: e.ShirExpr) -> Optional[int]:
-        read = folder.scalar(value, BuiltinType.I32)
+        read = folder.scalar(value, validator.body_answers().type_of(value.shir_id))
         return int(read.value) if read is not None and is_integer_constant(read) else None
 
     def plan(value: e.ShirExpr) -> Optional[RangePlan]:
@@ -212,8 +212,8 @@ def check_index(validator: TypeValidator, node: e.Index,
     """The element that `a[i]` reads: the element of an array, or the `u8` of a string."""
     base = deref_type(visit.check_expr(validator, node.base))
     position = STRING_INDEX if base == BuiltinType.STRING else ARRAY_INDEX
-    reject_non_i32(validator, node.index, check_i32_operand(validator, node.index),
-                   position=position)
+    reject_non_index(validator, node.index, check_index_operand(validator, node.index),
+                     position=position)
     if base is None:
         return None
     if base == BuiltinType.STRING:
@@ -236,9 +236,9 @@ def check_slice(validator: TypeValidator, node: e.Slice,
             .help("a string has no slice: copy the part with `s.s(a, b)`, or index one byte "
                   "with `s[i]`") \
             .emit()
-        check_bounds(validator, (node.start, node.end))
+        check_slice_bounds(validator, (node.start, node.end))
         return None
-    check_bounds(validator, (node.start, node.end))
+    check_slice_bounds(validator, (node.start, node.end))
     _reject_bounds_that_go_down(validator, node, span)
     if base is None:
         return None
@@ -249,9 +249,9 @@ def check_slice(validator: TypeValidator, node: e.Slice,
 
 
 def _reject_bounds_that_go_down(validator: TypeValidator, node: e.Slice, span: Span) -> None:
-    folder = validator.body_folder()
-    start = folder.scalar(node.start, BuiltinType.I32)
-    end = folder.scalar(node.end, BuiltinType.I32)
+    folder, answers = validator.body_folder(), validator.body_answers()
+    start = folder.scalar(node.start, answers.type_of(node.start.shir_id))
+    end = folder.scalar(node.end, answers.type_of(node.end.shir_id))
     if (start is None or end is None or not is_integer_constant(start)
             or not is_integer_constant(end)):
         return

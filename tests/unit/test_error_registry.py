@@ -205,10 +205,10 @@ def test_runtime_texts_use_printf_or_braces_but_never_both():
 
 
 def test_re2020_format_matches_its_call_site():
-    """RE2020's text is the format string the bounds check feeds two i32s to."""
+    """RE2020's text is the format string the bounds check feeds two i64s to."""
     text = REGISTRY["RE2020"].text
-    assert re.findall(r"%[a-zA-Z]", text) == ["%d", "%d"], (
-        f"RE2020's text must take exactly two %d (index, size): {text!r}"
+    assert printf_conversions(text) == ("%lld", "%lld"), (
+        f"RE2020's text must take exactly two %lld (index, size): {text!r}"
     )
 
 

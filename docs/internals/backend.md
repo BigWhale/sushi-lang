@@ -221,8 +221,11 @@ and a fat pointer with owned = 0.
 `index >= 0` and `index < size`. A failure prints
 `Runtime Error RE2020: array index 5 out of bounds for array of size 2` and exits with
 status 1. `.get(i)` answers a `Maybe@(T)` through the same check (`emit_checked_maybe`). An
-index, a count and a range bound are `i32`; `require_i32` (`backend/llvm_utils.py`) is an
-internal error, never a widening.
+index position arrives as an `i64`, which SLIR widened (docs/adr/0001-index-width-i64.md):
+`require_index` (`backend/llvm_utils.py`) refuses any other width as an internal error, and
+`index_as_i32` saturates the value to the `i32` range for an emitter whose length is an
+`i32`. `emit_bounds_check` sign-extends the index and the size to `i64` and compares them
+unsigned.
 
 ### The method families
 

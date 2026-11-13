@@ -54,7 +54,8 @@ def emit_stdlib_string_call(
     """Emit a call to a built-in string method from the values of its operands.
 
     A value that arrives by pointer (a `peek` receiver, a `string[]` argument for `join`)
-    is loaded to the value that the generated function takes. `is_empty` and `clone` are
+    is loaded to the value that the generated function takes. The i64 of an index position
+    is saturated to the `i32` that the generated function takes (`index_as_i32`). `is_empty` and `clone` are
     inline intrinsics with no row.
     """
     from sushi_lang.backend.functions import declare_stdlib_function
@@ -74,8 +75,10 @@ def emit_stdlib_string_call(
     if spec is None:
         raise_internal_error("CE0077", method=method)
 
+    values = [codegen.utils.index_as_i32(value) if at in spec.indexes else value
+              for at, value in enumerate(arg_values)]
     call_args = [receiver, *(as_param_value(codegen, Param(ty), value)
-                             for ty, value in zip(spec.arg_types, arg_values, strict=True))]
+                             for ty, value in zip(spec.arg_types, values, strict=True))]
     function_type = string_method_function_type(spec)
     stdlib_func = declare_stdlib_function(codegen.module, f"string_{method}",
                                           function_type.return_type, list(function_type.args))

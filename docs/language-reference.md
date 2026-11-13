@@ -1001,7 +1001,7 @@ method takes an argument, and no method needs an import. `W` is the width of the
 | `leading_zeros() i32` | The count of zero bits above the highest one bit. | `W` |
 | `trailing_zeros() i32` | The count of zero bits below the lowest one bit. | `W` |
 
-The two counts are `i32`, as every count and index is. A value with the top bit set
+The two counts are `i32`. A value with the top bit set
 has `leading_zeros()` 0, and an odd value has `trailing_zeros()` 0. `W -
 x.leading_zeros()` is the count of bits that `x` needs.
 
@@ -1051,7 +1051,7 @@ let string combined = "{a}{b}"   # "foobar"
 
 Two primitives give a string's bytes in place, with no copy (#1091):
 
-- **`s[i]`** answers the `u8` at byte offset `i`. The index is an `i32`, and it is
+- **`s[i]`** answers the `u8` at byte offset `i`. The index is of any integer type, and it is
   bounds-checked like `arr[i]`: an offset past `size` is [`RE2020`](error-catalog.md#re2020). It is a read and never
   a write: `s[i] := v` is [`CE2113`](error-catalog.md#ce2113), because a string is immutable.
 - **`string.from_bytes(nom b)`** is a static that TAKES a `u8[]`: the array's buffer
@@ -1389,11 +1389,25 @@ Runtime Error RE2026: assertion failed at ./stats.sushi:2:5: mean() of an empty 
 
 See [Standard Library](standard-library.md) for complete array API.
 
-**An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
-range bound, and the index or count argument of a built-in method: `get`, `insert` and
-`remove` on `T[]` and `List@(T)`; `truncate`, `s`, `ss` and `extend_range` on an array;
-`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is [`CE2121`](error-catalog.md#ce2121), which names the position (`an array
-index is i32, got i64`; [`CE2006`](error-catalog.md#ce2006) as a method argument), and it needs `as i32`: nothing widens, and a float is refused.
+**An index position takes any integer type** (the Go rule; see
+[ADR 0001](adr/0001-index-width-i64.md)). An index position is `arr[i]`, `s[i]`, a slice bound,
+a repeat count, and the position or count argument of a built-in method: `get`, `insert`,
+`remove`, `truncate`, `swap`, `resize`, `s`, `ss`, `extend_back` on `T[]`; `insert`, `get`,
+`remove`, `reserve`, `index_of_from` on `List@(T)`; `List.with_capacity`; and `sleft`,
+`sright`, `char_at`, `repeat`, `s`, `ss`, `pad_left`, `pad_right` on a string. A value of any
+integer type, of any width and any sign, fits there, and a bare literal takes `i64`. A value
+of another type is [`CE2121`](error-catalog.md#ce2121), which names the position (`an array index is an integer, got f64`;
+[`CE2006`](error-catalog.md#ce2006) as a method argument).
+
+The value is widened to `i64`: a signed type sign-extends and an unsigned type zero-extends.
+The bounds check widens the length to `i64` too and compares the two as unsigned 64-bit
+values, so a negative index and an index of 2^32 are both out of bounds ([`RE2020`](error-catalog.md#re2020), which
+prints the 64-bit index). A method that clamps its count (`s`, `sleft`, `truncate`) clamps a
+value above the `i32` range as it clamps any count above the length.
+
+A range bound (`a..b`) is still `i32`: a typed bound of another type is [`CE2121`](error-catalog.md#ce2121) and needs
+`as i32`. `len()` still answers `i32`. A `ptr` offset (`p.load_i64(96)`) is no index position,
+and it is `i32`.
 
 ### Fixed Arrays
 

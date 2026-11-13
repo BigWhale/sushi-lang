@@ -111,7 +111,7 @@ def emit_list_get(codegen: Any, list_ptr: ir.Value, list_type: StructType,
     """`list.get(index)`: the element as `Maybe@(T)`, or `Maybe.None` out of range. With
     `dest`, the `Maybe` is written into that slot and the answer is None."""
     length, data = list_slots(codegen, list_ptr)
-    return emit_array_get_maybe(codegen, data, length, codegen.utils.require_i32(args[0]),
+    return emit_array_get_maybe(codegen, data, length, codegen.utils.require_index(args[0]),
                                 extract_element_type(list_type, codegen), dest)
 
 
@@ -164,7 +164,7 @@ def emit_list_insert(codegen: Any, list_ptr: ir.Value, list_type: StructType,
     from sushi_lang.backend.generics.container_shift import emit_descriptor_insert
 
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
-    return emit_descriptor_insert(codegen, list_ptr, codegen.utils.require_i32(args[0]),
+    return emit_descriptor_insert(codegen, list_ptr, codegen.utils.require_index(args[0]),
                                   args[1], extract_element_type(list_type, codegen),
                                   element_llvm_type)
 
@@ -175,5 +175,5 @@ def emit_list_remove(codegen: Any, list_ptr: ir.Value, list_type: StructType,
     from sushi_lang.backend.generics.container_shift import emit_descriptor_remove
 
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
-    return emit_descriptor_remove(codegen, list_ptr, codegen.utils.require_i32(args[0]),
+    return emit_descriptor_remove(codegen, list_ptr, codegen.utils.require_index(args[0]),
                                   extract_element_type(list_type, codegen), element_llvm_type)

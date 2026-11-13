@@ -4,6 +4,10 @@
 
 Built-in methods for fixed-size and dynamic arrays.
 
+An index or a count argument, which the signatures below write as `i32`, is an index
+position: it takes a value of any integer type, and a bare literal there takes `i64` (see
+[ADR 0001](../../adr/0001-index-width-i64.md)). A bounds check compares the index and the length at 64 bits.
+
 ## Import
 
 Arrays are built-in types and require no import. For dynamic array construction from literals, arrays are available by default.
@@ -408,7 +412,7 @@ an element type that owns a resource. `swap(i, i)` changes nothing.
 Each index is checked as the index of `arr[i]` is. An index out of range is the run-time
 error [RE2020](../../error-catalog.md#re2020). On a fixed array, an index that the compiler can read and that is out of
 range is a compile-time error: [CE2056](../../error-catalog.md#ce2056) when it is negative and [CE2012](../../error-catalog.md#ce2012) when it is past
-the end. Each index is an i32 position.
+the end. Each index takes any integer type, and the check compares at 64 bits.
 
 ```sushi
 fn main() i32:

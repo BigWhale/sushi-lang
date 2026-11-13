@@ -9,9 +9,11 @@ A value of an owning element: a `Single` value moves into its slot, and a repeat
 a borrow that the emitter copies into each slot. A write of an owning element drops the old
 element after the new value and the check of the index (`lower_aggregate.part_write`).
 Each index and each bound goes into a local of the statement first, so a later call cannot
-change it between the check and the access. A checked index compares the index and the
-length as `u32` and goes to the trap RE2020 on the failing edge; a slice checks
-`0 <= start <= end <= len` and goes to RE2028. An index under `dont_panic` has no check, and
+change it between the check and the access. An index position takes any integer type, and
+its value is widened to `i64` (`index_operand`, docs/adr/0001), a repeat count too. A
+checked index widens the length to `i64` too, compares the two as `u64`, and goes to the
+trap RE2020 on the failing edge, so a negative index and an index above 2^32 both fail; a
+slice checks `0 <= start <= end <= len` the same way and goes to RE2028. An index under `dont_panic` has no check, and
 neither has a constant index that typecheck proved in range. The locals of a compare get no
 storage marker. Each arm is a free function that takes the `Lowering` of `lower.py` first.
 """
@@ -30,7 +32,8 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
-from sushi_lang.semantics.slir.lower_control import bound, i32, int_of, range_operands
+from sushi_lang.semantics.slir.lower_control import (
+    i32, i64, index_operand, int_of, range_operands, widen_index)
 from sushi_lang.semantics.slir.lower_values import Value
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, Type, deref_type,
@@ -39,7 +42,7 @@ from sushi_lang.semantics.typesys import (
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Lowering
 
-I32, U32, BOOL = BuiltinType.I32, BuiltinType.U32, BuiltinType.BOOL
+I32, I64, U64, BOOL = BuiltinType.I32, BuiltinType.I64, BuiltinType.U64, BuiltinType.BOOL
 
 
 def array_init(low: Lowering, node: e.ArrayInit) -> Value:
@@ -66,7 +69,8 @@ def array_init(low: Lowering, node: e.ArrayInit) -> Value:
             parts.append(next(operands))
         elif isinstance(run, e.Repeat):
             runs.append(r.RunRepeat())
-            parts += [next(operands), next(operands)]
+            parts += [next(operands), widen_index(low, next(operands),
+                                                  low.type_of(run.count), run.count.loc)]
         else:
             runs.append(r.RunSequence(-1 if run.range.reverse else 1))
             parts += range_operands(low, run.range, next(operands), next(operands))
@@ -75,9 +79,9 @@ def array_init(low: Lowering, node: e.ArrayInit) -> Value:
 
 def element(low: Lowering, base: p.Place, node: e.Index) -> p.Place:
     """`Index(base, i)`: the index into a local of the statement, then the bounds check."""
-    index = bound(low, node.index)
+    index = index_operand(low, node.index)
     if not node.unchecked:
-        length = length_of(low, base, low.type_of(node.base), node.loc)
+        length = _checked_length(low, base, low.type_of(node.base), node.loc)
         at, size = int_of(index), int_of(length)
         if at is None or size is None or not 0 <= at < size:
             ok = _compare(low, "<", index, length, node.loc)
@@ -89,9 +93,9 @@ def view(low: Lowering, base: p.Place, node: e.Slice) -> p.Place:
     """A view local that a `Slice` writes, after the check `0 <= start <= end <= len`. An
     inclusive end is one more, so the `Slice` and the trap read an exclusive end."""
     span = node.loc
-    start = bound(low, node.start)
-    end = _add(low, bound(low, node.end), node.inclusive, span)
-    length = length_of(low, base, low.type_of(node.base), span)
+    start = index_operand(low, node.start)
+    end = _add(low, index_operand(low, node.end), node.inclusive, span)
+    length = _checked_length(low, base, low.type_of(node.base), span)
     first, last, size = int_of(start), int_of(end), int_of(length)
     if first is None or last is None or size is None or not 0 <= first <= last <= size:
         end_ok = _compare(low, "<=", end, length, span)
@@ -107,16 +111,21 @@ def view(low: Lowering, base: p.Place, node: e.Slice) -> p.Place:
 
 def length_of(low: Lowering, base: p.Place, ty: Type, span: Span) -> p.Operand:
     """The length of a `T[N]` is a constant; of a `T[]`, a `List@(T)` and a `string`, a `Len`
-    into a local of the statement, which the trap reads too."""
+    into a local of the statement."""
     held = deref_type(ty)
     if isinstance(held, ArrayType):
         return i32(held.size)
     return p.Copy(p.Local(low.temporary(r.Len(base), I32, span)))
 
 
+def _checked_length(low: Lowering, base: p.Place, ty: Type, span: Span) -> p.Operand:
+    """The length as an `i64`, which the check and the trap read."""
+    return widen_index(low, length_of(low, base, ty, span), I32, span)
+
+
 def _compare(low: Lowering, op: BinOp, left: p.Operand, right: p.Operand,
              span: Span) -> p.Operand:
-    """`left op right` over the two `i32` values read as `u32`: a negative value is above
+    """`left op right` over the two `i64` values read as `u64`: a negative value is above
     every length."""
     return _check_local(low, r.Binary(op, _unsigned(low, left, span),
                                       _unsigned(low, right, span)), BOOL, span)
@@ -125,8 +134,8 @@ def _compare(low: Lowering, op: BinOp, left: p.Operand, right: p.Operand,
 def _unsigned(low: Lowering, operand: p.Operand, span: Span) -> p.Operand:
     value = int_of(operand)
     if value is not None:
-        return p.Const(k.Int(value % (1 << 32), U32))
-    return _check_local(low, r.Cast(operand, U32), U32, span)
+        return p.Const(k.Int(value % (1 << 64), U64))
+    return _check_local(low, r.Cast(operand, U64), U64, span)
 
 
 def _check_local(low: Lowering, value: r.Rvalue, ty: Type, span: Span) -> p.Operand:
@@ -152,5 +161,5 @@ def _add(low: Lowering, operand: p.Operand, one: bool, span: Span) -> p.Operand:
     if not one:
         return operand
     if value is not None:
-        return i32(value + 1)
-    return p.Copy(p.Local(low.temporary(r.Binary("+", operand, i32(1)), I32, span)))
+        return i64(value + 1)
+    return p.Copy(p.Local(low.temporary(r.Binary("+", operand, i64(1)), I64, span)))

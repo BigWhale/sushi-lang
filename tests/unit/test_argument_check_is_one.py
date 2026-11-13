@@ -23,8 +23,8 @@ SEAM = TYPES_PASS / "arguments.py"
 _ARGUMENT_CODES = ("CE2006", "CE2009")
 
 #: What each module that still holds a copy may emit, at MOST. A row may only go DOWN:
-#: `arrays.py` keeps the one i32 seam (`reject_non_i32`), whose text names the argument
-#: and helps with `as i32`, and `calls/user_defined.py` keeps the one check that is not a
+#: `arrays.py` keeps the one index seam (`reject_non_index`), whose text names the argument
+#: and helps with `as i64`, and `calls/user_defined.py` keeps the one check that is not a
 #: parameter list at all: the polymorphic math family, measured against a SET of types.
 #: A module absent from this table may emit neither code.
 _CEILING = {

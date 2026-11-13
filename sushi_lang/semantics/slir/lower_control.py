@@ -407,17 +407,41 @@ def range_operands(low: Lowering, range_: e.Range, start: p.Operand,
 
 
 def bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
-    """An `i32` as a constant, or in a local of the statement that later code cannot
+    """An integer as a constant, or in a local of the statement that later code cannot
     change: a bound of a counted loop, an index, a bound of a slice."""
     value = low.value(expr)
     if isinstance(value, r.Use) and isinstance(value.operand, p.Const):
         return value.operand
-    return p.Copy(p.Local(low.temporary(value, BuiltinType.I32, expr.loc)))
+    return p.Copy(p.Local(low.temporary(value, low.type_of(expr), expr.loc)))
+
+
+def index_operand(low: Lowering, expr: e.ShirExpr) -> p.Operand:
+    """The value of an index position as an `i64` (docs/adr/0001): `bound`, then
+    `widen_index`."""
+    return widen_index(low, bound(low, expr), low.type_of(expr), expr.loc)
+
+
+def widen_index(low: Lowering, operand: p.Operand, ty: Type, span: Span) -> p.Operand:
+    """`operand`, of the integer type `ty`, as an `i64`: a constant stays a constant, and
+    any other value goes through a `Cast`, which sign-extends a signed type and zero-extends
+    an unsigned one."""
+    value = int_of(operand)
+    if value is not None:
+        return i64(value)
+    if ty == BuiltinType.I64:
+        return operand
+    return p.Copy(p.Local(low.temporary(r.Cast(operand, BuiltinType.I64), BuiltinType.I64,
+                                        span)))
 
 
 def i32(value: int) -> p.Const:
     """The operand of the `i32` constant `value`."""
     return p.Const(k.Int(value, BuiltinType.I32))
+
+
+def i64(value: int) -> p.Const:
+    """The operand of the `i64` constant with the bits of `value`."""
+    return p.Const(k.Int((value + (1 << 63)) % (1 << 64) - (1 << 63), BuiltinType.I64))
 
 
 def int_of(operand: p.Operand) -> int | None:

@@ -10,7 +10,7 @@ from sushi_lang.internals.errors.registry import (
     _add,
 )
 
-_CONVERSION = re.compile(r"%(?:%|[-+ #0-9.*]*[a-zA-Z])")
+_CONVERSION = re.compile(r"%(?:%|[-+ #0-9.*]*(?:hh|h|ll|l|z|j|t)?[a-zA-Z])")
 
 
 def printf_conversions(text: str) -> tuple[str, ...]:
@@ -19,16 +19,16 @@ def printf_conversions(text: str) -> tuple[str, ...]:
     return tuple(hit for hit in _CONVERSION.findall(text) if hit != "%%")
 
 
-# Array bounds errors. The text is the printf format: two %d, matching the
-# (index, size) pair the bounds check passes.
+# Array bounds errors. The text is the printf format: two %lld, matching the
+# (index, size) pair the bounds check passes, each an i64.
 _add(ErrorMessage("RE2020", Severity.ERROR,
-    "array index %d out of bounds for array of size %d",
-    Category.RUNTIME, "Array access with index outside valid range [0, size)."))
+    "array index %lld out of bounds for array of size %lld",
+    Category.RUNTIME, "Array access with index outside valid range [0, size). The index may be of any integer type, and the check compares it and the size as 64-bit values read unsigned, so a negative index and an index that a u32 cannot hold both fail (docs/adr/0001-index-width-i64.md)."))
 
-# A slice range outside the array. The text is the printf format: three %d, matching the
-# (start, exclusive end, size) triple the range check passes.
+# A slice range outside the array. The text is the printf format: three %lld, matching the
+# (start, exclusive end, size) triple the range check passes, each an i64.
 _add(ErrorMessage("RE2028", Severity.ERROR,
-    "slice %d..%d is out of bounds for an array of size %d",
+    "slice %lld..%lld is out of bounds for an array of size %lld",
     Category.RUNTIME, "A slice `data[a..b]` views the elements a to b-1 of an array, and "
     "`data[a..=b]` the elements a to b (#1226, docs/design/slices.md). The range must hold "
     "`0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of "

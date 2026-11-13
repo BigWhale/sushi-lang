@@ -4,6 +4,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **An index position takes any integer type.** `arr[i]`, `s[i]`, a slice bound, a repeat
+  count and the position or count argument of a built-in method of `T[]`, `List@(T)` and
+  `string` take a value of any integer type, so a `u8` or an `i64` needs no `as i32`. A
+  bare literal there is an `i64`. The bounds check compares the index and the length at 64
+  bits, so a negative index and an index of 2^32 both stop the program with `RE2020`, which
+  prints the 64-bit index. A range bound is still `i32`, and `len()` still answers `i32`
+  (docs/adr/0001-index-width-i64.md, #1298).
+
 ### Fixed
 
 - **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is

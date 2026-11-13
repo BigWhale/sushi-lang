@@ -92,15 +92,33 @@ class LLVMUtils:
             return self.codegen.builder.fptosi(v, self.codegen.i32)
         raise_internal_error("CE0017", src=str(ty), dst="i32")
 
-    def require_i32(self, v: ir.Value) -> ir.Value:
-        """An index, a count or a range bound: the typecheck pass admits an i32 alone (#870).
+    def require_index(self, v: ir.Value) -> ir.Value:
+        """The value of an index position: SLIR widened it to i64 (docs/adr/0001).
 
-        Nothing is widened here. A narrow operand is an internal error, because a
-        zero-extension turned `-1 as i8` into 255 with no diagnostic.
+        Nothing is widened here, because the sign of the source type is gone. Any other
+        width is an internal error.
         """
-        if v.type != self.codegen.i32:
-            raise_internal_error("CE0017", src=str(v.type), dst="i32")
+        if v.type != ir.IntType(64):
+            raise_internal_error("CE0017", src=str(v.type), dst="i64")
         return v
+
+    def index_as_i32(self, v: ir.Value) -> ir.Value:
+        """The i64 value of an index position, saturated to the i32 range, for an emitter
+        whose length is an i32. No length is above the i32 maximum, so the saturated value
+        is out of range, or clamps, exactly when the i64 value does. A truncation is not
+        sound: 2^32 would read as 0."""
+        builder = self.codegen.builder
+        if builder is None:
+            raise_internal_error("CE0009")
+        wide = self.require_index(v)
+        i64 = wide.type
+        low = ir.Constant(i64, -(1 << 31))
+        high = ir.Constant(i64, (1 << 31) - 1)
+        wide = builder.select(builder.icmp_signed("<", wide, low), low, wide,
+                              name="index_floor")
+        wide = builder.select(builder.icmp_signed(">", wide, high), high, wide,
+                              name="index_ceiling")
+        return builder.trunc(wide, self.codegen.i32, name="index_i32")
 
     def cast_to_int_width(self, v: ir.Value, dst: ir.IntType) -> ir.Value:
         """Cast value to target integer width using dispatch table."""

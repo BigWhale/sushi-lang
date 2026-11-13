@@ -1041,10 +1041,10 @@ A condition takes a 'bool' and nothing else. Sushi converts no type to a truth v
 
 **Help:**
 
-- `convert it with 'as i32'`
+- `convert it with 'as i64'`
 - `` borrow it at the call site: `{mode} {place}` ``
 
-A function call argument type does not match the corresponding parameter type. A generic body is checked where it is written: an argument of a type parameter is compared with the parameter of the callee as written, so `T` is not `i32` whatever a call gives for it. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+A function call argument type does not match the corresponding parameter type. The position or count argument of a built-in method (`get(i)`, `insert(i, v)`, `with_capacity(n)`, `sleft(n)`) is an index position, which takes any integer type (see [ADR 0001](adr/0001-index-width-i64.md)); the text then gives the expected type as "an integer". A generic body is checked where it is written: an argument of a type parameter is compared with the parameter of the callee as written, so `T` is not `i32` whatever a call gives for it. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2007 {#ce2007}
 
@@ -1853,11 +1853,11 @@ A `let` destructure names one element for each element of the tuple, in order: `
 
 **Error** · type
 
-**Message:** `{position} is i32, got {got}`
+**Message:** `{position} is {expected}, got {got}`
 
-**Help:** `convert it with 'as i32'`
+**Help:** `convert it with 'as i64'`
 
-An index, a count and a range bound are i32 positions: an array index `a[i]`, a repeat count `[v; n]`, and each bound of a range `a..b`, in a `foreach` and in an array literal (`[a..b]`) alike. A bare literal takes i32 there. A value of any other type is refused, and nothing widens it. Convert the value with `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an i32 position (`get`, `insert`, `truncate`, `s`) is [CE2006](#ce2006), which names the argument; an assignment of the wrong type is [CE2002](#ce2002).
+An index position takes a value of any integer type, of any width and any sign (see [ADR 0001](adr/0001-index-width-i64.md)): an array index `a[i]`, a string index `s[i]`, a slice bound `a[i..j]` and a repeat count `[v; n]`. A bare literal takes i64 there. A value of another type (a float, a bool, a string) is refused. The value is widened to i64, and the bounds check compares it with the length at 64 bits, so a negative index and an index above 2^32 both stop the program ([RE2020](#re2020)). A range bound is still i32 (`a..b`, in a `foreach` and in an array literal alike), and a range bound of another type is this error too, with the help `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an index position (`get`, `insert`, `truncate`, `s`, `sleft`) is [CE2006](#ce2006), which names the argument; an assignment of the wrong type is [CE2002](#ce2002).
 
 ### CE2122 {#ce2122}
 
@@ -3694,9 +3694,9 @@ A compiled program gives a runtime error when it stops on a trap. The program wr
 
 **Error** · runtime
 
-**Message:** `array index %d out of bounds for array of size %d`
+**Message:** `array index %lld out of bounds for array of size %lld`
 
-Array access with index outside valid range \[0, size).
+Array access with index outside valid range \[0, size). The index may be of any integer type, and the check compares it and the size as 64-bit values read unsigned, so a negative index and an index that a u32 cannot hold both fail (see [ADR 0001](adr/0001-index-width-i64.md)).
 
 ### RE2021 {#re2021}
 
@@ -3750,7 +3750,7 @@ An `assert(cond)` or `assert(cond, message)` found its condition false. The text
 
 **Error** · runtime
 
-**Message:** `slice %d..%d is out of bounds for an array of size %d`
+**Message:** `slice %lld..%lld is out of bounds for an array of size %lld`
 
 A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` the elements a to b (see [the slice design](design/slices.md)). The range must hold `0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of range does ([RE2020](#re2020)). This is not the clamp rule of `.s()` and `.ss()`, which are the copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go down are the compile error [CE2125](#ce2125); computed bounds that go down are this error, and not an empty view. The `dont_panic` marker does not remove this check: a bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length. The check runs once, when the slice is made.
 
