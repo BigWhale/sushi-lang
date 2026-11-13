@@ -85,9 +85,9 @@ def _check_run(validator: TypeValidator, run: e.ArrayRun,
     """Check one run, and answer the type that it puts in a slot: the type of its value,
     or the item type of a range."""
     if isinstance(run, e.RangeRun):
-        return check_range_run(validator, run.range)
+        return check_range_run(validator, run.range, element)
     if isinstance(run.value, e.Range):
-        slot: Optional[Type] = check_range_run(validator, run.value)
+        slot: Optional[Type] = check_range_run(validator, run.value, element)
     else:
         slot = visit.check_expr(validator, run.value, element)
     if isinstance(run, e.Repeat):

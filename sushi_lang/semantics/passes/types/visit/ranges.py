@@ -13,7 +13,8 @@ A range has the type of its bounds (docs/adr/0001): its item type `T`, and the t
 `Iterator@(T)`. `range_item` is the one rule. A literal bound takes the type of the other
 bound, two literal bounds take i32, and a value position gives `T` to both. A bound that is
 no number is CE2072, and a bound of another type than `T` is CE2121. A run of an array
-literal has the type of its bounds too, and its slots have the type `T`. A slice bound is an index position (`semantics/passes/types/arrays.py`),
+literal has the type of its bounds too, and its slots have the type `T`; two literal
+bounds of a run take the integer element type of the array, else i32. A slice bound is an index position (`semantics/passes/types/arrays.py`),
 which takes any integer type. Readable bounds of a `foreach` range must go up (CE2125,
 `semantics/ranges.py`).
 """
@@ -44,14 +45,18 @@ def check_range_iterable(validator: TypeValidator, node: e.Range) -> Type:
     return item
 
 
-def check_range_run(validator: TypeValidator, node: e.Range) -> Type:
-    """A run of an array literal: a range that is no value. Answers its item type, the type
-    of each slot that it fills."""
-    return _check_no_value(validator, node, None)
+def check_range_run(validator: TypeValidator, node: e.Range,
+                    element: Optional[Type]) -> Type:
+    """A run of an array literal: a range that is no value. An integer element type of the
+    array is the type of two literal bounds. Answers the item type, the type of each slot
+    that the run fills."""
+    return _check_no_value(validator, node, None,
+                           element if _is_integer(element) else BuiltinType.I32)
 
 
-def _check_no_value(validator: TypeValidator, node: e.Range, item: Optional[Type]) -> Type:
-    ty = range_item(validator, node, item)
+def _check_no_value(validator: TypeValidator, node: e.Range, item: Optional[Type],
+                    literal: Type = BuiltinType.I32) -> Type:
+    ty = range_item(validator, node, item, literal)
     validator.body_answers().record_range_value(node.shir_id, False)
     visit.answer(validator, node, IteratorType(ty))
     return ty
@@ -80,10 +85,12 @@ def _reject_going_down(validator: TypeValidator, node: e.Range, item: Type) -> N
                                   validator.reporter)
 
 
-def range_item(validator: TypeValidator, node: e.Range, item: Optional[Type]) -> Type:
+def range_item(validator: TypeValidator, node: e.Range, item: Optional[Type],
+               literal: Type = BuiltinType.I32) -> Type:
     """The item type of a range, and the check of its bounds, the start first. A typed
     bound is checked first; its type is the item type, unless the position gives `item`.
-    Then each literal bound takes the item type, and two literal bounds take i32. A bare
+    Then each literal bound takes the item type, and two literal bounds take `literal`
+    (i32, or the integer element type of the array of a run). A bare
     byte literal (`a'x'`), also under a negation, takes the item type too."""
     bounds = (node.start, node.end)
     typed = {id(bound): visit.check_expr(validator, bound, None)
@@ -92,7 +99,7 @@ def range_item(validator: TypeValidator, node: e.Range, item: Optional[Type]) ->
     if item is None:
         source = next((bound for bound in bounds if id(bound) in typed
                        and _is_integer(typed[id(bound)])), None)
-        item = (typed[id(source)] if source is not None else None) or BuiltinType.I32
+        item = (typed[id(source)] if source is not None else None) or literal
     for bound in bounds:
         if id(bound) not in typed:
             if is_byte_literal(bound):

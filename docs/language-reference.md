@@ -1169,7 +1169,8 @@ the default `i32`. Two typed bounds of different integer types are
 range has the type of the range, and a range as a value is an `Iterator@(T)` for that `T`.
 A value position gives its `T` to the literal bounds: `let Iterator@(i64) r = 0..5` is an
 `i64` range. A run of an array literal (`from([0..n])`) obeys the same rule, and
-its slots have the type of the range.
+its slots have the type of the range. An integer element type of the array is the type of
+two literal bounds: `let i64[] a = from([0..5])` is an `i64` run.
 
 ```sushi
 fn main() i32:
@@ -1590,8 +1591,9 @@ fn main() i32:
 ```
 
 A range has the type of its bounds, exactly as in `foreach(i in 0..5)`: with an `i64 n`,
-`let i64[] a = from([0..n])` is an `i64` run. Two literal bounds take `i32`, so `let i64[]
-a = from([0..5])` is a type mismatch, and two typed bounds of different types are
+`let i64[] a = from([0..n])` is an `i64` run. Two literal bounds take the integer element type
+of the array, so `let i64[] a = from([0..5])` is an `i64` run too, and two typed bounds of
+different types are
 **[CE2121](error-catalog.md#ce2121)**. It obeys the same position rule as a repeat: a bound in
 a `from()` literal may be any integer expression, and a fixed array or a constant needs one
 the compiler can read. A bound it cannot read there is **[CE2019](error-catalog.md#ce2019)**, and so is a readable
