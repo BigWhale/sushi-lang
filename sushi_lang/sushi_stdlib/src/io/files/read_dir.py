@@ -1,5 +1,7 @@
 """The directory listing of <io/files>: one opendir/readdir walk."""
 from llvmlite import ir
+from sushi_lang.backend.gep_utils import insert_cap, insert_len
+from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_result_type, get_unit_enum_type,
     get_dynamic_array_type, get_string_type,
@@ -157,7 +159,7 @@ def generate_read_dir(module: ir.Module) -> None:
     builder.call(closedir_func, [dir_handle])
 
     descriptor = ir.Constant(array_type, ir.Undefined)
-    descriptor = builder.insert_value(descriptor, builder.load(len_slot), 0, name="desc_len")
-    descriptor = builder.insert_value(descriptor, builder.load(cap_slot), 1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, builder.load(len_slot), builder=builder)
+    descriptor = insert_cap(None, descriptor, builder.load(cap_slot), builder=builder)
     descriptor = builder.insert_value(descriptor, builder.load(data_slot), 2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))

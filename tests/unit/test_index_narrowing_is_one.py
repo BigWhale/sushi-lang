@@ -37,6 +37,10 @@ KNOWN_TRUNCS = {
     ("functions/main_wrapper.py", "_return_exit_code"),
     # The i64 counter of a range as a value: the item of a range is in the i32 range.
     ("runtime/iterators.py", "body"),
+    # The stored i64 length or capacity of a `T[]` or a `List@(T)`, read as the i32 of
+    # `len()`. Each write extends an i32, so the value is in the i32 range (the expand
+    # step of docs/adr/0001; the contract step removes the row).
+    ("gep_utils.py", "_as_surface_i32"),
 }
 
 

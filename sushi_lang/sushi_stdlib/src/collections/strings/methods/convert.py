@@ -2,13 +2,14 @@
 
 import llvmlite.ir as ir
 from ..common import declare_malloc, declare_memcpy, build_string_struct
-from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_dynamic_array_type
+from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_to_bytes(module: ir.Module) -> ir.Function:
-    """Emit `{i32 len, i32 cap, u8* data} string_to_bytes({i8*, i32} str)`."""
+    """Emit `{i64 len, i64 cap, u8* data} string_to_bytes({i8*, i32} str)`."""
     func_name = "string_to_bytes"
 
     if func_name in module.globals:
@@ -17,7 +18,7 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
             return func
 
     i8, i8_ptr, i32, i64, string_type = get_string_types()
-    dyn_array_type = ir.LiteralStructType([i32, i32, i8_ptr])  # {i32 len, i32 cap, u8* data}
+    dyn_array_type = get_dynamic_array_type(i8)
 
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
@@ -39,8 +40,8 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
     builder.call(memcpy, [byte_data, data, builder.zext(size, ir.IntType(64)), is_volatile])
 
     undef_struct = ir.Constant(dyn_array_type, ir.Undefined)
-    struct_with_len = builder.insert_value(undef_struct, size, 0, name="struct_with_len")
-    struct_with_cap = builder.insert_value(struct_with_len, size, 1, name="struct_with_cap")
+    struct_with_len = insert_len(None, undef_struct, size, builder=builder)
+    struct_with_cap = insert_cap(None, struct_with_len, size, builder=builder)
     struct_complete = builder.insert_value(struct_with_cap, byte_data, 2, name="result")
 
     builder.ret(struct_complete)
@@ -61,7 +62,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     i8, i8_ptr, i32, i64, string_type = get_string_types()
     i1 = ir.IntType(1)
     string_ptr = string_type.as_pointer()
-    dyn_array_type = ir.LiteralStructType([i32, i32, string_ptr])  # {i32 len, i32 cap, string* data}
+    dyn_array_type = get_dynamic_array_type(string_type)
 
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
@@ -103,8 +104,8 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.store(func.args[0], array_data_empty_typed)
 
     undef_empty = ir.Constant(dyn_array_type, ir.Undefined)
-    struct_empty_len = builder.insert_value(undef_empty, one_elem, 0, name="struct_empty_len")
-    struct_empty_cap = builder.insert_value(struct_empty_len, one_elem, 1, name="struct_empty_cap")
+    struct_empty_len = insert_len(None, undef_empty, one_elem, builder=builder)
+    struct_empty_cap = insert_cap(None, struct_empty_len, one_elem, builder=builder)
     result_empty = builder.insert_value(struct_empty_cap, array_data_empty_typed, 2, name="result_empty")
     empty_delim_end = builder.block
     builder.branch(return_block)
@@ -280,8 +281,8 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.store(final_complete, final_array_elem_ptr)
 
     undef_result = ir.Constant(dyn_array_type, ir.Undefined)
-    result_with_len = builder.insert_value(undef_result, num_strings, 0, name="result_with_len")
-    result_with_cap = builder.insert_value(result_with_len, num_strings, 1, name="result_with_cap")
+    result_with_len = insert_len(None, undef_result, num_strings, builder=builder)
+    result_with_cap = insert_cap(None, result_with_len, num_strings, builder=builder)
     result_normal = builder.insert_value(result_with_cap, array_data, 2, name="result_normal")
     split_done_end = builder.block
     builder.branch(return_block)
@@ -296,7 +297,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
 
 
 def emit_string_join(module: ir.Module) -> ir.Function:
-    """Emit `{i8*, i32} string_join({i8*, i32} sep, {i32, i32, {i8*,i32}*} parts)`."""
+    """Emit `{i8*, i32} string_join({i8*, i32} sep, {i64, i64, {i8*,i32}*} parts)`."""
     func_name = "string_join"
 
     if func_name in module.globals:
@@ -306,7 +307,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
 
     i8, i8_ptr, i32, i64, string_type = get_string_types()
     string_ptr = string_type.as_pointer()
-    dyn_array_type = ir.LiteralStructType([i32, i32, string_ptr])
+    dyn_array_type = get_dynamic_array_type(string_type)
 
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
@@ -333,7 +334,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
     sep_data = builder.extract_value(func.args[0], 0, name="sep_data")
     sep_size = builder.extract_value(func.args[0], 1, name="sep_size")
-    arr_len = builder.extract_value(func.args[1], 0, name="arr_len")
+    arr_len = extract_len(None, func.args[1], name="arr_len", builder=builder)
     arr_data = builder.extract_value(func.args[1], 2, name="arr_data")
 
     is_empty = builder.icmp_signed("==", arr_len, ir.Constant(i32, 0), name="is_empty")

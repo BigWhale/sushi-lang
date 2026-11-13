@@ -161,7 +161,7 @@ class CursorSource:
     live: Optional[Callable[['LLVMCodegen', ir.Value, ir.Value], ir.Value]] = None
 
     def cursor_type(self, codegen: 'LLVMCodegen') -> ir.LiteralStructType:
-        return ir.LiteralStructType([codegen.types.i32, codegen.types.i32,
+        return ir.LiteralStructType([codegen.types.i64, codegen.types.i64,
                                      ir.PointerType(self.data_type)])
 
 
@@ -181,7 +181,7 @@ def emit_lent_cursor(codegen: 'LLVMCodegen', source: CursorSource, length: ir.Va
     """A value that borrows its slots: its cursor is a stack slot, or a heap block when it
     leaves through a `peek` return (#1229)."""
     cursor_type = source.cursor_type(codegen)
-    zero = ir.Constant(codegen.types.i32, 0)
+    zero = ir.Constant(codegen.types.i64, 0)
     if heap:
         raw, cursor = _heap_state(codegen, cursor_type)
         _store_cursor(codegen, cursor, zero, length, data, source)
@@ -196,8 +196,14 @@ def emit_lent_cursor(codegen: 'LLVMCodegen', source: CursorSource, length: ir.Va
 def _store_cursor(codegen: 'LLVMCodegen', cursor_ptr: ir.Value, index: ir.Value,
                   length: ir.Value, data: ir.Value, source: CursorSource) -> None:
     b = codegen.builder
-    b.store(index, gep_utils.gep_struct_field(codegen, cursor_ptr, _INDEX, "iter_index"))
-    b.store(length, gep_utils.gep_struct_field(codegen, cursor_ptr, _LENGTH, "iter_length"))
+    i64 = codegen.types.i64
+
+    def wide(v: ir.Value) -> ir.Value:
+        return v if v.type == i64 else b.sext(v, i64)
+
+    b.store(wide(index), gep_utils.gep_struct_field(codegen, cursor_ptr, _INDEX, "iter_index"))
+    b.store(wide(length), gep_utils.gep_struct_field(codegen, cursor_ptr, _LENGTH,
+                                                     "iter_length"))
     b.store(b.bitcast(data, ir.PointerType(source.data_type)),
             gep_utils.gep_struct_field(codegen, cursor_ptr, _DATA, "iter_data"))
 
@@ -226,7 +232,7 @@ def _cursor_next(codegen: 'LLVMCodegen', source: CursorSource) -> ir.Function:
         b.position_at_end(slot)
         data = b.load(gep_utils.gep_struct_field(codegen, cursor, _DATA, "data_ptr"),
                       name="data")
-        b.store(b.add(index, ir.Constant(codegen.types.i32, 1), name="next_index"),
+        b.store(b.add(index, ir.Constant(codegen.types.i64, 1), name="next_index"),
                 index_ptr)
         if source.live is None:
             b.branch(found)
@@ -279,7 +285,7 @@ def emit_owned_cursor(codegen: 'LLVMCodegen', source: CursorSource,
     b.store(container.value, held)
     length, data = container.slots(codegen, held)
     cursor = gep_utils.gep_struct_field(codegen, state, _CURSOR, "iter_cursor")
-    _store_cursor(codegen, cursor, ir.Constant(codegen.types.i32, 0), length, data, source)
+    _store_cursor(codegen, cursor, ir.Constant(codegen.types.i64, 0), length, data, source)
     return iterator_value(codegen, _cursor_next(codegen, source), raw,
                           _owned_drop(codegen, source, container),
                           _owned_clone(codegen, source, container))

@@ -200,14 +200,14 @@ def builtin_generic_structs() -> tuple[GenericStructType, ...]:
             fields=(("value", PointerType(pointee_type=TypeParameter(name="T"))),),
         ),
         hashmap_generic_struct(),
-        # List<T>: `{i32 len, i32 capacity, T* data}`, 2x growth, lazily allocated.
+        # List<T>: `{i64 len, i64 capacity, T* data}`, 2x growth, lazily allocated.
         # See docs/stdlib/collections/list.md.
         GenericStructType(
             name="List",
             type_params=(TypeParameter(name="T"),),
             fields=(
-                ("len", BuiltinType.I32),
-                ("capacity", BuiltinType.I32),
+                ("len", BuiltinType.I64),
+                ("capacity", BuiltinType.I64),
                 ("data", PointerType(BuiltinType.I32)),  # Placeholder for T*
             ),
         ),

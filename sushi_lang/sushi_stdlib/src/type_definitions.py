@@ -35,10 +35,9 @@ def get_string_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTy
 
 
 def get_dynamic_array_type(element_type: ir.Type) -> ir.LiteralStructType:
-    """Get the dynamic array struct type for a given element type."""
-    i32 = ir.IntType(32)
-    element_ptr = element_type.as_pointer()
-    return ir.LiteralStructType([i32, i32, element_ptr])
+    """The `T[]` descriptor `{i64 len, i64 cap, T* data}` for a given element type."""
+    i64 = ir.IntType(64)
+    return ir.LiteralStructType([i64, i64, element_type.as_pointer()])
 
 
 def get_byte_array_type() -> ir.LiteralStructType:
@@ -84,7 +83,7 @@ def get_datagram_type() -> ir.LiteralStructType:
 
 def _datagram_size_bytes() -> int:
     """Aligned size of Datagram, mirroring backend sizing.py `_calculate_struct_size`."""
-    array_size = 16   # {i32 len, i32 cap, T* data}, aligned
+    array_size = 24   # {i64 len, i64 cap, T* data}, aligned
     string_size = 16  # fat pointer {i8*, i32, i8 owned}, aligned
     fields = [(array_size, 8), (string_size, 8), (4, 4)]
     offset = 0

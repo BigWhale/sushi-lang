@@ -648,7 +648,7 @@ monomorphized per (receiver, method, margs). The decision record is
   unreachable. Only non-builtin names route to the extension path. This is not specific to `List` --
   it is the general precedence rule, and **[CE2097](../error-catalog.md#ce2097)** enforces it across every built-in family. See
   [method-resolution.md](method-resolution.md) for the full chain and the perk override route.
-- **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array `{i32, i32, T*}`
+- **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array `{i64, i64, T*}`
   layout and is passed by pointer, but `self` is declared by value; the dispatch site loads the
   header to reconcile (safe because extension bodies never register `self` for cleanup, so the
   shared buffer is not double-freed).

@@ -1,0 +1,24 @@
+# A `T[]` descriptor is `{i64 len, i64 cap, T* data}` (docs/adr/0001, the expand step).
+# `len()` still answers an i32: the read narrows the i64 field. A push writes the field as
+# an i64.
+# EXPECT_IR_HOLDS: total { i64, i64, ptr } %xs
+# EXPECT_IR_LACKS: total { i32, i32, ptr }
+# EXPECT_IR_HOLDS: append store i64
+# EXPECT_IR_LACKS: append { i32, i32, ptr }
+# EXPECT_STDOUT_EXACT: "3 4 4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn total(i32[] xs) i32:
+    return xs.len()
+
+fn append(poke i32[] xs) i32:
+    xs.push(9)
+    return xs.len()
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 before = total(xs)
+    let i32 after = append(poke xs)
+    println("{before} {after} {xs.capacity()}")
+    return 0

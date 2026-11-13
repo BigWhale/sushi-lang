@@ -160,12 +160,9 @@ class TypeMapper:
                 raise_internal_error("CE0022", type=str(t))
 
     def get_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:
-        """Create LLVM struct type for dynamic arrays: {i32 len, i32 cap, T* data}"""
-        return ir.LiteralStructType([
-            self.i32,
-            self.i32,
-            ir.PointerType(element_type),
-        ])
+        """The `T[]` descriptor `{i64 len, i64 cap, T* data}`."""
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_dynamic_array_type
+        return get_dynamic_array_type(element_type)
 
     def get_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
         """LLVM struct type for Iterator<T>: `{next_fn, state, drop_fn, clone_fn}` (#1259).
@@ -223,11 +220,7 @@ class TypeMapper:
         key_type, value_type = parse_hashmap_types(struct_type, wrapper, on_missing="raise")
         entry_type = get_entry_type(wrapper, key_type, value_type)
 
-        buckets_type = ir.LiteralStructType([
-            self.i32,
-            self.i32,
-            ir.PointerType(entry_type),
-        ])
+        buckets_type = self.get_dynamic_array_struct_type(entry_type)
         llvm_struct = ir.LiteralStructType([
             buckets_type,
             self.i32,

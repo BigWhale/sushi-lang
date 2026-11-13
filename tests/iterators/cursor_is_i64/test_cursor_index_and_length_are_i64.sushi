@@ -1,0 +1,22 @@
+# The cursor of an array iterator is `{i64 index, i64 length, T*}`: the index and the
+# length of the walk have the width of the array length (docs/adr/0001).
+# EXPECT_IR_HOLDS: walk_lent alloca { i64, i64, ptr }
+# EXPECT_IR_HOLDS: walk_lent store i64 0
+# EXPECT_IR_HOLDS: __sushi_iter_next_elements_I32 %index = load i64
+# EXPECT_IR_HOLDS: __sushi_iter_next_elements_I32 %length = load i64
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn walk_lent(i32[] xs) i32:
+    let i32 sum = 0
+    let Iterator@(i32) it = xs.iter()
+    foreach(x in it):
+        sum := sum + x
+    return sum
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(walk_lent(xs))
+    return 0

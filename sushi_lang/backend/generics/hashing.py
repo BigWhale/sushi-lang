@@ -15,10 +15,11 @@ slot order is not the entry order, so it needs a fold that this walk cannot give
 from typing import Any, Sequence
 
 import llvmlite.ir as ir
+from sushi_lang.backend import gep_utils
 
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.backend.generics.container_walk import emit_container_walk
-from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_len_ptr
+from sushi_lang.backend.generics.list.types import get_list_data_ptr
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_combine, emit_fnv1a_init
 from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
@@ -63,7 +64,7 @@ def _make_list_hash_emitter(list_type: Type) -> Any:
         element_type = _held_type(list_type, 0)
 
         list_ptr = _as_address(codegen, receiver_value, receiver_type, "list_hash_temp")
-        length = builder.load(get_list_len_ptr(builder, list_ptr), name="list_hash_len")
+        length = gep_utils.load_len(codegen, list_ptr, "list_hash_len", builder=builder)
         data = builder.load(get_list_data_ptr(builder, list_ptr), name="list_hash_data")
 
         accumulator = entry_alloca(builder, u64, name="list_hash_acc")

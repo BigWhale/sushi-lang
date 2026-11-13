@@ -136,10 +136,8 @@ def emit_dynamic_array_extend_back(codegen: 'LLVMCodegen', array_address: ir.Val
     i32 = codegen.types.i32
     one = ir.Constant(i32, 1)
 
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_address)
-    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_address)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_address)
-    length = b.load(len_ptr, name="back_len")
+    length = gep_utils.load_len(codegen, array_address, "back_len", builder=b)
 
     dist_in_range = b.and_(b.icmp_signed(">=", dist, one), b.icmp_signed("<=", dist, length),
                            name="back_dist_ok")
@@ -154,8 +152,8 @@ def emit_dynamic_array_extend_back(codegen: 'LLVMCodegen', array_address: ir.Val
         needed = b.add(length, count, name="back_needed")
         data = memory.emit_grow_to_fit(
             codegen, data_ptr=b.load(data_ptr_ptr, name="back_data"),
-            data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
-            current_cap=b.load(cap_ptr, name="back_cap"), count=needed,
+            data_ptr_ptr=data_ptr_ptr, header=array_address,
+            current_cap=gep_utils.load_cap(codegen, array_address, "back_cap", builder=b), count=needed,
             element_llvm_type=element_llvm_type, policy=memory.GrowPolicy.AT_LEAST)
         dest = gep_utils.gep_array_element(codegen, data, length, "back_dest")
         start = b.sub(length, dist, name="back_start")
@@ -172,7 +170,7 @@ def emit_dynamic_array_extend_back(codegen: 'LLVMCodegen', array_address: ir.Val
                 with overlap:
                     _emit_forward_run(codegen, dest, data, start, count)
 
-        b.store(needed, len_ptr)
+        gep_utils.store_len(codegen, array_address, needed, builder=b)
 
     return ir.Constant(i32, 0)
 

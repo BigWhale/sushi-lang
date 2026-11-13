@@ -14,6 +14,8 @@ argument on FileChannel.read -- and none of them needed a new kind of type.
 `off_t` is 64-bit on both supported platforms; probe P6 measured it.
 """
 from llvmlite import ir
+from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_byte_array_type, get_result_type, get_unit_enum_type,
 )
@@ -140,12 +142,10 @@ def generate_fd_pread(module: ir.Module) -> None:
 
     builder.position_at_end(success_bb)
     descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = builder.insert_value(descriptor,
-                                      builder.trunc(got, i32, name="got32"), 0,
-                                      name="desc_len")
-    descriptor = builder.insert_value(descriptor, maximum, 1, name="desc_cap")
+    descriptor = insert_len(None, descriptor, got, builder=builder)
+    descriptor = insert_cap(None, descriptor, maximum, builder=builder)
     descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))
 
 
 def generate_fd_pwrite(module: ir.Module) -> None:
@@ -167,7 +167,7 @@ def generate_fd_pwrite(module: ir.Module) -> None:
     fd.name, offset.name, data.name = "fd", "offset", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = builder.extract_value(data, 0, name="data_len")
+    length = extract_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
     length64 = builder.zext(length, i64, name="data_len64")
 

@@ -15,7 +15,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.gep_utils import gep_dynamic_array_data, gep_dynamic_array_len
+from sushi_lang.backend.gep_utils import gep_dynamic_array_data, load_len
 
 
 _PE_SPAWN_FAILED = 0
@@ -270,7 +270,7 @@ def generate_run(module: ir.Module) -> None:
 
     b.position_at_end(setup)
     cmd_cstr = fat_pointer_to_cstr(module, b, cmd_arg)
-    arg_len = b.load(gep_dynamic_array_len(None, args_slot, name="", builder=b))
+    arg_len = load_len(None, args_slot, name="", builder=b)
     arg_data = b.load(gep_dynamic_array_data(None, args_slot, name="", builder=b))  # string*
     argc = b.add(arg_len, one_i32)                                # cmd + args
     slots = b.add(argc, one_i32)                                  # + NULL terminator

@@ -1,0 +1,26 @@
+# The buckets of a `HashMap@(K, V)` share the `T[]` descriptor shape, so they are
+# `{i64 len, i64 cap, Entry* data}` (docs/adr/0001, the expand step). The result of
+# `string.split()`, which a stdlib generator builds, is a `string[]` of the same shape.
+# EXPECT_IR_HOLDS: count { { i64, i64, ptr }, i32, i32, i32 }
+# EXPECT_IR_LACKS: count { i32, i32, ptr }
+# EXPECT_IR_HOLDS: words { i64, i64, ptr }
+# EXPECT_IR_LACKS: words { i32, i32, ptr }
+# EXPECT_STDOUT_EXACT: "2 3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+use <collections/strings>
+
+fn count(HashMap@(i32, i32) map) i32:
+    return map.len()
+
+fn words(string text) i32:
+    let string[] parts = text.split(" ")
+    return parts.len()
+
+fn main() i32:
+    let HashMap@(i32, i32) map = HashMap.new()
+    map.insert(1, 10)
+    map.insert(2, 20)
+    println("{count(map)} {words('so long and')}")
+    return 0

@@ -22,7 +22,8 @@ fn show(string path) ~ | IoError:
 
 Two things are walkable, and they are walked by different machinery.
 
-An **iterator** is `{i32 index, i32 length, T* data}` — a cursor over contiguous storage.
+An **iterator** is `{i64 index, i64 length, T* data}` — a cursor over contiguous storage.
+The index and the length have the width of the stored length of a `T[]` (`docs/adr/0001-index-width-i64.md`).
 `.iter()` answers one on an array or a `List@(T)`, `.keys()` / `.values()` / `.entries()`
 answer one on a `HashMap`, and a range is one. It has no `next` to call: the loop reads the
 length and indexes. Its type is `Iterator@(T)`, and a program can write that name after
