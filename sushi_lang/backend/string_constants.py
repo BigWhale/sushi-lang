@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict
 
 from llvmlite import ir
 
-from sushi_lang.internals.errors import message_for
+from sushi_lang.internals.errors import message_for, raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -27,10 +27,12 @@ def content_digest(text: str) -> str:
 def text_global(module: ir.Module, name: str, text: str, nul: bool = True) -> ir.GlobalVariable:
     """The private constant `name` that holds the bytes of `text`, with a NUL after them
     when `nul` is set; one global for each name."""
+    data = bytearray(text.encode("utf-8") + (b"\0" if nul else b""))
     existing = module.globals.get(name)
     if isinstance(existing, ir.GlobalVariable):
+        if existing.initializer is None or bytes(existing.initializer.constant) != bytes(data):
+            raise_internal_error("CE0000", detail=f"the global '{name}' already holds other bytes")
         return existing
-    data = bytearray(text.encode("utf-8") + (b"\0" if nul else b""))
     ty = ir.ArrayType(ir.IntType(8), len(data))
     global_str = ir.GlobalVariable(module, ty, name=name)
     global_str.linkage = "private"
