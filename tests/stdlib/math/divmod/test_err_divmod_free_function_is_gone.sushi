@@ -1,0 +1,9 @@
+# `divmod` is a method of the integer types: `<math>` has no free function `divmod`.
+# EXPECT_ERROR_CODE: CE2008
+use <math>
+
+fn main() i32:
+    let i32 a = 7
+    let (i32, i32) pair = divmod(a, 2)
+    println("{pair.0} {sqrt(4.0)}")
+    return 0

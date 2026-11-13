@@ -1847,7 +1847,7 @@ An integer literal and a string literal are legal in every pattern position: a l
 
 **Message:** `the destructure names {count} elements, but '{type}' has {arity}`
 
-A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = divmod(7, 2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
+A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = n.divmod(2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
 
 ### CE2121 {#ce2121}
 

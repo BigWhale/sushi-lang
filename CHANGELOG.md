@@ -4,6 +4,17 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **`divmod` is a method of each integer type, and it answers a bare `(T, T)`.** Write
+  `a.divmod(b)`. The method needs no import. A divisor of 0 stops the program with
+  `RE2030`, and a signed `MIN.divmod(-1)` stops it with `RE2031`, the same as `/`. The
+  free function `divmod(a, b)` and its `| MathError` channel are removed. BREAKING
+  (#1300).
+- **`MathError` is removed.** No stdlib function answered it after the change to
+  `divmod`. A program that names it declares its own error type with `error`. BREAKING
+  (#1300).
+
 ### Fixed
 
 - **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is

@@ -99,7 +99,7 @@ def _function_type_of_row(row: 'Signature', yielded: Type) -> FunctionType:
 
 def _check_math_family(validator: 'TypeValidator', node: e.Call, name: str,
                        loc: Span) -> list[Optional[Type]]:
-    """A `<math>` family call (`abs`, `min`, `max`, `divmod`), measured against its table,
+    """A `<math>` family call (`abs`, `min`, `max`), measured against its table,
     and the type of each argument.
 
     The two arguments of a two-argument family are checked as a pair: a lone literal takes

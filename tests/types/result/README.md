@@ -80,7 +80,6 @@ Tests predefined stdlib error enums:
 - `test_std_error.sushi` - StdError.Error (generic error)
 - `test_file_error.sushi` - FileError variants (NotFound, PermissionDenied, etc.)
 - `test_io_error.sushi` - IoError variants, including the Os(i32) payload arm
-- `test_math_error.sushi` - MathError variants (DivisionByZero, Overflow, etc.)
 - `test_env_error.sushi` - EnvError variants (NotFound, InvalidValue, etc.)
 - `test_process_error.sushi` - ProcessError variants (SpawnFailed, etc.)
 - `test_multiple_error_types.sushi` - Using multiple error types together
@@ -138,12 +137,6 @@ enum IoError:
     InvalidInput
     Os(i32 errno)
     Other
-
-enum MathError:
-    DivisionByZero
-    Overflow
-    Underflow
-    InvalidInput
 
 enum EnvError:
     NotFound

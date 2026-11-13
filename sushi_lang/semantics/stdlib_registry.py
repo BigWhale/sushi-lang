@@ -61,6 +61,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "io/error": _SRC_SUSHI_ROOT / "io" / "error.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
+    "math": _SRC_SUSHI_ROOT / "math.sushi",
     "net/dns": _SRC_SUSHI_ROOT / "net" / "dns.sushi",
     "net/error": _SRC_SUSHI_ROOT / "net" / "error.sushi",
     "net/handle": _SRC_SUSHI_ROOT / "net" / "handle.sushi",
@@ -85,7 +86,7 @@ SOURCE_STDLIB_MODULES.update({
 # (R2): a name of the module still needs the import.
 BUILTIN_TYPE_METHOD_MODULES = frozenset({
     "collections/iter", "collections/sort", "collections/strings", "encoding/binary",
-    "text/ascii",
+    "math", "text/ascii",
 })
 
 
@@ -262,7 +263,7 @@ def _get_param_specs():
 def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798).
 
-    The math FAMILIES (`abs`, `min`, `max`, `divmod`) have one row per argument type and are not
+    The math FAMILIES (`abs`, `min`, `max`) have one row per argument type and are not
     here: `math.family_row` builds the row for the type a call reaches.
     """
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
@@ -288,7 +289,7 @@ def family_tables() -> Dict[str, Dict[Callable, Tuple[str, ...]]]:
     """Every registry module's FAMILIES: a resolver over argument types, and its names.
 
     A family has one row per argument type, so it has no one entry in its module's
-    signature table. Only `<math>` has families today (`abs`, `min`, `max`, `divmod`).
+    signature table. Only `<math>` has families today (`abs`, `min`, `max`).
     """
     from sushi_lang.sushi_stdlib.src.math import (
         MATH_FAMILIES,

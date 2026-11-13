@@ -1,0 +1,26 @@
+# `a.divmod(b)` on each unsigned width divides as an unsigned value: a value with the
+# top bit set is a large value, never a negative one. An import of `<math>` keeps the method.
+# EXPECT_STDOUT_EXACT: "u8 28 4\nu16 8571 3\nu32 571428571 3\nu64 2571428571428571428 4\nroot 3\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    let u8 a8 = 200
+    let (u8 q8, u8 r8) = a8.divmod(7)
+    println("u8 {q8} {r8}")
+
+    let u16 a16 = 60000
+    let u16 b16 = 7
+    let (q16, r16) = a16.divmod(b16)
+    println("u16 {q16} {r16}")
+
+    let u32 a32 = 4000000000
+    let (u32, u32) pair = a32.divmod(7)
+    println("u32 {pair.0} {pair.1}")
+
+    let u64 a64 = 18000000000000000000
+    let (q64, r64) = a64.divmod(7)
+    println("u64 {q64} {r64}")
+
+    println("root {sqrt(9.0)}")
+    return 0

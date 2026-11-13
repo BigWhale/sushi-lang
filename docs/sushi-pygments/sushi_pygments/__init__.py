@@ -47,7 +47,7 @@ _TYPES = (
 # Built-in generic types, collections, and error enums.
 _BUILTIN_TYPES = (
     "Result", "Maybe", "Option", "Own", "List", "HashMap", "Iterator", "Entry",
-    "StdError", "MathError", "FileError", "IoError", "ProcessError", "EnvError",
+    "StdError", "FileError", "IoError", "ProcessError", "EnvError",
 )
 
 # Built-in free functions / constructors.

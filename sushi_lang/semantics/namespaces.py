@@ -346,8 +346,8 @@ class UnitNamespace(Provider):
 class StdlibNamespace(Provider):
     """A registry stdlib module. Already keyed by `(module, name)` -- section 1.4.
 
-    `types` carries the predefined enums HOMED at the module (#574): `<math>` brings
-    `MathError`, so `m.MathError` is a member exactly as `m.sqrt` is. `reexports` is
+    `types` carries the predefined enums HOMED at the module (#574): `<sys/env>` brings
+    `EnvError`, so `m.EnvError` is a member exactly as `m.getenv` is. `reexports` is
     what the module's `REEXPORTS` row names (`StdlibModule.reexports`): a registry
     module has no `use` statement to write, so its re-exports are declared beside its
     functions (section 8.1).

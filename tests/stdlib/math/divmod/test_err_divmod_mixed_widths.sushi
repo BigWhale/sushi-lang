@@ -1,11 +1,9 @@
-# Both arguments of `divmod` have one type: an i32 beside an i64 is refused.
+# The divisor of `a.divmod(b)` has the type of `a`: an i64 divisor of an i32 is refused.
 # EXPECT_ERROR_CODE: CE2006
-use <math>
 
 fn main() i32:
     let i32 a = 7
     let i64 b = 2
-    match divmod(a, b):
-        Result.Ok(_) -> println("ok")
-        Result.Err(_) -> println("failed")
+    let (q, r) = a.divmod(b)
+    println("{q} {r}")
     return 0

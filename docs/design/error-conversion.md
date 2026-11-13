@@ -109,8 +109,8 @@ generic form (`error DecodeError@(T)`), the derived `Eq`, `Ord`, `Display`, `has
 `clone`, extension methods, perk implementations, `Drop`, visibility, namespaces,
 libraries, the `docs` pass and the `unused` lint.
 
-The `collect` pass gives the flag to seven of the nine predefined enums: `StdError`,
-`IoError`, `FileError`, `NetError`, `ProcessError`, `EnvError` and `MathError`.
+The `collect` pass gives the flag to six of the eight predefined enums: `StdError`,
+`IoError`, `FileError`, `NetError`, `ProcessError` and `EnvError`.
 `FileMode` and `SeekFrom` are not errors and stay plain enums.
 
 ### 2.3 An error type is data

@@ -1,15 +1,14 @@
 # The flat import brings the bare name, one home per enum: `FileMode` and `FileError`
 # from `<io/fs>`, `IoError` and `SeekFrom` from `<io/contracts>`, `NetError` from the new
-# `<net/error>`, `ProcessError` from `<sys/process>`, `EnvError` from `<sys/env>` and
-# `MathError` from `<math>` (#574, Ruling 3).
+# `<net/error>`, `ProcessError` from `<sys/process>`, and `EnvError` from
+# `<sys/env>` (#574, Ruling 3).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "8\n"
+# EXPECT_STDOUT_EXACT: "7\n"
 use <io/fs>
 use <net/error>
 use <sys/process>
 use <sys/env>
-use <math>
 
 fn main() i32:
     let FileMode a = FileMode.Read()
@@ -19,7 +18,6 @@ fn main() i32:
     let NetError e = NetError.TimedOut
     let ProcessError f = ProcessError.SpawnFailed
     let EnvError g = EnvError.NotFound
-    let MathError h = MathError.Overflow
     let i32 count = 0
     match a:
         FileMode.Read -> count := count + 1
@@ -41,9 +39,6 @@ fn main() i32:
         _ -> count := count
     match g:
         EnvError.NotFound -> count := count + 1
-        _ -> count := count
-    match h:
-        MathError.Overflow -> count := count + 1
         _ -> count := count
     println("{count}")
     return 0
