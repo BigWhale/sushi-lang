@@ -1,0 +1,23 @@
+# A range as a value is an `Iterator@(T)` of the type of its bounds. Two literal bounds
+# take the item type of the position: in an `Iterator@(i64)` they are i64.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3000000000\n3000000001\n2\n1\n0\nu8 9 8\n"
+use <collections/iter>
+
+fn bytes(u8 n) Iterator@(u8):
+    return (8..=n).rev()
+
+fn main() i32:
+    let Iterator@(i64) big = 3000000000..3000000002
+    foreach(x in big):
+        println(x)
+    let i64 n = 3
+    let Iterator@(i64) down = (0..n).rev()
+    foreach(x in down):
+        println(x)
+    let string s = "u8"
+    foreach(b in bytes(9)):
+        s := s.concat(" {b}")
+    println(s)
+    return 0

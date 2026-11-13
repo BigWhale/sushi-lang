@@ -35,7 +35,8 @@ KNOWN_TRUNCS = {
     ("expressions/memory.py", "get_element_size_constant"),
     # The i64 answer of a `main`, cut to the C `int` of the exit code.
     ("functions/main_wrapper.py", "_return_exit_code"),
-    # The i64 counter of a range as a value: the item of a range is in the i32 range.
+    # The i64 counter of a range as a value, cut to the item type: the item of a range is in
+    # the range of its type.
     ("runtime/iterators.py", "body"),
 }
 
