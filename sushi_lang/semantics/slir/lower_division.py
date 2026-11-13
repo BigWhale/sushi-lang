@@ -18,7 +18,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.ids import BlockId
 from sushi_lang.semantics.slir.lower_control import int_of
-from sushi_lang.semantics.type_predicates import is_integer_type, is_unsigned_int
+from sushi_lang.semantics.type_predicates import is_unsigned_int
 from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
@@ -28,13 +28,14 @@ if TYPE_CHECKING:
 def check_divisor(low: Lowering, left: p.Operand, right: p.Operand, ty: Type,
                   span: Span) -> None:
     """The checks of `left / right` and `left % right` at the type `ty`."""
-    if not is_integer_type(ty):
+    limits = integer_range(ty)
+    if limits is None:
         return
     divisor, dividend = int_of(right), int_of(left)
     cases: list[tuple[int, BlockId]] = []
     if divisor is None or divisor == 0:
         cases.append((0, _trap(low, tm.Trap("RE2030", (), span))))
-    smallest = integer_range(ty)[0]
+    smallest = limits[0]
     overflow = (not is_unsigned_int(ty) and divisor in (None, -1)
                 and dividend in (None, smallest))
     if not cases and not overflow:
