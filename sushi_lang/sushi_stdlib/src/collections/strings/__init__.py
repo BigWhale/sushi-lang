@@ -82,13 +82,15 @@ class MethodSpec:
     has the LLVM shape of the declared type, so the back end reads it as that type.
 
     `indexes` holds the arguments that are an index position: each takes any integer type,
-    and the generated function takes it as an `i32` (docs/adr/0001).
+    and the generated function takes it as an `i32` (docs/adr/0001). `counts` holds the
+    index positions that are a count of the result: a count above the i32 range traps.
     """
     name: str
     arg_types: tuple
     returns: Any
     also_accepts: tuple = ()
     indexes: frozenset = frozenset()
+    counts: frozenset = frozenset()
 
     @property
     def arg_count(self) -> int:
@@ -97,8 +99,9 @@ class MethodSpec:
 
 _S, _I32, _BOOL = BuiltinType.STRING, BuiltinType.I32, BuiltinType.BOOL
 
-#: The mark of an index position in a row.
+#: The mark of an index position in a row, and of an index position that is a count.
 _IDX = object()
+_COUNT = object()
 
 
 def _maybe(payload: Type | GenericTypeRef) -> GenericTypeRef:
@@ -110,9 +113,11 @@ def _list(element: Type) -> GenericTypeRef:
 
 
 def _spec(name: str, args: tuple, returns: Any, also_accepts: tuple = ()) -> MethodSpec:
-    return MethodSpec(f"string.{name}", tuple(_I32 if arg is _IDX else arg for arg in args),
+    return MethodSpec(f"string.{name}",
+                      tuple(_I32 if arg in (_IDX, _COUNT) else arg for arg in args),
                       returns, also_accepts,
-                      frozenset(at for at, arg in enumerate(args) if arg is _IDX))
+                      frozenset(at for at, arg in enumerate(args) if arg in (_IDX, _COUNT)),
+                      frozenset(at for at, arg in enumerate(args) if arg is _COUNT))
 
 
 # The ONE spelling of every string method's signature.
@@ -142,7 +147,7 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("sleft", (_IDX,), _S),
     ("sright", (_IDX,), _S),
     ("char_at", (_IDX,), _S),
-    ("repeat", (_IDX,), _S),
+    ("repeat", (_COUNT,), _S),
 
     ("s", (_IDX, _IDX), _S),
     ("ss", (_IDX, _IDX), _S),
@@ -153,8 +158,8 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("join", (DynamicArrayType(_S),), _S, ((_list(_S),),)),
 
     ("replace", (_S, _S), _S),
-    ("pad_left", (_IDX, _S), _S),
-    ("pad_right", (_IDX, _S), _S),
+    ("pad_left", (_COUNT, _S), _S),
+    ("pad_right", (_COUNT, _S), _S),
 
     ("to_i32", (), _maybe(_I32)),
     ("to_i64", (), _maybe(BuiltinType.I64)),

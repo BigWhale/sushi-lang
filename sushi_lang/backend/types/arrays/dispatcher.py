@@ -109,7 +109,9 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
 
         case "clear" | "truncate" | "resize":
             # Only `resize` has a fill value, a borrow: each added slot takes its own copy.
-            new_len = zero if name == "clear" else _clamped(codegen, args[0])
+            new_len = (zero if name == "clear"
+                       else codegen.utils.count_as_i32(args[0][0]) if name == "resize"
+                       else _clamped(codegen, args[0]))
             fill = args[1][0] if name == "resize" else None
             return core.emit_dynamic_array_resize(codegen,
                                                   _descriptor(receiver, array_type, name),

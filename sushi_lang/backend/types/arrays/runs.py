@@ -148,23 +148,16 @@ def _emitted_runs(codegen: 'LLVMCodegen', element: 'Type', runs: Sequence[r.Arra
             emitted.append(EmittedRun(count=ir.Constant(codegen.types.i32, 1), value=parts[at]))
         elif isinstance(run, r.RunRepeat):
             emitted.append(EmittedRun(count=_clamp_count(codegen,
-                                                         _repeat_count(codegen, parts[at + 1])),
+                                                         codegen.utils.count_as_i32(parts[at + 1])),
                                       value=None if by_address else parts[at],
                                       source=parts[at] if by_address else None,
                                       owning=owning))
         else:
-            emitted.append(EmittedRun(count=_clamp_count(codegen, parts[at + 1]),
+            emitted.append(EmittedRun(count=_clamp_count(codegen,
+                                                         codegen.utils.count_as_i32(parts[at + 1])),
                                       first=parts[at], step=run.step))
         at += r.run_width(run)
     return emitted
-
-
-def _repeat_count(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
-    """The i64 count of a repeat run (an index position) as an i32: a constant as its value,
-    any other count saturated (`index_as_i32`)."""
-    if isinstance(count, ir.Constant):
-        return ir.Constant(codegen.types.i32, count.constant)
-    return codegen.utils.index_as_i32(count)
 
 
 def _clamp_count(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:

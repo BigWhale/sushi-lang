@@ -107,18 +107,51 @@ class LLVMUtils:
         whose length is an i32. No length is above the i32 maximum, so the saturated value
         is out of range, or clamps, exactly when the i64 value does. A truncation is not
         sound: 2^32 would read as 0."""
+        return self._narrow(self.require_index(v), trap_above=False)
+
+    def count_as_i32(self, v: ir.Value) -> ir.Value:
+        """The i64 value of a count position as the i32 of a length: a count above the i32
+        maximum stops the program with RE2033, and a count below the i32 minimum saturates,
+        so it stays negative and counts as zero."""
+        return self._narrow(self.require_index(v), trap_above=True)
+
+    def checked_as_i32(self, v: ir.Value) -> ir.Value:
+        """An index that a bounds check passed, or a difference of two such indexes, as an
+        i32: the check proved that the value is in `0..=len`, so the truncation loses
+        nothing. An i32 stays as it is."""
         builder = self.codegen.builder
         if builder is None:
             raise_internal_error("CE0009")
-        wide = self.require_index(v)
-        i64 = wide.type
-        low = ir.Constant(i64, -(1 << 31))
-        high = ir.Constant(i64, (1 << 31) - 1)
+        i32 = self.codegen.i32
+        return v if v.type == i32 else builder.trunc(v, i32, name="checked_i32")
+
+    def _narrow(self, wide: ir.Value, *, trap_above: bool) -> ir.Value:
+        """The one narrowing of an i64 index position to an i32 that no check proved."""
+        builder = self.codegen.builder
+        if builder is None:
+            raise_internal_error("CE0009")
+        i64, i32 = wide.type, self.codegen.i32
+        floor, ceiling = -(1 << 31), (1 << 31) - 1
+        if isinstance(wide, ir.Constant) and isinstance(wide.constant, int):
+            value = (wide.constant + (1 << 63)) % (1 << 64) - (1 << 63)
+            if value <= ceiling or not trap_above:
+                return ir.Constant(i32, min(max(value, floor), ceiling))
+        low, high = ir.Constant(i64, floor), ir.Constant(i64, ceiling)
+        if trap_above:
+            too_large = builder.icmp_signed(">", wide, high, name="count_too_large")
+            fail = builder.append_basic_block(name="count_too_large")
+            ok = builder.append_basic_block(name="count_fits")
+            builder.cbranch(too_large, fail, ok)
+            builder.position_at_end(fail)
+            self.codegen.runtime.errors.emit_runtime_error_with_values("RE2033", wide)
+            builder.unreachable()
+            builder.position_at_end(ok)
+        else:
+            wide = builder.select(builder.icmp_signed(">", wide, high), high, wide,
+                                  name="index_ceiling")
         wide = builder.select(builder.icmp_signed("<", wide, low), low, wide,
                               name="index_floor")
-        wide = builder.select(builder.icmp_signed(">", wide, high), high, wide,
-                              name="index_ceiling")
-        return builder.trunc(wide, self.codegen.i32, name="index_i32")
+        return builder.trunc(wide, i32, name="index_i32")
 
     def cast_to_int_width(self, v: ir.Value, dst: ir.IntType) -> ir.Value:
         """Cast value to target integer width using dispatch table."""

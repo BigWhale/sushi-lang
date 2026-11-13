@@ -58,14 +58,14 @@ def test_a_fixed_array_of_runs_whose_constant_counts_add_up_passes():
     runs = (r.RunOne(), r.RunRepeat(), r.RunSequence(-1))
     _passes(_function([BLANK, TRIPLE, I32], _block(
         0, _ret(), _live(1),
-        _array(TRIPLE, runs, _copy(2), p.Const(k.Int(7, I32)), _i64(1), _i32(9), _i32(1)),
+        _array(TRIPLE, runs, _copy(2), p.Const(k.Int(7, I32)), _i64(1), _i32(9), _i64(1)),
         _done(), _dead(1)), params=((2, GUARANTEED),)))
 
 
 def test_a_dynamic_array_of_run_time_counts_drops_and_passes():
     runs = (r.RunRepeat(), r.RunSequence(1))
     _passes(_function([BLANK, NUMBERS, I32, I64], _block(
-        0, _ret(), _live(1), _array(NUMBERS, runs, _i32(0), _copy(3), _copy(2), _copy(2)),
+        0, _ret(), _live(1), _array(NUMBERS, runs, _i32(0), _copy(3), _copy(2), _copy(3)),
         _done(), _drop(1), _dead(1)), params=((2, GUARANTEED), (3, GUARANTEED))))
 
 

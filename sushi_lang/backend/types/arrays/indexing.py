@@ -60,8 +60,7 @@ def slice_value(codegen: 'LLVMCodegen', base: ir.Value, ty: Type, start: ir.Valu
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
         raise_internal_error("CE0000", detail=f"a slice of {ty}, which is no array")
     data = gep_utils.gep_array_element(codegen, array_data(codegen, base, ty), start, "slice_data")
-    length = codegen.builder.trunc(codegen.builder.sub(end, start, name="slice_len"),
-                                   codegen.types.i32, name="slice_len_i32")
+    length = codegen.utils.checked_as_i32(codegen.builder.sub(end, start, name="slice_len"))
     return descriptor(codegen, codegen.types.ll_type(ty.base_type), length, length, data)
 
 

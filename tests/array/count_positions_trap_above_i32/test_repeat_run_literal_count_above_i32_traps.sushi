@@ -1,0 +1,9 @@
+# A literal repeat count that an i32 length cannot hold stops the program too. The
+# constant is not cut to its low 32 bits.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2033: count 4294967297 is too large for a length"
+fn main() i32:
+    let i32[] a = from([7; 4294967297])
+    println(a.len())
+    return 0

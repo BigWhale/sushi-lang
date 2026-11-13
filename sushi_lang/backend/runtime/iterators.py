@@ -346,18 +346,19 @@ def array_source(codegen: 'LLVMCodegen', element_type: 'Type') -> CursorSource:
 # ---------------------------------------------------------------------------------------
 # A range and `Iterator.new`: an owned state on the heap
 
-# The range state: `{i32 k, i32 count, i32 first, i32 step}`; the item is first + step * k.
+# The range state: `{i64 k, i64 count, i32 first, i32 step}`; the item is first + step * k,
+# with k cut to i32: the item is in the i32 range, so the low 32 bits give it.
 _RANGE_K, _RANGE_COUNT, _RANGE_FIRST, _RANGE_STEP = 0, 1, 2, 3
 
 
 def emit_range_iterator(codegen: 'LLVMCodegen', first: ir.Value, count: ir.Value,
                         step: int) -> ir.Value:
     """A range as a value: its first value, its count and its step in a heap state."""
-    i32 = codegen.types.i32
+    i32, i64 = codegen.types.i32, ir.IntType(64)
     state_type = _range_state_type(codegen)
     raw, state = _heap_state(codegen, state_type)
     b = codegen.builder
-    for field, value in ((_RANGE_K, ir.Constant(i32, 0)), (_RANGE_COUNT, count),
+    for field, value in ((_RANGE_K, ir.Constant(i64, 0)), (_RANGE_COUNT, count),
                          (_RANGE_FIRST, first), (_RANGE_STEP, ir.Constant(i32, step))):
         b.store(value, gep_utils.gep_struct_field(codegen, state, field, "range_field"))
     return iterator_value(codegen, _range_next(codegen), raw, _free_state(codegen),
@@ -365,8 +366,8 @@ def emit_range_iterator(codegen: 'LLVMCodegen', first: ir.Value, count: ir.Value
 
 
 def _range_state_type(codegen: 'LLVMCodegen') -> ir.LiteralStructType:
-    i32 = codegen.types.i32
-    return ir.LiteralStructType([i32, i32, i32, i32])
+    i32, i64 = codegen.types.i32, ir.IntType(64)
+    return ir.LiteralStructType([i64, i64, i32, i32])
 
 
 def _range_next(codegen: 'LLVMCodegen') -> ir.Function:
@@ -388,9 +389,10 @@ def _range_next(codegen: 'LLVMCodegen') -> ir.Function:
                   found, done)
 
         b.position_at_end(found)
-        b.store(b.add(k, ir.Constant(codegen.types.i32, 1)), k_ptr)
+        b.store(b.add(k, ir.Constant(k.type, 1)), k_ptr)
         item = b.add(b.load(field(_RANGE_FIRST), name="first"),
-                     b.mul(b.load(field(_RANGE_STEP), name="step"), k), name="item")
+                     b.mul(b.load(field(_RANGE_STEP), name="step"),
+                           b.trunc(k, codegen.types.i32, name="k_i32")), name="item")
         emit_return(codegen, fn, emit_maybe_some(codegen, BuiltinType.I32, item))
 
         b.position_at_end(done)

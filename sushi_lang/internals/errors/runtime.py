@@ -40,6 +40,20 @@ _add(ErrorMessage("RE2028", Severity.ERROR,
     "slice is a descriptor with a wrong length that leaves the marked body, and every "
     "callee checks against that length. The check runs once, when the slice is made."))
 
+# A count that a length cannot hold. The text is the printf format: one %lld, the count as
+# an i64.
+_add(ErrorMessage("RE2033", Severity.ERROR,
+    "count %lld is too large for a length: a length holds at most 2147483647",
+    Category.RUNTIME, "A count position (the count of a repeat run `[x; n]`, `T[].resize`, "
+    "`List.with_capacity`, `List.reserve`, `string.repeat`, and the width of `pad_left` and "
+    "`pad_right`) takes any integer type (docs/adr/0001-index-width-i64.md), but a length "
+    "is still an i32. A count above the i32 maximum stops the program, because the "
+    "program asked for more elements than the value can hold, and a smaller length is a "
+    "wrong answer. A u64 count above the i64 maximum prints as the i64 maximum. A negative "
+    "count of a signed type is not this error: it counts as zero (#478). An index or a "
+    "clamped bound out of the i32 range is not this error either: it is out of range, so "
+    "the bounds check or the clamp answers it."))
+
 # Memory allocation errors
 _add(ErrorMessage("RE2021", Severity.ERROR,
     "memory allocation failed",

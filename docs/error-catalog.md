@@ -3786,6 +3786,14 @@ A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` 
 
 `a + b`, `a - b`, `a * b` or `-a` on an integer type gave a result that the type cannot hold, at run time. The default overflow mode is `trap`, so the program stops with exit code 1. The text names the operator and the type, for example `integer overflow: '+' on i32`. `.add_up()` on an integer array is a `+` for this rule. Build with `--overflow=wrap` to lose the bits that leave the type in place of the stop. The checked operators are the [CE2077](#ce2077) set; for `/` and `%` the overflow is [RE2031](#re2031), and a division by zero is [RE2030](#re2030) in both modes. The arithmetic that the compiler makes (the count of a range, a loop counter) gets no check. `~`, `&`, `|`, `^` and `as` are width-defined, and a wider type or a cast is the escape.
 
+### RE2033 {#re2033}
+
+**Error** · runtime
+
+**Message:** `count %lld is too large for a length: a length holds at most 2147483647`
+
+A count position (the count of a repeat run `[x; n]` or of a range run, `T[].resize`, `List.with_capacity`, `List.reserve`, `string.repeat`, and the width of `pad_left` and `pad_right`) takes any integer type (see [the index-width decision](adr/0001-index-width-i64.md)), but a length is still an i32. A count above the i32 maximum stops the program with exit code 1, because the program asked for more elements than the value can hold, and a smaller length is a wrong answer. A u64 count above the i64 maximum prints as the i64 maximum. A negative count of a signed type is not this error: it counts as zero. An index or a clamped bound out of the i32 range is not this error either: the bounds check ([RE2020](#re2020)) or the clamp answers it.
+
 ## NExxxx: Nori package manager errors {#nexxxx}
 
 The package manager, `nori`, gives these errors. The ranges are: NE00xx internal, NE10xx the manifest, NE20xx the archive, NE30xx the installed packages, NE40xx the operating system, NE50xx the package repository.

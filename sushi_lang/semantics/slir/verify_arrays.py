@@ -1,7 +1,7 @@
 """The checks of an array value, a length, a slice and the drop of a part in the SLIR verifier (docs/design/ir.md 8.13).
 
 An `Aggregate(AggArray)` gives the parts of each run: a value of the element type, an
-`i32` count, and an `i32` first value of a sequence of `i32` slots. The value of a repeat
+`i64` count, and an `i32` first value of a sequence of `i32` slots. The value of a repeat
 run is a borrow, never a `Move`. The counts of a `T[N]` are constants that add up to `N`. A
 `Drop` of a field, an element or a payload is of an owning type, off a local that is no view. `Len` reads an array, a `List@(T)` or a string, and `Slice` reads an
 array with two `i32` bounds. Each check is a free function that takes the `Check` of
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span: Span) -> None:
     """The parts fit the runs: a value of the element type and an `i64` count of a repeat,
-    an `i32` first value and an `i32` count of a sequence of `i32` slots. The value of a repeat run is a borrow, never
+    an `i32` first value and an `i64` count of a sequence of `i32` slots. The value of a repeat run is a borrow, never
     a `Move`. The counts of a `T[N]` are constants that add up to `N`."""
     ty = kind.ty
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
@@ -51,8 +51,7 @@ def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span
             check.fail(ARRAY_VALUE, f"a sequence fills {display_type(ty)}, whose element "
                                     f"is no i32", span)
         first = BuiltinType.I32 if isinstance(run, r.RunSequence) else ty.base_type
-        count = BuiltinType.I64 if isinstance(run, r.RunRepeat) else BuiltinType.I32
-        wanted += [first] if isinstance(run, r.RunOne) else [first, count]
+        wanted += [first] if isinstance(run, r.RunOne) else [first, BuiltinType.I64]
     check.parts_fit(ARRAY_VALUE, display_type(ty), wanted,
                     [check.operand_type(part, span) for part in parts], span)
     if isinstance(ty, ArrayType):

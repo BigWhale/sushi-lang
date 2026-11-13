@@ -1,0 +1,26 @@
+# A count in the i32 range keeps its value in each count position, and a negative signed
+# count still counts as zero (#478, Ruling 2), also below the i32 minimum.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n0\nababab\n\n   ab\nab   \n4\n5\n0\n"
+fn main() i32:
+    let i64 three = 3
+    let i64 neg = 0 - 4294967297
+    let i32[] a = from([7; three])
+    println(a.len())
+    let i32[] b = from([7; neg])
+    println(b.len())
+    println("ab".repeat(three))
+    println("ab".repeat(neg))
+    let u8 five = 5
+    println("ab".pad_left(five, " "))
+    println("ab".pad_right(five, " "))
+    let List@(i32) xs = List.with_capacity(4 as i64)
+    println(xs.capacity())
+    let i32[] c = from([1, 2, 3])
+    c.resize(five, 0)
+    println(c.len())
+    c.resize(neg, 0)
+    println(c.len())
+    xs.free()
+    return 0
