@@ -1,0 +1,8 @@
+public fn wrap_add(i32 a, i32 b) i32:
+    return a + b
+
+public struct Tally@(T):
+    T item
+
+public extend Tally@(T) add(i32 a, i32 b) i32:
+    return a + b

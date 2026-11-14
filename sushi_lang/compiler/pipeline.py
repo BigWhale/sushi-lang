@@ -927,7 +927,8 @@ def _emit_library(driver, analyzer, compilation_order, out_path: Path,
     source = manifest_gen.source_map(compilation_order) if kind != "binary" else None
 
     manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates,
-                          library_version=library_version, kind=kind, source=source)
+                          library_version=library_version, kind=kind, source=source,
+                          overflow=options.overflow.value)
     # CE0116 and CE5002 are found while the public API is extracted, so the second
     # gate is here. `generate()` wrote nothing; this is what keeps the success line
     # from following a diagnostic.
