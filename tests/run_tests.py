@@ -1179,6 +1179,11 @@ REPORT_LINES = (
     "  public extend Crate@(T) value_view() peek T",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
+# The report library is built in the mode that is not the default, and a kind that carries
+# bitcode prints that mode (docs/adr/0002-overflow-mode.md). A source library carries no
+# compiled code, so it prints no mode.
+REPORT_OVERFLOW = "--overflow=wrap"
+REPORT_OVERFLOW_LINE = "Overflow: wrap"
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer of each kind passes `--dont-panic` (D9). It instantiates the two marked
@@ -1213,7 +1218,8 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             kind_dir.mkdir()
             lib = kind_dir / "report_lib.slib"
             built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
-                               "--dont-panic", str(tmp / "report_lib.sushi"), "-o", str(lib),
+                               "--dont-panic", REPORT_OVERFLOW,
+                               str(tmp / "report_lib.sushi"), "-o", str(lib),
                                "--cache-dir", cache], tmp, {})
             if built.returncode != 0:
                 result.failures.append(f"the {kind} report library does not build: "
@@ -1229,6 +1235,12 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                         result.failures.append(
                             f"--lib-info ({half}), {kind}: no line {expected!r} "
                             f"(exit {done.returncode})")
+                result.checks += 1
+                shows_mode = REPORT_OVERFLOW_LINE in lines
+                if shows_mode != (kind != "source"):
+                    result.failures.append(
+                        f"--lib-info ({half}), {kind}: the line {REPORT_OVERFLOW_LINE!r} is "
+                        f"{'present' if shows_mode else 'absent'}")
             program = kind_dir / "main.sushi"
             program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
             done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"), *REPORT_CONSENT,

@@ -168,8 +168,10 @@ above the first member, so one `pending` flag covers the owner and its members.
 ## 11. The payload sizes
 
 The report ends with the size of each payload section that the kind of the library has. A
-field that the kind makes meaningless does not print: a source library has no platform and
-no bitcode, and a binary library has no source. `group_thousands` writes a size with comma
+field that the kind makes meaningless does not print: a source library has no platform, no
+overflow mode and no bitcode, and a binary library has no source. The header prints the
+`overflow` key as `Overflow: <mode>` after `Platform`, and only when the manifest has the
+key. A source library has no key, and a library from a compiler before the key has none. `group_thousands` writes a size with comma
 separators, as the Python `{n:,}` does.
 
 ## 12. The command line and the colour decision

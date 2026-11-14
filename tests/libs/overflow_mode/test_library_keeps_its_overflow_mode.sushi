@@ -1,0 +1,11 @@
+# A binary library built with --overflow=wrap keeps its mode: its compiled function wraps
+# in a consumer that builds in the default mode.
+# BUILD_LIB_BINARY: ovf_wrap_lib.sushi
+# LIB_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-2147483648\n"
+use <lib/ovf_wrap_lib>
+
+fn main(string[] args) i32:
+    println("{wrap_add(2147483647, args.len())}")
+    return 0
