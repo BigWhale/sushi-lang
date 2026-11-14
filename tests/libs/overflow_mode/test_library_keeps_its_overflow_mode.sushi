@@ -7,5 +7,5 @@
 use <lib/ovf_wrap_lib>
 
 fn main(string[] args) i32:
-    println("{wrap_add(2147483647, args.len())}")
+    println("{wrap_add(2147483647, args.len() as i32)}")
     return 0

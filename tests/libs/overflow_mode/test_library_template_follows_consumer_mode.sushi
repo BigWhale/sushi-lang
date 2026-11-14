@@ -9,5 +9,5 @@ use <lib/ovf_wrap_lib>
 
 fn main(string[] args) i32:
     let Tally@(i32) t = Tally(7)
-    println("{t.add(2147483647, args.len())}")
+    println("{t.add(2147483647, args.len() as i32)}")
     return 0
