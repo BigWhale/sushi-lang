@@ -242,17 +242,14 @@ def _trap_on_shift_count(codegen: 'LLVMCodegen', op: str, count: ir.Value, width
     """Stop the program with RE2034 when `count` is out of `0..width`."""
     from sushi_lang.semantics.generics.type_display import display_type
     builder = codegen.builder
+    type_name = display_type(value_type) if value_type is not None else f"i{width}"
+    fail, written = codegen.runtime.errors.exit_block_with_i64(
+        builder.function, "RE2034", op=op, type=type_name)
+    written.add_incoming(_count_as_i64(codegen, count, count_type), builder.block)
     high = builder.lshr(count, ir.Constant(count.type, width.bit_length() - 1))
-    fail = builder.append_basic_block(name="shift_count_out_of_range")
     held = builder.append_basic_block(name="shift_count_in_range")
     switch = builder.switch(high, fail)
     switch.add_case(ir.Constant(count.type, 0), held)
-    builder.position_at_end(fail)
-    type_name = display_type(value_type) if value_type is not None else f"i{width}"
-    codegen.runtime.errors.emit_runtime_error_with_values(
-        "RE2034", _count_as_i64(codegen, count, count_type),
-        *_text_operand(codegen, op), *_text_operand(codegen, type_name))
-    builder.unreachable()
     builder.position_at_end(held)
 
 
@@ -269,14 +266,6 @@ def _count_as_i64(codegen: 'LLVMCodegen', count: ir.Value,
         return count
     negative = builder.icmp_signed("<", count, ir.Constant(i64, 0))
     return builder.select(negative, ir.Constant(i64, (1 << 63) - 1), count)
-
-
-def _text_operand(codegen: 'LLVMCodegen', text: str) -> tuple[ir.Value, ir.Value]:
-    """The two operands of `%.*s` for a text that the compiler knows: its size, then its
-    bytes."""
-    data = codegen.string_manager.get_or_create_raw(text)
-    pointer = codegen.builder.gep(data, [ir.Constant(codegen.i32, 0)] * 2)
-    return ir.Constant(codegen.i32, len(text.encode("utf-8"))), pointer
 
 
 def emit_xor(codegen: 'LLVMCodegen', lhs: ir.Value, rhs: ir.Value, to_i1: bool) -> ir.Value:

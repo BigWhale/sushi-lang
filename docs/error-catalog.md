@@ -3798,7 +3798,7 @@ A count position (the count of a repeat run `[x; n]` or of a range run, `T[].res
 
 **Error** · runtime
 
-**Message:** `shift count %lld is out of range: '%.*s' on %.*s`
+**Message:** `shift count %lld is out of range: '{op}' on {type}`
 
 `a << n` or `a >> n` on an integer type found a count `n` that is equal to or larger than the width of the type, or a negative count of a signed count type, at run time. The default overflow mode is `trap`, so the program stops with exit code 1 (see [the overflow-mode decision](adr/0002-overflow-mode.md)). The text names the count as written, the operator and the type of the shifted value, for example `shift count 32 is out of range: '<<' on i32`. The count of a type of width W runs from 0 to W - 1. A u64 count above the i64 maximum prints as the i64 maximum. Build with `--overflow=wrap` to mask the count to the width (`a << (n & (W - 1))`) in place of the stop. A count that the compiler can read is the compile error [CE2512](#ce2512). To shift every bit out of the type, cast the value to a wider type first.
 

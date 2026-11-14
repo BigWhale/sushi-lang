@@ -146,7 +146,7 @@ _add(ErrorMessage("RE2032", Severity.ERROR,
 
 # A shift count at or above the width, or negative, in trap mode (#1304)
 _add(ErrorMessage("RE2034", Severity.ERROR,
-    "shift count %lld is out of range: '%.*s' on %.*s",
+    "shift count %lld is out of range: '{op}' on {type}",
     Category.RUNTIME, "`a << n` or `a >> n` on an integer type found a count `n` that is "
     "equal to or larger than the width of the type, or a negative count of a signed count "
     "type, at run time. The default overflow mode is `trap`, so the program stops with exit "

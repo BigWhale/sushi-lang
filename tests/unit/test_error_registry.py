@@ -31,7 +31,7 @@ REFERENCE_PATTERNS = [
     re.compile(r"""LibraryError\(\s*["'](C[EW]\d{4})["']"""),
     re.compile(r"""emit_runtime_error(?:_with_values)?\(\s*["'](RE\d{4})["']"""),
     re.compile(r"""Trap\(\s*["'](RE\d{4})["']"""),
-    re.compile(r"""exit_block\([^,]*,\s*["'](RE\d{4})["']"""),
+    re.compile(r"""exit_block(?:_with_i64)?\([^,]*,\s*["'](RE\d{4})["']"""),
 ]
 
 # The packager raises an NE code through NoriError and its subclasses, and recasts one

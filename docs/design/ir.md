@@ -3548,7 +3548,12 @@ here out of range: that is CE2512. A width is a power of two, so the count is in
 its bits above the low `log2(width)` are 0, and a negative count has the sign bit set. The
 check is a `switch` on those bits, not a compare and a branch, because LLVM's SimplifyCFG
 does not converge on a nest of thousands of compare-and-branch checks (the fixtures under
-`tests/operators/deep_nest_operand_reads/`).
+`tests/operators/deep_nest_operand_reads/`). Every check of a function goes to ONE fail block
+(`RuntimeErrors.exit_block_with_i64`), whose phi takes the count of each site, and that block
+calls ONE cold function for each text. The operator and the type are in the text at compile
+time, so the count is the only run-time value. A fail block for each site makes LLVM merge
+thousands of identical calls, and that is slow. A SLIR `Const` count gets no check, because
+CE2512 has already read it (`backend/slir/values.py`).
 
 **An array value.** The kind of an array is `AggArray(ty, runs)`. `ty` is the `T[N]` or the
 `T[]` of the value, and `runs` holds one run for each run of the `ArrayInit`, in order:

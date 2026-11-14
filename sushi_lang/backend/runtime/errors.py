@@ -20,6 +20,7 @@ class RuntimeErrors:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
         self._exit_blocks: dict[tuple[str, str], ir.Block] = {}
+        self._i64_exit_blocks: dict[tuple[str, str], tuple[ir.Block, ir.PhiInstr]] = {}
 
     def emit_runtime_error(self, error_code: str, **params) -> None:
         """Emit runtime error message to stderr and exit program."""
@@ -38,6 +39,47 @@ class RuntimeErrors:
         stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
         builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr] + list(values))
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
+
+    def exit_block_with_i64(self, fn: ir.Function, error_code: str,
+                            **params) -> tuple[ir.Block, ir.PhiInstr]:
+        """ONE block of `fn` that stops with `error_code` and ONE i64 in its text, and the
+        phi that each site that branches to it gives its i64."""
+        text = runtime_error_text(self.codegen.module, error_code, **params)
+        key = (fn.name, text.name)
+        found = self._i64_exit_blocks.get(key)
+        if found is None or found[0].parent is not fn:
+            block = fn.append_basic_block(name=f"exit_{error_code}")
+            builder = ir.IRBuilder(block)
+            phi = builder.phi(ir.IntType(64), name="value")
+            builder.call(self._shared_exit_with_i64(text), [phi])
+            builder.unreachable()
+            found = (block, phi)
+            self._i64_exit_blocks[key] = found
+        return found
+
+    def _shared_exit_with_i64(self, text: ir.GlobalVariable) -> ir.Function:
+        module = self.codegen.module
+        name = f"__sushi_exit_i64_{text.name}"
+        existing = module.globals.get(name)
+        if existing is not None:
+            return existing
+        i64 = ir.IntType(64)
+        fn = self._cold_exit_function(name, [i64])
+        builder = ir.IRBuilder(fn.append_basic_block("entry"))
+        fmt_ptr = builder.gep(text, [ZERO_I32, ZERO_I32], name="err_fmt_ptr")
+        stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
+        builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr, fn.args[0]])
+        builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
+        builder.unreachable()
+        return fn
+
+    def _cold_exit_function(self, name: str, params: list[ir.Type]) -> ir.Function:
+        fn = ir.Function(self.codegen.module,
+                         call_signature(ir.VoidType(), params).function_type, name=name)
+        fn.linkage = "private"
+        for attribute in ("noreturn", "cold", "noinline", "nounwind"):
+            fn.attributes.add(attribute)
+        return fn
 
     def exit_block(self, fn: ir.Function, error_code: str, **params) -> ir.Block:
         """ONE block of `fn` that stops with `error_code`, for every site of `fn` that
@@ -64,12 +106,7 @@ class RuntimeErrors:
         existing = module.globals.get(name)
         if existing is not None:
             return existing
-        fn = ir.Function(module, call_signature(ir.VoidType(), []).function_type, name=name)
-        fn.linkage = "private"
-        fn.attributes.add("noreturn")
-        fn.attributes.add("cold")
-        fn.attributes.add("noinline")
-        fn.attributes.add("nounwind")
+        fn = self._cold_exit_function(name, [])
         builder = ir.IRBuilder(fn.append_basic_block("entry"))
         msg_ptr = builder.gep(text, [ZERO_I32, ZERO_I32], name="err_msg_ptr")
         stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
