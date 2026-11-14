@@ -1,0 +1,16 @@
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n18\n36\n72\n"
+# In wrap mode a count of a wider type is masked to the width of the value: a u64
+# count of 256 on a u8 is 0, and 9 is 1.
+
+fn shl_u8_wide(u8 value, u64 places) u8:
+    return value << places
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shl_u8_wide(0x12, 256)}")
+    println("{shl_u8_wide(0x12, 9)}")
+    println("{shl_u8_wide(0x12, 2)}")
+
+    return 0

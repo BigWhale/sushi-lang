@@ -737,11 +737,18 @@ fn main() i32:
 ```
 
 A computed count -- a loop index, a value read from a file -- cannot be read at
-compile time, so it is not an error. It has a defined answer instead: a shift by a
-count at or above the width moves every bit out of the type and gives **0**. An
-arithmetic right shift fills from the sign bit, so it leaves the sign behind: 0 for
-a positive value and -1 for a negative one. A negative count is out of range at the
-other end and answers the same way.
+compile time, so it is not an error. A computed count that is equal to or larger than the
+width, or a negative count of a signed count type, follows the overflow mode
+([Overflow](#overflow), [the overflow-mode decision](adr/0002-overflow-mode.md)):
+
+- `trap` (the default): the program stops with [RE2034](error-catalog.md#re2034), which
+  names the count, the operator and the type
+  (`shift count 8 is out of range: '<<' on u8`). The program exits 1.
+- `wrap`: the count is masked to the width, as Rust does: `value << (places & (W - 1))`
+  for a type of width `W`. So `value << 8` on a `u8` is `value << 0`.
+
+The range is read from the count as it is written. A `u64` count of 256 on a `u8` is out of
+range, and is not narrowed to 0 first.
 
 ```sushi
 fn shift(u8 value, u8 places) u8:
@@ -749,16 +756,12 @@ fn shift(u8 value, u8 places) u8:
 
 fn main() i32:
     println("{shift(0x12, 3)}")     # 144
-    println("{shift(0x12, 8)}")     # 0 -- every bit has left the u8
+    println("{shift(0x12, 7)}")     # 0 -- the last legal count of a u8
     return 0
 ```
 
-The count is never masked. Masking is what the hardware does and what Java and Rust
-expose, and it would answer `value << 8` on a `u8` with the value itself -- a wrong
-answer that reads like a working shift. Sushi follows Go here: shifting by one place
-at a time is the rule, so a count that empties the type gives an empty result. It
-costs one compare and one conditional move, and nothing at all when the count is a
-constant.
+To shift every bit out of the type, cast the value to a wider type first, or test the
+count before the shift.
 
 ### Arithmetic
 
@@ -830,6 +833,11 @@ the sum of two locals, is checked when the program runs. The flag
   program with [RE2032](error-catalog.md#re2032), which names the operator and the type
   (`integer overflow: '+' on u8`). The program exits 1.
 - `wrap`: the bits that leave the type are lost, and nothing reports it.
+
+A shift count that the compiler cannot read follows the mode too: in `trap` mode a count
+that is equal to or larger than the width, or negative, stops the program with
+[RE2034](error-catalog.md#re2034); in `wrap` mode the count is masked to the width (see
+[Operand types](#operand-types)).
 
 ```sushi
 fn main() i32:
@@ -1024,8 +1032,9 @@ integer literal is `i32`, so a literal receiver also needs the cast:
 `(0x80 as u8).trailing_zeros()`.
 
 **The low `n` bits, reversed.** Use the shift: `c.reverse_bits() >> (W - n)`. For `n = W`
-the count is 0, and the answer is the full reversal. For `n = 0` the count is `W`. A
-computed shift count at or above the width gives 0, so the answer is 0. Write the count
+the count is 0, and the answer is the full reversal. For `n = 0` the count is `W`, which is
+out of range: [RE2034](error-catalog.md#re2034) in the default mode. So test `n == 0`
+first when `n` can be 0. Write the count
 as an expression of `n`: a count that the compiler can read must be from 0 to `W - 1`,
 so `c.reverse_bits() >> 32` on a `u32` is [CE2512](error-catalog.md#ce2512).
 

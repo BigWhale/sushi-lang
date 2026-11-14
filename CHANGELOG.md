@@ -13,6 +13,12 @@ All notable changes to Sushi Lang will be documented in this file.
   and `find_last` of a string, answer `Maybe@(i64)`. A bare literal stays `i32`, so
   `let i32 n = xs.len()` needs `as i32` (docs/adr/0001-index-width-i64.md). BREAKING
   (#1306).
+- **A shift count at or above the width follows the overflow mode.** In the default mode
+  `trap`, a computed count of `<<` or `>>` that is equal to or larger than the width of the
+  value, or a negative count, stops the program with `RE2034`, which names the count, the
+  operator and the type. With `--overflow=wrap` the count is masked to the width
+  (`x << (n & (W - 1))`), as Rust does. This replaces the Go rule, which gave 0 or the sign
+  fill. A count that the compiler can read is still `CE2512`. BREAKING (#1304).
 - **`divmod` is a method of each integer type, and it answers a bare `(T, T)`.** Write
   `a.divmod(b)`. The method needs no import. A divisor of 0 stops the program with
   `RE2030`, and a signed `MIN.divmod(-1)` stops it with `RE2031`, the same as `/`. The

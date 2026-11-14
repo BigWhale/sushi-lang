@@ -1,0 +1,13 @@
+# A u64 count above the i64 maximum prints as the i64 maximum.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2034"
+# EXPECT_STDERR_CONTAINS: "shift count 9223372036854775807 is out of range: '<<' on u64"
+
+fn shl(u64 value, u64 places) u64:
+    return value << places
+
+fn main() i32:
+    let u64 huge = 18446744073709551615
+    println("{shl(1, huge)}")
+    return 0
