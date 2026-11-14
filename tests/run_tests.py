@@ -1184,6 +1184,7 @@ REPORT_KINDS = ("source", "hybrid", "binary")
 # compiled code, so it prints no mode.
 REPORT_OVERFLOW = "--overflow=wrap"
 REPORT_OVERFLOW_LINE = "Overflow: wrap"
+REPORT_MODE_KINDS = ("hybrid", "binary")
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer of each kind passes `--dont-panic` (D9). It instantiates the two marked
@@ -1237,7 +1238,7 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                             f"(exit {done.returncode})")
                 result.checks += 1
                 shows_mode = REPORT_OVERFLOW_LINE in lines
-                if shows_mode != (kind != "source"):
+                if shows_mode != (kind in REPORT_MODE_KINDS):
                     result.failures.append(
                         f"--lib-info ({half}), {kind}: the line {REPORT_OVERFLOW_LINE!r} is "
                         f"{'present' if shows_mode else 'absent'}")
