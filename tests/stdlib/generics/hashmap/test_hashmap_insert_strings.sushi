@@ -13,7 +13,7 @@ fn main() i32:
     ages.insert("Charlie", 35)
 
     # Check size
-    let i32 size = ages.len()
+    let i32 size = ages.len() as i32
     println("Size after 3 inserts: {size}")
 
     if (size != 3):
@@ -22,7 +22,7 @@ fn main() i32:
 
     # Test updating an existing key
     ages.insert("Trillian", 26)
-    let i32 size2 = ages.len()
+    let i32 size2 = ages.len() as i32
     println("Size after update: {size2}")
 
     if (size2 != 3):

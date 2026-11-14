@@ -19,4 +19,4 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), Call(Builtin(Call(Free(@parse), [(Lit(3), Guaranteed)]), "realise"), [Lit("zero")]), is_init: true)
     Assign(LocalRef(_1), Call(Builtin(Call(Free(@name), [(Lit(1), Guaranteed)]), "realise"), [Lit(true)]), is_init: true)
-    Return(Binary(+, LocalRef(_0), Call(Builtin(LocalRef(_1), "len"), [])))
+    Return(Binary(+, LocalRef(_0), Cast(Call(Builtin(LocalRef(_1), "len"), []), i32)))

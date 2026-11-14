@@ -575,6 +575,8 @@ def print_library_info(library_path: Path, show_docs: bool = False,
     print(f"Kind: {kind}")
     if kind != 'source':
         print(f"Platform: {metadata['platform']}")
+    if metadata.get('overflow'):
+        print(f"Overflow: {metadata['overflow']}")
     print(f"Compiler: {metadata['compiler_version']}")
     if requires:
         print(f"Requires compiler: {requires}")

@@ -25,7 +25,7 @@ fn typed() i32 | IoError:
     let BufReader@(File) r = BufReader.new(nom stdin.share()??, 64)
     let i32 total = 0
     foreach(string text?? in r.lines()):
-        total := total + text.len()
+        total := total + (text.len() as i32)
     return Result.Ok(total)
 
 fn skipped() i32 | IoError:

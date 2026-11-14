@@ -463,7 +463,7 @@ def _a_maybe_element(array_type: ArrayReceiver, validator: 'TypeValidator') -> O
 def _a_maybe_index(array_type: ArrayReceiver, validator: 'TypeValidator') -> Optional[Type]:
     """`index_of` and `index_of_from` answer WHERE, so the `Maybe` carries the index and not
     the element."""
-    return _maybe(validator, BuiltinType.I32)
+    return _maybe(validator, BuiltinType.I64)
 
 
 def _the_byte_string(array_type: ArrayReceiver,
@@ -535,7 +535,7 @@ class ArraySpec:
 
 
 _ARRAY_METHODS: dict[str, ArraySpec] = {
-    "len": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.I32)),
+    "len": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.I64)),
     "get": ArraySpec(1, Receiver.ANY, _a_maybe_element, arguments=_an_index),
     "first": ArraySpec(0, Receiver.ANY, _a_maybe_element),
     "last": ArraySpec(0, Receiver.ANY, _a_maybe_element),
@@ -558,7 +558,7 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     "clear": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK)),
     "truncate": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
                           arguments=_an_index),
-    "capacity": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.I32)),
+    "capacity": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.I64)),
     # The `List@(T)` contract (ruling R3): `insert` answers `Result@(~, StdError)`, and
     # `remove` answers `Maybe@(T)`.
     "insert": ArraySpec(2, Receiver.DYNAMIC, _the_checked_insert,

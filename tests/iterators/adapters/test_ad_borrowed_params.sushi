@@ -10,13 +10,13 @@ use <collections/iter>
 fn length_plain(Iterator@(string) it) ~:
     let i32 n = 0
     foreach(s in it.clone()):
-        n := n + s.len()
+        n := n + (s.len() as i32)
     println("plain {n}")
 
 fn length_peek(peek Iterator@(string) it) ~:
     let i32 n = 0
     foreach(s in it.clone()):
-        n := n + s.len()
+        n := n + (s.len() as i32)
     println("peek {n}")
 
 fn sum_plain(Iterator@(i32) it) ~:

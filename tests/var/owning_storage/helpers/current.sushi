@@ -6,4 +6,4 @@ public fn set_current(string v) ~:
     current := "{v}+"
 
 public fn current_len() i32:
-    return current.len()
+    return current.len() as i32

@@ -14,7 +14,7 @@ fn joined(...string parts) string:
     return out
 
 fn count(...string parts) i32:
-    return parts.len()
+    return parts.len() as i32
 
 fn forward(nom string[] parts) i32:
     return count(parts...)

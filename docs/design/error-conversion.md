@@ -424,7 +424,7 @@ fn count_configs(string dir) i32 | ConfigError:
     let string[] names = read_dir(dir)??
     if (names.len() == 0):
         return Result.Err(ConfigError.Empty)
-    return Result.Ok(names.len())
+    return Result.Ok(names.len() as i32)
 
 fn main() i32:
     match count_configs("/etc/app"):

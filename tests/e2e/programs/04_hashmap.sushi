@@ -4,7 +4,7 @@ fn main() i32:
     let HashMap@(string, i32) map = HashMap.new()
     map.insert("answer", 42)
     map.insert("towels", 1)
-    let i32 size = map.len()
+    let i32 size = map.len() as i32
     if (size != 2):
         println("FAIL: wrong size")
         map.free()

@@ -21,7 +21,7 @@ fn word(i32 n) string | TokenError:
 fn run(i32 n) i32 | AppError:
     let Result@(string, TokenError) r = word(n)
     let string w = r??
-    return Result.Ok(w.len())
+    return Result.Ok(w.len() as i32)
 
 fn main() i32:
     match run(3):

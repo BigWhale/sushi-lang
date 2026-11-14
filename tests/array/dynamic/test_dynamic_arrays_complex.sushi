@@ -7,7 +7,7 @@ fn run_test() i32 | StdError:
 
   # Test dynamic growth and capacity
   let string[] words = new()
-  let i32 capacity_before = words.capacity()
+  let i32 capacity_before = words.capacity() as i32
   print(capacity_before)    # Should print 0
 
   print(words.push("first"))   # Push returns void (0)
@@ -16,7 +16,7 @@ fn run_test() i32 | StdError:
   print(words.push("fourth"))  # Push returns void (0)
   print(words.push("fifth"))   # Push returns void (0)
 
-  let i32 capacity_after = words.capacity()
+  let i32 capacity_after = words.capacity() as i32
   print(words.len())        # Should print 5
   print(capacity_after)     # Should be >= 5 (likely 8 due to exponential growth)
 

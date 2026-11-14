@@ -25,7 +25,7 @@ fn feed_of@(T)(nom T[] items) Feed@(T):
 
 fn size@(T)(nom T[] items) i32:
     let Feed@(T) f = feed_of(nom items)
-    return f.items.len()
+    return f.items.len() as i32
 
 fn main() i32:
     println(size(nom from(["Arthur", "Ford"])))

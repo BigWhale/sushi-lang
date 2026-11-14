@@ -4,7 +4,7 @@
 # A `poke string` parameter is the receiver of a string method.
 
 fn measure(poke string s) i32:
-    return s.trim().len()
+    return s.trim().len() as i32
 
 fn main() i32:
     let string s = "Mostly Harmless"

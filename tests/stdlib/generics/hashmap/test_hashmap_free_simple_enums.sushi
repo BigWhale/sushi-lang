@@ -22,14 +22,14 @@ fn main() i32:
     map.insert(3, s3)
 
     println("Before free - map has 3 Status enum entries")
-    let i32 size_before = map.len()
+    let i32 size_before = map.len() as i32
     println("Size: {size_before}")
 
     # Free the map
     map.free()
 
     println("\nAfter free - map should be empty")
-    let i32 size_after = map.len()
+    let i32 size_after = map.len() as i32
     println("Size: {size_after}")
 
     if (size_after == 0):
@@ -39,7 +39,7 @@ fn main() i32:
     let Status new_s = Status.Ok(100)
     map.insert(10, new_s)
 
-    let i32 final_size = map.len()
+    let i32 final_size = map.len() as i32
     if (final_size == 1):
         println("✓ Can reuse map after free")
 

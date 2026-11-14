@@ -21,7 +21,7 @@ use <collections/hashmap>
 fn len_of(Maybe@(List@(i32)) got) i32:
     match got:
         Maybe.Some(lst) ->
-            return lst.len()
+            return lst.len() as i32
         Maybe.None ->
             return -1
 

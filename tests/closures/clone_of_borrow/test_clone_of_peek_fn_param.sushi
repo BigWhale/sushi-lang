@@ -11,6 +11,6 @@ fn dup(peek fn(i32) -> i32 f) i32:
 
 fn main() i32:
     let string tag = "abc {1}"
-    let fn(i32) -> i32 c = |i32 x| x + tag.len() + 3
+    let fn(i32) -> i32 c = |i32 x| x + (tag.len() as i32) + 3
     println("{dup(peek c)}")
     return 0

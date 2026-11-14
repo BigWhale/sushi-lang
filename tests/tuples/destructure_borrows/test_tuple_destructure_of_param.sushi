@@ -7,7 +7,7 @@ use <collections/strings>
 fn show((string, string) p) i32:
     let (first, string last) = p
     println("{first} {last} {first.len()}")
-    return last.len()
+    return last.len() as i32
 
 fn main() i32:
     let (string, string) t = ("zaphod", "beeblebrox")

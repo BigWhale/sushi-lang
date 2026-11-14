@@ -17,7 +17,7 @@ fn main() i32:
     colors.push(Color.Red())
     colors.push(Color.Green())
 
-    let i32 len = colors.len()
+    let i32 len = colors.len() as i32
     if (len != 2):
         println("FAIL: expected 2 got {len}")
         return 1

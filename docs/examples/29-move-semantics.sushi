@@ -53,7 +53,7 @@ enum Shape:
 # The match binding `p` borrows the payload too.
 fn point_count(Shape s) i32:
     match s:
-        Shape.Poly(p) -> return p.len()
+        Shape.Poly(p) -> return p.len() as i32
         Shape.Empty -> return 0
 
 fn main() i32:
@@ -123,4 +123,4 @@ fn main() i32:
     return 0
 
 fn counted(peek i32[] xs) i32:
-    return xs.len()
+    return xs.len() as i32

@@ -42,7 +42,7 @@ extend Crate map_err(i32 d) i32:
 
 extend Crate expect(string why) i32:
     println("expect {self.label} {why}")
-    return why.len()
+    return why.len() as i32
 
 fn make(i32 n) Light:
     println("make {n}")

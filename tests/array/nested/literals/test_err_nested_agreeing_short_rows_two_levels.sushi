@@ -3,4 +3,4 @@
 # EXPECT_ERROR_CODES_EXACT: CE2002
 fn main() i32:
     let i32[2][2][2] x = [[[1], [2]], [[3], [4]]]
-    return x.len()
+    return x.len() as i32

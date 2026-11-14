@@ -192,6 +192,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "sushi_lib_version", "str", "yes"),
     ("manifest", "kind", "str", "no"),
     ("manifest", "requires_compiler", "str", "no"),
+    ("manifest", "overflow", "str", "no"),
     ("manifest", "units", "strs", "no"),
     ("manifest", "unit_docs", "{}doc", "no"),
     ("manifest", "reexports", "[]reexport", "no"),

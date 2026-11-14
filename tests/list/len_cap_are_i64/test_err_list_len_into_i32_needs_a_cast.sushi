@@ -1,0 +1,11 @@
+# A length is an i64 (ADR 0001, the contract step), and Sushi has no implicit narrowing:
+# `let i32 n = list.len()` of a `List@(T)` is refused. `as i32` is the escape.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn main() i32:
+    let List@(i32) list = List.new()
+    let i32 b = list.len()
+    let i32 ok = list.len() as i32
+    println("{b} {ok}")
+    list.free()
+    return 0

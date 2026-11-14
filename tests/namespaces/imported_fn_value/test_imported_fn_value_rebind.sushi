@@ -5,7 +5,7 @@ use "helpers/lib3"
 use <collections/strings>
 
 fn one(string s) i32:
-    return s.len() - s.len() + 1
+    return (s.len() as i32) - (s.len() as i32) + 1
 
 fn main() i32:
     let fn(string) -> i32 f = one

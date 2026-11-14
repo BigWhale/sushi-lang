@@ -9,7 +9,7 @@ fn run() i32:
     let List@(string) xs = List.new()
     xs.push("ab")
     xs.push("cde")
-    let i32 total = fold(xs, 0, |i32 acc, string s| acc + s.len())
+    let i32 total = fold(xs, 0, |i32 acc, string s| acc + (s.len() as i32))
     println(total)
     return 0
 

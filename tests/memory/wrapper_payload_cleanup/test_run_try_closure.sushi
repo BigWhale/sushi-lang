@@ -9,7 +9,7 @@ fn make(i32 n) Result@(fn(i32) -> i32, StdError):
     if (n == 0):
         return Result.Err(StdError.Error)
     let string tag = "tag {n}"
-    return Result.Ok(|i32 x| x * n + tag.len())
+    return Result.Ok(|i32 x| x * n + (tag.len() as i32))
 
 fn run(i32 n) i32 | StdError:
     let string label = "run {n}"

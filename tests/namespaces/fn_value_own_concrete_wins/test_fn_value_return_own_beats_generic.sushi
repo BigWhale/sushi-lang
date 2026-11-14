@@ -5,7 +5,7 @@ use "helpers/pick_any"
 use <collections/strings>
 
 fn pick(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn chooser() fn(string) -> i32:
     return pick

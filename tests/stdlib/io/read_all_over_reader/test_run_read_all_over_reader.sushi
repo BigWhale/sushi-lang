@@ -25,7 +25,7 @@ extend Chunks with Reader:
         if (max < step):
             step := max
         let u8[] out = self.data.ss(self.pos, step)
-        self.pos := self.pos + out.len()
+        self.pos := self.pos + (out.len() as i32)
         return Result.Ok(out)
 
 fn run() ~ | IoError:

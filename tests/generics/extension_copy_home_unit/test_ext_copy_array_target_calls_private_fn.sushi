@@ -6,7 +6,7 @@ fn plain(i32 x) i32:
     return x
 
 extend T[] firstish() i32:
-    return plain(self.len())
+    return plain(self.len() as i32)
 
 fn main() i32:
     let i32[] a = from([5, 6, 7])

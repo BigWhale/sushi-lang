@@ -11,6 +11,6 @@ fn main() i32:
         let poke i32[] a = xs
         let peek i32[] b = xs
         a.push(k)
-        return b.len() + y.len()
+        return (b.len() as i32) + (y.len() as i32)
     println(f(0))
     return 0

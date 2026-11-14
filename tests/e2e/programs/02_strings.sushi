@@ -2,7 +2,7 @@ use <collections/strings>
 
 fn main() i32:
     let string s = "Mostly Harmless"
-    let i32 length = s.len()
+    let i32 length = s.len() as i32
     println(length)
     let string upper = s.upper()
     println(upper)

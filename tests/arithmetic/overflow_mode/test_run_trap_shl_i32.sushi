@@ -1,0 +1,12 @@
+# A shift count at the width of an i32 stops the program in the default mode.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2034"
+# EXPECT_STDERR_CONTAINS: "shift count 32 is out of range: '<<' on i32"
+
+fn shl(i32 value, i32 places) i32:
+    return value << places
+
+fn main() i32:
+    println("{shl(1, 32)}")
+    return 0

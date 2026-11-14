@@ -36,4 +36,4 @@ fn main() i32:
     let (word, count) = nom h.pair
     println("{word} {count}")
     show_all(1, 2)
-    return s.len() - 2
+    return (s.len() as i32) - 2

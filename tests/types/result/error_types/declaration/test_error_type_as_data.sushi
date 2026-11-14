@@ -23,7 +23,7 @@ fn main() i32:
     seen.push(NetFault.Refused)
     seen.push(NetFault.Timeout(30))
     seen.push(NetFault.Refused)
-    let Tracker t = Tracker(NetFault.Timeout(5), seen.len())
+    let Tracker t = Tracker(NetFault.Timeout(5), seen.len() as i32)
     println("last {t.last}")
     let Event ev = Event.Failed(NetFault.Refused)
     match ev:

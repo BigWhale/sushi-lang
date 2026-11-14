@@ -6,13 +6,13 @@ struct Named:
     string name
 
 fn count(nom i32[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn glue(nom string a, string b) string:
     return "{a}{b}"
 
 fn peek_len(string[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn name_of(nom Named n) string:
     return n.name.clone()

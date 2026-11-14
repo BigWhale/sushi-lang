@@ -340,7 +340,7 @@ use <collections/iter>
 fn count(poke Iterator@(peek string) it) i32:
     let i32 n = 0
     foreach(s in it):                  # walks the caller's iterator in place
-        n := n + s.len()
+        n := n + (s.len() as i32)
     return n
 
 fn main() i32:

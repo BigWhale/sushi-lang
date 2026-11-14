@@ -13,7 +13,7 @@ fn main() i32:
     let List@(string) words = List.new()
     words.push("a")
     words.push("bb")
-    println(words.iter().fold(nom 0, nom |i32 acc, string w| acc + w.len()))
+    println(words.iter().fold(nom 0, nom |i32 acc, string w| acc + (w.len() as i32)))
     println(words.iter().fold(nom "", nom |string acc, string w| "{acc}<{w}>"))
     let Iterator@(i32) r = 0..5
     println(r.fold(nom 0, nom |i32 acc, i32 x| acc + x))

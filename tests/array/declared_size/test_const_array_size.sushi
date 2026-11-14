@@ -8,7 +8,7 @@ struct Counts:
     i32[MAX_BITS] slots
 
 fn walk(i32[MAX_BITS] counts) i32:
-    return counts.len()
+    return counts.len() as i32
 
 fn main() i32:
     println("Mostly Harmless")

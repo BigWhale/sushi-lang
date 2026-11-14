@@ -1,0 +1,15 @@
+# `len()`, `size()`, `find`, `find_last` and `count` of a string answer i64 (ADR 0001, the
+# contract step). Arithmetic on the answer goes above 2^31 with no overflow.
+# EXPECT_STDOUT_EXACT: "5000000000 6000000000 1 3 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string s = "abcbé"
+    let i64 n = s.len()
+    let i64 bytes = s.size()
+    let i64 first = s.find("b").realise(-1)
+    let i64 last = s.find_last("b").realise(-1)
+    let i64 times = s.count("b")
+    println("{n * 1000000000} {bytes * 1000000000} {first} {last} {times}")
+    return 0

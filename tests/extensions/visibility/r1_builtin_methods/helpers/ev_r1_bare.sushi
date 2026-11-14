@@ -1,6 +1,6 @@
 # A unit with no import that calls a method of each tier.
 public fn line_count(string s) i32:
-    return s.lines().len()
+    return s.lines().len() as i32
 
 public fn shout(string s) string:
     return s.upper()

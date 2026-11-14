@@ -11,14 +11,16 @@ import stat
 
 from _harness import PROJECT_ROOT
 from run_tests import (
-    LIB_READER_TOOL_ENV, REPORT_KINDS, REPORT_LINES, lib_info_report_gate,
+    LIB_READER_TOOL_ENV, REPORT_KINDS, REPORT_LINES, REPORT_MODE_KINDS,
+    lib_info_report_gate,
 )
 
 SILENT_TOOL = "#!/bin/sh\necho 'Library: whatever'\nexit 0\n"
 
 
 def test_the_gate_fails_a_tool_that_prints_no_report(monkeypatch, tmp_path):
-    """The always-fires control: every line fails the tool half, and only it."""
+    """The always-fires control: every line and every mode line fails the tool half, and
+    only it."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     tool = bin_dir / "slib-info"
@@ -26,7 +28,8 @@ def test_the_gate_fails_a_tool_that_prints_no_report(monkeypatch, tmp_path):
     tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
     monkeypatch.setenv(LIB_READER_TOOL_ENV, str(bin_dir))
     result = lib_info_report_gate(PROJECT_ROOT)
-    assert len(result.failures) == len(REPORT_KINDS) * len(REPORT_LINES), result.failures
+    expected = len(REPORT_KINDS) * len(REPORT_LINES) + len(REPORT_MODE_KINDS)
+    assert len(result.failures) == expected, result.failures
     assert all("--lib-info (tool)" in f for f in result.failures), result.failures
 
 

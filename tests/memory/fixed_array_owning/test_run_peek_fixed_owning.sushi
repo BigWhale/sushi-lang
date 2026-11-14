@@ -9,7 +9,7 @@ struct Pair:
 
 fn look(peek string[2] g) i32:
     println("look {g[0]} {g[1]}")
-    return g[0].len() + g[1].len()
+    return (g[0].len() as i32) + (g[1].len() as i32)
 
 fn main() i32:
     let string[2] g = ["a {1}", "b {1}"]

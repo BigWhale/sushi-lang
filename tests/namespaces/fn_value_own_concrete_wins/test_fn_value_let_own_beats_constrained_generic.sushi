@@ -6,7 +6,7 @@ use "helpers/pick_pk"
 use <collections/strings>
 
 fn pick(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let fn(string) -> i32 f = pick

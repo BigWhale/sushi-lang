@@ -8,7 +8,7 @@
 # (A by-value array param is moved and freed by the callee -- see get_bool_count, which
 # consumes its argument.)
 fn get_length(peek i32[] arr) i32:
-    return arr.len()
+    return arr.len() as i32
 
 fn get_string_length(peek string[] arr) string | StdError:
     # A get-out is a borrow and the caller keeps the array, so returning an owned string
@@ -16,16 +16,16 @@ fn get_string_length(peek string[] arr) string | StdError:
     return Result.Ok(arr.get(0).or_err(nom StdError.Error)??.clone())
 
 fn get_bool_count(bool[] arr) i32:
-    return arr.len()
+    return arr.len() as i32
 
 # Takes its arrays by value (move): this is the last use of nums/words, so they are
 # consumed here and freed by the callee.
 fn process_multiple(i32[] numbers, string[] names) i32:
-    return numbers.len() + names.len()
+    return (numbers.len() as i32) + (names.len() as i32)
 
 fn modify_array(poke i32[] arr) i32:
     print(arr.push(99))
-    return arr.len()
+    return arr.len() as i32
 
 fn main() i32:
     # Test basic dynamic array parameter

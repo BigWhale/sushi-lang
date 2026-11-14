@@ -9,7 +9,7 @@ struct Box@(T):
     T value
 
 extend Box@(List@(i32)) counted() i32:
-    return self.value.len()
+    return self.value.len() as i32
 
 extend Box@(i32) raw() i32:
     return self.value

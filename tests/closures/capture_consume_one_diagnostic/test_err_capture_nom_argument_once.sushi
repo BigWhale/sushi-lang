@@ -4,7 +4,7 @@
 # EXPECT_STDERR_CONTAINS: cannot consume 's'
 
 fn take(nom i32[] s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let i32[] s = from([1, 2, 3])

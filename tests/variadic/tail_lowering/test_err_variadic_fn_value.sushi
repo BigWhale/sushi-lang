@@ -5,7 +5,7 @@
 use "helpers/tail_unit" as t
 
 fn sum(...i32 xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let fn(i32[]) -> i32 f = sum

@@ -5,7 +5,7 @@
 use <collections/strings>
 
 fn look(peek string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let string[] xs = from(["ab", "c"])

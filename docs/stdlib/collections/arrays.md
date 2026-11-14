@@ -97,7 +97,7 @@ A method that only READS -- `.len()`, `.get()`, `.iter()`, `.hash()`, `.clone()`
 
 ## Common Methods (Fixed and Dynamic)
 
-### `.len() -> i32`
+### `.len() -> i64`
 
 Get number of elements.
 
@@ -137,7 +137,7 @@ let i32[] empty = from([])
 empty.first().is_none()                  # true
 ```
 
-### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
+### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i64)`
 
 A linear search with the `==` the language defines, so the element type must have
 equality: the numeric types, `bool`, `string`, or a struct or an enum with a derived or
@@ -152,7 +152,7 @@ let i32 at = words.index_of("beta").realise(-1)   # 1
 words.index_of("delta").is_none()         # true
 ```
 
-### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
+### `.index_of_from(T value, i32 start) -> Maybe@(i64)`
 
 Finds the first index `i` with `i >= start` where the element is equal to `value`.
 The answer is `Maybe.Some(i)`, or `Maybe.None()` when no element from `start` to the end
@@ -181,7 +181,7 @@ fn main() i32:
     println(a.index_of_from(7, 4).realise(-1))    # -1
 
     # Every match, one call per match.
-    let i32 at = 0
+    let i64 at = 0
     while (true):
         match a.index_of_from(7, at):
             Maybe.Some(i) ->
@@ -756,7 +756,7 @@ if (dist < 1 or dist > out.len()):
 out.extend_back(dist, length)
 ```
 
-### `.capacity() -> i32`
+### `.capacity() -> i64`
 
 Get allocated capacity.
 

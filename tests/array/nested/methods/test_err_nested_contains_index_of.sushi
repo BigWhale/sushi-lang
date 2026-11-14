@@ -8,8 +8,8 @@ fn main() i32:
     let string[][] s = from([from(["a"])])
     let bool a = d.contains(from([3]))
     let bool b = m.contains([1, 2])
-    let Maybe@(i32) c = s.index_of(from(["a"]))
-    let Maybe@(i32) e = m.index_of([3, 4])
+    let Maybe@(i64) c = s.index_of(from(["a"]))
+    let Maybe@(i64) e = m.index_of([3, 4])
     if (a or b):
         return 1
-    return c.realise(0) + e.realise(0)
+    return (c.realise(0) + e.realise(0)) as i32

@@ -6,7 +6,7 @@ use <collections/hashmap>
 fn count@(T)(nom T key) i32:
     let HashMap@(T, i32) seen = HashMap.new()
     seen.insert(key, 1)
-    return seen.len()
+    return seen.len() as i32
 
 fn main() i32:
     println("Mostly Harmless")

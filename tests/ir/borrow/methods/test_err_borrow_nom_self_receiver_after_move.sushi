@@ -14,10 +14,10 @@ extend Bag static named(nom string label) Bag:
     return Bag(label)
 
 extend Bag size() i32:
-    return self.label.len()
+    return self.label.len() as i32
 
 extend Bag seen(peek self) i32:
-    return self.label.len()
+    return self.label.len() as i32
 
 extend Bag relabel(poke self, nom string label) ~:
     self.label := label

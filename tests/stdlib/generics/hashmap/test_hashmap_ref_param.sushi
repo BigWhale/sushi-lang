@@ -6,7 +6,7 @@ use <collections/hashmap>
 
 fn build_chain(poke HashMap@(string, string) chain, string[] words) ~:
     let i32 i = 0
-    while (i < words.len() - 1):
+    while (i < (words.len() as i32) - 1):
         let string current = words[i]
         let string next_word = words[i + 1]
         chain.insert(current.clone(), next_word.clone())

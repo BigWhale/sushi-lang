@@ -7,7 +7,7 @@ use <collections/strings>
 fn letters(List@((string, string)) names) i32:
     let i32 total = 0
     foreach((first, last) in names.iter()):
-        total := total + first.len() + last.len()
+        total := total + (first.len() as i32) + (last.len() as i32)
     return total
 
 fn main() i32:

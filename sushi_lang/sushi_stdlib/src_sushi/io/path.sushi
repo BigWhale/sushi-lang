@@ -171,7 +171,7 @@ a hidden-file prefix and not an extension mark.
 - Parameter d: The index of the last dot.
 - Returns: Whether the dot belongs to the hidden-file prefix.
 :##
-fn leading_dots_reach(string name, i32 d) bool:
+fn leading_dots_reach(string name, i64 d) bool:
     return name.s(0, d).trim_start_matches(".").is_empty()
 
 ##:

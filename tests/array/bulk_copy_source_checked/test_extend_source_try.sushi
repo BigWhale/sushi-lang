@@ -10,7 +10,7 @@ fn give() u8[] | E:
 fn grow() i32 | E:
     let u8[] two = from([0])
     two.extend(give()??)
-    return Result.Ok(two.len())
+    return Result.Ok(two.len() as i32)
 
 fn main() i32:
     println(grow().realise(0))

@@ -35,16 +35,19 @@ def element_address(codegen: 'LLVMCodegen', base: ir.Value, ty: Type,
     return gep_utils.gep_array_element(codegen, array_data(codegen, base, ty), index, "elem_ptr")
 
 
-def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
-    """The length of the array, the `List@(T)` or the string at `base`, as an `i32`."""
+def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type, *,
+                 stored: bool = False) -> ir.Value:
+    """The length of the array, the `List@(T)` or the string at `base`: as an `i32`, or as
+    the stored `i64` that `len()` answers when `stored` is set."""
     if isinstance(ty, ArrayType):
-        return ir.Constant(codegen.types.i32, ty.size)
+        return ir.Constant(codegen.types.i64 if stored else codegen.types.i32, ty.size)
+    load = gep_utils.load_stored_len if stored else gep_utils.load_len
     if isinstance(ty, DynamicArrayType):
-        return gep_utils.load_len(codegen, base, "array_len")
+        return load(codegen, base, "array_len")
     if ty == BuiltinType.STRING:
-        return string_size_at(codegen.builder, base, name="string_len")
+        return string_size_at(codegen.builder, base, name="string_len", stored=stored)
     if is_instance_of(ty, "List"):
-        return gep_utils.load_len(codegen, base, "list_len")
+        return load(codegen, base, "list_len")
     raise_internal_error("CE0000", detail=f"the length of {ty}, which is no array")
 
 

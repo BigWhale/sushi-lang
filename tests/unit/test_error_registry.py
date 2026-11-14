@@ -31,7 +31,7 @@ REFERENCE_PATTERNS = [
     re.compile(r"""LibraryError\(\s*["'](C[EW]\d{4})["']"""),
     re.compile(r"""emit_runtime_error(?:_with_values)?\(\s*["'](RE\d{4})["']"""),
     re.compile(r"""Trap\(\s*["'](RE\d{4})["']"""),
-    re.compile(r"""exit_block\([^,]*,\s*["'](RE\d{4})["']"""),
+    re.compile(r"""exit_block(?:_with_i64)?\([^,]*,\s*["'](RE\d{4})["']"""),
 ]
 
 # The packager raises an NE code through NoriError and its subclasses, and recasts one
@@ -44,7 +44,7 @@ PACKAGER_REFERENCE = re.compile(r"""["'](NE\d{4})["']""")
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 448
+REGISTRY_SIZE = 449
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay

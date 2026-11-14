@@ -66,7 +66,7 @@ it never reads outside the array.
 :##
 public extend (T: Ord)[] binary_search(T v) Maybe@(i32):
     let i32 lo = 0
-    let i32 hi = self.len()
+    let i32 hi = self.len() as i32
     while (lo < hi):
         let i32 mid = lo + (hi - lo) / 2
         if (self[mid] < v):
@@ -104,7 +104,7 @@ equal elements keep their order.
   `xs[order[i]]`.
 :##
 fn stable_order@(T)(T[] xs, fn(T, T) -> i32 cmp) i32[]:
-    let i32 n = xs.len()
+    let i32 n = xs.len() as i32
     let i32[] order = from([0..n])
     let i32[] spare = from([0; n])
     let i32 width = 1
@@ -145,7 +145,7 @@ value, so the pass makes fewer swaps than there are elements.
 - Parameter order: The sorted indexes from `stable_order`.
 :##
 fn apply_order@(T)(poke T[] xs, nom i32[] order) ~:
-    foreach(start in 0..order.len()):
+    foreach(start in 0..order.len() as i32):
         let i32 cur = start
         let i32 next = order[cur]
         order[cur] := cur

@@ -2,15 +2,15 @@ unit test_err_typeck_method_string_return_mismatch
 
 ShirBody main
   params : []
-  locals : [_0 "s": string, _1 "up": string, _2 "where": i32, _3 "empty": bool, _4 "at": Maybe@(i32), _5 "copy": string, _6 "bad": i32]
+  locals : [_0 "s": string, _1 "up": string, _2 "where": i32, _3 "empty": bool, _4 "at": Maybe@(i64), _5 "copy": string, _6 "bad": i32]
   block  :
     Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
     Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "upper"), []), is_init: true)
-    Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "count"), [(Lit("l"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), Cast(Call(Builtin(LocalRef(_0), "count"), [(Lit("l"), Guaranteed)]), i32), is_init: true)
     Assign(LocalRef(_3), Call(Builtin(LocalRef(_0), "is_empty"), []), is_init: true)
     Assign(LocalRef(_4), Call(Builtin(LocalRef(_0), "find"), [(Lit("H"), Guaranteed)]), is_init: true)
     Assign(LocalRef(_5), Call(Builtin(LocalRef(_0), "clone"), []), is_init: true)
     Assign(LocalRef(_6), Call(Builtin(LocalRef(_0), "upper"), []), is_init: true)
-    If(LocalRef(_3), then: [Return(Binary(+, Call(Builtin(LocalRef(_1), "len"), []), Call(Builtin(LocalRef(_5), "len"), [])))])
+    If(LocalRef(_3), then: [Return(Binary(+, Cast(Call(Builtin(LocalRef(_1), "len"), []), i32), Cast(Call(Builtin(LocalRef(_5), "len"), []), i32)))])
     If(Call(Builtin(LocalRef(_4), "is_some"), []), then: [Return(Lit(2))])
     Return(Binary(+, LocalRef(_2), LocalRef(_6)))

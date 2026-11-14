@@ -31,7 +31,7 @@ fn main() i32:
     map.insert(12, "twelve")
     map.insert(13, "thirteen")
 
-    let i32 size1 = map.len()
+    let i32 size1 = map.len() as i32
     println("After 13 insertions: size = {size1}, capacity should still be 16")
 
     # This 14th insert should trigger resize
@@ -48,7 +48,7 @@ fn main() i32:
     if (map.contains_key(15)):
         println("✓ Key 15 exists after resize")
 
-    let i32 final_size = map.len()
+    let i32 final_size = map.len() as i32
     if (final_size == 15):
         println("✓ All 15 items preserved after resize")
         return 0

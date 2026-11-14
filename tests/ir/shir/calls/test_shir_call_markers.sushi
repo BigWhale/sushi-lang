@@ -9,13 +9,13 @@
 var i32 count = 0
 
 fn size(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn look(peek string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn take(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn bump(poke i32 n) i32:
     return n + 1

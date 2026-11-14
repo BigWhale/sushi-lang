@@ -15,8 +15,8 @@ fn test_pad_left() ~ | StdError:
 
 fn test_find() ~ | StdError:
     let string s = "hello world"
-    let Maybe@(i32) result = s.find('world')
-    let i32 index = result.realise(-1)
+    let Maybe@(i64) result = s.find('world')
+    let i64 index = result.realise(-1)
     let string interp = "{s.find('world').realise(-1)}"
     if (interp == "{index}"):
         println("PASS: find with single-quote needle")

@@ -3537,6 +3537,24 @@ compile time; in `wrap` mode a marked signed `/` or `%` gives `0 - left` or 0 fo
 divisor of -1. The check is not a SLIR `Trap`, so the SLIR of a body is the same in each
 mode, except the RE2031 check of `/` and `%`, which lowering leaves out in `wrap` mode.
 
+**A shift count.** A shift count at or above the width of the value, or a negative count,
+follows the overflow mode too (`_emit_shift`, `backend/expressions/operators.py`). In `trap`
+mode a marked shift stops with RE2034. In `wrap` mode, and for a shift that the compiler
+made, the count is masked to the width (`value << (count & (width - 1))`), as Rust does. The
+mask also keeps LLVM from an out-of-range shift, whose result is poison. The range is read
+from the count as the user wrote it, before it is brought to the width of the value, because
+a `u64` count of 256 narrowed to a `u8` is 0. A count that the compiler can read never gets
+here out of range: that is CE2512. A width is a power of two, so the count is in range when
+its bits above the low `log2(width)` are 0, and a negative count has the sign bit set. The
+check is a `switch` on those bits, not a compare and a branch, because LLVM's SimplifyCFG
+does not converge on a nest of thousands of compare-and-branch checks (the fixtures under
+`tests/operators/deep_nest_operand_reads/`). Every check of a function goes to ONE fail block
+(`RuntimeErrors.exit_block_with_i64`), whose phi takes the count of each site, and that block
+calls ONE cold function for each text. The operator and the type are in the text at compile
+time, so the count is the only run-time value. A fail block for each site makes LLVM merge
+thousands of identical calls, and that is slow. A SLIR `Const` count gets no check, because
+CE2512 has already read it (`backend/slir/values.py`).
+
 **An array value.** The kind of an array is `AggArray(ty, runs)`. `ty` is the `T[N]` or the
 `T[]` of the value, and `runs` holds one run for each run of the `ArrayInit`, in order:
 
@@ -3574,6 +3592,8 @@ seam of the `Clone` arm). A value that is a new value is a temporary of the stat
 drops it at the end of the statement.
 
 `Len(place)` is the length of a `T[N]`, a `T[]`, a `List@(T)` or a `string`, as an `i32`.
+It is the length that a bounds check and a walk read. The method `len()` is a call and not a
+`Len`: it answers the stored `i64` (ADR 0001).
 `Slice(place, start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is
 exclusive. Its value is a `T[]` descriptor that views the storage of `place`. **A VIEW** is
 a local that a `Slice` writes, or a view local that a `Copy` writes (8.2): it owns nothing,

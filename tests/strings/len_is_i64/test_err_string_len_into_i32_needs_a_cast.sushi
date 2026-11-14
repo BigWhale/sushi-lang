@@ -1,0 +1,12 @@
+# A length is an i64 (ADR 0001, the contract step), and Sushi has no implicit narrowing:
+# `let i32 n = s.len()` and `let i32 n = s.size()` of a string are refused. `as i32` is
+# the escape.
+# EXPECT_ERROR_CODES_EXACT: CE2002, CE2002
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 d = s.len()
+    let i32 e = s.size()
+    let i32 ok = s.len() as i32
+    println("{d} {e} {ok}")
+    return 0

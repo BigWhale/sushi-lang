@@ -7,7 +7,7 @@
 use <collections/strings>
 
 fn count_lines(string text) i32:
-    return text.lines().len()
+    return text.lines().len() as i32
 
 fn take(nom string[] parts) string:
     let string out = ""

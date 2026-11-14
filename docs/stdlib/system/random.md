@@ -175,7 +175,7 @@ use <random>
 
 fn main() i32:
     let string[] choices = from(["Rock", "Paper", "Scissors"])
-    let i32 index = rand_range(0, choices.len())
+    let i32 index = rand_range(0, choices.len() as i32)
     let string choice = choices[index]
     println("Choice: {choice}")
     return 0

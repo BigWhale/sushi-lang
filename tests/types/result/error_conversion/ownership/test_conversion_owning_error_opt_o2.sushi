@@ -22,7 +22,7 @@ extend TokenError as AppError:
 
 extend NoteError as AppError:
     match self:
-        NoteError.Note(s) -> return AppError.Short(s.len())
+        NoteError.Note(s) -> return AppError.Short(s.len() as i32)
 
 fn tokenize(i32 n) i32 | TokenError:
     if (n < 0):
@@ -38,7 +38,7 @@ fn run(i32 a, i32 b) i32 | AppError:
     let string label = "run {a}"
     let i32 x = tokenize(a)??
     let i32 y = note(b)??
-    return Result.Ok(x + y + label.len())
+    return Result.Ok(x + y + (label.len() as i32))
 
 fn show(Result@(i32, AppError) r) ~:
     match r:

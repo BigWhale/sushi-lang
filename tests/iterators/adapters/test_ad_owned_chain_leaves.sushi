@@ -10,7 +10,7 @@ fn evens(i32 n) Iterator@(i32):
     return r.filter(nom |i32 x| x % 2 == 0)
 
 fn lengths() Iterator@(i32):
-    return from(["a", "bb"]).iter().map(nom |string s| s.len())
+    return from(["a", "bb"]).iter().map(nom |string s| s.len() as i32)
 
 fn main() i32:
     foreach(x in evens(5)):

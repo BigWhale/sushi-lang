@@ -10,19 +10,19 @@ ShirBody size
   params : [(_0 "s": string, Guaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32))
 
 ShirBody look
   params : [(_0 "s": string, InGuaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32))
 
 ShirBody take
   params : [(_0 "s": string, Owned)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32))
 
 ShirBody bump
   params : [(_0 "n": i32, Inout)]

@@ -1,0 +1,15 @@
+# With --overflow=wrap, a right shift on a signed type masks the count and keeps the
+# sign fill.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-8\n-4\n-1\n100\n"
+
+fn shr(i32 value, i32 places) i32:
+    return value >> places
+
+fn main() i32:
+    println("{shr(-8, 32)}")
+    println("{shr(-8, 33)}")
+    println("{shr(-8, -1)}")
+    println("{shr(100, 64)}")
+    return 0

@@ -16,7 +16,7 @@ fn main() i32:
         break
     let i32 found = 0
     foreach(z in names.iter().zip(nom from(["p", "q"]).iter().clone_each())):
-        found := z.0.len() - 1
+        found := (z.0.len() as i32) - 1
         break
     println(found)
     return 0

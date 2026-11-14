@@ -2,9 +2,13 @@ unit test_slir_variadic_bloom
 
 fn count(_1: string[] @guaranteed) -> i32 {
     let _0: i32
+    let _2: i64
 
   bb0:
-    _0 = call builtin array.len(copy _1 @guaranteed)
+    StorageLive(_2)
+    _2 = call builtin array.len(copy _1 @guaranteed)
+    _0 = move _2 as i32
+    StorageDead(_2)
     return
 }
 

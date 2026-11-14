@@ -9,7 +9,7 @@
 # has no entry for `i32[]`. The copy fixpoint places each one, and lowering runs on it there.
 
 extend T[] twice_len() i32:
-    return self.len() * 2
+    return (self.len() as i32) * 2
 
 perk Named:
     fn name() string

@@ -16,7 +16,7 @@ fn main() i32:
     println("Before free:")
     map.debug()
 
-    let i32 size_before = map.len()
+    let i32 size_before = map.len() as i32
     println("Size before free: {size_before}")
 
     # Free the map
@@ -25,7 +25,7 @@ fn main() i32:
     println("\nAfter free:")
     map.debug()
 
-    let i32 size_after = map.len()
+    let i32 size_after = map.len() as i32
     println("Size after free: {size_after}")
 
     # Verify map is reset
@@ -39,7 +39,7 @@ fn main() i32:
     println("\nAfter re-inserting:")
     map.debug()
 
-    let i32 final_size = map.len()
+    let i32 final_size = map.len() as i32
     if (final_size == 2):
         println("✓ Can reuse map after free")
 

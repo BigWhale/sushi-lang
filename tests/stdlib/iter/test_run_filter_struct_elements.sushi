@@ -17,7 +17,7 @@ fn run() i32:
     xs.push(Crate(2, "light"))
     xs.push(Crate(9, "heavy"))
     let List@(Crate) heavy = xs.filter(is_heavy)
-    return heavy.len()
+    return heavy.len() as i32
 
 fn main() i32:
     println("{run()}")

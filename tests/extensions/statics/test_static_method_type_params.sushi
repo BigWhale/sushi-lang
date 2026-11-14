@@ -5,7 +5,7 @@ struct Counter:
     i32 n
 
 extend Counter static counting@(U)(U[] items) Counter:
-    return Counter(items.len() * 4)
+    return Counter((items.len() as i32) * 4)
 
 fn main() i32:
     let string[] words = from(["a", "b", "c"])

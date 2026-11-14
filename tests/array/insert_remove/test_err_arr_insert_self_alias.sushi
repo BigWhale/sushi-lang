@@ -4,4 +4,4 @@
 fn main() i32:
     let string[] a = from(["x".clone(), "y".clone()])
     a.insert(0, a[1])
-    return a.len()
+    return a.len() as i32

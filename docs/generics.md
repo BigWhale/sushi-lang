@@ -591,7 +591,7 @@ extend Opt@(T) is_has() bool:
         Opt.Nope -> return false
 
 extend List@(T) doubled_len() i32:
-    return self.len() * 2
+    return (self.len() as i32) * 2
 
 fn main() i32:
     let Box@(i32) b = Box(value: 42)
@@ -696,7 +696,7 @@ extend Stack@(T) pop(poke self) Maybe@(T):
     return self.items.pop()
 
 extend Stack@(T) size() i32:
-    return self.items.len()
+    return self.items.len() as i32
 
 fn main() i32:
     let Stack@(i32) s = Stack.new()      # T comes from the annotation

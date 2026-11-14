@@ -7,10 +7,10 @@ fn make(string a) (string, string[]):
     return (a.clone(), from([a.clone(), "x"]))
 
 fn consume(nom (string, string[]) p) i32:
-    return p.1.len()
+    return p.1.len() as i32
 
 fn length((string, i32[]) p) i32:
-    return p.1.len()
+    return p.1.len() as i32
 
 fn main() i32:
     let string base = "a"

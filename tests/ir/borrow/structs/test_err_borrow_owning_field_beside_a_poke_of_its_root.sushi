@@ -13,7 +13,7 @@ struct Box:
     i32 n
 
 fn both(string s, poke Box b) ~:
-    b.n := s.len()
+    b.n := s.len() as i32
 
 fn count(i32 n, poke Box b) ~:
     b.n := n

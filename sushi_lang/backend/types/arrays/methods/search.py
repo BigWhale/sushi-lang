@@ -88,7 +88,7 @@ def emit_array_contains(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Va
 
 def emit_array_index_of(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
                         needle: ir.Value, element_semantic_type: 'Type') -> ir.Value:
-    """`index_of(v)` as `Maybe@(i32)`: `Some(first match)`, else `None`."""
+    """`index_of(v)` as `Maybe@(i64)`: `Some(first match)`, else `None`."""
     found, index = _search(codegen, data_ptr, count, needle, element_semantic_type)
     return _maybe_index(codegen, found, index)
 
@@ -96,7 +96,7 @@ def emit_array_index_of(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Va
 def emit_array_index_of_from(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
                              needle: ir.Value, start: ir.Value,
                              element_semantic_type: 'Type') -> ir.Value:
-    """`index_of_from(v, start)` as `Maybe@(i32)`: the first match at an index >= start.
+    """`index_of_from(v, start)` as `Maybe@(i64)`: the first match at an index >= start.
 
     `start` is clamped into `0..count` (D3, the rule of `.s()` and the bulk copy), so
     nothing traps: a negative start reads from 0, and a start at or past the end leaves
@@ -117,8 +117,9 @@ def emit_array_index_of_from(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: 
 
 
 def _maybe_index(codegen: 'LLVMCodegen', found: ir.Value, index: ir.Value) -> ir.Value:
-    """`Some(index)` when `found`, else `None`, as one `Maybe@(i32)` value."""
+    """`Some(index)` when `found`, else `None`, as one `Maybe@(i64)` value."""
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
+    from sushi_lang.backend.stored_width import as_stored_i64
 
     builder = codegen.builder
     some_bb = builder.append_basic_block(name="index_of_some")
@@ -127,12 +128,12 @@ def _maybe_index(codegen: 'LLVMCodegen', found: ir.Value, index: ir.Value) -> ir
     builder.cbranch(found, some_bb, none_bb)
 
     builder.position_at_end(some_bb)
-    some_result = emit_maybe_some(codegen, BuiltinType.I32, index)
+    some_result = emit_maybe_some(codegen, BuiltinType.I64, as_stored_i64(builder, index))
     some_pred = builder.block
     builder.branch(merge_bb)
 
     builder.position_at_end(none_bb)
-    none_result = emit_maybe_none(codegen, BuiltinType.I32)
+    none_result = emit_maybe_none(codegen, BuiltinType.I64)
     none_pred = builder.block
     builder.branch(merge_bb)
 

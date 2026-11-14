@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 import llvmlite.ir as ir
 from sushi_lang.backend.string_layout import string_size
+from sushi_lang.backend.stored_width import as_stored_i64
 from ..common import allocate_substring
 from ..intrinsics import declare_utf8_count_intrinsic
 from sushi_lang.sushi_stdlib.src.type_definitions import (
@@ -327,16 +328,16 @@ def emit_string_contains(module: ir.Module) -> ir.Function:
 
 
 def _emit_string_find_at(module: ir.Module, func_name: str, reverse: bool) -> ir.Function:
-    """Emit a search that answers the CHARACTER index of its match as `Maybe@(i32)`."""
+    """Emit a search that answers the CHARACTER index of its match as `Maybe@(i64)`."""
     func = _defined(module, func_name)
     if func is not None:
         return func
-    maybe_type = get_maybe_type(ir.IntType(32))
+    maybe_type = get_maybe_type(ir.IntType(64))
     utf8_count = declare_utf8_count_intrinsic(module)
 
     def on_found(builder: ir.IRBuilder, scan: _Scan, found_pos: Callable[[], ir.Value]) -> None:
         char_index = builder.call(utf8_count, [scan.str_data, found_pos()], name="char_index")
-        _ret_maybe_some(builder, maybe_type, char_index)
+        _ret_maybe_some(builder, maybe_type, as_stored_i64(builder, char_index))
 
     return _emit_search(
         module, func_name, maybe_type,
@@ -357,7 +358,7 @@ def emit_string_find_last(module: ir.Module) -> ir.Function:
 
 
 def emit_string_count(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_count({i8*, i64, i8} str, {i8*, i64, i8} needle)`; matches do not overlap."""
+    """Emit `i64 string_count({i8*, i64, i8} str, {i8*, i64, i8} needle)`; matches do not overlap."""
     func = _defined(module, "string_count")
     if func is not None:
         return func
@@ -371,7 +372,7 @@ def emit_string_count(module: ir.Module) -> ir.Function:
         return pos_skip, count_incremented
 
     return _emit_search(
-        module, "string_count", i32,
+        module, "string_count", ir.IntType(64),
         on_match=on_match,
         carry=("count", ir.Constant(i32, 0)),
         on_exhausted=_ret_carried,
@@ -381,7 +382,7 @@ def emit_string_count(module: ir.Module) -> ir.Function:
 def _ret_carried(builder: ir.IRBuilder, carried: Optional[ir.Value]) -> None:
     if carried is None:
         raise ValueError("string_count carries a count")
-    builder.ret(carried)
+    builder.ret(as_stored_i64(builder, carried))
 
 
 def _emit_string_split_at(module: ir.Module, func_name: str, reverse: bool) -> ir.Function:

@@ -1,6 +1,6 @@
 # A lambda parameter of an owning type stays refused.
 # EXPECT_ERROR_CODES_EXACT: CE2094
 fn main() i32:
-    let fn(i32[]) -> i32 f = |i32[] xs| xs.len()
+    let fn(i32[]) -> i32 f = |i32[] xs| xs.len() as i32
     println(f(from([1])))
     return 0

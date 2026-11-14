@@ -86,7 +86,7 @@ and the value is freed with the closure's environment:
 ```sushi
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
-    let fn(i32) -> i32 f = |i32 x| x + nums.len()   # moves nums into the closure
+    let fn(i32) -> i32 f = |i32 x| x + (nums.len() as i32)   # moves nums into the closure
     println(f(10))                      # 13
     return 0
 ```

@@ -51,7 +51,7 @@ let List@(string) names = List.with_capacity(100)
 
 ## Query Methods
 
-### `.len() -> i32`
+### `.len() -> i64`
 
 Get number of elements.
 
@@ -59,7 +59,7 @@ Get number of elements.
 println("Size: {list.len()}")
 ```
 
-### `.capacity() -> i32`
+### `.capacity() -> i64`
 
 Get allocated capacity.
 
@@ -151,7 +151,7 @@ fn main() i32:
     return 0
 ```
 
-### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
+### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i64)`
 
 The search methods of the [arrays](arrays.md), with the same rules. `.contains()`
 answers `true` when an element is equal to `value`. `.index_of()` answers the index of
@@ -176,7 +176,7 @@ fn main() i32:
     return 0
 ```
 
-### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
+### `.index_of_from(T value, i32 start) -> Maybe@(i64)`
 
 Finds the first index `i` with `i >= start` where the element is equal to `value`.
 The answer is `Maybe.Some(i)`, or `Maybe.None()`. The index is from the start of the

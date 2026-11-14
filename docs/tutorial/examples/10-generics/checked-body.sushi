@@ -3,7 +3,7 @@ perk Measured:
 
 extend string with Measured:
     fn measure() i32:
-        return self.size()
+        return self.size() as i32
 
 extend i32 with Measured:
     fn measure() i32:

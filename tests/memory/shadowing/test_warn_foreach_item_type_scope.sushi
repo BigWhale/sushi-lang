@@ -6,7 +6,7 @@
 # still warns (CW1002), which is why this is a warning test.
 # EXPECT_ERROR_CODE: CW1002
 fn eat(i32[] a) i32 | StdError:
-    return Result.Ok(a.len())
+    return Result.Ok(a.len() as i32)
 
 fn main() i32:
     let i32[] p = from([9, 9])

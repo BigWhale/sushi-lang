@@ -32,10 +32,10 @@ extend Crate static never_built() Crate:
     return Crate(0)
 
 extend List@(T) never_listed() i32:
-    return self.len()
+    return self.len() as i32
 
 extend T[] never_arrayed() i32:
-    return self.len()
+    return self.len() as i32
 
 extend i32 by_dead() i32:
     return self * 2
