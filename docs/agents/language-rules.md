@@ -260,8 +260,8 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - **Bitwise:** `& | ^ ~ << >>`; `>>` is arithmetic on a signed value, logical on an unsigned.
 - **Mixed widths** are an error for comparison, arithmetic and `& | ^`. A shift is exempt:
   the TYPE of the count is free, but a count that the compiler can read must be 0..width-1. A
-  COMPUTED count past the width is defined, not checked: 0, or the sign bit for a signed
-  `>>` (the Go rule; never masked, so `v << 8` on a u8 is 0 and not `v`).
+  COMPUTED count at or above the width, or negative, follows the overflow mode: `trap` (the
+  default) stops with RE2034, `wrap` masks the count to the width (`v << 8` on a u8 is `v`).
 - **Arithmetic operands** (`reject_non_numeric_arithmetic`, `passes/types/expressions.py`):
   each operand of `+ - * / %` and of the unary minus is an integer or a float. A `bool`, an
   enum, a struct, an array and an unhandled `Result`/`Maybe` are errors (the diagnostic names

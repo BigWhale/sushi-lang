@@ -140,8 +140,9 @@ instruction traps. A compile-time report is therefore the only correct answer fo
 | `>>` | arithmetic on a signed type, logical on an unsigned type |
 
 The shift **count** has its own rule. A count the compiler can read must be 0 to
-width-1, which is [CE2512](../error-catalog.md#ce2512). A computed count past the width is defined and unchecked. This
-is Go's rule.
+width-1, which is [CE2512](../error-catalog.md#ce2512). A computed count past the width follows the overflow
+mode at run time: [RE2034](../error-catalog.md#re2034) in `trap` mode, a count masked to the
+width in `wrap` mode ([the overflow-mode decision](../adr/0002-overflow-mode.md)).
 
 ### Where the rule applies
 

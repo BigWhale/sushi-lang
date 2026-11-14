@@ -189,11 +189,14 @@ def _emit_wrapping_division(codegen: 'LLVMCodegen', op: str, left: ir.Value,
     return builder.select(minus_one, ir.Constant(left.type, 0), builder.srem(left, divisor))
 
 
-def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit bitwise operations on integer values. Two constants are an instruction too."""
+def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value,
+                 left_type: 'Optional[Type]' = None, right_type: 'Optional[Type]' = None,
+                 checked: bool = False) -> ir.Value:
+    """Emit bitwise operations on integer values. Two constants are an instruction too.
+    `checked` is the user mark: a shift that the user wrote follows the overflow mode."""
     if (op in SHIFT_OPS
             and isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType)):
-        return _emit_shift(codegen, op, left, right, left_type)
+        return _emit_shift(codegen, op, left, right, left_type, right_type, checked)
 
     _require_one_width(op, left, right)
 
@@ -210,28 +213,23 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
 
 
 def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Value,
-                value_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit a shift, with an answer for a count that leaves the type.
+                value_type: 'Optional[Type]', count_type: 'Optional[Type]',
+                checked: bool) -> ir.Value:
+    """A shift. A count at or above the width of the value, or a negative count, follows
+    the overflow mode (docs/adr/0002-overflow-mode.md): in `trap` mode it stops the program
+    with RE2034. In `wrap` mode, and for a shift that the compiler made, the count is
+    masked to the width (`value << (count & (width - 1))`), as Rust does.
 
-    A count at or above the width of the value moves every bit out of it, so the
-    result is 0 -- or the sign bit repeated, when an arithmetic right shift fills
-    from it. That is what shifting one place at a time would reach, and it is Go's
-    rule. A count is never masked: masking answers `value << 8` on a u8 with the
-    value itself, which reads like a working shift.
-
-    Three details carry the rule:
-    - the range is read from the count AS WRITTEN, before it is brought to the
-      value's width, because a u64 count of 256 narrowed to a u8 is 0;
-    - the shift instruction is given a masked count, so LLVM never emits an
-      out-of-range shift, whose result is poison it may then use as it likes;
-    - a count the compiler can read never arrives out of range. That is CE2512,
-      and LLVM folds this whole sequence back to one shift for a constant in range.
+    The range is read from the count AS WRITTEN, before it is brought to the value's
+    width, because a u64 count of 256 narrowed to a u8 is 0. The mask also keeps LLVM
+    from an out-of-range shift, whose result is poison. A count that the compiler can
+    read never arrives out of range: that is CE2512.
     """
-
     builder = codegen.builder
     width = value.type.width
 
-    leaves_the_type = builder.icmp_unsigned(">=", count, ir.Constant(count.type, width))
+    if _follows(codegen, checked, OverflowMode.TRAP):
+        _trap_on_shift_count(codegen, op, count, width, value_type, count_type)
 
     if count.type.width > width:
         places = builder.trunc(count, value.type)
@@ -242,16 +240,56 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     places = builder.and_(places, ir.Constant(value.type, width - 1))
 
     if op == SHL_OP:
-        shifted = builder.shl(value, places)
-        emptied = ir.Constant(value.type, 0)
-    elif is_unsigned_int(value_type):
-        shifted = builder.lshr(value, places)
-        emptied = ir.Constant(value.type, 0)
-    else:
-        shifted = builder.ashr(value, places)
-        emptied = builder.ashr(value, ir.Constant(value.type, width - 1))
+        return builder.shl(value, places)
+    if is_unsigned_int(value_type):
+        return builder.lshr(value, places)
+    return builder.ashr(value, places)
 
-    return builder.select(leaves_the_type, emptied, shifted)
+
+def _trap_on_shift_count(codegen: 'LLVMCodegen', op: str, count: ir.Value, width: int,
+                         value_type: 'Optional[Type]', count_type: 'Optional[Type]') -> None:
+    """Stop the program with RE2034 when `count` is out of `0..width`. A width is a power
+    of two, so the count is in range when its bits above the low `log2(width)` are 0; a
+    negative count has the sign bit set. The test is a `switch` on those bits and not a
+    compare and a branch, because LLVM's SimplifyCFG does not converge on a nest of
+    thousands of compare-and-branch checks (the deep shift nest fixtures)."""
+    from sushi_lang.semantics.generics.type_display import display_type
+    builder = codegen.builder
+    high = builder.lshr(count, ir.Constant(count.type, width.bit_length() - 1))
+    fail = builder.append_basic_block(name="shift_count_out_of_range")
+    held = builder.append_basic_block(name="shift_count_in_range")
+    switch = builder.switch(high, fail)
+    switch.add_case(ir.Constant(count.type, 0), held)
+    builder.position_at_end(fail)
+    type_name = display_type(value_type) if value_type is not None else f"i{width}"
+    codegen.runtime.errors.emit_runtime_error_with_values(
+        "RE2034", _count_as_i64(codegen, count, count_type),
+        *_text_operand(codegen, op), *_text_operand(codegen, type_name))
+    builder.unreachable()
+    builder.position_at_end(held)
+
+
+def _count_as_i64(codegen: 'LLVMCodegen', count: ir.Value,
+                  count_type: 'Optional[Type]') -> ir.Value:
+    """The count of a shift as the i64 of `%lld`. A u64 above the i64 maximum is the i64
+    maximum."""
+    builder = codegen.builder
+    i64 = ir.IntType(64)
+    unsigned = is_unsigned_int(count_type)
+    if count.type.width < 64:
+        return builder.zext(count, i64) if unsigned else builder.sext(count, i64)
+    if not unsigned:
+        return count
+    negative = builder.icmp_signed("<", count, ir.Constant(i64, 0))
+    return builder.select(negative, ir.Constant(i64, (1 << 63) - 1), count)
+
+
+def _text_operand(codegen: 'LLVMCodegen', text: str) -> tuple[ir.Value, ir.Value]:
+    """The two operands of `%.*s` for a text that the compiler knows: its size, then its
+    bytes."""
+    data = codegen.string_manager.get_or_create_raw(text)
+    pointer = codegen.builder.gep(data, [ir.Constant(codegen.i32, 0)] * 2)
+    return ir.Constant(codegen.i32, len(text.encode("utf-8"))), pointer
 
 
 def emit_xor(codegen: 'LLVMCodegen', lhs: ir.Value, rhs: ir.Value, to_i1: bool) -> ir.Value:

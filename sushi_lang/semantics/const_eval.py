@@ -912,8 +912,8 @@ class ConstantEvaluator:
                             span: Optional[Span]) -> Optional[ConstantValue]:
         """`& | ^ << >>`: the kernel keeps the bits of the type, and none of them reports.
 
-        A count past the width is defined and not checked (Go's rule, and CE2512 covers
-        the one a body writes).
+        A count past the width is CE2512 at the shift; the kernel still gives it an
+        answer, so the fold never fails on it.
         """
         if not is_integer_constant(left) or not is_integer_constant(right):
             what = 'shift' if op in SHIFT_OPS else f'bitwise {op}'

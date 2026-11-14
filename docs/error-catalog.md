@@ -2446,7 +2446,7 @@ The ?? operator propagates the error of the inner Result@(T, \{inner\_err\}) int
 
 **Message:** `shift count {count} is out of range for {value_type}: a count must be from 0 to {max_count}`
 
-A shift moves the bits of its left operand, so the width of that operand is what limits the count. A count at or above the width moves every bit out of the type, and a negative count is no shift at all. Neither has a defined answer: LLVM makes the result poison and the hardware promises nothing. Cast the value to a wider type when the shift is meant to reach further: (high as u32) &lt;&lt; 8. Only a count the compiler can read is an error. A computed count is defined instead of checked: a shift that empties the type answers 0, and an arithmetic right shift leaves the sign behind, which is the rule of Go.
+A shift moves the bits of its left operand, so the width of that operand is what limits the count. A count at or above the width moves every bit out of the type, and a negative count is no shift at all. Neither has a defined answer: LLVM makes the result poison and the hardware promises nothing. Cast the value to a wider type when the shift is meant to reach further: (high as u32) &lt;&lt; 8. Only a count the compiler can read is an error. A computed count follows the overflow mode (see [the overflow-mode decision](adr/0002-overflow-mode.md)): the default `trap` stops the program with [RE2034](#re2034), and `--overflow=wrap` masks the count to the width, as Rust does.
 
 ### CE2513 {#ce2513}
 
@@ -3793,6 +3793,14 @@ A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` 
 **Message:** `count %lld is too large for a length: a length holds at most 2147483647`
 
 A count position (the count of a repeat run `[x; n]` or of a range run, `T[].resize`, `List.with_capacity`, `List.reserve`, `string.repeat`, and the width of `pad_left` and `pad_right`) takes any integer type (see [the index-width decision](adr/0001-index-width-i64.md)), but a length is still an i32. A count above the i32 maximum stops the program with exit code 1, because the program asked for more elements than the value can hold, and a smaller length is a wrong answer. A u64 count above the i64 maximum prints as the i64 maximum. A negative count of a signed type is not this error: it counts as zero. An index or a clamped bound out of the i32 range is not this error either: the bounds check ([RE2020](#re2020)) or the clamp answers it.
+
+### RE2034 {#re2034}
+
+**Error** · runtime
+
+**Message:** `shift count %lld is out of range: '%.*s' on %.*s`
+
+`a << n` or `a >> n` on an integer type found a count `n` that is equal to or larger than the width of the type, or a negative count of a signed count type, at run time. The default overflow mode is `trap`, so the program stops with exit code 1 (see [the overflow-mode decision](adr/0002-overflow-mode.md)). The text names the count as written, the operator and the type of the shifted value, for example `shift count 32 is out of range: '<<' on i32`. The count of a type of width W runs from 0 to W - 1. A u64 count above the i64 maximum prints as the i64 maximum. Build with `--overflow=wrap` to mask the count to the width (`a << (n & (W - 1))`) in place of the stop. A count that the compiler can read is the compile error [CE2512](#ce2512). To shift every bit out of the type, cast the value to a wider type first.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 
