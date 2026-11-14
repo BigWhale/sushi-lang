@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Sequence
 from llvmlite import ir
 from sushi_lang.backend.string_layout import string_size
 
-from sushi_lang.backend import gep_utils
 from sushi_lang.backend.utils.validation import require_builder
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
@@ -49,9 +48,7 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
 
     match name:
         case "len":
-            if isinstance(array_type, ArrayType):
-                return ir.Constant(codegen.types.i64, array_type.size)
-            return gep_utils.load_stored_len(codegen, receiver, "array_len")
+            return array_length(codegen, receiver, array_type, stored=True)
 
         case "capacity":
             return core.emit_dynamic_array_capacity(codegen, _descriptor(receiver, array_type,

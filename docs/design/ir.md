@@ -3537,6 +3537,19 @@ compile time; in `wrap` mode a marked signed `/` or `%` gives `0 - left` or 0 fo
 divisor of -1. The check is not a SLIR `Trap`, so the SLIR of a body is the same in each
 mode, except the RE2031 check of `/` and `%`, which lowering leaves out in `wrap` mode.
 
+**A shift count.** A shift count at or above the width of the value, or a negative count,
+follows the overflow mode too (`_emit_shift`, `backend/expressions/operators.py`). In `trap`
+mode a marked shift stops with RE2034. In `wrap` mode, and for a shift that the compiler
+made, the count is masked to the width (`value << (count & (width - 1))`), as Rust does. The
+mask also keeps LLVM from an out-of-range shift, whose result is poison. The range is read
+from the count as the user wrote it, before it is brought to the width of the value, because
+a `u64` count of 256 narrowed to a `u8` is 0. A count that the compiler can read never gets
+here out of range: that is CE2512. A width is a power of two, so the count is in range when
+its bits above the low `log2(width)` are 0, and a negative count has the sign bit set. The
+check is a `switch` on those bits, not a compare and a branch, because LLVM's SimplifyCFG
+does not converge on a nest of thousands of compare-and-branch checks (the fixtures under
+`tests/operators/deep_nest_operand_reads/`).
+
 **An array value.** The kind of an array is `AggArray(ty, runs)`. `ty` is the `T[N]` or the
 `T[]` of the value, and `runs` holds one run for each run of the `ArrayInit`, in order:
 

@@ -215,16 +215,7 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
 def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Value,
                 value_type: 'Optional[Type]', count_type: 'Optional[Type]',
                 checked: bool) -> ir.Value:
-    """A shift. A count at or above the width of the value, or a negative count, follows
-    the overflow mode (docs/adr/0002-overflow-mode.md): in `trap` mode it stops the program
-    with RE2034. In `wrap` mode, and for a shift that the compiler made, the count is
-    masked to the width (`value << (count & (width - 1))`), as Rust does.
-
-    The range is read from the count AS WRITTEN, before it is brought to the value's
-    width, because a u64 count of 256 narrowed to a u8 is 0. The mask also keeps LLVM
-    from an out-of-range shift, whose result is poison. A count that the compiler can
-    read never arrives out of range: that is CE2512.
-    """
+    """A shift; an out-of-range count follows the overflow mode (docs/design/ir.md 8.7)."""
     builder = codegen.builder
     width = value.type.width
 
@@ -248,11 +239,7 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
 
 def _trap_on_shift_count(codegen: 'LLVMCodegen', op: str, count: ir.Value, width: int,
                          value_type: 'Optional[Type]', count_type: 'Optional[Type]') -> None:
-    """Stop the program with RE2034 when `count` is out of `0..width`. A width is a power
-    of two, so the count is in range when its bits above the low `log2(width)` are 0; a
-    negative count has the sign bit set. The test is a `switch` on those bits and not a
-    compare and a branch, because LLVM's SimplifyCFG does not converge on a nest of
-    thousands of compare-and-branch checks (the deep shift nest fixtures)."""
+    """Stop the program with RE2034 when `count` is out of `0..width`."""
     from sushi_lang.semantics.generics.type_display import display_type
     builder = codegen.builder
     high = builder.lshr(count, ir.Constant(count.type, width.bit_length() - 1))

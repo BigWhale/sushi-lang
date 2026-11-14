@@ -45,12 +45,16 @@ def string_size_i64(builder: ir.IRBuilder, value: ir.Value, name: str = "") -> i
     return builder.extract_value(value, SIZE_FIELD, name=name)
 
 
-def string_size_at(builder: ir.IRBuilder, address: ir.Value, name: str = "") -> ir.Value:
-    """The size of the string at `address` as the surface i32."""
+def string_size_at(builder: ir.IRBuilder, address: ir.Value, name: str = "", *,
+                   stored: bool = False) -> ir.Value:
+    """The size of the string at `address`: as the surface i32, or at its stored width when
+    `stored` is set."""
     i32 = ir.IntType(32)
     slot = builder.gep(address, [ir.Constant(i32, 0), ir.Constant(i32, SIZE_FIELD)])
-    stored = builder.load(slot, name=f"{name}_i64" if name else "")
-    return as_surface_i32(builder, stored, name)
+    if stored:
+        return builder.load(slot, name=name)
+    size = builder.load(slot, name=f"{name}_i64" if name else "")
+    return as_surface_i32(builder, size, name)
 
 
 def with_string_size(builder: ir.IRBuilder, value: ir.Value, size: ir.Value,

@@ -1,0 +1,13 @@
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "u8 208\n"
+# EXPECT_STDERR_CONTAINS: "shift count 8 is out of range: '>>' on u8"
+#
+# The low n bits of c, reversed, for n = 0: the count W - n is the width, which is out of
+# range in the default overflow mode, so the program stops with RE2034.
+fn low8(u8 c, i32 n) u8:
+    return c.reverse_bits() >> (8 - n)
+
+fn main() i32:
+    println("u8 {low8(11, 8)}")
+    println("u8 {low8(11, 0)}")
+    return 0
