@@ -8,9 +8,9 @@
 use <collections/strings>
 
 public fn eat(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 public fn drive() i32:
     let string msg = "mostly harmless"
     let i32 n = eat(msg)
-    return n + msg.len()
+    return n + (msg.len() as i32)

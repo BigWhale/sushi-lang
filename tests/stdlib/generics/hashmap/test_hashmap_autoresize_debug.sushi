@@ -16,7 +16,7 @@ fn main() i32:
     let i32 i = 1
     while (i <= 15):
         map.insert(i, "value")
-        let i32 size = map.len()
+        let i32 size = map.len() as i32
         println("After inserting {i}: size = {size}")
         i := i + 1
 

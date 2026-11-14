@@ -211,7 +211,7 @@ class HashMapMethodInferrer:
                 elif self.method_name in ("contains_key", "is_empty"):
                     return BuiltinType.BOOL
                 elif self.method_name in ("len", "tombstone_count"):
-                    return BuiltinType.I32
+                    return BuiltinType.I64
                 elif self.method_name in ("new", "insert", "rehash", "debug", "free", "destroy"):
                     return BuiltinType.BLANK
                 elif self.method_name == "keys":
@@ -252,14 +252,14 @@ class ListMethodInferrer:
                     return ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 elif self.method_name in ("index_of", "index_of_from"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-                    return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32,
+                    return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I64,
                                                       struct_table=self.validator.struct_table.by_name)
                 elif self.method_name == "clone":
                     # `.clone()` is the ONLY escape from CE2411 for a List read, so it must
                     # exist for every List (#242). Returns the receiver's own type.
                     return self.receiver_type
                 elif self.method_name in ("len", "capacity"):
-                    return BuiltinType.I32
+                    return BuiltinType.I64
                 elif self.method_name in ("is_empty", "contains"):
                     return BuiltinType.BOOL
                 elif self.method_name == "insert":

@@ -14,7 +14,7 @@ fn main() i32:
 
     # first(), last(), contains() and index_of() read without an index you must check.
     let string head = crew.first().realise("nobody".clone())
-    let i32 at = crew.index_of("Trillian").realise(-1)
+    let i64 at = crew.index_of("Trillian").realise(-1)
     let bool aboard = crew.contains("Ford")
     println("First is {head}; Trillian is at {at}; Ford aboard: {aboard}")
 

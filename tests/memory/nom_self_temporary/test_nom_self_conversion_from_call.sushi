@@ -21,7 +21,7 @@ extend TokenError as AppError:
 
 extend NoteError as AppError:
     match self:
-        NoteError.Note(s) -> return AppError.Short(s.len())
+        NoteError.Note(s) -> return AppError.Short(s.len() as i32)
 
 fn make_err(i32 n) TokenError:
     return TokenError.Bad("bad {n}")

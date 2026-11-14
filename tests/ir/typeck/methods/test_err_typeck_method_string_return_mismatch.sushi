@@ -7,13 +7,13 @@
 fn main() i32:
     let string s = "Mostly Harmless"
     let string up = s.upper()
-    let i32 where = s.count("l")
+    let i32 where = s.count("l") as i32
     let bool empty = s.is_empty()
-    let Maybe@(i32) at = s.find("H")
+    let Maybe@(i64) at = s.find("H")
     let string copy = s.clone()
     let i32 bad = s.upper()
     if (empty):
-        return up.len() + copy.len()
+        return (up.len() as i32) + (copy.len() as i32)
     if (at.is_some()):
         return 2
     return where + bad

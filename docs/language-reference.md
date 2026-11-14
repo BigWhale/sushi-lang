@@ -852,7 +852,7 @@ division by zero gives an infinity or a NaN, and nothing reports it.
 ```sushi
 fn main(string[] args) i32:
     let i32 a = 7
-    let i32 b = args.len() - 1    # 0 when the program gets no argument
+    let i32 b = (args.len() as i32) - 1    # 0 when the program gets no argument
     println("{a / b}")            # RE2030: integer division by zero
     return 0
 ```
@@ -1384,7 +1384,7 @@ fn mean(i32[] xs) i32:
     let i32 total = 0
     foreach(x in xs.iter()):
         total := total + x
-    return total / xs.len()
+    return total / (xs.len() as i32)
 
 fn main() i32:
     let i32[] xs = from([3, 4, 5])
@@ -1441,7 +1441,7 @@ value above the `i32` range as it clamps any count above the length.
 
 A range bound (`a..b`) is no index position: the range has the type of its bounds (see
 [For-Each Loops](#for-each-loops)), and a typed bound of another type than the range is
-[`CE2121`](error-catalog.md#ce2121). `len()` still answers `i32`. A `ptr` offset (`p.load_i64(96)`) is no index position,
+[`CE2121`](error-catalog.md#ce2121). `len()` answers `i64`, so `0..xs.len()` is a range of `i64`. A `ptr` offset (`p.load_i64(96)`) is no index position,
 and it is `i32`.
 
 ### Fixed Arrays
@@ -1478,7 +1478,7 @@ struct Counts:
     i32[MAX_BITS] slots
 
 fn walk(i32[MAX_BITS] counts) i32:
-    return counts.len()
+    return counts.len() as i32
 
 fn main() i32:
     let i32[MAX_BITS] counts = [1, 2, 3, 4]
@@ -1556,8 +1556,9 @@ A count you can see that spells nothing is a typo, so `[0; 0]` stays an error. A
 you cannot see is **data**: `from([0; n])` with `n` at zero gives an empty `T[]`, the
 same value `new()` gives. A run-time count that is **negative** is clamped to zero and
 gives the same empty array: a count of zero is already data rather than an error, so a
-negative one reaching the same answer needs no rule of its own. A length is an `i32`, so a
-count above the `i32` maximum stops the program with RE2033: the array cannot hold it.
+negative one reaching the same answer needs no rule of its own. `len()` answers an `i64`,
+but a count above the `i32` maximum still stops the program with RE2033: the array cannot
+hold it.
 
 The value is evaluated once, and every slot takes its own copy. A type that owns heap
 memory costs one allocation per slot, so use a long run of one only when you mean that.
@@ -3927,7 +3928,7 @@ Use single-quote strings for string arguments inside interpolation expressions:
 let string text = "hello"
 let string[] parts = from(["a", "b"])
 println("{text.pad_left(10, '*')}")       # Padding character
-println("{text.find('world').realise(-1)}")   # Search string; find answers Maybe@(i32)
+println("{text.find('world').realise(-1)}")   # Search string; find answers Maybe@(i64)
 println("{text.replace('old', 'new')}")   # Multiple string args
 println("{','.join(parts)}")              # Separator string
 ```

@@ -76,7 +76,7 @@ fn main() i32:
     # first(), last() and index_of() answer a Maybe, so an empty array is no crash.
     let string captain = crew.first().realise("nobody")
     let string android = crew.last().realise("nobody")
-    let i32 eddie_at = crew.index_of("Eddie").realise(-1)
+    let i64 eddie_at = crew.index_of("Eddie").realise(-1)
     let bool has_marvin = crew.contains("Marvin")
     println("First: {captain}, last: {android}, Eddie at {eddie_at}, Marvin aboard: {has_marvin}")
 

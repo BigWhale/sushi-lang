@@ -25,7 +25,7 @@ fn main() i32:
     println("read {back.to_string()}")
 
     # split() is the other producer, and answers a string[] rather than a u8[].
-    let i32 parts = 'a,b,c'.split(',').len()
+    let i32 parts = 'a,b,c'.split(',').len() as i32
     println("parts {parts}")
 
     fd_close(fd).realise(-1)

@@ -10,7 +10,7 @@ use <io/files>
 
 fn length_of(nom Maybe@(string) value) i32:
     match value:
-        Maybe.Some(text) -> return text.len()
+        Maybe.Some(text) -> return text.len() as i32
         Maybe.None -> return -1
 
 fn main() i32:

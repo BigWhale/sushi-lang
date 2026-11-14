@@ -11,7 +11,7 @@ fn build() i32:
     data.push(20)
     data.push(30)
     # No data.free() / data.destroy(): RAII must clean up at scope exit.
-    return data.len()
+    return data.len() as i32
 
 fn main() i32:
     let i32 n = build()

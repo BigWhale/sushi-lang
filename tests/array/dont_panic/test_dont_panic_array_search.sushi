@@ -5,7 +5,7 @@
 
 fn index_in_dynamic(i32[] xs, i32 target) i32 dont_panic because "k < len holds k in range":
     let i32 k = 0
-    while (k < xs.len()):
+    while (k < xs.len() as i32):
         if (xs[k] == target):
             return k
         k := k + 1

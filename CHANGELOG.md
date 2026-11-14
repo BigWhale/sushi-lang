@@ -6,6 +6,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`len()`, `size()`, `capacity()`, `index_of`, `find` and the counts answer `i64`.** The
+  `len()` and `capacity()` of `T[N]`, `T[]` and `List@(T)`, the `len()` and
+  `tombstone_count()` of `HashMap@(K, V)`, and the `len()`, `size()` and `count()` of a
+  string are `i64`. `index_of` and `index_of_from` of an array and a `List@(T)`, and `find`
+  and `find_last` of a string, answer `Maybe@(i64)`. A bare literal stays `i32`, so
+  `let i32 n = xs.len()` needs `as i32` (docs/adr/0001-index-width-i64.md). BREAKING
+  (#1306).
 - **`divmod` is a method of each integer type, and it answers a bare `(T, T)`.** Write
   `a.divmod(b)`. The method needs no import. A divisor of 0 stops the program with
   `RE2030`, and a signed `MIN.divmod(-1)` stops it with `RE2031`, the same as `/`. The

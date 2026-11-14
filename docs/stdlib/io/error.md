@@ -119,7 +119,7 @@ use <net/error>
 
 fn entries(string dir) i32 | IoError:
     let string[] names = read_dir(dir)??        # FileError as IoError
-    return Result.Ok(names.len())
+    return Result.Ok(names.len() as i32)
 
 fn main() i32:
     match entries("/no/such/dir"):

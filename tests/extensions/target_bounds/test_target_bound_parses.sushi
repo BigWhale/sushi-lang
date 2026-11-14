@@ -4,10 +4,10 @@
 # EXPECT_NO_LEAKS: true
 
 extend List@(T: Clone) count2() i32:
-    return self.len()
+    return self.len() as i32
 
 extend (T: Clone)[] count3() i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     let List@(i32) xs = List.new()

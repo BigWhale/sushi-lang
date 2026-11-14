@@ -8,5 +8,5 @@ fn add(i32 a, i32 b) i32:
     return a + b
 
 fn main(string[] args) i32:
-    println("{add(2147483647, args.len())}")
+    println("{add(2147483647, args.len() as i32)}")
     return 0

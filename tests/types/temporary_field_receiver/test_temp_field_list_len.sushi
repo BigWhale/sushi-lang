@@ -17,6 +17,6 @@ fn main() i32:
     println(w().l.get(0).realise(0))
     let i32 total = 0
     foreach(i in 0..3):
-        total := total + w().l.len() + i
+        total := total + (w().l.len() as i32) + i
     println(total)
     return 0

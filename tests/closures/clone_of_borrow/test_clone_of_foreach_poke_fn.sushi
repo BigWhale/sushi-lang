@@ -10,8 +10,8 @@ fn main() i32:
     let string one = "a"
     let string two = "ab"
     let List@(fn(i32) -> i32) fs = List.new()
-    fs.push(|i32 x| x + one.len())
-    fs.push(|i32 x| x + two.len())
+    fs.push(|i32 x| x + (one.len() as i32))
+    fs.push(|i32 x| x + (two.len() as i32))
     let i32 base = 3
     foreach(poke f in fs.iter()):
         let fn(i32) -> i32 g = f.clone()

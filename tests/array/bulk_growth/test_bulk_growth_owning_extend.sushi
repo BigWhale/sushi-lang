@@ -24,6 +24,6 @@ fn main() i32:
 
     let i32 total = 0
     foreach(w in words.iter()):
-        total := total + w.len()
+        total := total + (w.len() as i32)
     println(total)
     return 0

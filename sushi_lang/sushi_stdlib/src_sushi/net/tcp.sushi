@@ -290,7 +290,7 @@ Writes every byte, looping until the buffer is gone.
 - Errors: NetError, when a write failed before the buffer was gone.
 :##
 public extend TcpStream send_all(u8[] data) ~ | NetError:
-    let i32 total = data.len()
+    let i32 total = data.len() as i32
     let i32 done = 0
     while (done < total):
         let u8[] rest = data[done..total]
@@ -312,8 +312,8 @@ an exact count has no use for a partial one.
 :##
 public extend TcpStream recv_exact(i32 count) u8[] | NetError:
     let u8[] out = from([])
-    while (out.len() < count):
-        let u8[] chunk = sock_recv(self.fd, count - out.len())??
+    while (out.len() as i32 < count):
+        let u8[] chunk = sock_recv(self.fd, count - (out.len() as i32))??
         if (chunk.len() == 0):
             return Result.Err(NetError.Closed)
         out.extend(chunk)

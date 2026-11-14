@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE0140
 
 extend T[] size() i32:
-    return self.len()
+    return self.len() as i32
     println("dead")
 
 fn main() i32:

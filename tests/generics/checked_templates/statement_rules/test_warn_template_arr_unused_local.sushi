@@ -5,7 +5,7 @@
 
 extend T[] size() i32:
     let i32 spare = 1
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     println("Mostly Harmless")

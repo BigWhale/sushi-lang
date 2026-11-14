@@ -68,11 +68,11 @@ fn main() i32:
     # Test 10: Capacity growth pattern
     let u8[] growth = new()
     growth.push(1 as u8)
-    let i32 cap1 = growth.capacity()
+    let i32 cap1 = growth.capacity() as i32
     growth.push(2 as u8)
-    let i32 cap2 = growth.capacity()
+    let i32 cap2 = growth.capacity() as i32
     growth.push(3 as u8)
-    let i32 cap3 = growth.capacity()
+    let i32 cap3 = growth.capacity() as i32
     println("Capacity pattern: {cap1}, {cap2}, {cap3}")
 
     return 0

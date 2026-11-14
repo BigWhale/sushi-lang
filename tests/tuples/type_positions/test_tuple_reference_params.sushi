@@ -7,7 +7,7 @@ use <collections/strings>
 
 fn peeked(peek (string, string) p) i32:
     let (a, b) = p
-    return a.len() + b.len()
+    return (a.len() as i32) + (b.len() as i32)
 
 fn poked(poke (string, i32) p) ~:
     p.1 := p.1 + 1

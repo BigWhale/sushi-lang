@@ -1,5 +1,5 @@
 fn count(string[] crew) i32:
-    return crew.len()
+    return crew.len() as i32
 
 fn add_one(poke i32 counter) ~:
     counter := counter + 1

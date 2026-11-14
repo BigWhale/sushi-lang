@@ -1,9 +1,10 @@
 """The string value `{i8* data, i64 size, i8 owned}`: its type, its size field and its
 construction (ADR 0001, docs/design/string-representation.md).
 
-The size field is an i64. The surface `size()` and `len()` still answer an i32, so
-`string_size` truncates and `string_value` extends an i32 size. `string_size_i64` gives the
-stored width for a byte count (`malloc`, `mem*`). No other code reads or writes field 1.
+The size field is an i64, and the surface `size()` answers it (`string_size_i64`). The
+generated string functions compute in i32, so `string_size` truncates and `string_value`
+extends an i32 size. `string_size_i64` also gives the stored width for a byte count
+(`malloc`, `mem*`). No other code reads or writes field 1.
 """
 from __future__ import annotations
 

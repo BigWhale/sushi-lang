@@ -13,7 +13,7 @@ extend Slot@(T) take(nom self) T:
 
 extend List@(T) with_one(poke self, nom T x) i32:
     self.push(nom x)
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     let Slot@(string) a = Slot("old")

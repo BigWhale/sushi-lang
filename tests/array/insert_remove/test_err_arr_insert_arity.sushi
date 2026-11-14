@@ -5,4 +5,4 @@ fn main() i32:
     a.insert(5)
     a.remove()
     a.remove(0, 1)
-    return a.len()
+    return a.len() as i32

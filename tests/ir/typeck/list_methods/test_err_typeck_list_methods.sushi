@@ -13,7 +13,7 @@ fn main() i32:
     xs.push("a")
     let Result@(~, StdError) put = xs.insert(0, "b")
     println(put.is_ok())
-    let i32 n = xs.len() + xs.capacity()
+    let i32 n = (xs.len() as i32) + (xs.capacity() as i32)
     println(xs.is_empty())
     println(xs.get(1).is_some())
     println(xs.first().is_some())

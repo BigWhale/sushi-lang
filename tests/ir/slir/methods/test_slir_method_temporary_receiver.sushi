@@ -9,8 +9,8 @@ fn word() string:
     return "Mostly Harmless"
 
 fn main() i32:
-    let i32 a = "Mostly Harmless".len()
-    let i32 b = word().upper().len()
+    let i32 a = "Mostly Harmless".len() as i32
+    let i32 b = word().upper().len() as i32
     let bool c = word().contains("H")
     if (c):
         return a + b

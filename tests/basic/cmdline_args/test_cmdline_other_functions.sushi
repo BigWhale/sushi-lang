@@ -4,7 +4,7 @@
 
 fn helper(string[] args) i32 | StdError:
     # This should work normally - no special command line processing
-    return Result.Ok(args.len())
+    return Result.Ok(args.len() as i32)
 
 fn main() i32:
     let string[] test_array = new()

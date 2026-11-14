@@ -16,7 +16,7 @@ struct Plain:
 extend Plain static seeded@(U)(nom U seed, i32 x) Plain:
     let List@(U) held = List.new()
     held.push(nom seed)
-    return Plain(x + held.len())
+    return Plain(x + (held.len() as i32))
 
 fn main() i32:
     let Crate@(i32) a = Crate.of(nom 4)

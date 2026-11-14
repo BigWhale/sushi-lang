@@ -3,7 +3,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\n2\n5\n"
 extend T[] count_of() i32:
-    return self.len()
+    return self.len() as i32
 
 extend T[] sized@(U)(nom U seed) U:
     return seed

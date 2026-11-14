@@ -24,21 +24,22 @@ fn main() -> i32 {
     let _20: i32                           // n
     let _21: i32[]                         // sides
     let _22: i32
-    let _23: i32
+    let _23: i64
     let _24: i32
-    let _25: ~
-    let _26: i32
-    let _27: i32                           // n
-    let _28: Holder view
-    let _29: i32
+    let _25: i32
+    let _26: ~
+    let _27: i32
+    let _28: i32                           // n
+    let _29: Holder view
     let _30: i32
-    let _31: Holder view
-    let _32: string
-    let _33: ~
+    let _31: i32
+    let _32: Holder view
+    let _33: string
     let _34: ~
-    let _35: i32
-    let _36: i32                           // c
-    let _37: ~
+    let _35: ~
+    let _36: i32
+    let _37: i32                           // c
+    let _38: ~
 
   bb0:
     StorageLive(_1)
@@ -114,10 +115,13 @@ fn main() -> i32 {
     StorageLive(_23)
     _23 = call builtin array.len(copy _21 @guaranteed)
     StorageLive(_24)
-    _24 = user copy _22 + copy _23
-    _20 = user copy _24 + const 1_i32
+    _24 = move _23 as i32
+    StorageLive(_25)
+    _25 = user copy _22 + copy _24
+    _20 = user copy _25 + const 1_i32
     EndBorrow(b4)
     EndBorrow(b3)
+    StorageDead(_25)
     StorageDead(_24)
     StorageDead(_23)
     StorageDead(_22)
@@ -126,63 +130,63 @@ fn main() -> i32 {
     goto -> bb5
 
   bb4:
-    StorageLive(_25)
-    _25 = call builtin println@(string)(const "empty" @guaranteed)
-    StorageDead(_25)
+    StorageLive(_26)
+    _26 = call builtin println@(string)(const "empty" @guaranteed)
+    StorageDead(_26)
     goto -> bb5
 
   bb5:
-    _26 = discriminant(_18)
-    switchInt(copy _26) -> [0: bb6, 1: bb7, otherwise: unreachable]
+    _27 = discriminant(_18)
+    switchInt(copy _27) -> [0: bb6, 1: bb7, otherwise: unreachable]
 
   bb6:
-    StorageLive(_27)
-    _27 = copy ((_18 as Named).0)
     StorageLive(_28)
-    BeginBorrow(b5, _15, peek, for _28)
-    _28 = call builtin own.get(copy _15 @guaranteed)
+    _28 = copy ((_18 as Named).0)
     StorageLive(_29)
-    _29 = copy (_28.0)
+    BeginBorrow(b5, _15, peek, for _29)
+    _29 = call builtin own.get(copy _15 @guaranteed)
     StorageLive(_30)
-    _30 = copy _27
+    _30 = copy (_29.0)
     StorageLive(_31)
-    BeginBorrow(b6, _15, peek, for _31)
-    _31 = call builtin own.get(copy _15 @guaranteed)
+    _31 = copy _28
     StorageLive(_32)
-    _32 = call builtin interp@(i32, string, i32, string, string)(copy _29 @guaranteed, const " " @guaranteed, copy _30 @guaranteed, const " " @guaranteed, copy (_31.1) @guaranteed)
+    BeginBorrow(b6, _15, peek, for _32)
+    _32 = call builtin own.get(copy _15 @guaranteed)
     StorageLive(_33)
-    _33 = call builtin println@(string)(copy _32 @guaranteed)
+    _33 = call builtin interp@(i32, string, i32, string, string)(copy _30 @guaranteed, const " " @guaranteed, copy _31 @guaranteed, const " " @guaranteed, copy (_32.1) @guaranteed)
+    StorageLive(_34)
+    _34 = call builtin println@(string)(copy _33 @guaranteed)
     EndBorrow(b6)
     EndBorrow(b5)
+    StorageDead(_34)
+    Drop(_33)
     StorageDead(_33)
-    Drop(_32)
     StorageDead(_32)
     StorageDead(_31)
     StorageDead(_30)
     StorageDead(_29)
     StorageDead(_28)
-    StorageDead(_27)
     goto -> bb8
 
   bb7:
-    StorageLive(_34)
-    _34 = call builtin println@(string)(const "empty" @guaranteed)
-    StorageDead(_34)
+    StorageLive(_35)
+    _35 = call builtin println@(string)(const "empty" @guaranteed)
+    StorageDead(_35)
     goto -> bb8
 
   bb8:
-    StorageLive(_35)
-    _35 = const 7_i32
     StorageLive(_36)
-    BeginBorrow(b7, _35, peek)
-    _36 = ref peek _35
+    _36 = const 7_i32
     StorageLive(_37)
-    _37 = call builtin println@(i32)(copy _36 @guaranteed)
+    BeginBorrow(b7, _36, peek)
+    _37 = ref peek _36
+    StorageLive(_38)
+    _38 = call builtin println@(i32)(copy _37 @guaranteed)
     EndBorrow(b7)
-    StorageDead(_37)
+    StorageDead(_38)
     _0 = const 0_i32
+    StorageDead(_37)
     StorageDead(_36)
-    StorageDead(_35)
     Drop(_18)
     StorageDead(_18)
     StorageDead(_16)

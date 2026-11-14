@@ -14,7 +14,7 @@ extend Box@(i32) tag() i32:
     return self.value * 10
 
 extend Box@(string) tag() i32:
-    return self.value.len()
+    return self.value.len() as i32
 
 fn run_test() i32:
     let Box@(i32) n = Box(7)

@@ -16,7 +16,7 @@ fn main() i32:
     numbers.push(30)
 
     # Check size
-    let i32 size = numbers.len()
+    let i32 size = numbers.len() as i32
     if (size != 3):
         println("ERROR: Expected size 3, got {size}")
         return 2

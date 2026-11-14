@@ -26,7 +26,7 @@ fn show(Result@(string, BadInput) r) ~:
 fn first(Maybe@(string) m, string why) i32 | BadInput:
     let BadInput e = BadInput.Missing(why.clone())
     let string s = m.or_err(nom e)??
-    return Result.Ok(s.len())
+    return Result.Ok(s.len() as i32)
 
 fn main() i32:
     show(make(1).or_err(nom BadInput.Missing("none")))

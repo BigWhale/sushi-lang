@@ -7,7 +7,7 @@ struct Words:
     i32 pos
 
 extend Words next(poke self) Maybe@(string):
-    if (self.pos >= self.items.len()):
+    if (self.pos >= self.items.len() as i32):
         return Maybe.None
     self.pos := self.pos + 1
     return Maybe.Some(self.items[self.pos - 1].clone())

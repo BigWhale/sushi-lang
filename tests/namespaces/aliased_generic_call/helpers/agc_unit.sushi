@@ -4,7 +4,7 @@ public fn gen@(T)(nom T x) T:
     return x
 
 public fn look@(T: Display)(T x) i32:
-    return "{x}".len()
+    return "{x}".len() as i32
 
 public fn count_all@(...Ts)(...Ts xs) i32:
     return 3
@@ -16,10 +16,10 @@ public extend Holder pass@(U)(nom U x) U:
     return x
 
 public fn coll(...i32 xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 public fn take_all(...string xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 public fn first_or(i32 d, ...i32 xs) i32:
     return xs.get(0).realise(d)

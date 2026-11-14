@@ -35,4 +35,4 @@ fn tests(i32 n) i32:
 
 fn main() i32:
     let string s = parse(1).is_ok()
-    return tests(4) + s.len()
+    return tests(4) + (s.len() as i32)

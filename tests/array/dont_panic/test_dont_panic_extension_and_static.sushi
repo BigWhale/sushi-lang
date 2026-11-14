@@ -9,7 +9,7 @@ struct Crate:
 extend i32[] sum_all() i32 dont_panic because "k < len holds k in range":
     let i32 sum = 0
     let i32 k = 0
-    while (k < self.len()):
+    while (k < self.len() as i32):
         sum := sum + self[k]
         k := k + 1
     return sum

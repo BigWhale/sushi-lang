@@ -17,4 +17,4 @@ fn main() i32:
     let i32 copy = counter
     let i32 more = twice(counter)
     let i32[] mine = table
-    return copy + more + mine.len()
+    return copy + more + (mine.len() as i32)

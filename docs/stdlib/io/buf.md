@@ -46,8 +46,8 @@ fn longest_line(string path) i32 | IoError:
     let BufReader@(File) r = BufReader.new(nom f, 8192)
     let i32 longest = 0
     foreach(line?? in r.lines()):
-        if (line.len() > longest):
-            longest := line.len()
+        if (line.len() as i32 > longest):
+            longest := line.len() as i32
     return Result.Ok(longest)
 
 fn main() i32:

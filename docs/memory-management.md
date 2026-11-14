@@ -396,7 +396,7 @@ plain call leaves the argument usable:
 
 ```sushi
 fn total(i32[] arr) i32:
-    return arr.len()
+    return arr.len() as i32
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
@@ -410,7 +410,7 @@ To hand the value over, write **`nom`** on the parameter and again at the call s
 
 ```sushi
 fn eat(nom i32[] arr) i32:
-    return arr.len()
+    return arr.len() as i32
     # arr is freed here -- the callee is the owner
 
 fn main() i32:

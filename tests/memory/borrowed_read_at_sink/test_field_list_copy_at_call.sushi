@@ -15,7 +15,7 @@ struct W:
     List@(i32) items
 
 fn total(List@(i32) xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let List@(i32) l = List.new()

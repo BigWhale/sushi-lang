@@ -22,7 +22,7 @@ fn run() i32 | StdError:
     let Row[3][] f = from([[row("b", 1), row("c", 1), row("d", 1)]])
     let Row[][2] h = [from([row("e", 1)]), new()]
     let i32 v = step(false)??
-    return Result.Ok(v + g.len() + f.len() + h.len())
+    return Result.Ok(v + (g.len() as i32) + (f.len() as i32) + (h.len() as i32))
 
 fn main() i32:
     let i32 turns = 0
@@ -32,7 +32,7 @@ fn main() i32:
         let Row[][2] h = [from([row("p", 1)]), from([row("p", 2)])]
         if (i % 2 == 0):
             continue
-        turns := turns + g.len() + f.len() + h.len() - 3
+        turns := turns + (g.len() as i32) + (f.len() as i32) + (h.len() as i32) - 3
         if (i == 5):
             break
     println(turns)

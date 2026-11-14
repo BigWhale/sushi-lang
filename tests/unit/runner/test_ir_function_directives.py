@@ -25,7 +25,7 @@ TWINS = (
     "fn main() i32:\n"
     "    let i32[] a = from([1])\n"
     '    let string[] b = from(["x"])\n'
-    "    println(a.tag() + b.len())\n"
+    "    println(a.tag() + (b.len() as i32))\n"
     "    return 0\n"
 )
 OUT = '# EXPECT_STDOUT_EXACT: "8\\n"\n'

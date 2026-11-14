@@ -15,12 +15,14 @@ A dynamic array value is a **3-field descriptor**:
 `ll_type(DynamicArrayType)` says so. The descriptor is 24 bytes. A `List@(T)` has the same
 layout, and so do the buckets of a `HashMap`.
 
-The length and the capacity are stored as `i64`, but `len()` and `capacity()` still answer
-an `i32` (the expand step of `docs/adr/0001-index-width-i64.md`). One seam holds the two
-widths: the value helpers of `backend/gep_utils.py`. `load_len` / `load_cap` read a field
-through the address of a descriptor or a `List`, and `store_len` / `store_cap` write it;
-`extract_len` / `extract_cap` and `insert_len` / `insert_cap` do the same on a value. A read
-truncates the stored `i64` to the `i32` of the surface. A write extends an `i32` (or stores
+The length and the capacity are stored as `i64`, and `len()` and `capacity()` answer that
+`i64` (the contract step of `docs/adr/0001-index-width-i64.md`). One seam holds the two
+widths: the value helpers of `backend/gep_utils.py`. `load_stored_len` / `load_stored_cap`
+read the `i64` field that `len()` and `capacity()` answer. `load_len` / `load_cap` read a
+field through the address of a descriptor or a `List` as the `i32` of the internal walks,
+and `store_len` / `store_cap` write it; `extract_len` / `extract_cap` and `insert_len` /
+`insert_cap` do the same on a value. An internal read truncates the stored `i64` to an
+`i32`. A write extends an `i32` (or stores
 an `i64` as it is). Because each write comes from an `i32`, the stored value is always in the
 `i32` range, and the truncation loses nothing. No other code takes the address of a length
 or a capacity (gate: `tests/unit/test_descriptor_gep_is_one.py`). The rule this document adds is about the value:

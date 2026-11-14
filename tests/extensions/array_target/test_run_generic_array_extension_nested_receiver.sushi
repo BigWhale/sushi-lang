@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2 3\n3 6\n"
 extend T[] rows() i32:
-    return self.len()
+    return self.len() as i32
 
 extend (T: Clone)[] last_row() T:
     return self[self.len() - 1].clone()

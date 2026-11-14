@@ -5,7 +5,7 @@
 
 fn copy_into(i32[] src, poke i32[] dst) ~ dont_panic because "dst has the length of src, and k < len holds k in range":
     let i32 k = 0
-    while (k < src.len()):
+    while (k < src.len() as i32):
         dst[k] := src[k]
         k := k + 1
 

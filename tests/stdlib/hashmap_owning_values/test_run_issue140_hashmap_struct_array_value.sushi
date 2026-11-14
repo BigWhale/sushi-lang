@@ -22,7 +22,7 @@ fn run() i32:
     let i32 out = -2
     match map.get(7):
         Maybe.Some(found) ->
-            out := found.data.len()
+            out := found.data.len() as i32
         Maybe.None ->
             out := -2
     map.free()

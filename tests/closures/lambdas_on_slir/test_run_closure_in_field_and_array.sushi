@@ -7,8 +7,8 @@ struct Holder:
 fn main() i32:
     let string a = "abcde".clone()
     let string b = "abcdef".clone()
-    let Holder h = Holder(|i32 x| x + a.len())
-    let (fn(i32) -> i32)[] fs = from([|i32 x| x + b.len()])
+    let Holder h = Holder(|i32 x| x + (a.len() as i32))
+    let (fn(i32) -> i32)[] fs = from([|i32 x| x + (b.len() as i32)])
     let fn(i32) -> i32 first = fs[0].clone()
     println(h.run(1))
     println(first(1))

@@ -11,7 +11,7 @@ extend i32 with Show:
         return "i32"
 
 fn sum(...i32 xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn outer@(...Ts: Show)(...Ts args) i32:
     return sum(args...)

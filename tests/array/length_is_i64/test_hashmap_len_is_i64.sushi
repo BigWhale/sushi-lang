@@ -1,0 +1,20 @@
+# `len()` and `tombstone_count()` of a `HashMap@(K, V)` answer i64 (ADR 0001, the
+# contract step). Arithmetic on the answer goes above 2^31 with no overflow.
+# EXPECT_STDOUT_EXACT: "2000000000 3000000000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, string) map = HashMap.new()
+    map.insert(1, "one")
+    map.insert(2, "two")
+    map.insert(3, "three")
+    map.remove(2)
+    let i64 n = map.len()
+    let i64 gone = map.tombstone_count()
+    let i64 big = n * 1000000000
+    let i64 total = (n + gone) * 1000000000
+    println("{big} {total}")
+    map.free()
+    return 0

@@ -4,7 +4,7 @@ ShirBody sum
   params : [(_0 "nums": i32[], Guaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32))
 
 ShirBody forward
   params : [(_0 "xs": i32[], Owned)]

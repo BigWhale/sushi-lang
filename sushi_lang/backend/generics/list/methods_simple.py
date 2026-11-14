@@ -58,20 +58,20 @@ def emit_list_with_capacity(codegen: Any, capacity: ir.Value, list_type: StructT
 
 
 def emit_list_len(codegen: Any, list_ptr: ir.Value) -> ir.Value:
-    """Emit LLVM IR for list.len() - get current length."""
-    return gep_utils.load_len(codegen, list_ptr, "list_len")
+    """`list.len()`: the stored i64 length."""
+    return gep_utils.load_stored_len(codegen, list_ptr, "list_len")
 
 
 def emit_list_capacity(codegen: Any, list_ptr: ir.Value) -> ir.Value:
-    """Emit LLVM IR for list.capacity() - get allocated capacity."""
-    return gep_utils.load_cap(codegen, list_ptr, "list_capacity")
+    """`list.capacity()`: the stored i64 capacity."""
+    return gep_utils.load_stored_cap(codegen, list_ptr, "list_capacity")
 
 
 def emit_list_is_empty(codegen: Any, list_ptr: ir.Value) -> ir.Value:
     """Emit LLVM IR for list.is_empty() - check if length is zero."""
     len_value = emit_list_len(codegen, list_ptr)
 
-    zero = ir.Constant(codegen.types.i32, 0)
+    zero = ir.Constant(len_value.type, 0)
     is_zero = codegen.builder.icmp_signed('==', len_value, zero, name="is_empty")
 
     return codegen.builder.zext(is_zero, codegen.types.i8)

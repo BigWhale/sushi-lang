@@ -13,7 +13,7 @@ fn make(i32 n) Slot:
     if (n == 0):
         return Slot.Empty
     let string tag = "tag {n}"
-    return Slot.Full(|i32 x| x * n + tag.len())
+    return Slot.Full(|i32 x| x * n + (tag.len() as i32))
 
 fn eat(nom fn(i32) -> i32 f) ~:
     println("ate {f(10)}")

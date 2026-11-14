@@ -237,8 +237,8 @@ use <io/fs>
 
 fn read_exact(i32 count) u8[] | IoError:
     let u8[] header = from([])
-    while (header.len() < count):
-        let u8[] chunk = stdin.read_bytes(count - header.len())??
+    while (header.len() as i32 < count):
+        let u8[] chunk = stdin.read_bytes(count - (header.len() as i32))??
         if (chunk.len() == 0):
             return Result.Err(IoError.Closed)     # input ended early
         header.extend(chunk)

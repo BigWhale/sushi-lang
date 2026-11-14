@@ -15,5 +15,5 @@ fn main() i32:
     foreach(p in names.iter().enumerate()):
         if (p.0 == 1):
             println("{p.0}:{p.1}")
-    println(names.iter().fold(nom 0, nom |i32 acc, string s| acc + s.len()))
+    println(names.iter().fold(nom 0, nom |i32 acc, string s| acc + (s.len() as i32)))
     return 0

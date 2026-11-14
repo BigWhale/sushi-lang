@@ -19,4 +19,4 @@ fn main() i32:
     a.push(4)
     if (put):
         println(view[1])
-    return a.len()
+    return a.len() as i32

@@ -11,7 +11,7 @@ struct Action:
 
 fn make(i32 n) Action:
     let string tag = "tag {n}"
-    return Action(|i32 x| x * n + tag.len(), "label {n}")
+    return Action(|i32 x| x * n + (tag.len() as i32), "label {n}")
 
 fn take_out(nom Action s) fn(i32) -> i32:
     return nom s.f

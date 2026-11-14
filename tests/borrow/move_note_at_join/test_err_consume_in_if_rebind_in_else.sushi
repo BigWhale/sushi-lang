@@ -11,7 +11,7 @@ struct Text:
     string s
 
 extend Text finish(nom self) i32:
-    return self.s.len()
+    return self.s.len() as i32
 
 fn f(bool go) i32:
     let Text t = Text("tow".concat("el"))

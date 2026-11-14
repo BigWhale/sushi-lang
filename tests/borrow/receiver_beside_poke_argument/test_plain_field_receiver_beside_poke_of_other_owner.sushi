@@ -7,7 +7,7 @@ struct W:
     u8[] buf
 
 extend u8[] send_to(poke i32[] sink) ~:
-    sink.push(self.len())
+    sink.push(self.len() as i32)
 
 fn main() i32:
     let W w = W(from([1]), from([2 as u8]))

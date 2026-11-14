@@ -29,7 +29,7 @@ fn numeric_host(ptr sockaddr, u32 length, i32 size) string:
     let i32 rc = libc.getnameinfo(sockaddr, length, poke host, size as u32, Maybe.None, 0, NI_NUMERICHOST)
     if (rc != 0):
         return "getnameinfo failed"
-    let i32 end = host.index_of(0 as u8).realise(size)
+    let i32 end = host.index_of(0 as u8).realise(size as i64) as i32
     host.truncate(end)
     return host.to_string()
 

@@ -15,6 +15,6 @@ fn main() i32:
     let string t = "x={x}"
 
     let string lit = "literal-control"
-    let i32 control = lit.len() - lit.len()   # exercise the literal binding; 0
+    let i32 control = (lit.len() as i32) - (lit.len() as i32)   # exercise the literal binding; 0
 
-    return j.len() + u.len() + t.len() + control
+    return (j.len() as i32) + (u.len() as i32) + (t.len() as i32) + control

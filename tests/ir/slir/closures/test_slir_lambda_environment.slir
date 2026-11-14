@@ -61,11 +61,15 @@ fn user_main.__lambda_0(_1: __closure_env@(i32) @in_guaranteed, _2: i32 @guarant
 fn user_main.__lambda_1(_1: __closure_env@(List@(i32)) @in_guaranteed, _2: i32 @guaranteed) -> i32 {
     let _0: i32
     let _3: ~
+    let _4: i64
 
   bb0:
     StorageLive(_3)
     _3 = call builtin list.push(copy (_1.0) @inout, copy _2 @owned)
     StorageDead(_3)
-    _0 = call builtin list.len(copy (_1.0) @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin list.len(copy (_1.0) @guaranteed)
+    _0 = move _4 as i32
+    StorageDead(_4)
     return
 }

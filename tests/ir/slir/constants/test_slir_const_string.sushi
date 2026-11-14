@@ -15,4 +15,4 @@ fn main() i32:
     println(GREETING)
     println(ALIAS)
     println("{ALIAS}!")
-    return GREETING.len() - 15
+    return (GREETING.len() as i32) - 15

@@ -24,7 +24,7 @@ fn run() i32:
         Maybe.Some(s) ->
             match s:
                 Status.Items(arr) ->
-                    out := arr.len()
+                    out := arr.len() as i32
                 Status.Active ->
                     out := -1
         Maybe.None ->

@@ -75,7 +75,7 @@ These are written in Sushi (see [Methods written in Sushi](#methods-written-in-s
 
 ## Inspection Methods
 
-### `.len() -> i32`
+### `.len() -> i64`
 
 Character count (UTF-8 aware).
 
@@ -84,7 +84,7 @@ let string s = "Hello 🌍"
 println(s.len())  # 7 characters
 ```
 
-### `.size() -> i32`
+### `.size() -> i64`
 
 Byte count.
 
@@ -131,7 +131,7 @@ if (filename.ends_with(".txt")):
     println("Text file")
 ```
 
-### `.find(string needle) -> Maybe@(i32)`
+### `.find(string needle) -> Maybe@(i64)`
 
 Find first occurrence position (UTF-8 character index).
 
@@ -143,7 +143,7 @@ match text.find('world'):
         println("Not found")
 ```
 
-### `.find_last(string needle) -> Maybe@(i32)`
+### `.find_last(string needle) -> Maybe@(i64)`
 
 Find last occurrence position (UTF-8 character index).
 
@@ -207,7 +207,7 @@ fn main() i32:
     return 0
 ```
 
-### `.count(string needle) -> i32`
+### `.count(string needle) -> i64`
 
 Count non-overlapping occurrences.
 

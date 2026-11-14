@@ -22,7 +22,7 @@ fn main() -> i32 {
     let _18: i64
     let _19: u64
     let _20: bool
-    let _21: i32
+    let _21: i64
     let _22: string
     let _23: ~
 
@@ -93,7 +93,7 @@ fn main() -> i32 {
     StorageLive(_21)
     _21 = call builtin array.len(copy _3 @guaranteed)
     StorageLive(_22)
-    _22 = call builtin interp@(string, string, string, string, string, string, i32)(copy _14 @guaranteed, const " " @guaranteed, copy (_8[const 1_i64]) @guaranteed, const " " @guaranteed, copy (_3[const 2_i64]) @guaranteed, const " " @guaranteed, copy _21 @guaranteed)
+    _22 = call builtin interp@(string, string, string, string, string, string, i64)(copy _14 @guaranteed, const " " @guaranteed, copy (_8[const 1_i64]) @guaranteed, const " " @guaranteed, copy (_3[const 2_i64]) @guaranteed, const " " @guaranteed, copy _21 @guaranteed)
     StorageLive(_23)
     _23 = call builtin println@(string)(copy _22 @guaranteed)
     EndBorrow(b0)

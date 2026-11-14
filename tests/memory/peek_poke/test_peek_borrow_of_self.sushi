@@ -18,7 +18,7 @@ fn read_counter(peek Counter c) i32:
     return c.n
 
 fn count(peek i32[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 extend Counter show() i32:
     return read_counter(peek self)

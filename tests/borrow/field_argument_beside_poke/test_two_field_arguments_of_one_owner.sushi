@@ -8,7 +8,7 @@ struct H:
     i32[] more
 
 fn g(i32[] a, i32[] b) i32:
-    return a.len() + b.len()
+    return (a.len() as i32) + (b.len() as i32)
 
 fn main() i32:
     let H h = H(from([1]), from([2, 3]))

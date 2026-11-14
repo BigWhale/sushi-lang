@@ -4,7 +4,7 @@ ShirBody length
   params : [(_0 "s": string, Guaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(Call(Builtin(LocalRef(_0), "trim"), []), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(Call(Builtin(LocalRef(_0), "trim"), []), "len"), []), i32))
 
 ShirBody sliced
   params : [(_0 "s": string, Guaranteed)]
@@ -16,7 +16,7 @@ ShirBody literal
   params : []
   locals : []
   block  :
-    Return(adopt Call(Builtin(Lit("Mostly Harmless"), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(Lit("Mostly Harmless"), "len"), []), i32))
 
 ShirBody opaque
   params : []

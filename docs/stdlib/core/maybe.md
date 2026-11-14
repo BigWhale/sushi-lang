@@ -125,7 +125,7 @@ error LookupError:
 
 fn first_name(List@(string) names) i32 | LookupError:
     let string s = names.get(0).or_err(nom LookupError.Missing)??   # a borrow of the element
-    return Result.Ok(s.len())
+    return Result.Ok(s.len() as i32)
 
 fn main() i32:
     let List@(string) names = List.new()

@@ -21,7 +21,7 @@ fn main() i32:
     let i32 min = same(-2147483647 - 1)
     println("get: {show(xs.get(lo))} {show(xs.get(hi))} {show(xs.get(at))} {show(xs.get(neg))} {show(xs.get(min))}")
 
-    let i32 end = same(xs.len())
+    let i32 end = same(xs.len() as i32)
     if (xs.insert(end, 7).is_ok()):
         println("insert end: ok {xs.len()} {xs[3]}")
     if (xs.insert(lo, 1).is_ok()):
@@ -30,7 +30,7 @@ fn main() i32:
         println("insert -1: err {xs.len()}")
     if (xs.insert(min, 2).is_err()):
         println("insert min: err {xs.len()}")
-    let i32 past = same(xs.len() + 1)
+    let i32 past = same((xs.len() as i32) + 1)
     if (xs.insert(past, 2).is_err()):
         println("insert past: err {xs.len()}")
     return 0

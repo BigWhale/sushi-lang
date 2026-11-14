@@ -9,4 +9,4 @@ fn main() i32:
     let string s = "Mostly Harmless"
     let string upper = s.upper()
     let string again = upper.replace("M", "m")
-    return again.len()
+    return again.len() as i32

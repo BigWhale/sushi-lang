@@ -5,6 +5,7 @@ fn main() -> i32 {
     let _1: string                         // s
     let _2: string                         // upper
     let _3: string                         // again
+    let _4: i64
 
   bb0:
     StorageLive(_1)
@@ -13,7 +14,10 @@ fn main() -> i32 {
     _2 = call builtin string.upper(copy _1 @guaranteed)
     StorageLive(_3)
     _3 = call builtin string.replace(copy _2 @guaranteed, const "M" @guaranteed, const "m" @guaranteed)
-    _0 = call builtin string.len(copy _3 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin string.len(copy _3 @guaranteed)
+    _0 = move _4 as i32
+    StorageDead(_4)
     Drop(_3)
     StorageDead(_3)
     Drop(_2)

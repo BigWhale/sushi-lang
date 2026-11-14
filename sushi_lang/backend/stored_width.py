@@ -2,9 +2,9 @@
 or a `List@(T)`, and the index and the length of an array cursor (docs/adr/0001).
 
 A count is stored as the signed i64 of an index. `as_stored_i64` sign-extends a narrower
-count. `as_surface_i32` gives the i32 that `size()`, `len()` and `capacity()` answer in the
-expand step: every write extends an i32, so the stored value is in the i32 range and the
-truncation loses nothing.
+count. `as_surface_i32` gives the i32 of an internal walk: every write extends an i32, so
+the stored value is in the i32 range and the truncation loses nothing. `len()`, `size()` and
+`capacity()` answer the stored i64.
 """
 from __future__ import annotations
 

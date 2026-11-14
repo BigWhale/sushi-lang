@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS
 
 fn size(nom u8[] b) i32:
-    return b.len()
+    return b.len() as i32
 
 fn main() i32:
     let u8[] b = "hi".to_bytes()

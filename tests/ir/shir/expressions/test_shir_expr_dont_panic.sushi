@@ -13,7 +13,7 @@ fn third(i32[] xs) i32 dont_panic because "the caller gives four elements":
 
 fn pair(i32[] xs) i32 dont_panic because "the caller gives four elements":
     let i32[] view = xs[2..4]
-    return view.len() * xs[0]
+    return (view.len() as i32) * xs[0]
 
 fn main() i32:
     let i32[] xs = from([10, 20, 30, 40])

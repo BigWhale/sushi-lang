@@ -13,4 +13,4 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), Lit("nobody"), is_init: true)
     Assign(LocalRef(_1), Call(Builtin(Call(Free(@name), [(Lit(1), Guaranteed)]), "realise"), [(LocalRef(_0), Owned)]), is_init: true)
-    Return(Call(Builtin(LocalRef(_1), "len"), []))
+    Return(Cast(Call(Builtin(LocalRef(_1), "len"), []), i32))

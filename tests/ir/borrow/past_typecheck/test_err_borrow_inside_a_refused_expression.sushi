@@ -6,7 +6,7 @@
 # call in it takes `s` after the move, and that is CE2405.
 
 fn take(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let string s = "Mostly Harmless {42}"

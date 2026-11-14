@@ -20,12 +20,12 @@ fn plain(Maybe@(i32) m) i32 | StdError:
 
 fn through(Maybe@(string) m) i32 | StdError:
     let string s = m.or_err(nom StdError.Error)??
-    return Result.Ok(s.len())
+    return Result.Ok(s.len() as i32)
 
 fn nested(Result@(Result@(string, StdError), StdError) r) i32 | StdError:
     let string s = r????
     println(s)
-    return Result.Ok(s.len())
+    return Result.Ok(s.len() as i32)
 
 fn main() i32:
     println(owned().realise("none"))

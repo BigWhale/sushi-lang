@@ -17,7 +17,7 @@ extend Words next(poke self) Maybe@(string):
 
 fn eat(nom string s) i32:
     println(s)
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let Words w = Words(3)

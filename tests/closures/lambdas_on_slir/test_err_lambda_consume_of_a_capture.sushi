@@ -1,7 +1,7 @@
 # A capture place is never moved out of: a consume of it is the consume of a borrow.
 # EXPECT_ERROR_CODES_EXACT: CE2411
 fn eat(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let string s = "abc".clone()

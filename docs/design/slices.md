@@ -5,7 +5,7 @@ Status: BUILT (#1226, phase 5 of the epic #1230). The rulings are David's (2026-
 
 ```sushi
 fn send(u8[] bytes) i32:
-    return bytes.len()
+    return bytes.len() as i32
 
 fn main() i32:
     let u8[] data = from([1, 2, 3, 4, 5, 6])

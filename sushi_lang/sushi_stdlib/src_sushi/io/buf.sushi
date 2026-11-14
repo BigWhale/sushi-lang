@@ -109,11 +109,11 @@ extend BufReader@(R) with Reader:
         if (max < 1):
             let u8[] none = from([])
             return Result.Ok(none)
-        if (self.pos >= self.window.len()):
+        if (self.pos >= self.window.len() as i32):
             if (not self.fill()??):
                 let u8[] ended = from([])
                 return Result.Ok(ended)
-        let i32 avail = self.window.len() - self.pos
+        let i32 avail = (self.window.len() as i32) - self.pos
         let i32 take = max
         if (take > avail):
             take := avail
@@ -150,11 +150,11 @@ public extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
     let u8[] line = from([])
     let bool saw_any = false
     while (true):
-        if (self.pos >= self.window.len()):
+        if (self.pos >= self.window.len() as i32):
             if (not self.fill()??):
                 break
-        let i32 stop = self.window.len()
-        let i32 at = self.window.index_of_from(a'\n', self.pos).realise(-1)
+        let i32 stop = self.window.len() as i32
+        let i32 at = self.window.index_of_from(a'\n', self.pos).realise(-1) as i32
         saw_any := true
         if (at < 0):
             line.extend_range(self.window, self.pos, stop - self.pos)
@@ -225,7 +225,7 @@ refused while compiling.
   ```
 :##
 public extend BufReader@(R) into_parts(nom self) (R, u8[]):
-    let u8[] unread = self.window.ss(self.pos, self.window.len() - self.pos)
+    let u8[] unread = self.window.ss(self.pos, (self.window.len() as i32) - self.pos)
     let R handle = nom self.inner
     return (handle, unread)
 
@@ -390,7 +390,7 @@ Drains the buffer if it has reached its size. Every write goes through this one 
 - Errors: IoError, when the drain failed.
 :##
 public extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
-    if (self.buf.len() >= self.cap):
+    if (self.buf.len() as i32 >= self.cap):
         self.flush()??
     return Result.Ok(~)
 

@@ -12,11 +12,11 @@ struct Holder:
     i32[] items
 
 fn count@(T)(T[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn view(poke i32[] xs) i32:
     let i32[] part = xs[1..3]
-    return part.len()
+    return part.len() as i32
 
 fn sum_peek(peek u8[] bytes) i32:
     let i32 total = 0

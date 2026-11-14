@@ -14,7 +14,7 @@ extend Bag first_two(peek self) i32:
     let Iterator@(peek string) it = self.items.iter()
     let i32 n = 0
     foreach(s in it):
-        n := n + s.len()
+        n := n + (s.len() as i32)
     return n
 
 struct Counter:

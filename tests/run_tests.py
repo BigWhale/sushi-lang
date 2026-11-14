@@ -985,7 +985,7 @@ Takes a value with two constraints.
 - Returns: The length of its name.
 :##
 public fn both@(T: Hashable + Named)(T x) i32:
-    return x.name().len()
+    return x.name().len() as i32
 
 ##:
 A blue colour.

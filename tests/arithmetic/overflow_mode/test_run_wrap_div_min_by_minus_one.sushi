@@ -11,5 +11,5 @@ fn rem(i32 a, i32 b) i32:
     return a % b
 
 fn main(string[] args) i32:
-    println("{div(-2147483648, -args.len())} {rem(-2147483648, -args.len())}")
+    println("{div(-2147483648, -(args.len() as i32))} {rem(-2147483648, -(args.len() as i32))}")
     return 0

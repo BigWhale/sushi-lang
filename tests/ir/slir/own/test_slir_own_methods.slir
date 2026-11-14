@@ -7,7 +7,7 @@ fn main() -> i32 {
     let _3: string view                    // got
     let _4: Own@(string)                   // copy
     let _5: string view
-    let _6: i32
+    let _6: i64
     let _7: string
     let _8: ~
     let _9: ~
@@ -46,7 +46,7 @@ fn main() -> i32 {
     StorageLive(_6)
     _6 = call builtin string.len(copy _5 @guaranteed)
     StorageLive(_7)
-    _7 = call builtin interp@(string, string, i32)(copy _3 @guaranteed, const " " @guaranteed, copy _6 @guaranteed)
+    _7 = call builtin interp@(string, string, i64)(copy _3 @guaranteed, const " " @guaranteed, copy _6 @guaranteed)
     StorageLive(_8)
     _8 = call builtin println@(string)(copy _7 @guaranteed)
     EndBorrow(b0)

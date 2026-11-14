@@ -7,7 +7,7 @@
 fn main() i32:
     let i32[][] d = from([from([1, 2]), from([4])])
     foreach(poke row in d.iter()):
-        row.push(row.len() + 3)
+        row.push((row.len() as i32) + 3)
         row[0] := 9
     println("{d[0].len()} {d[0][0]} {d[0][1]}")
     println("{d[1].len()} {d[1][0]} {d[1][1]}")

@@ -6,7 +6,7 @@
 
 fn first_two(string s) i32:
     let string[] parts = s.split(",")
-    foreach(i in 0..parts.len()):
+    foreach(i in 0..parts.len() as i32):
         if (i == 1):
             return i + 3
     return 0

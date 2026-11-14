@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2411
 
 fn total(...i32 xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn forward(i32[] xs) i32:
     return total(xs...)

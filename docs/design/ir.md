@@ -3574,6 +3574,8 @@ seam of the `Clone` arm). A value that is a new value is a temporary of the stat
 drops it at the end of the statement.
 
 `Len(place)` is the length of a `T[N]`, a `T[]`, a `List@(T)` or a `string`, as an `i32`.
+It is the length that a bounds check and a walk read. The method `len()` is a call and not a
+`Len`: it answers the stored `i64` (ADR 0001).
 `Slice(place, start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is
 exclusive. Its value is a `T[]` descriptor that views the storage of `place`. **A VIEW** is
 a local that a `Slice` writes, or a view local that a `Copy` writes (8.2): it owns nothing,

@@ -9,7 +9,7 @@ fn same(peek i32[] a, peek i32[] b) bool:
     if (a.len() != b.len()):
         return false
     let i32 i = 0
-    while (i < a.len()):
+    while (i < a.len() as i32):
         if (a[i] != b[i]):
             return false
         i := i + 1

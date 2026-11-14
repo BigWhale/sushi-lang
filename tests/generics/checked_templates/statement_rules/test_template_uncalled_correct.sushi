@@ -19,7 +19,7 @@ extend Box@(T) count(i32 n) i32:
     return doubled
 
 extend T[] size_plus(i32 n) i32:
-    return self.len() + n
+    return (self.len() as i32) + n
 
 extend Box@(T) with Sized:
     fn size() i32 | StdError:

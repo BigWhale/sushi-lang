@@ -4,4 +4,4 @@ public fn c_same(string a, string b) bool:
     return a == b
 
 public fn c_len(string s) i32:
-    return s.len()
+    return s.len() as i32

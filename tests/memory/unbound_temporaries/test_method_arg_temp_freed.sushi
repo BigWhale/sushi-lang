@@ -18,10 +18,10 @@ fn fallback() i32[]:
     return from([0])
 
 extend Box look(i32[] a) i32:
-    return a.len()
+    return a.len() as i32
 
 fn plain_look(i32[] a) i32:
-    return a.len()
+    return a.len() as i32
 
 fn main() i32:
     let Box b = Box(1)

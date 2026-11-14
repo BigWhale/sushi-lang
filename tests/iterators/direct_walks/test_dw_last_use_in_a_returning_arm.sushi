@@ -8,9 +8,9 @@ fn f(string[] a) i32:
     let string[] xs = from(["q".concat("1")])
     let peek string r = xs[0]
     if (a.len() > 0):
-        return r.len()
+        return r.len() as i32
     xs.push("n")
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let string[] a = from(["a"])

@@ -15,7 +15,7 @@ fn main() i32:
     println(kept.get(0).realise("-"))
     let string unused = "never"
     let Iterator@(i32) r = 0..3
-    let Iterator@(i32) dropped = r.map(nom |i32 x| x + unused.len())
+    let Iterator@(i32) dropped = r.map(nom |i32 x| x + (unused.len() as i32))
     if (min.len() > 5):
         foreach(x in dropped):
             println(x)

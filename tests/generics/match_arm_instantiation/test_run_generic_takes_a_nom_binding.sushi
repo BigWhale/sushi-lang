@@ -20,7 +20,7 @@ fn eat@(T: Hashable)(nom T v) i32:
 fn main() i32:
     match make():
         Result.Ok(nom xs) ->
-            let i32 n = xs.len()
+            let i32 n = xs.len() as i32
             let i32 one = eat(nom xs)
             println("ate {n * one}")
         Result.Err(_) -> println("no")

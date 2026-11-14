@@ -4,7 +4,7 @@
 use "helpers/ecopy_cst" as c
 
 extend T[] firstish() i32:
-    return c.tick(self.len())
+    return c.tick(self.len() as i32)
 
 fn main() i32:
     let i32[] a = from([5, 6, 7])

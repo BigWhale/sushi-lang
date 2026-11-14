@@ -12,5 +12,5 @@ fn main() i32:
     let u8 byte = 5 as u8
     let i32 zeros = byte.leading_zeros()
     if (found):
-        return s.len() + zeros
+        return (s.len() as i32) + zeros
     return 0

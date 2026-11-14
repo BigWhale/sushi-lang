@@ -10,9 +10,9 @@ fn inc(i32 x) i32:
 fn main() i32:
     let string tag = "Mostly Harmless"
     let string other = "abc"
-    let (fn(i32) -> i32)[] fs = from([|i32 x| x + tag.len()])
+    let (fn(i32) -> i32)[] fs = from([|i32 x| x + (tag.len() as i32)])
     fs.push(inc)
-    fs.push(|i32 x| x + other.len())
+    fs.push(|i32 x| x + (other.len() as i32))
     println(fs[0](2))
     println(fs[2](2))
     println(fs.len())

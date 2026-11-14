@@ -7,7 +7,8 @@ fn main() -> i32 {
     let _3: bool                           // found
     let _4: u8                             // byte
     let _5: i32                            // zeros
-    let _6: i32
+    let _6: i64
+    let _7: i32
 
   bb0:
     StorageLive(_1)
@@ -25,7 +26,10 @@ fn main() -> i32 {
   bb1:
     StorageLive(_6)
     _6 = call builtin string.len(copy _1 @guaranteed)
-    _0 = user copy _6 + copy _5
+    StorageLive(_7)
+    _7 = move _6 as i32
+    _0 = user copy _7 + copy _5
+    StorageDead(_7)
     StorageDead(_6)
     StorageDead(_5)
     StorageDead(_4)

@@ -32,7 +32,7 @@ fn take(nom Msg m) string:
 
 fn count(nom Bag b) i32:
     match nom b:
-        Bag.Left(nom xs) | Bag.Right(nom xs) -> return xs.len()
+        Bag.Left(nom xs) | Bag.Right(nom xs) -> return xs.len() as i32
 
 fn keep(nom string s) ~:
     println("temp {s}")

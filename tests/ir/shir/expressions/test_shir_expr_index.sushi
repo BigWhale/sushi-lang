@@ -9,7 +9,7 @@
 # a `Slice` with the bounds of the range and `inclusive`. A slice is a view.
 
 fn width(i32[] row) i32:
-    return row.len()
+    return row.len() as i32
 
 fn main() i32:
     let i32[] xs = from([10, 20, 30, 40])

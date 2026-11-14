@@ -67,7 +67,7 @@ fn run_test() i32 | ZError:
     i := 0
     while (i < 500):
         let i32 j = 0
-        while (j < unit.len()):
+        while (j < unit.len() as i32):
             prose.push(unit[j])
             j := j + 1
         i := i + 1

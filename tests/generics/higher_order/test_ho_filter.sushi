@@ -16,7 +16,7 @@ fn run() i32:
     xs.push(3)
     xs.push(4)
     let List@(i32) big = filter(xs, |i32 x| x > threshold)
-    return big.len()
+    return big.len() as i32
 
 fn main() i32:
     println(run())

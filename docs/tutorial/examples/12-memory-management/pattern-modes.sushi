@@ -14,7 +14,7 @@ fn load() Cargo:
     return Cargo.Crates(crates)
 
 fn ship(nom List@(string) crates) i32:
-    return crates.len()
+    return crates.len() as i32
 
 fn main() i32:
     let Cargo cargo = load()

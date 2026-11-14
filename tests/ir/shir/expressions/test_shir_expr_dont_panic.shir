@@ -12,7 +12,7 @@ ShirBody pair
   regions : [_1: {_0} until #7]
   block  :
     Assign(LocalRef(_1), reject Slice(LocalRef(_0), Lit(2), Lit(4), inclusive: false), is_init: true)
-    Return(adopt Binary(*, Call(Builtin(LocalRef(_1), "len"), []), Index(LocalRef(_0), Lit(0), unchecked: true)))
+    Return(adopt Binary(*, Cast(adopt Call(Builtin(LocalRef(_1), "len"), []), i32), Index(LocalRef(_0), Lit(0), unchecked: true)))
 
 ShirBody main
   params : []

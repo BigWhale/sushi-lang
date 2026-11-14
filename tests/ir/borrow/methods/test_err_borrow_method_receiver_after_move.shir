@@ -11,8 +11,8 @@ ShirBody main
   locals : [_0 "text": string, _1 "first": i32, _2 "other": string, _3 "second": i32]
   block  :
     Assign(LocalRef(_0), adopt Call(Free(@make), [(Lit(42), Guaranteed)]), is_init: true)
-    Assign(LocalRef(_1), adopt Call(Builtin(LocalRef(_0), "len"), []), is_init: true)
+    Assign(LocalRef(_1), adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32), is_init: true)
     Assign(LocalRef(_2), move LocalRef(_0), is_init: true)
-    Assign(LocalRef(_3), adopt Call(Builtin(LocalRef(_0), "len"), []), is_init: true)
+    Assign(LocalRef(_3), adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
     Return(adopt Binary(+, LocalRef(_1), LocalRef(_3)))
