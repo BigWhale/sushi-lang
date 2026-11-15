@@ -26,8 +26,8 @@ buffered handle and the plain one alike.
 
 | type | constructor | reads / writes | ends with |
 |---|---|---|---|
-| `BufReader@(R)` | `BufReader.new(nom src, i32 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `lines`, `into_inner` |
-| `BufWriter@(W)` | `BufWriter.new(nom dst, i32 cap)` | `write`, `write_bytes`, `write_line`, `flush`, `drain_if_full` | `finish`, `into_inner` |
+| `BufReader@(R)` | `BufReader.new(nom src, i64 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `lines`, `into_inner` |
+| `BufWriter@(W)` | `BufWriter.new(nom dst, i64 cap)` | `write`, `write_bytes`, `write_line`, `flush`, `drain_if_full` | `finish`, `into_inner` |
 | `Lines@(R)` | `r.lines()` | `next` | -- |
 
 Both constructors are statics named `new`, and both TAKE the handle: the buffer owns
@@ -68,7 +68,7 @@ answer. A last line with no newline after it is still a line, and the `None` arr
 call after it. The line is copied out of the window in bulk, never a byte at a time, and a
 line longer than the window spans as many refills as it needs.
 
-### `read(i32 max) string | IoError` and `read_bytes(i32 max) u8[] | IoError`
+### `read(i64 max) string | IoError` and `read_bytes(i64 max) u8[] | IoError`
 
 What the window still has, up to `max`, refilling it if it is spent.
 

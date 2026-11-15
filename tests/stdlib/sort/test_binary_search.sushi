@@ -4,7 +4,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 use <collections/sort>
 
-fn show(Maybe@(i32) m) ~:
+fn show(Maybe@(i64) m) ~:
     match m:
         Maybe.Some(i) -> println(i)
         Maybe.None() -> println("none")

@@ -8,7 +8,7 @@
 # value -1 stands for Maybe.None.
 use <collections/strings>
 
-fn index_of(Maybe@(i32) m) i32:
+fn index_of(Maybe@(i64) m) i64:
     match m:
         Maybe.Some(i) -> return i
         Maybe.None -> return -1
@@ -20,7 +20,7 @@ fn found_at(Maybe@(i64) m) i64:
 
 fn oracle(string text, string needle) ~:
     let i64 first = found_at(text.find(needle))
-    let i32 from0 = index_of(text.find_from(needle, 0))
+    let i64 from0 = index_of(text.find_from(needle, 0))
     println("[{text}] [{needle}] find={first} from0={from0}")
 
 fn main() i32:

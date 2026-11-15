@@ -14,16 +14,16 @@ fn main() i32:
 
     foreach((i, name) in enumerate(names).iter()):
         println("{i} {name}")
-    foreach((i32 i, string name) in names.enumerate().iter()):
+    foreach((i64 i, string name) in names.enumerate().iter()):
         println("{i} {name}")
 
     let i32[] scores = from([10, 20])
-    let List@((i32, i32)) indexed = scores.enumerate()
+    let List@((i64, i32)) indexed = scores.enumerate()
     foreach((i, v) in indexed.iter()):
         println("{i} {v}")
 
-    let List@((i32, string)) numbered = enumerate(names)
-    let (i32 at, string last) = numbered.pop().realise((-1, ""))
+    let List@((i64, string)) numbered = enumerate(names)
+    let (i64 at, string last) = numbered.pop().realise((-1, ""))
     println("last {at} {last}")
     match numbered.get(0):
         Maybe.Some(first) -> println("first {first}")

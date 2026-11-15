@@ -124,7 +124,7 @@ Gives each element of the list with its index, in a new list.
       println("{i}: {name}")
   ```
 :##
-public fn enumerate@(T: Clone)(List@(T) xs) List@((i32, T)):
+public fn enumerate@(T: Clone)(List@(T) xs) List@((i64, T)):
     return xs.enumerate()
 
 ##:
@@ -205,7 +205,7 @@ Gives each element of the list with its index, in a new list.
       println("{i}: {name}")
   ```
 :##
-public extend List@(T: Clone) enumerate() List@((i32, T)):
+public extend List@(T: Clone) enumerate() List@((i64, T)):
     return self.iter().clone_each().enumerate().collect()
 
 ##:
@@ -252,12 +252,12 @@ Gives each element of the array with its index, in a new list.
 - Example:
   ```sushi
   let string[] names = from(["Arthur", "Ford"])
-  let List@((i32, string)) numbered = names.enumerate()
+  let List@((i64, string)) numbered = names.enumerate()
   foreach((i, name) in numbered.iter()):
       println("{i}: {name}")
   ```
 :##
-public extend (T: Clone)[] enumerate() List@((i32, T)):
+public extend (T: Clone)[] enumerate() List@((i64, T)):
     return self.iter().clone_each().enumerate().collect()
 
 ##:

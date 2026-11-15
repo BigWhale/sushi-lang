@@ -48,7 +48,7 @@ fn main() i32:
 ```
 public error Base64Error:
     BadLength       # the length of the text is not a multiple of 4
-    BadChar(i32)    # the byte offset of the first byte outside the alphabet
+    BadChar(i64)    # the byte offset of the first byte outside the alphabet
     BadPadding      # a `=` that is not part of the padding at the end
 ```
 

@@ -285,7 +285,7 @@ extend File with Reader:
     - Returns: The text that arrived, empty at end of file.
     - Errors: IoError, when the read failed.
     :##
-    fn read(poke self, i32 max) string | IoError:
+    fn read(poke self, i64 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
         return Result.Ok(chunk.to_string())
 
@@ -299,7 +299,7 @@ extend File with Reader:
     - Returns: The bytes that arrived, empty at end of file.
     - Errors: IoError, when the read failed.
     :##
-    fn read_bytes(poke self, i32 max) u8[] | IoError:
+    fn read_bytes(poke self, i64 max) u8[] | IoError:
         return Result.Ok(fd_read(self.fd, max)??)
 
 ##:
@@ -437,7 +437,7 @@ the file.
 - Returns: The bytes that were there, empty past the end.
 - Errors: IoError, when the read failed. A pipe cannot be read at an offset.
 :##
-public extend File read_at(i64 offset, i32 count) u8[] | IoError:
+public extend File read_at(i64 offset, i64 count) u8[] | IoError:
     return Result.Ok(fd_pread(self.fd, offset, count)??)
 
 ##:
@@ -452,7 +452,7 @@ caller's, exactly as it is for a socket's send().
 - Returns: How many bytes were written.
 - Errors: IoError, when the write failed.
 :##
-public extend File write_at(i64 offset, u8[] data) i32 | IoError:
+public extend File write_at(i64 offset, u8[] data) i64 | IoError:
     return Result.Ok(fd_pwrite(self.fd, offset, data)??)
 
 ##:

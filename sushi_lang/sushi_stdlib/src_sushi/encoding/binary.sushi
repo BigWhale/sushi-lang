@@ -18,8 +18,8 @@ Tells if `width` bytes start at an offset of a buffer.
 - Parameter width: The count of bytes, 1 or more.
 - Returns: `false` when `at` is negative or the bytes go past the end.
 :##
-fn fits(u8[] buf, i32 at, i32 width) bool:
-    return at >= 0 and at <= (buf.len() as i32) - width
+fn fits(u8[] buf, i64 at, i64 width) bool:
+    return at >= 0 and at <= buf.len() - width
 
 ##:
 Reads `width` bytes at an offset, the least significant byte first.
@@ -29,7 +29,7 @@ Reads `width` bytes at an offset, the least significant byte first.
 - Parameter width: The count of bytes, 1 to 8.
 - Returns: The bytes as an unsigned integer.
 :##
-fn le_bits(u8[] buf, i32 at, i32 width) u64:
+fn le_bits(u8[] buf, i64 at, i64 width) u64:
     let u64 v = 0
     foreach(i in 0..width):
         v := v | ((buf[at + i] as u64) << (8 * i))
@@ -43,7 +43,7 @@ Reads `width` bytes at an offset, the most significant byte first.
 - Parameter width: The count of bytes, 1 to 8.
 - Returns: The bytes as an unsigned integer.
 :##
-fn be_bits(u8[] buf, i32 at, i32 width) u64:
+fn be_bits(u8[] buf, i64 at, i64 width) u64:
     let u64 v = 0
     foreach(i in 0..width):
         v := (v << 8) | (buf[at + i] as u64)
@@ -60,7 +60,7 @@ Reads the 2 bytes at an offset as a little-endian `u16`, the least significant b
   println(buf.read_u16_le(0).realise(0))
   ```
 :##
-public extend u8[] read_u16_le(i32 at) Maybe@(u16):
+public extend u8[] read_u16_le(i64 at) Maybe@(u16):
     if (not fits(self, at, 2)):
         return Maybe.None()
     return Maybe.Some(le_bits(self, at, 2) as u16)
@@ -76,7 +76,7 @@ Reads the 2 bytes at an offset as a big-endian `u16`, the most significant byte 
   println(buf.read_u16_be(0).realise(0))
   ```
 :##
-public extend u8[] read_u16_be(i32 at) Maybe@(u16):
+public extend u8[] read_u16_be(i64 at) Maybe@(u16):
     if (not fits(self, at, 2)):
         return Maybe.None()
     return Maybe.Some(be_bits(self, at, 2) as u16)
@@ -92,7 +92,7 @@ Reads the 4 bytes at an offset as a little-endian `u32`, the least significant b
   println(buf.read_u32_le(0).realise(0))
   ```
 :##
-public extend u8[] read_u32_le(i32 at) Maybe@(u32):
+public extend u8[] read_u32_le(i64 at) Maybe@(u32):
     if (not fits(self, at, 4)):
         return Maybe.None()
     return Maybe.Some(le_bits(self, at, 4) as u32)
@@ -108,7 +108,7 @@ Reads the 4 bytes at an offset as a big-endian `u32`, the most significant byte 
   println(buf.read_u32_be(0).realise(0))
   ```
 :##
-public extend u8[] read_u32_be(i32 at) Maybe@(u32):
+public extend u8[] read_u32_be(i64 at) Maybe@(u32):
     if (not fits(self, at, 4)):
         return Maybe.None()
     return Maybe.Some(be_bits(self, at, 4) as u32)
@@ -124,7 +124,7 @@ Reads the 8 bytes at an offset as a little-endian `u64`, the least significant b
   println(buf.read_u64_le(0).realise(0))
   ```
 :##
-public extend u8[] read_u64_le(i32 at) Maybe@(u64):
+public extend u8[] read_u64_le(i64 at) Maybe@(u64):
     if (not fits(self, at, 8)):
         return Maybe.None()
     return Maybe.Some(le_bits(self, at, 8) as u64)
@@ -140,7 +140,7 @@ Reads the 8 bytes at an offset as a big-endian `u64`, the most significant byte 
   println(buf.read_u64_be(0).realise(0))
   ```
 :##
-public extend u8[] read_u64_be(i32 at) Maybe@(u64):
+public extend u8[] read_u64_be(i64 at) Maybe@(u64):
     if (not fits(self, at, 8)):
         return Maybe.None()
     return Maybe.Some(be_bits(self, at, 8) as u64)

@@ -7,15 +7,15 @@
 # EXPECT_RUNTIME_EXIT: 0
 use <encoding/msgpack>
 
-fn walk(u8[] stream) i32 | MpError:
-    let i32 at = 0
-    while (at < stream.len() as i32):
-        let (MsgValue v, i32 used) = decode_prefix(stream.s(at, stream.len()))??
+fn walk(u8[] stream) i64 | MpError:
+    let i64 at = 0
+    while (at < stream.len()):
+        let (MsgValue v, i64 used) = decode_prefix(stream.s(at, stream.len()))??
         println("{show(v)} used {used}")
         at := at + used
     return Result.Ok(at)
 
-fn fault(Result@((MsgValue, i32), MpError) r) string:
+fn fault(Result@((MsgValue, i64), MpError) r) string:
     match r:
         Result.Ok(_) -> return "decoded"
         Result.Err(e) -> return e.text()
@@ -27,7 +27,7 @@ fn main() i32:
         Result.Err(e) -> println("walk failed {e.text()}")
 
     let u8[] padded = from([0xa2, 0x6f, 0x6b, 0xff, 0xff])
-    let (MsgValue, i32) first = decode_prefix(padded).realise((MsgValue.Nil(), -1))
+    let (MsgValue, i64) first = decode_prefix(padded).realise((MsgValue.Nil(), -1))
     println("whole {first.1} of {padded.len()}")
 
     let u8[] empty = from([])

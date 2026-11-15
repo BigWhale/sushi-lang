@@ -15,10 +15,10 @@ struct Header:
 fn first_u32(u8[] buf) u32:
     return buf.read_u32_be(0).realise(0)
 
-fn at_u16(peek u8[] buf, i32 at) Maybe@(u16):
+fn at_u16(peek u8[] buf, i64 at) Maybe@(u16):
     return buf.read_u16_le(at)
 
-fn need_u16(u8[] buf, i32 at) u16 | StdError:
+fn need_u16(u8[] buf, i64 at) u16 | StdError:
     let u16 v = buf.read_u16_le(at).or_err(nom StdError.Error)??
     return Result.Ok(v)
 

@@ -364,7 +364,7 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 
 ### Encoding (`<encoding/binary>`: methods on `u8[]`, no import)
 
-- `read_u16_le(i32 at)` ... `read_u64_be(i32 at)` - Read a fixed-width unsigned integer from a `u8[]` at an offset, in either byte order; `Maybe.None()` when it does not fit
+- `read_u16_le(i64 at)` ... `read_u64_be(i64 at)` - Read a fixed-width unsigned integer from a `u8[]` at an offset, in either byte order; `Maybe.None()` when it does not fit
 - `push_u16_le(v)` ... `push_u64_be(v)` - Append the bytes of a fixed-width unsigned integer to a `u8[]`, in either byte order
 
 ### Encoding (`use <encoding/msgpack>`)

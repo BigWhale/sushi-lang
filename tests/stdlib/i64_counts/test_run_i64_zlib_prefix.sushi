@@ -1,0 +1,21 @@
+# inflate_raw_prefix answers the count of input bytes it read as an i64 (ADR 0001).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "[Mostly Harmless] used all true\n"
+use <compression/zlib>
+use <collections/strings>
+
+fn run() ~ | ZError:
+    let u8[] fixed = deflate_raw("Mostly Harmless".to_bytes(), 6)??
+    let u8[] padded = fixed.clone()
+    padded.push(0xff)
+    let (u8[] out, i64 used) = inflate_raw_prefix(padded)??
+    println("[{out.to_string()}] used all {used == fixed.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return 0
+        Result.Err(e) ->
+            println("failed {e.text()}")
+            return 1

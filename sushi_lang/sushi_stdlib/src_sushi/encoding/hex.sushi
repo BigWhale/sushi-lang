@@ -13,7 +13,7 @@ public error HexError:
     ##: The text holds an odd count of digits. :##
     OddLength
     ##: A byte of the text is not a hex digit. The payload is its offset. :##
-    BadDigit(i32)
+    BadDigit(i64)
 
 ##:
 Writes each byte as two lower-case hex digits.
@@ -49,7 +49,7 @@ match decode("DEad01"):
 ```
 :##
 public fn decode(string text) u8[] | HexError:
-    let i32 n = text.size() as i32
+    let i64 n = text.size()
     if (n % 2 != 0):
         return Result.Err(HexError.OddLength)
     let u8[] out = from([0; n / 2])

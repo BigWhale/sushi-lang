@@ -45,11 +45,11 @@ gzip (RFC 1952) is not handled, so there is no CRC-32 here.
 
 ```
 public error ZError:
-    Truncated(i32)              # byte offset where the input ran out
+    Truncated(i64)              # byte offset where the input ran out
     BadBlockType(i32)           # BTYPE 3 is reserved
-    BadStoredLength(i32, i32)   # LEN and NLEN, which must be complements
+    BadStoredLength(i64, i64)   # LEN and NLEN, which must be complements
     BadCode()                   # incomplete or over-subscribed Huffman code
-    BadDistance(i32, i32)       # the distance asked for, and the bytes available
+    BadDistance(i64, i64)       # the distance asked for, and the bytes available
     BadSymbol(i32)              # a length or distance symbol with no meaning
     BadHeader(i32)              # the zlib header word that failed its check
     BadChecksum(u32, u32)       # the Adler-32 expected, and the one computed
@@ -134,7 +134,7 @@ fn main() i32:
 # 3 bytes: abc
 ```
 
-### `inflate_raw_prefix(u8[] src) -> (u8[], i32) | ZError`
+### `inflate_raw_prefix(u8[] src) -> (u8[], i64) | ZError`
 
 Decompress the raw DEFLATE stream at the start of `src`, and answer the output with the
 count of input bytes the stream used: up to the end of its final block, rounded up to a

@@ -8,7 +8,7 @@ use <collections/iter>
 fn doubled_evens(i32[] xs) peek Iterator@(i32):
     return xs.iter().filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * 10)
 
-fn long_ones(string[] names) peek Iterator@((i32, peek string)):
+fn long_ones(string[] names) peek Iterator@((i64, peek string)):
     let Iterator@(peek string) kept = names.iter().filter(nom |string s| s.len() > 1)
     return kept.enumerate()
 

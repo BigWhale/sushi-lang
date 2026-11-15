@@ -5,8 +5,8 @@ The design record is `docs/design/stdlib-syscall-layer.md`.
 from dataclasses import dataclass
 
 from llvmlite import ir
-from sushi_lang.backend.string_layout import STRING_BYTES, string_size, string_value
-from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.string_layout import STRING_BYTES, string_size_i64, string_value
+from sushi_lang.backend.gep_utils import extract_stored_len, insert_cap, insert_len
 from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_byte_array_type, get_maybe_type, get_result_type,
@@ -43,7 +43,7 @@ def generate_ir(module: ir.Module) -> None:
 
 
 def generate_fd_read(module: ir.Module) -> None:
-    """Emit `Result<u8[], FileError> sushi_io_files_fd_read(i32 fd, i32 max)`.
+    """Emit `Result<u8[], FileError> sushi_io_files_fd_read(i32 fd, i64 max)`.
 
     ONE `read(2)`, so the answer carries what arrived and may be shorter than asked for.
     An EMPTY array is end of file and not an error, which is what lets a caller loop
@@ -57,14 +57,13 @@ def generate_fd_read(module: ir.Module) -> None:
 
     array_ty = get_byte_array_type()
     result_type = get_result_type(array_ty, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, i32]),
+    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64]),
                        name="sushi_io_files_fd_read")
     fd, maximum = func.args
     fd.name, maximum.name = "fd", "max"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    max64 = builder.zext(maximum, i64, name="max64")
-    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="read_buf")
+    buffer = emit_checked_malloc(builder, malloc_fn, maximum, name="read_buf")
 
     # A signal that lands before the first byte moves answers -1 with EINTR, and the
     # only correct response is to ask again (probe P13).
@@ -73,7 +72,7 @@ def generate_fd_read(module: ir.Module) -> None:
     builder.branch(attempt_bb)
 
     builder.position_at_end(attempt_bb)
-    attempt = builder.call(read_fn, [fd, buffer, max64], name="got")
+    attempt = builder.call(read_fn, [fd, buffer, maximum], name="got")
     builder.store(attempt, got_slot)
     ok = builder.icmp_signed(">=", attempt, ir.Constant(i64, 0), name="read_ok")
 
@@ -156,12 +155,11 @@ def _emit_write_all(builder: ir.IRBuilder, func: ir.Function, write_fn: ir.Funct
     builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type,
-                               builder.trunc(length, i32, name="wrote32"), 4))
+    builder.ret(emit_ok_result(builder, result_type, length, 8))
 
 
 def generate_fd_write(module: ir.Module) -> None:
-    """Emit `Result<i32, FileError> sushi_io_files_fd_write(i32 fd, u8[] data)`.
+    """Emit `Result<i64, FileError> sushi_io_files_fd_write(i32 fd, u8[] data)`.
 
     Every byte goes or it is an error; the Ok value is the count, which equals the
     array's length. The buffer belongs to the caller and is a borrow, so this never
@@ -171,32 +169,30 @@ def generate_fd_write(module: ir.Module) -> None:
     write_fn = get_platform_module('files').declare_write(module)
 
     array_ty = get_byte_array_type()
-    result_type = get_result_type(i32, get_unit_enum_type())
+    result_type = get_result_type(i64, get_unit_enum_type())
     func = ir.Function(module, ir.FunctionType(result_type, [i32, array_ty]),
                        name="sushi_io_files_fd_write")
     fd, data = func.args
     fd.name, data.name = "fd", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = extract_len(None, data, name="data_len", builder=builder)
+    length = extract_stored_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
-    _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer,
-                    builder.zext(length, i64, name="data_len64"))
+    _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer, length)
 
 
 def generate_fd_write_str(module: ir.Module) -> None:
-    """Emit `Result<i32, FileError> sushi_io_files_fd_write_str(i32 fd, string s)`.
+    """Emit `Result<i64, FileError> sushi_io_files_fd_write_str(i32 fd, string s)`.
 
     The string's OWN bytes, with no `to_bytes()` copy in front of them: a fat pointer
     already carries a pointer and a byte count, which is exactly what `write(2)` wants.
-    The count is the i32 `size` field and is widened here -- never passed as a `mem*`
-    length directly (`docs/design/string-representation.md`).
+    The count is the stored i64 `size` field.
     """
     _i8, _i8_ptr, i32, i64 = get_basic_types()
     write_fn = get_platform_module('files').declare_write(module)
 
     string_ty = get_string_type()
-    result_type = get_result_type(i32, get_unit_enum_type())
+    result_type = get_result_type(i64, get_unit_enum_type())
     func = ir.Function(module, ir.FunctionType(result_type, [i32, string_ty]),
                        name="sushi_io_files_fd_write_str")
     fd, text = func.args
@@ -204,9 +200,8 @@ def generate_fd_write_str(module: ir.Module) -> None:
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
     buffer = builder.extract_value(text, 0, name="str_data")
-    size = string_size(builder, text, name="str_size")
-    _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer,
-                    builder.zext(size, i64, name="str_size64"))
+    size = string_size_i64(builder, text, name="str_size")
+    _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer, size)
 
 
 def generate_fd_readln(module: ir.Module) -> None:

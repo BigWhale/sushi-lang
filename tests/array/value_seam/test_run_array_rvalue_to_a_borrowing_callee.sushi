@@ -17,7 +17,7 @@ fn main() i32:
         return 1
 
     # The rvalue goes straight in: no local to bind it to, and no copy.
-    let i32 wrote = fd_pwrite(fd, 0 as i64, 'Hello'.to_bytes()).realise(-1)
+    let i64 wrote = fd_pwrite(fd, 0 as i64, 'Hello'.to_bytes()).realise(-1)
     println("wrote {wrote}")
 
     let u8[] empty = from([])

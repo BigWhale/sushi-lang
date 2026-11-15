@@ -43,7 +43,7 @@ fn main() i32:
 ```
 public error HexError:
     OddLength       # the text holds an odd count of digits
-    BadDigit(i32)   # the byte offset of the first byte that is not a hex digit
+    BadDigit(i64)   # the byte offset of the first byte that is not a hex digit
 ```
 
 ## Functions

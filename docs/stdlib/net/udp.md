@@ -48,11 +48,11 @@ Bind a datagram socket. Port 0 asks the kernel to choose; `s.local_port()` reads
 
 ## Methods
 
-### `s.send_to(u8[] data, string host, i32 port) i32 | NetError`
+### `s.send_to(u8[] data, string host, i32 port) i64 | NetError`
 
 Send one datagram. The destination is resolved on every call, so a tight loop to one peer resolves that peer each time round.
 
-### `s.recv_from(i32 max) Datagram | NetError`
+### `s.recv_from(i64 max) Datagram | NetError`
 
 Wait for one datagram. A datagram longer than `max` is truncated and the rest is lost, which is how the protocol works. A sender whose address cannot be rendered leaves `peer_ip` empty rather than failing the receive: the bytes did arrive.
 

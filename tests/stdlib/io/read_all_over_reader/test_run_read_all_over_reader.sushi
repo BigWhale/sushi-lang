@@ -13,19 +13,19 @@ const string PATH = "/tmp/sushi_read_all_over_reader.txt"
 
 struct Chunks:
     u8[] data
-    i32 pos
+    i64 pos
 
 extend Chunks with Reader:
-    fn read(poke self, i32 max) string | IoError:
+    fn read(poke self, i64 max) string | IoError:
         let u8[] got = self.read_bytes(max)??
         return Result.Ok(got.to_string())
 
-    fn read_bytes(poke self, i32 max) u8[] | IoError:
-        let i32 step = 4
+    fn read_bytes(poke self, i64 max) u8[] | IoError:
+        let i64 step = 4
         if (max < step):
             step := max
         let u8[] out = self.data.ss(self.pos, step)
-        self.pos := self.pos + (out.len() as i32)
+        self.pos := self.pos + out.len()
         return Result.Ok(out)
 
 fn run() ~ | IoError:

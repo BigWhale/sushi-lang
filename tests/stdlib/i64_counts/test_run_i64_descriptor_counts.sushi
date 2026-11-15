@@ -1,0 +1,33 @@
+# The descriptor primitives take an i64 count and answer an i64 count (ADR 0001).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "pwrite 5\nwrite 5\npread Hello\nread Hello\n"
+use <io/files>
+use <collections/strings>
+
+fn main() i32:
+    let i32 fd = fd_open("i64_descriptor_counts.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return 1
+
+    let i64 five = 5
+    let u8[] payload = 'Hello'.to_bytes()
+    let i64 pw = fd_pwrite(fd, 0 as i64, payload).realise(-1)
+    println("pwrite {pw}")
+    let i64 sw = fd_write(fd, payload).realise(-1)
+    println("write {sw}")
+
+    let u8[] empty = from([])
+    let u8[] at0 = fd_pread(fd, 0 as i64, five).realise(empty)
+    println("pread {at0.to_string()}")
+
+    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
+    let u8[] empty2 = from([])
+    let u8[] seq = fd_read(fd, five).realise(empty2)
+    println("read {seq.to_string()}")
+
+    fd_close(fd).realise(-1)
+    remove("i64_descriptor_counts.txt").realise(0)
+    return 0

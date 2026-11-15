@@ -27,12 +27,12 @@ fn main() i32:
     println("magic={rec.starts_with(MAGIC)}")
     let u8[] head = from([a'S', a'R', 3, 0])
     println("head={rec.eq_range(0, head)}")
-    let i32 count = rec.read_u16_le(2).realise(0) as i32
+    let i64 count = rec.read_u16_le(2).realise(0) as i64
     println("count={count}")
     let List@(u32) read_back = List.new()
     let u8[] read_tags = from([])
     foreach(i in 0..count):
-        let i32 at = 4 + 5 * i
+        let i64 at = 4 + 5 * i
         let u32 v = rec.read_u32_be(at).realise(0)
         let u8 t = rec[at + 4]
         read_back.push(v)

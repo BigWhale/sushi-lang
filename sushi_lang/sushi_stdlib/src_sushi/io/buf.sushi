@@ -37,9 +37,9 @@ public struct BufReader@(R: Reader):
     ##: The last refill, held whole. :##
     u8[] window
     ##: How far into the window the cursor has moved. :##
-    i32 pos
+    i64 pos
     ##: The refill size, in bytes. :##
-    i32 cap
+    i64 cap
     ##: Whether a refill has already answered end of input. :##
     bool at_end
 
@@ -53,8 +53,8 @@ into_inner() is how a caller gets it back.
 - Parameter cap: The refill size in bytes. Anything below 1 becomes 8192.
 - Returns: The buffered reader.
 :##
-public extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R):
-    let i32 size = cap
+public extend BufReader@(R) static new(nom R src, i64 cap) BufReader@(R):
+    let i64 size = cap
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
@@ -105,16 +105,16 @@ extend BufReader@(R) with Reader:
     - Returns: The bytes taken, empty at end of input.
     - Errors: IoError, when a refill failed.
     :##
-    fn read_bytes(poke self, i32 max) u8[] | IoError:
+    fn read_bytes(poke self, i64 max) u8[] | IoError:
         if (max < 1):
             let u8[] none = from([])
             return Result.Ok(none)
-        if (self.pos >= self.window.len() as i32):
+        if (self.pos >= self.window.len()):
             if (not self.fill()??):
                 let u8[] ended = from([])
                 return Result.Ok(ended)
-        let i32 avail = (self.window.len() as i32) - self.pos
-        let i32 take = max
+        let i64 avail = self.window.len() - self.pos
+        let i64 take = max
         if (take > avail):
             take := avail
         let u8[] out = self.window.ss(self.pos, take)
@@ -131,7 +131,7 @@ extend BufReader@(R) with Reader:
     - Returns: The text taken, empty at end of input.
     - Errors: IoError, when a refill failed.
     :##
-    fn read(poke self, i32 max) string | IoError:
+    fn read(poke self, i64 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
         return Result.Ok(chunk.to_string())
 
@@ -150,11 +150,11 @@ public extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
     let u8[] line = from([])
     let bool saw_any = false
     while (true):
-        if (self.pos >= self.window.len() as i32):
+        if (self.pos >= self.window.len()):
             if (not self.fill()??):
                 break
-        let i32 stop = self.window.len() as i32
-        let i32 at = self.window.index_of_from(a'\n', self.pos).realise(-1) as i32
+        let i64 stop = self.window.len()
+        let i64 at = self.window.index_of_from(a'\n', self.pos).realise(-1)
         saw_any := true
         if (at < 0):
             line.extend_range(self.window, self.pos, stop - self.pos)
@@ -225,7 +225,7 @@ refused while compiling.
   ```
 :##
 public extend BufReader@(R) into_parts(nom self) (R, u8[]):
-    let u8[] unread = self.window.ss(self.pos, (self.window.len() as i32) - self.pos)
+    let u8[] unread = self.window.ss(self.pos, self.window.len() - self.pos)
     let R handle = nom self.inner
     return (handle, unread)
 
@@ -309,7 +309,7 @@ public struct BufWriter@(W: Writer):
     ##: The bytes waiting to go. :##
     u8[] buf
     ##: The size at which the buffer drains itself, in bytes. :##
-    i32 cap
+    i64 cap
 
 ##:
 Wraps a handle in a buffered writer, TAKING the handle.
@@ -322,8 +322,8 @@ into_inner() is how a caller gets it back.
   becomes 8192.
 - Returns: The buffered writer.
 :##
-public extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W):
-    let i32 size = cap
+public extend BufWriter@(W) static new(nom W dst, i64 cap) BufWriter@(W):
+    let i64 size = cap
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
@@ -390,7 +390,7 @@ Drains the buffer if it has reached its size. Every write goes through this one 
 - Errors: IoError, when the drain failed.
 :##
 public extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
-    if (self.buf.len() as i32 >= self.cap):
+    if (self.buf.len() >= self.cap):
         self.flush()??
     return Result.Ok(~)
 

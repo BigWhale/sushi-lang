@@ -33,12 +33,12 @@ Reads the digits of `base` from `start` to the end of the text, with no sign.
 - Returns: `Maybe.Some(value)`, or `Maybe.None()` when there is no digit, a byte is not a
   digit of `base`, the value is more than `max`, or the base is outside 2 to 36.
 :##
-fn strict_digits(string text, i32 start, i32 base, u64 max) Maybe@(u64):
-    if (base < 2 or base > 36 or start >= text.size() as i32):
+fn strict_digits(string text, i64 start, i32 base, u64 max) Maybe@(u64):
+    if (base < 2 or base > 36 or start >= text.size()):
         return Maybe.None()
     let u64 b = base as u64
     let u64 acc = 0
-    foreach(i in start..text.size() as i32):
+    foreach(i in start..text.size()):
         let u64 d = strict_digit(text[i])
         if (d >= b or acc > (max - d) / b):
             return Maybe.None()
@@ -208,7 +208,7 @@ Copies the bytes from `start` to `end` of a string into a new string.
 - Parameter end: The offset after the last byte to copy.
 - Returns: A new string that holds the bytes of that range.
 :##
-fn cut_bytes(string s, i32 start, i32 end) string:
+fn cut_bytes(string s, i64 start, i64 end) string:
     let u8[] out = from([0; end - start])
     foreach(i in start..end):
         out[i - start] := s[i]
@@ -222,10 +222,10 @@ Tests if the bytes of `t` are in `s` at the offset `at`.
 - Parameter at: The offset in `s`.
 - Returns: True when `s` holds all the bytes of `t` from `at`.
 :##
-fn bytes_match_at(string s, string t, i32 at) bool:
-    if (at < 0 or at + (t.size() as i32) > s.size() as i32):
+fn bytes_match_at(string s, string t, i64 at) bool:
+    if (at < 0 or at + t.size() > s.size()):
         return false
-    foreach(i in 0..t.size() as i32):
+    foreach(i in 0..t.size()):
         if (s[at + i] != t[i]):
             return false
     return true
@@ -252,12 +252,12 @@ An empty `t` gives the text unchanged.
   ```
 :##
 public extend string trim_start_matches(string t) string:
-    let i32 m = t.size() as i32
-    let i32 start = 0
+    let i64 m = t.size()
+    let i64 start = 0
     if (m > 0):
         while (bytes_match_at(self, t, start)):
             start := start + m
-    return cut_bytes(self, start, self.size() as i32)
+    return cut_bytes(self, start, self.size())
 
 ##:
 Removes every repeat of `t` at the end of the text.
@@ -272,8 +272,8 @@ An empty `t` gives the text unchanged.
   ```
 :##
 public extend string trim_end_matches(string t) string:
-    let i32 m = t.size() as i32
-    let i32 end = self.size() as i32
+    let i64 m = t.size()
+    let i64 end = self.size()
     if (m > 0):
         while (bytes_match_at(self, t, end - m)):
             end := end - m
@@ -311,17 +311,17 @@ Gives the byte count of the code point that starts at a byte.
 - Parameter at: The offset of the first byte of the code point.
 - Returns: The width that the first byte states, 1 to 4, but not past the end of `s`.
 :##
-fn code_point_width(string s, i32 at) i32:
+fn code_point_width(string s, i64 at) i64:
     let u8 b = s[at]
-    let i32 w = 1
+    let i64 w = 1
     if (b >= a'\xf0'):
         w := 4
     elif (b >= a'\xe0'):
         w := 3
     elif (b >= a'\xc0'):
         w := 2
-    if (at + w > s.size() as i32):
-        return (s.size() as i32) - at
+    if (at + w > s.size()):
+        return s.size() - at
     return w
 
 ##:
@@ -332,8 +332,8 @@ Gives the offset of the first byte of the code point that ends at `end`.
 - Returns: The offset of the last byte before `end` that is not a continuation byte,
   or 0.
 :##
-fn code_point_start_before(string s, i32 end) i32:
-    let i32 at = end - 1
+fn code_point_start_before(string s, i64 end) i64:
+    let i64 at = end - 1
     while (at > 0 and is_continuation_byte(s[at])):
         at := at - 1
     return at
@@ -353,10 +353,10 @@ empty `set` gives the text unchanged.
   ```
 :##
 public extend string trim_start_chars(string set) string:
-    let i32 n = self.size() as i32
-    let i32 start = 0
+    let i64 n = self.size()
+    let i64 start = 0
     while (start < n):
-        let i32 w = code_point_width(self, start)
+        let i64 w = code_point_width(self, start)
         let string c = cut_bytes(self, start, start + w)
         if (not set.contains(c)):
             break
@@ -378,9 +378,9 @@ hold. An empty `set` gives the text unchanged.
   ```
 :##
 public extend string trim_end_chars(string set) string:
-    let i32 end = self.size() as i32
+    let i64 end = self.size()
     while (end > 0):
-        let i32 at = code_point_start_before(self, end)
+        let i64 at = code_point_start_before(self, end)
         let string c = cut_bytes(self, at, end)
         if (not set.contains(c)):
             break
@@ -419,10 +419,10 @@ only an empty `needle`, and a `start` more than the character count gives no mat
   println("abcabc".find_from("bc", 2).realise(-1))
   ```
 :##
-public extend string find_from(string needle, i32 start) Maybe@(i32):
-    let i32 n = self.size() as i32
-    let i32 at = 0
-    let i32 index = 0
+public extend string find_from(string needle, i64 start) Maybe@(i64):
+    let i64 n = self.size()
+    let i64 at = 0
+    let i64 index = 0
     while (index < start):
         if (at >= n):
             return Maybe.None()
@@ -430,7 +430,7 @@ public extend string find_from(string needle, i32 start) Maybe@(i32):
         while (at < n and is_continuation_byte(self[at])):
             at := at + 1
         index := index + 1
-    while (at + (needle.size() as i32) <= n):
+    while (at + needle.size() <= n):
         if (bytes_match_at(self, needle, at)):
             return Maybe.Some(index)
         if (not is_continuation_byte(self[at])):
@@ -476,11 +476,11 @@ gives one line and `""` gives none.
 :##
 public extend string lines() string[]:
     let string[] out = from([])
-    let i32 n = self.size() as i32
-    let i32 start = 0
+    let i64 n = self.size()
+    let i64 start = 0
     foreach(i in 0..n):
         if (self[i] == a'\n'):
-            let i32 end = i
+            let i64 end = i
             if (end > start and self[end - 1] == a'\r'):
                 end := end - 1
             out.push(cut_bytes(self, start, end))
@@ -503,8 +503,8 @@ text of white space alone gives no token.
 :##
 public extend string split_whitespace() string[]:
     let string[] out = from([])
-    let i32 n = self.size() as i32
-    let i32 start = -1
+    let i64 n = self.size()
+    let i64 start = -1
     foreach(i in 0..n):
         if (is_space_byte(self[i])):
             if (start >= 0):
@@ -530,8 +530,8 @@ rule of `len()`, so `s.chars().len()` equals `s.len()`.
 :##
 public extend string chars() string[]:
     let string[] out = from([])
-    let i32 n = self.size() as i32
-    let i32 start = -1
+    let i64 n = self.size()
+    let i64 start = -1
     foreach(i in 0..n):
         if (not is_continuation_byte(self[i])):
             if (start < 0):
@@ -1153,8 +1153,8 @@ Counts the bytes collected so far.
   println(sb.size())
   ```
 :##
-public extend StringBuilder size() i32:
-    return self.bytes.len() as i32
+public extend StringBuilder size() i64:
+    return self.bytes.len()
 
 ##:
 Tests if the builder holds no byte.

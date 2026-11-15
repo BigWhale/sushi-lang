@@ -1,0 +1,60 @@
+# The file and buffer functions take an i64 count and answer an i64 count (ADR 0001).
+# Each count here is an i64 VARIABLE, because a bare literal takes any integer type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote 15\nat 7: Harmless\nread Mostly\nbytes 1\nbuf Mostly\nbuf bytes 1\nperk Mostly\nbuffered Mostly Harmless\n"
+use <io/fs>
+use <io/buf>
+
+const string PATH = "i64_file_counts.txt"
+
+fn first@(R: Reader)(poke R r, i64 n) string | IoError:
+    return Result.Ok(r.read(n)??)
+
+fn run() ~ | IoError:
+    let i64 zero = 0
+    let i64 six = 6
+    let i64 one = 1
+    let i64 eight = 8
+    let i64 cap = 64
+
+    let File w = open(PATH, FileMode.Write())??
+    let u8[] payload = "Mostly Harmless".to_bytes()
+    let i64 wrote = w.write_at(zero, payload)??
+    println("wrote {wrote}")
+    w.close()??
+
+    let File f = open(PATH, FileMode.Read())??
+    let u8[] tail = f.read_at(7 as i64, eight)??
+    println("at 7: {tail.to_string()}")
+    let string head = f.read(six)??
+    println("read {head}")
+    let u8[] next = f.read_bytes(one)??
+    println("bytes {next.len()}")
+    f.close()??
+
+    let BufReader@(File) b = BufReader.new(nom open(PATH, FileMode.Read())??, cap)
+    let string bhead = b.read(six)??
+    println("buf {bhead}")
+    let u8[] bnext = b.read_bytes(one)??
+    println("buf bytes {bnext.len()}")
+
+    let File g = open(PATH, FileMode.Read())??
+    println("perk {first(poke g, six)??}")
+    g.close()??
+
+    let BufWriter@(File) bw = BufWriter.new(nom File(fd: STDOUT_FD, owned: false), cap)
+    bw.write("buffered Mostly Harmless\n")??
+    bw.finish()??
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 code = 0
+    match run():
+        Result.Ok(_) -> code := 0
+        Result.Err(_) ->
+            println("run failed")
+            code := 1
+    remove_all(PATH)
+    return code

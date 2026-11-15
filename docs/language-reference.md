@@ -2068,8 +2068,8 @@ A stdlib function or method with two results answers a tuple:
 | `<io/path>` | `split(p)`, `split_extension(p)` | `(string, string)` |
 | `<io/buf>` | `r.into_parts()` | `(R, u8[])` |
 | `<net/tcp>` | `l.accept()`, `s.peer()` | `(TcpStream, IpAddr) \| NetError`, `(IpAddr, i32) \| NetError` |
-| `<encoding/msgpack>` | `decode_prefix(buf)` | `(MsgValue, i32) \| MpError` |
-| `<compression/zlib>` | `inflate_raw_prefix(src)` | `(u8[], i32) \| ZError` |
+| `<encoding/msgpack>` | `decode_prefix(buf)` | `(MsgValue, i64) \| MpError` |
+| `<compression/zlib>` | `inflate_raw_prefix(src)` | `(u8[], i64) \| ZError` |
 
 A `MsgValue.Map` holds its entries as `(MsgValue, MsgValue)[]`. The answer goes into a
 destructure, a `match` with a tuple pattern, or a `foreach`:

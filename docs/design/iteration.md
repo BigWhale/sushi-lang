@@ -517,7 +517,7 @@ type parameter from the arguments.
 |---|---|
 | `map` | the owned result `U` of the function |
 | `filter` | the item of the receiver, in its mode |
-| `enumerate` | `(i32, item)`, the item in its mode: `Iterator@((i32, peek string))` |
+| `enumerate` | `(i64, item)`, the item in its mode: `Iterator@((i64, peek string))` |
 | `zip` | `(left item, right item)`, each in its mode: `Iterator@((peek string, i32))` |
 | `clone_each` | the item, owned: one `.clone()` for each lent part (the rule of `.clone()`) |
 

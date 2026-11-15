@@ -1,7 +1,7 @@
 """Operations on a socket descriptor, whatever transport made it."""
 from llvmlite import ir
 from sushi_lang.backend.string_layout import STRING_BYTES
-from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.gep_utils import extract_stored_len, insert_cap, insert_len
 from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
@@ -145,7 +145,7 @@ def generate_local_port(module: ir.Module) -> None:
 
 
 def generate_send(module: ir.Module) -> None:
-    """Emit `Result<i32, NetError> sushi_net_sock_send(i32 fd, {i32,i32,i8*} data)`.
+    """Emit `Result<i64, NetError> sushi_net_sock_send(i32 fd, u8[] data)`.
 
     The descriptor arrives BY VALUE and the buffer behind it belongs to the
     caller: this never frees it, and a caller may read the array again after
@@ -164,19 +164,18 @@ def generate_send(module: ir.Module) -> None:
     send_fn = platform_net.declare_send(module)
 
     array_ty = get_byte_array_type()
-    result_type = get_result_type(i32, get_unit_enum_type())
+    result_type = get_result_type(i64, get_unit_enum_type())
     func = ir.Function(module, ir.FunctionType(result_type, [i32, array_ty]),
                        name="sushi_net_sock_send")
     fd, data = func.args
     fd.name, data.name = "fd", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = extract_len(None, data, name="data_len", builder=builder)
+    length = extract_stored_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
-    length64 = builder.zext(length, i64, name="data_len64")
 
     sent = builder.call(send_fn, [
-        fd, buffer, length64, ir.Constant(i32, platform_net.SEND_FLAGS),
+        fd, buffer, length, ir.Constant(i32, platform_net.SEND_FLAGS),
     ], name="sent")
     ok = builder.icmp_signed(">=", sent, ir.Constant(i64, 0), name="send_ok")
 
@@ -188,12 +187,11 @@ def generate_send(module: ir.Module) -> None:
     builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type,
-                               builder.trunc(sent, i32, name="sent32"), 4))
+    builder.ret(emit_ok_result(builder, result_type, sent, 8))
 
 
 def generate_recv(module: ir.Module) -> None:
-    """Emit `Result<{i32,i32,i8*}, NetError> sushi_net_sock_recv(i32 fd, i32 max)`.
+    """Emit `Result<u8[], NetError> sushi_net_sock_recv(i32 fd, i64 max)`.
 
     The answer is one read, not `max` bytes: len carries what arrived and cap
     stays max, so the array destructor frees the whole buffer whatever len says
@@ -213,15 +211,14 @@ def generate_recv(module: ir.Module) -> None:
 
     array_ty = get_byte_array_type()
     result_type = get_result_type(array_ty, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, i32]),
+    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64]),
                        name="sushi_net_sock_recv")
     fd, maximum = func.args
     fd.name, maximum.name = "fd", "max"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    max64 = builder.zext(maximum, i64, name="max64")
-    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="recv_buf")
-    got = builder.call(recv_fn, [fd, buffer, max64, ir.Constant(i32, 0)], name="got")
+    buffer = emit_checked_malloc(builder, malloc_fn, maximum, name="recv_buf")
+    got = builder.call(recv_fn, [fd, buffer, maximum, ir.Constant(i32, 0)], name="got")
     ok = builder.icmp_signed(">=", got, ir.Constant(i64, 0), name="recv_ok")
 
     success_bb = func.append_basic_block(name="success")

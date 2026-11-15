@@ -35,8 +35,8 @@ position to move.
 
 ```sushi
 public perk Reader:
-    fn read(poke self, i32 max) string | IoError
-    fn read_bytes(poke self, i32 max) u8[] | IoError
+    fn read(poke self, i64 max) string | IoError
+    fn read_bytes(poke self, i64 max) u8[] | IoError
 
 public perk Writer:
     fn write(poke self, string data) ~ | IoError

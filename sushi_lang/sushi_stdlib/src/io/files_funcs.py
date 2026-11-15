@@ -57,15 +57,15 @@ FILES_SIGNATURES: Dict[str, Signature] = {
     # The DESCRIPTOR layer, positional half. A descriptor is a bare i32, and an offset
     # is i64 because `off_t` is 64-bit on both supported platforms (probe P6).
     "fd_open":      Signature(params_of(cstr(), I32, I32), ok=I32, error=FILE),
-    "fd_pread":     Signature(params_of(I32, I64, I32), ok=BYTES, error=FILE),
-    "fd_pwrite":    Signature(params_of(I32, I64, BYTES), ok=I32, error=FILE),
+    "fd_pread":     Signature(params_of(I32, I64, I64), ok=BYTES, error=FILE),
+    "fd_pwrite":    Signature(params_of(I32, I64, BYTES), ok=I64, error=FILE),
     "fd_dup":       Signature(params_of(I32), ok=I32, error=FILE),
     "fd_close":     Signature(params_of(I32), ok=I32, error=FILE),
     # The sequential half. A `string` crosses as its fat pointer here -- `fd_write_str`
     # takes a string VALUE, not a path, so it is not marshalled to `i8*`.
-    "fd_read":      Signature(params_of(I32, I32), ok=BYTES, error=FILE),
-    "fd_write":     Signature(params_of(I32, BYTES), ok=I32, error=FILE),
-    "fd_write_str": Signature(params_of(I32, STRING), ok=I32, error=FILE),
+    "fd_read":      Signature(params_of(I32, I64), ok=BYTES, error=FILE),
+    "fd_write":     Signature(params_of(I32, BYTES), ok=I64, error=FILE),
+    "fd_write_str": Signature(params_of(I32, STRING), ok=I64, error=FILE),
     # A blank line is Some("") and end of file is None; an empty string can no longer
     # mean both (HANDLES.md, ruling R22).
     "fd_readln":    Signature(params_of(I32), ok=MAYBE_STRING, error=FILE),

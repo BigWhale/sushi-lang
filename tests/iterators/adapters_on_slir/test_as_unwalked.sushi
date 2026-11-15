@@ -10,7 +10,7 @@ fn main() i32:
     let string tag = "t"
     let string[] names = from(["a", "bb"])
     let Iterator@(string) lent = names.iter().map(nom |string s| s.concat(tag))
-    let Iterator@((i32, string)) owned = from(["x", "y"]).iter().clone_each().enumerate()
+    let Iterator@((i64, string)) owned = from(["x", "y"]).iter().clone_each().enumerate()
     let i32 n = 0
     if (n > 0):
         foreach(s in lent):

@@ -14,7 +14,7 @@ argument on FileChannel.read -- and none of them needed a new kind of type.
 `off_t` is 64-bit on both supported platforms; probe P6 measured it.
 """
 from llvmlite import ir
-from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.gep_utils import extract_stored_len, insert_cap, insert_len
 from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_byte_array_type, get_result_type, get_unit_enum_type,
@@ -105,7 +105,7 @@ def generate_fd_open(module: ir.Module) -> None:
 
 
 def generate_fd_pread(module: ir.Module) -> None:
-    """Emit `Result<u8[], FileError> sushi_io_files_fd_pread(i32 fd, i64 off, i32 max)`.
+    """Emit `Result<u8[], FileError> sushi_io_files_fd_pread(i32 fd, i64 off, i64 max)`.
 
     One pread. The answer carries what ARRIVED, which may be fewer bytes than asked for
     and is empty at end of file; cap stays `max`, so the array destructor frees the whole
@@ -119,15 +119,14 @@ def generate_fd_pread(module: ir.Module) -> None:
 
     array_ty = get_byte_array_type()
     result_type = get_result_type(array_ty, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64, i32]),
+    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64, i64]),
                        name="sushi_io_files_fd_pread")
     fd, offset, maximum = func.args
     fd.name, offset.name, maximum.name = "fd", "offset", "max"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    max64 = builder.zext(maximum, i64, name="max64")
-    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="pread_buf")
-    got = builder.call(pread_fn, [fd, buffer, max64, offset], name="got")
+    buffer = emit_checked_malloc(builder, malloc_fn, maximum, name="pread_buf")
+    got = builder.call(pread_fn, [fd, buffer, maximum, offset], name="got")
     ok = builder.icmp_signed(">=", got, ir.Constant(i64, 0), name="pread_ok")
 
     success_bb = func.append_basic_block(name="success")
@@ -149,7 +148,7 @@ def generate_fd_pread(module: ir.Module) -> None:
 
 
 def generate_fd_pwrite(module: ir.Module) -> None:
-    """Emit `Result<i32, FileError> sushi_io_files_fd_pwrite(i32 fd, i64 off, u8[] data)`.
+    """Emit `Result<i64, FileError> sushi_io_files_fd_pwrite(i32 fd, i64 off, u8[] data)`.
 
     One pwrite. The count it took is the Ok value; looping until the whole buffer is
     gone is the caller's job, exactly as it is for `sock_send`. The buffer belongs to
@@ -160,18 +159,17 @@ def generate_fd_pwrite(module: ir.Module) -> None:
     pwrite_fn = platform_files.declare_pwrite(module)
 
     array_ty = get_byte_array_type()
-    result_type = get_result_type(i32, get_unit_enum_type())
+    result_type = get_result_type(i64, get_unit_enum_type())
     func = ir.Function(module, ir.FunctionType(result_type, [i32, i64, array_ty]),
                        name="sushi_io_files_fd_pwrite")
     fd, offset, data = func.args
     fd.name, offset.name, data.name = "fd", "offset", "data"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    length = extract_len(None, data, name="data_len", builder=builder)
+    length = extract_stored_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
-    length64 = builder.zext(length, i64, name="data_len64")
 
-    wrote = builder.call(pwrite_fn, [fd, buffer, length64, offset], name="wrote")
+    wrote = builder.call(pwrite_fn, [fd, buffer, length, offset], name="wrote")
     ok = builder.icmp_signed(">=", wrote, ir.Constant(i64, 0), name="pwrite_ok")
 
     success_bb = func.append_basic_block(name="success")
@@ -182,8 +180,7 @@ def generate_fd_pwrite(module: ir.Module) -> None:
     builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type,
-                               builder.trunc(wrote, i32, name="wrote32"), 4))
+    builder.ret(emit_ok_result(builder, result_type, wrote, 8))
 
 
 def generate_fd_dup(module: ir.Module) -> None:

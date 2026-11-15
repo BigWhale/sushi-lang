@@ -11,7 +11,7 @@ fn main() i32:
     let Iterator@((string, peek string)) pairs = names.iter().clone_each().zip(nom names.iter())
     foreach(p in pairs):
         println("{p.0}={p.1}")
-    let Iterator@((i32, string)) numbered = names.iter().map(nom |string w| "{w}!").enumerate()
+    let Iterator@((i64, string)) numbered = names.iter().map(nom |string w| "{w}!").enumerate()
     foreach((i, s) in numbered):
         println("{i} {s}")
     println(names.iter().map(nom |string w| "{w}!").enumerate().collect().len())

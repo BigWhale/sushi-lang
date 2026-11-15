@@ -4,16 +4,16 @@
 # EXPECT_STDOUT_EXACT: "1:y\n1:20\n"
 # EXPECT_NO_LEAKS
 
-fn numbered@(T: Clone)(T[] xs) List@((i32, T)):
+fn numbered@(T: Clone)(T[] xs) List@((i64, T)):
     return xs.iter().clone_each().enumerate().collect()
 
 fn main() i32:
     let string[] names = from(["x", "y"])
-    let List@((i32, string)) a = numbered(names)
+    let List@((i64, string)) a = numbered(names)
     let (i, s) = a.get(1).realise((0, ""))
     println("{i}:{s}")
     let i32[] nums = from([10, 20])
-    let List@((i32, i32)) b = numbered(nums)
+    let List@((i64, i32)) b = numbered(nums)
     let (j, n) = b.get(1).realise((0, 0))
     println("{j}:{n}")
     return 0

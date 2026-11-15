@@ -198,7 +198,7 @@ fn main() i32:
 Take ONE read from standard input, as bytes.
 
 ```sushi
-fn File.read_bytes(i32 max) u8[] | IoError
+fn File.read_bytes(i64 max) u8[] | IoError
 ```
 
 **Parameters:**
@@ -214,7 +214,7 @@ the handle in a [`BufReader`](buf.md).
 ```sushi
 use <io/fs>
 
-fn dump(i32 max) ~ | IoError:
+fn dump(i64 max) ~ | IoError:
     let u8[] data = stdin.read_bytes(max)??
     println("Read {data.len()} bytes")
 
@@ -235,10 +235,10 @@ fn main() i32:
 ```sushi
 use <io/fs>
 
-fn read_exact(i32 count) u8[] | IoError:
+fn read_exact(i64 count) u8[] | IoError:
     let u8[] header = from([])
-    while (header.len() as i32 < count):
-        let u8[] chunk = stdin.read_bytes(count - (header.len() as i32))??
+    while (header.len() < count):
+        let u8[] chunk = stdin.read_bytes(count - header.len())??
         if (chunk.len() == 0):
             return Result.Err(IoError.Closed)     # input ended early
         header.extend(chunk)
