@@ -5,7 +5,7 @@
 use "helpers/loud" as h
 
 extend List@(T: h.Loud) f() i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     return h.quiet()

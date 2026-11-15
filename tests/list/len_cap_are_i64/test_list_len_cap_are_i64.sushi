@@ -12,10 +12,10 @@
 fn grow(poke List@(i32) items) i32:
     items.push(3)
     items.push(4)
-    return items.len()
+    return items.len() as i32
 
 fn room(List@(i32) items) i32:
-    return items.capacity()
+    return items.capacity() as i32
 
 fn main() i32:
     let List@(i32) items = List.with_capacity(8)

@@ -25,10 +25,10 @@ fn main() i32:
     let bool found = d.contains(d.pop().realise(0))
     println("contains: {found}")
     let List@(i32) e = three()
-    let i32 at = e.index_of(e.pop().realise(0)).realise(-1)
+    let i32 at = e.index_of(e.pop().realise(0)).realise(-1) as i32
     println("index_of: {at}")
     let List@(i32) f = three()
-    let i32 from_at = f.index_of_from(f.pop().realise(0), 0).realise(-1)
+    let i32 from_at = f.index_of_from(f.pop().realise(0), 0).realise(-1) as i32
     println("index_of_from: {from_at}")
     let List@(i32) g = three()
     let Result@(~, StdError) r = g.insert(0, g.pop().realise(0))

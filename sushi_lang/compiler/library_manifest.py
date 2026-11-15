@@ -240,7 +240,8 @@ class LibraryManifestGenerator:
 
     def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
                  templates: dict | None = None, library_version: str = "0.0.0",
-                 kind: str = "binary", source: dict[str, str] | None = None) -> None:
+                 kind: str = "binary", source: dict[str, str] | None = None,
+                 overflow: str | None = None) -> None:
         """Generate .slib library file."""
         from sushi_lang.backend.platform_detect import current_platform_name
         from sushi_lang.internals.version import _get_versions
@@ -299,6 +300,11 @@ class LibraryManifestGenerator:
         reexports = self._extract_reexports(units)
         if reexports:
             manifest["reexports"] = reexports
+
+        # The mode of the compiled code (docs/adr/0002-overflow-mode.md). A source library
+        # carries no compiled code, so it has no mode.
+        if kind != "source" and overflow is not None:
+            manifest["overflow"] = overflow
 
         # Each marked declaration with its `because` (docs/design/dont-panic.md, D10),
         # so a reviewer sees the unchecked code before the first build. Every kind

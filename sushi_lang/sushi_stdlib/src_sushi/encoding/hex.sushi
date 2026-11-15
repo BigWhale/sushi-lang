@@ -49,7 +49,7 @@ match decode("DEad01"):
 ```
 :##
 public fn decode(string text) u8[] | HexError:
-    let i32 n = text.size()
+    let i32 n = text.size() as i32
     if (n % 2 != 0):
         return Result.Err(HexError.OddLength)
     let u8[] out = from([0; n / 2])

@@ -6,7 +6,8 @@ fn main() -> i32 {
     let _2: ~
     let _3: string
     let _4: ~
-    let _5: i32
+    let _5: i64
+    let _6: i32
 
   bb0:
     StorageLive(_1)
@@ -24,7 +25,10 @@ fn main() -> i32 {
     StorageDead(_3)
     StorageLive(_5)
     _5 = call builtin string.len(const "Mostly Harmless" @guaranteed)
-    _0 = user copy _5 - const 15_i32
+    StorageLive(_6)
+    _6 = move _5 as i32
+    _0 = user copy _6 - const 15_i32
+    StorageDead(_6)
     StorageDead(_5)
     return
 }

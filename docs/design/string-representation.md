@@ -21,10 +21,10 @@ A `string` value is a **3-field fat pointer**:
 exit), `0` = global-backed literal or borrow (never freed). The destructor is
 bit-guarded: `if owned: free(data)`.
 
-The `size` field is an `i64` (ADR 0001, the index type is `i64`). This is the expand step
-of that change: the surface `size()` and `len()` still answer an `i32`. A read truncates
-the `i64` to the `i32`, and a write zero-extends an `i32` size. A later step changes the
-surface type.
+The `size` field is an `i64` (ADR 0001, the index type is `i64`). The surface `size()`
+answers the field as it is, and `len()`, `find`, `find_last` and `count` answer an `i64`.
+The generated string functions still compute in `i32`: an internal read truncates the
+`i64` to the `i32`, and a write extends an `i32` size.
 
 We keep this representation. We do **not** switch to packing `owned` into the high bit
 of `size` (the 2-field alternative).

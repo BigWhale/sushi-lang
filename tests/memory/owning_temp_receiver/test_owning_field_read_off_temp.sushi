@@ -16,7 +16,7 @@ fn make(i32 n) Row:
     return Row("mostly harmless", n)
 
 fn label_len(i32 n) i32:
-    return make(n).label.len()
+    return make(n).label.len() as i32
 
 fn main() i32:
     println(Row("mostly harmless", 2).label)

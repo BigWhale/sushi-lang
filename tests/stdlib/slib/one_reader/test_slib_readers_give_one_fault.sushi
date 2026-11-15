@@ -12,7 +12,10 @@ const string ROOT = "/tmp/sushi_slib_readers_give_one_fault"
 
 fn push_le(poke u8[] out, u64 value, i32 count) ~:
     foreach(i in 0..count):
-        out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
+        if (i < 8):
+            out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
+        else:
+            out.push(0)
 
 fn header(u64 meta_len) u8[]:
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])

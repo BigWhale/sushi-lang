@@ -23,7 +23,7 @@ fn run() i32 | StdError:
     let Tok[][2] g = [from([tok("p")]), from([tok("q")])]
     println("fail")
     let i32 v = step(false)??
-    return Result.Ok(v + g.len())
+    return Result.Ok(v + (g.len() as i32))
 
 fn main() i32:
     foreach(i in 0..5):
@@ -36,7 +36,7 @@ fn main() i32:
     let i32 n = 0
     while (n < 3):
         let Tok[][2] h = [from([tok("x")]), from([tok("y")])]
-        n := n + h.len()
+        n := n + (h.len() as i32)
         println("break")
         break
     match run():

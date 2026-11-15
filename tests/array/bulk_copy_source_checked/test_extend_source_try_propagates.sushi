@@ -10,7 +10,7 @@ fn give() string[] | E:
 fn grow() i32 | E:
     let string[] two = from(["a"])
     two.extend(give()??)
-    return Result.Ok(two.len())
+    return Result.Ok(two.len() as i32)
 
 fn main() i32:
     println(grow().realise(7))

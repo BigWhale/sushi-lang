@@ -12,7 +12,7 @@ struct Cursor:
     i32 pos
 
 fn take(peek u8[] buf, poke Cursor cur, i32 count) peek u8[] | ReadError:
-    if (cur.pos + count > buf.len()):
+    if (cur.pos + count > buf.len() as i32):
         return Result.Err(ReadError.Short(cur.pos))
     let i32 start = cur.pos
     cur.pos := cur.pos + count

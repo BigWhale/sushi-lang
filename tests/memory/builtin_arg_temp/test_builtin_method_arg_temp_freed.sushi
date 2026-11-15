@@ -21,7 +21,7 @@ struct Box:
 
 extend Box with Namer:
     fn tag(string s) i32:
-        return self.n + s.len()
+        return self.n + (s.len() as i32)
 
 fn main() i32:
     let string src = "abcdefghij"

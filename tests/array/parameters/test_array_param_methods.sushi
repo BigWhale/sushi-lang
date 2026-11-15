@@ -7,7 +7,7 @@ fn safe_get(i32[] arr, i32 index) i32 | StdError:
     return Result.Ok(arr.get(index).or_err(nom StdError.Error)??)
 
 fn check_capacity(string[] arr) i32 | StdError:
-    return Result.Ok(arr.capacity())
+    return Result.Ok(arr.capacity() as i32)
 
 # Mutating helpers borrow poke so the caller keeps ownership and sees the mutation
 # (a by-value array param would be moved and freed by the callee).
@@ -17,7 +17,7 @@ fn pop_last(poke bool[] arr) bool | StdError:
 fn chain_methods(poke i32[] arr) i32 | StdError:
     print(arr.push(42))
     print(arr.push(24))
-    return Result.Ok(arr.len())
+    return Result.Ok(arr.len() as i32)
 
 fn main() i32:
     # Test get method on parameter

@@ -86,7 +86,7 @@ public fn parse_url(string text) Url | UrlError:
     if (text.len() == 0):
         return Result.Err(UrlError.Empty)
 
-    let i32 colon = text.find(":").realise(-1)
+    let i32 colon = text.find(":").realise(-1) as i32
     if (colon <= 0):
         return Result.Err(UrlError.NoScheme)
     let string raw_scheme = text.s(0, colon)
@@ -106,7 +106,7 @@ public fn parse_url(string text) Url | UrlError:
         return Result.Ok(Url(scheme, "", "", 0, body, query, fragment))
 
     let string authority_and_path = body.s(2, body.len())
-    let i32 slash = authority_and_path.find("/").realise(-1)
+    let i32 slash = authority_and_path.find("/").realise(-1) as i32
     let string authority = ""
     let string path = "/"
     if (slash < 0):
@@ -120,7 +120,7 @@ public fn parse_url(string text) Url | UrlError:
     let string host = ""
     let i32 port = 0
     if (hostport.starts_with("[")):
-        let i32 close = hostport.find("]").realise(-1)
+        let i32 close = hostport.find("]").realise(-1) as i32
         if (close < 0):
             return Result.Err(UrlError.UnclosedHost)
         host := hostport.s(1, close)
@@ -130,7 +130,7 @@ public fn parse_url(string text) Url | UrlError:
                 return Result.Err(UrlError.BadPort)
             port := read_port(tail.s(1, tail.len()))??
     else:
-        let i32 mark = hostport.find(":").realise(-1)
+        let i32 mark = hostport.find(":").realise(-1) as i32
         if (mark < 0):
             host := hostport.lower()
         else:

@@ -13,7 +13,7 @@ fn main() i32:
     let fn(i32) -> i32 add = |i32 x| x + base
     let fn(i32) -> i32 push = |i32 x|:
         xs.push(x)
-        return xs.len()
+        return xs.len() as i32
     println(add(2))
     push(1)
     push(2)

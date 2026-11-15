@@ -11,7 +11,7 @@ fn make() string | StdError:
 
 fn run() i32 | StdError:
     let Result@(string, StdError) r = make()
-    let i32 n = r??.len()
+    let i32 n = r??.len() as i32
     return Result.Ok(n)
 
 fn main() i32:

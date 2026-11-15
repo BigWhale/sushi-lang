@@ -9,7 +9,7 @@ fn same(i32 x) i32:
 fn main() i32:
     let i32[] xs = from([10, 20, 30])
     let i32 first = same(0)
-    let i32 last = same(xs.len() - 1)
+    let i32 last = same((xs.len() as i32) - 1)
     println("{xs[first]} {xs[last]}")
     xs[first] := 11
     xs[last] := 33

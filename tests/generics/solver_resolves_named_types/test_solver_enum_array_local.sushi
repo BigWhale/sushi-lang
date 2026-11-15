@@ -6,7 +6,7 @@ enum E:
     B
 
 fn cnt@(T: Hashable)(T[] xs, T d) i32:
-    return xs.len() + ((d.hash() * 0) as i32)
+    return (xs.len() as i32) + ((d.hash() * 0) as i32)
 
 fn main() i32:
     let E[] es = from([E.A(), E.B()])

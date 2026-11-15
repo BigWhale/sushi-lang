@@ -5,7 +5,7 @@ fn main() i32:
     let i32 base = 40
     let i32[] xs = from([1, 2, 3])
     let fn(i32) -> i32 add = |i32 x| x + base
-    let fn() -> i32 size = |~| xs.len()
+    let fn() -> i32 size = |~| xs.len() as i32
     println(add(2))
     println(size())
     println(add(2) + size())

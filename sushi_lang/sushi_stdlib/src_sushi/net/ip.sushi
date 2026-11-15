@@ -197,7 +197,7 @@ One to three digits, no leading zero, and a value of 255 at most.
 - Errors: NetError.InvalidAddress, when the text is not an octet.
 :##
 fn parse_octet(string piece) u32 | NetError:
-    let i32 width = piece.len()
+    let i32 width = piece.len() as i32
     if (width == 0 or width > 3):
         return Result.Err(NetError.InvalidAddress)
     if (width > 1 and piece.char_at(0) == "0"):
@@ -232,7 +232,7 @@ Reads one hexadecimal group of an IPv6 address.
 - Errors: NetError.InvalidAddress, when the text is not a group.
 :##
 fn parse_group(string piece) u16 | NetError:
-    let i32 width = piece.len()
+    let i32 width = piece.len() as i32
     if (width == 0 or width > 4):
         return Result.Err(NetError.InvalidAddress)
     return Result.Ok(piece.parse_u16(16).or_err(nom NetError.InvalidAddress)??)
@@ -263,7 +263,7 @@ fn parse_v6_groups(string text) u16[] | NetError:
 
     # `::` has to stand for at least one group, so a compressed address that
     # already spells eight of them is not an address.
-    let i32 total = left.len() + right.len()
+    let i32 total = (left.len() as i32) + (right.len() as i32)
     if (total >= 8):
         return Result.Err(NetError.InvalidAddress)
 
@@ -292,7 +292,7 @@ fn parse_group_run(string run) u16[] | NetError:
         return Result.Err(NetError.InvalidAddress)
 
     let string[] pieces = run.split(":")
-    let i32 count = pieces.len()
+    let i32 count = pieces.len() as i32
     foreach(i in 0..count):
         let string piece = pieces[i]
         if (piece.contains(".")):

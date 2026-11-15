@@ -6,6 +6,6 @@
 
 fn main(string[] args) i32:
     let i32 a = 7
-    let i32 b = args.len() - 1
+    let i32 b = (args.len() as i32) - 1
     println("{a / b}")
     return 0

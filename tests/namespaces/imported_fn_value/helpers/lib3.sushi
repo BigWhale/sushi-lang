@@ -1,11 +1,11 @@
 use <collections/strings>
 
 public fn plain(string s) i32:
-    return 5 + s.len() * 0
+    return 5 + (s.len() as i32) * 0
 
 public fn gen@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32
 
 fn hidden(string s) i32:
-    return 9 + s.len() * 0
+    return 9 + (s.len() as i32) * 0

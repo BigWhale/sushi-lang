@@ -16,7 +16,7 @@ fn mkbox() Box | StdError:
 
 fn probe() i32:
     match mkbox():
-        Result.Ok(b) -> return b.data.len()
+        Result.Ok(b) -> return b.data.len() as i32
         Result.Err(_) -> return -1
 
 fn main() i32:

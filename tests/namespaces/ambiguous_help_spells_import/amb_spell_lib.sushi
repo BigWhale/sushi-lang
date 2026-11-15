@@ -1,2 +1,2 @@
 public fn decode(u8[] buf) i32:
-    return buf.len() + 2
+    return (buf.len() as i32) + 2

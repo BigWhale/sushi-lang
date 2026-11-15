@@ -4,7 +4,7 @@
 use <io/fs>
 
 extend List@(T: Clone) zip2@(U: Clone)(List@(U) other) i32:
-    return self.len() + other.len()
+    return (self.len() as i32) + (other.len() as i32)
 
 fn main() i32:
     let List@(File) a = List.new()

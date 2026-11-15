@@ -21,13 +21,13 @@ ShirBody Bag.size
   params : [(_0 "self": Bag, Guaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(Field(LocalRef(_0), "label"), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(Field(LocalRef(_0), "label"), "len"), []), i32))
 
 ShirBody Bag.seen
   params : [(_0 "self": Bag, InGuaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Builtin(Field(LocalRef(_0), "label"), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(Field(LocalRef(_0), "label"), "len"), []), i32))
 
 ShirBody Bag.relabel
   params : [(_0 "self": Bag, Inout), (_1 "label": string, Owned)]

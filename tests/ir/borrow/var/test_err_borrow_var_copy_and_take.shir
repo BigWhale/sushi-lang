@@ -25,4 +25,4 @@ ShirBody main
     Assign(LocalRef(_0), adopt StorageRef(@counter), is_init: true)
     Assign(LocalRef(_1), adopt Call(Free(@twice), [(StorageRef(@counter), Guaranteed)]), is_init: true)
     Assign(LocalRef(_2), move StorageRef(@table), is_init: true)
-    Return(adopt Binary(+, Binary(+, LocalRef(_0), LocalRef(_1)), Call(Builtin(LocalRef(_2), "len"), [])))
+    Return(adopt Binary(+, Binary(+, LocalRef(_0), LocalRef(_1)), Cast(adopt Call(Builtin(LocalRef(_2), "len"), []), i32)))

@@ -17,20 +17,20 @@
 
 # borrow (unmarked): the caller keeps the value and frees it.
 fn borrows(i32[] a) i32:
-    return a.len()
+    return a.len() as i32
 
 # nom: the callee becomes the owner and frees it.
 fn eats(nom i32[] a) i32:
-    return a.len()
+    return a.len() as i32
 
 # peek: by pointer, read only. The caller frees.
 fn reads(peek i32[] a) i32:
-    return a.len()
+    return a.len() as i32
 
 # poke: by pointer, read/write. The caller frees, and sees the write.
 fn writes(poke i32[] a) i32:
     a.push(4)
-    return a.len()
+    return a.len() as i32
 
 fn main() i32:
     let i32[] b = from([1, 2, 3])

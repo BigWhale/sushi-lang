@@ -144,6 +144,19 @@ _add(ErrorMessage("RE2032", Severity.ERROR,
     "counter) gets no check. `~`, `&`, `|`, `^` and `as` are width-defined, and a wider "
     "type or a cast is the escape."))
 
+# A shift count at or above the width, or negative, in trap mode (#1304)
+_add(ErrorMessage("RE2034", Severity.ERROR,
+    "shift count %lld is out of range: '{op}' on {type}",
+    Category.RUNTIME, "`a << n` or `a >> n` on an integer type found a count `n` that is "
+    "equal to or larger than the width of the type, or a negative count of a signed count "
+    "type, at run time. The default overflow mode is `trap`, so the program stops with exit "
+    "code 1 (docs/adr/0002-overflow-mode.md). The text names the count as written, the "
+    "operator and the type of the shifted value; the count of a type of width W runs from 0 "
+    "to W - 1. A u64 count above the i64 maximum prints as the i64 maximum. Build with "
+    "`--overflow=wrap` to mask the count to the width (`a << (n & (W - 1))`) in place of the "
+    "stop. A count that the compiler can read is the compile error CE2512. To shift every "
+    "bit out of the type, cast the value to a wider type first."))
+
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,
     "a foreign call returned a null pointer where its declaration says non-null",

@@ -14,7 +14,7 @@ fn wrap@(T)(nom T x) Box@(T):
     return Box(x)
 
 fn count@(T)(peek T[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let Box@(i32[][]) b = Box(from([from([1]), from([2, 3])]))

@@ -4,10 +4,10 @@ use <collections/strings>
 
 fn test_find_last_basic() ~ | StdError:
     let string text = "hello world"
-    let Maybe@(i32) result = text.find_last("o")
+    let Maybe@(i64) result = text.find_last("o")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 7):
             println("PASS: find_last('o') in 'hello world' = 7")
         else:
@@ -19,7 +19,7 @@ fn test_find_last_basic() ~ | StdError:
 
 fn test_find_last_not_found() ~ | StdError:
     let string text = "hello"
-    let Maybe@(i32) result = text.find_last("x")
+    let Maybe@(i64) result = text.find_last("x")
 
     if (result.is_none()):
         println("PASS: find_last not found returns None")
@@ -30,10 +30,10 @@ fn test_find_last_not_found() ~ | StdError:
 
 fn test_find_last_first_char() ~ | StdError:
     let string text = "test"
-    let Maybe@(i32) result = text.find_last("t")
+    let Maybe@(i64) result = text.find_last("t")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 3):
             println("PASS: find_last('t') in 'test' = 3 (last occurrence)")
         else:
@@ -45,10 +45,10 @@ fn test_find_last_first_char() ~ | StdError:
 
 fn test_find_last_substring() ~ | StdError:
     let string text = "the cat in the hat"
-    let Maybe@(i32) result = text.find_last("the")
+    let Maybe@(i64) result = text.find_last("the")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 11):
             println("PASS: find_last('the') = 11 (last occurrence)")
         else:
@@ -60,10 +60,10 @@ fn test_find_last_substring() ~ | StdError:
 
 fn test_find_last_single_occurrence() ~ | StdError:
     let string text = "unique"
-    let Maybe@(i32) result = text.find_last("que")
+    let Maybe@(i64) result = text.find_last("que")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 3):
             println("PASS: find_last with single occurrence")
         else:
@@ -75,10 +75,10 @@ fn test_find_last_single_occurrence() ~ | StdError:
 
 fn test_find_last_empty_needle() ~ | StdError:
     let string text = "test"
-    let Maybe@(i32) result = text.find_last("")
+    let Maybe@(i64) result = text.find_last("")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 4):
             println("PASS: find_last empty needle returns end position")
         else:
@@ -90,7 +90,7 @@ fn test_find_last_empty_needle() ~ | StdError:
 
 fn test_find_last_empty_string() ~ | StdError:
     let string text = ""
-    let Maybe@(i32) result = text.find_last("x")
+    let Maybe@(i64) result = text.find_last("x")
 
     if (result.is_none()):
         println("PASS: find_last in empty string returns None")
@@ -101,10 +101,10 @@ fn test_find_last_empty_string() ~ | StdError:
 
 fn test_find_last_full_match() ~ | StdError:
     let string text = "hello"
-    let Maybe@(i32) result = text.find_last("hello")
+    let Maybe@(i64) result = text.find_last("hello")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 0):
             println("PASS: find_last full string match")
         else:
@@ -116,10 +116,10 @@ fn test_find_last_full_match() ~ | StdError:
 
 fn test_find_last_utf8() ~ | StdError:
     let string text = "café café"
-    let Maybe@(i32) result = text.find_last("café")
+    let Maybe@(i64) result = text.find_last("café")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 5):
             println("PASS: find_last UTF-8 word (last 'café' at char 5)")
         else:
@@ -131,10 +131,10 @@ fn test_find_last_utf8() ~ | StdError:
 
 fn test_find_last_emoji() ~ | StdError:
     let string text = "🎉test🎉"
-    let Maybe@(i32) result = text.find_last("🎉")
+    let Maybe@(i64) result = text.find_last("🎉")
 
     if (result.is_some()):
-        let i32 index = result.realise(-1)
+        let i64 index = result.realise(-1)
         if (index == 5):
             println("PASS: find_last emoji (last 🎉 at char 5)")
         else:
@@ -146,12 +146,12 @@ fn test_find_last_emoji() ~ | StdError:
 
 fn test_find_last_vs_find() ~ | StdError:
     let string text = "abcabc"
-    let Maybe@(i32) first = text.find("abc")
-    let Maybe@(i32) last = text.find_last("abc")
+    let Maybe@(i64) first = text.find("abc")
+    let Maybe@(i64) last = text.find_last("abc")
 
     if (first.is_some() and last.is_some()):
-        let i32 first_idx = first.realise(-1)
-        let i32 last_idx = last.realise(-1)
+        let i64 first_idx = first.realise(-1)
+        let i64 last_idx = last.realise(-1)
         if (first_idx == 0 and last_idx == 3):
             println("PASS: find() returns first (0), find_last() returns last (3)")
         else:

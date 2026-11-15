@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS
 
 extend i32[] three_lengths(i32[] a, peek i32[] b) i32:
-    return self.len() + a.len() + b.len()
+    return (self.len() as i32) + (a.len() as i32) + (b.len() as i32)
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])

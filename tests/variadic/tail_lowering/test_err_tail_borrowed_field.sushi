@@ -6,7 +6,7 @@ struct Holder:
     string name
 
 fn size(...string xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let Holder h = Holder("Mostly {'Harmless'}")

@@ -3,7 +3,7 @@ fn average(i32[] scores) i32:
     let i32 total = 0
     foreach(s in scores.iter()):
         total := total + s
-    return total / scores.len()
+    return total / (scores.len() as i32)
 
 fn main() i32:
     let i32[] scores = from([42, 40, 44])

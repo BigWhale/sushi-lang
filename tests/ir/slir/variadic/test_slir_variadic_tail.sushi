@@ -9,7 +9,7 @@
 # 7.4, 8.9). An empty tail is the empty array.
 
 fn count(string head, ...string xs) i32:
-    return xs.len() + head.len() - 1
+    return (xs.len() as i32) + (head.len() as i32) - 1
 
 fn mk(i32 a) string:
     return "v{a}"

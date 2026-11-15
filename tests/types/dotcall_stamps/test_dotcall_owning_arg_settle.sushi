@@ -8,7 +8,7 @@ struct Sink:
     i32 n
 
 extend Sink swallow(nom List@(i32) xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let Sink sink = Sink(0)

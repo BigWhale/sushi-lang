@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2122
 fn k@(T)(nom T x) i32:
     let T[] kept = from([x])
-    return kept.len()
+    return kept.len() as i32
 
 fn main() i32:
     println(k(nom 0..3))

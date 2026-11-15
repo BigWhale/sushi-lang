@@ -8,10 +8,10 @@
 
 fn grow(poke i32[] xs) ~:
     xs.push(1)
-    xs[0] := xs.len()
+    xs[0] := xs.len() as i32
 
 fn read(peek i32[] xs) i32:
-    let i32 n = xs.len() + xs[0]
+    let i32 n = (xs.len() as i32) + xs[0]
     xs.push(n)
     return n
 

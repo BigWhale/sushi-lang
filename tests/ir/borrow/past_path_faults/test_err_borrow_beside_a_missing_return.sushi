@@ -5,7 +5,7 @@
 # error, so the borrow pass walks the body: the second `nom s` is CE2405.
 
 fn eat(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn show(nom string s, bool first) i32:
     let i32 z = eat(nom s)

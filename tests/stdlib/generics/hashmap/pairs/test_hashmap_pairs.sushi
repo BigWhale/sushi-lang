@@ -17,7 +17,7 @@ fn main() i32:
     let i32 letters = 0
     foreach((name, age) in ages.pairs()):
         total := total + age
-        letters := letters + name.len()
+        letters := letters + (name.len() as i32)
     println("total {total} letters {letters}")
 
     foreach((string name, i32 age) in ages.pairs()):
@@ -43,7 +43,7 @@ fn main() i32:
     groups.insert(2, solo)
     let i32 count = 0
     foreach((_, members) in groups.pairs()):
-        count := count + members.len()
+        count := count + (members.len() as i32)
     println("lists {count}")
 
     let HashMap@(string, string) none = HashMap.new()

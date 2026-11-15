@@ -97,7 +97,7 @@ class MethodSpec:
         return len(self.arg_types)
 
 
-_S, _I32, _BOOL = BuiltinType.STRING, BuiltinType.I32, BuiltinType.BOOL
+_S, _I32, _I64, _BOOL = BuiltinType.STRING, BuiltinType.I32, BuiltinType.I64, BuiltinType.BOOL
 
 #: The mark of an index position in a row, and of an index position that is a count.
 _IDX = object()
@@ -123,8 +123,8 @@ def _spec(name: str, args: tuple, returns: Any, also_accepts: tuple = ()) -> Met
 # The ONE spelling of every string method's signature.
 # Note: is_empty and clone are NOT here: they are inline intrinsics, not stdlib methods.
 METHOD_SPECS = {row[0]: _spec(*row) for row in (
-    ("len", (), _I32),
-    ("size", (), _I32),
+    ("len", (), _I64),
+    ("size", (), _I64),
     ("upper", (), _S),
     ("lower", (), _S),
     ("cap", (), _S),
@@ -136,9 +136,9 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
 
     ("concat", (_S,), _S),
     ("contains", (_S,), _BOOL),
-    ("find", (_S,), _maybe(_I32)),
-    ("find_last", (_S,), _maybe(_I32)),
-    ("count", (_S,), _I32),
+    ("find", (_S,), _maybe(_I64)),
+    ("find_last", (_S,), _maybe(_I64)),
+    ("count", (_S,), _I64),
     ("starts_with", (_S,), _BOOL),
     ("ends_with", (_S,), _BOOL),
     ("strip_prefix", (_S,), _S),
@@ -162,7 +162,7 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("pad_right", (_COUNT, _S), _S),
 
     ("to_i32", (), _maybe(_I32)),
-    ("to_i64", (), _maybe(BuiltinType.I64)),
+    ("to_i64", (), _maybe(_I64)),
     ("to_f64", (), _maybe(BuiltinType.F64)),
 )}
 

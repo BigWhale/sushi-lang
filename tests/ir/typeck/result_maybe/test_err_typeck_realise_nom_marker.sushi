@@ -11,4 +11,4 @@ fn name(i32 n) Maybe@(string):
 fn main() i32:
     let string fallback = "nobody"
     let string s = name(1).realise(nom fallback)
-    return s.len()
+    return s.len() as i32

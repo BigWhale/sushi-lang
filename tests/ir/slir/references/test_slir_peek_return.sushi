@@ -23,13 +23,13 @@ fn longer(string a, string b) peek string:
     return b
 
 fn head(i32[] xs, i32 n) peek i32[] | Short:
-    if (n > xs.len()):
+    if (n > xs.len() as i32):
         return Result.Err(Short.Missing)
     return Result.Ok(xs[0..n])
 
 fn count(i32[] xs, i32 n) i32 | Short:
     let i32[] part = head(xs, n)??
-    return Result.Ok(part.len())
+    return Result.Ok(part.len() as i32)
 
 fn make() Bag:
     return Bag("Mostly Harmless")

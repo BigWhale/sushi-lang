@@ -1,4 +1,4 @@
-# `contains(v)` asks membership and `index_of(v)` asks WHERE, as Maybe@(i32).
+# `contains(v)` asks membership and `index_of(v)` asks WHERE, as Maybe@(i64).
 # Both walk left to right, so `index_of` answers the FIRST match. An empty array
 # contains nothing. Both array kinds answer.
 # EXPECT_RUNTIME_EXIT: 0

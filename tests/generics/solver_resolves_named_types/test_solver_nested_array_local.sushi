@@ -6,7 +6,7 @@ struct P:
     i32 x
 
 fn cnt@(T: Hashable)(T[][] xss, T d) i32:
-    return xss.len() + ((d.hash() * 0) as i32)
+    return (xss.len() as i32) + ((d.hash() * 0) as i32)
 
 fn main() i32:
     let P[][] pss = from([from([P(1)]), from([P(2), P(3)])])

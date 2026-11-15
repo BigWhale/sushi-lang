@@ -1,7 +1,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2405
 
 fn eat(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let fn(nom string) -> i32 f = eat

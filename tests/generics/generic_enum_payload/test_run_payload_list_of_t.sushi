@@ -10,7 +10,7 @@ enum Wrap@(T):
     Zero
 
 fn count@(U)(List@(U) l) i32:
-    return l.len()
+    return l.len() as i32
 
 fn main() i32:
     let List@(i32) xs = List.new()

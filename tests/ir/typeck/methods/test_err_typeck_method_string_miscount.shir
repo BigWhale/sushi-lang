@@ -7,6 +7,6 @@ ShirBody main
     Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
     Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "contains"), []), is_init: true)
     Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "is_empty"), [Lit(1)]), is_init: true)
-    Assign(LocalRef(_3), Call(Builtin(LocalRef(_0), "len"), []), is_init: true)
+    Assign(LocalRef(_3), Cast(Call(Builtin(LocalRef(_0), "len"), []), i32), is_init: true)
     If(Binary(and, LocalRef(_1), LocalRef(_2)), then: [Return(Lit(1))])
     Return(LocalRef(_3))

@@ -8,7 +8,7 @@ fn build() i32:
     let List@(fn(i32) -> i32) fns = List.new()
     fns.push(|i32 x| x + base)
     fns.push(|i32 x| x * base)
-    let i32 n = fns.len()
+    let i32 n = fns.len() as i32
     fns.free()
     return n
 

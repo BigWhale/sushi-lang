@@ -9,7 +9,7 @@
 # EXPECT_IR_LACKS: user_main store [4 x [512 x
 fn main() i32:
     let string[512][4] g = [["x".clone(); 512]; 4]
-    let fn() -> i32 f = |~| g.len()
+    let fn() -> i32 f = |~| g.len() as i32
     let string[512][4] h = [["x".clone(); 512]; 4]
     let fn() -> string w = |~| h[3][511].clone()
     println("{f()} {w()}")

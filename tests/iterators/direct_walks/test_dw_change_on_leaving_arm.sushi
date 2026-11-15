@@ -10,7 +10,7 @@ fn by_return(string[] xs) i32:
     foreach(x in ys.iter()):
         if (x == "b0"):
             ys.push("c")
-            return ys.len()
+            return ys.len() as i32
         println(x)
     return 0
 

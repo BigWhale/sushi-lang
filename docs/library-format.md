@@ -161,6 +161,10 @@ is the authority, and the index is a cache of it.
     "compiled_at": str,                # ISO 8601 timestamp
     "platform": str,                   # "darwin", "linux", "windows"
                                        #   meaningful only when kind != "source"
+    "overflow": str,                   # "trap" or "wrap": the --overflow mode of the
+                                       #   compiled code. Absent when kind == "source"
+                                       #   (no compiled code) and in a library from a
+                                       #   compiler before the key
     "compiler_version": str,           # Exactly which compiler built the file
 
     # The three lists below carry only CONCRETE declarations that the library MARKS

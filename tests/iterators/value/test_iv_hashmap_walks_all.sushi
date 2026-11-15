@@ -9,7 +9,7 @@ use <collections/hashmap>
 fn count_keys(poke Iterator@(peek string) it) i32:
     let i32 n = 0
     foreach(k in it):
-        n := n + k.len()
+        n := n + (k.len() as i32)
     return n
 
 fn main() i32:

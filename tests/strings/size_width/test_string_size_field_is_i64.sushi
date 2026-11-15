@@ -10,7 +10,7 @@
 # EXPECT_NO_LEAKS
 
 fn measure(string s) i32:
-    return s.size()
+    return s.size() as i32
 
 fn join_two(string a, string b) string:
     return a.concat(b)
@@ -18,6 +18,6 @@ fn join_two(string a, string b) string:
 fn main() i32:
     let string text = join_two("Mostly ", "Harmless")
     let i32 bytes = measure(text)
-    let i32 chars = text.len()
+    let i32 chars = text.len() as i32
     println("{bytes} {chars}")
     return 0

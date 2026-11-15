@@ -8,7 +8,7 @@ fn on_break() i32:
     let i32 i = 0
     while (true):
         let string tag = "tag{i}"
-        let fn(i32) -> i32 f = |i32 x| x + tag.len()
+        let fn(i32) -> i32 f = |i32 x| x + (tag.len() as i32)
         println(f(2))
         if (i == 1):
             println("break at {i}")
@@ -19,7 +19,7 @@ fn on_break() i32:
 fn on_return() i32:
     foreach(i in 0..5):
         let string tag = "tag{i}"
-        let fn(i32) -> i32 f = |i32 x| x + tag.len() + i
+        let fn(i32) -> i32 f = |i32 x| x + (tag.len() as i32) + i
         println(f(2))
         if (i == 2):
             println("return at {i}")

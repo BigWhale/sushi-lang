@@ -79,7 +79,8 @@ fn first(_1: Maybe@(string) @guaranteed, _2: string @guaranteed) -> Result@(i32,
     let _5: BadInput
     let _6: i32
     let _7: string view                    // s
-    let _8: i32
+    let _8: i64
+    let _9: i32
 
   bb0:
     StorageLive(_3)
@@ -100,8 +101,11 @@ fn first(_1: Maybe@(string) @guaranteed, _2: string @guaranteed) -> Result@(i32,
     StorageDead(_5)
     StorageLive(_8)
     _8 = call builtin string.len(copy _7 @guaranteed)
-    _0 = Result::Ok(move _8)
+    StorageLive(_9)
+    _9 = move _8 as i32
+    _0 = Result::Ok(move _9)
     EndBorrow(b0)
+    StorageDead(_9)
     StorageDead(_8)
     StorageDead(_7)
     StorageDead(_4)

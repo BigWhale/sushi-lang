@@ -22,7 +22,7 @@ extend Counter value() i32:
     return self.n
 
 extend Bag size() i32:
-    return self.items.len()
+    return self.items.len() as i32
 
 extend string say_it() string:
     return self.clone()

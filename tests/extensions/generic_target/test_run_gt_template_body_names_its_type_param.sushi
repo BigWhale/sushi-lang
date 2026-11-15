@@ -11,7 +11,7 @@ struct Box@(T):
 extend Box@(T: Clone) counted() i32:
     let List@(T) out = List.new()
     out.push(self.value.clone())
-    let i32 n = out.len()
+    let i32 n = out.len() as i32
     out.destroy()
     return n
 

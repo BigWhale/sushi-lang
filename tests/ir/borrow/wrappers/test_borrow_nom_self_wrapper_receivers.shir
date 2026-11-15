@@ -21,7 +21,7 @@ ShirBody through
   regions : [_1: {_0} until #7]
   block  :
     Assign(LocalRef(_1), reject Try(adopt Call(Builtin(reject LocalRef(_0), "or_err"), [(adopt EnumInit(@StdError, "Error", []), Owned)])), is_init: true)
-    Return(adopt EnumInit(@Result, "Ok", [adopt Call(Builtin(LocalRef(_1), "len"), [])]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Cast(adopt Call(Builtin(LocalRef(_1), "len"), []), i32)]))
 
 ShirBody nested
   params : [(_0 "r": Result@(Result@(string, StdError), StdError), Guaranteed)]
@@ -30,7 +30,7 @@ ShirBody nested
   block  :
     Assign(LocalRef(_1), reject Try(reject Try(reject LocalRef(_0))), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
-    Return(adopt EnumInit(@Result, "Ok", [adopt Call(Builtin(LocalRef(_1), "len"), [])]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Cast(adopt Call(Builtin(LocalRef(_1), "len"), []), i32)]))
 
 ShirBody main
   params : []

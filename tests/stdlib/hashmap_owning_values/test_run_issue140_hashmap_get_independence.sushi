@@ -27,14 +27,14 @@ fn run() i32:
     let i32 first = -1
     match map.get(1):
         Maybe.Some(lst) ->
-            first := lst.len()
+            first := lst.len() as i32
         Maybe.None ->
             first := -1
 
     let i32 second = -1
     match map.get(1):
         Maybe.Some(lst) ->
-            second := lst.len()
+            second := lst.len() as i32
         Maybe.None ->
             second := -1
 

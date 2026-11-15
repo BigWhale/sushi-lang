@@ -9,7 +9,7 @@ struct Holder:
     i32[] nums
 
 fn count(i32[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn mk() i32[] | StdError:
     return Result.Ok(new())

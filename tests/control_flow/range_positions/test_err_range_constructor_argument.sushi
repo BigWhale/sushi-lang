@@ -6,7 +6,7 @@ struct Holder@(T):
 
 fn count@(T)(nom Holder@(T) h) i32:
     let Holder@(T)[] kept = from([h])
-    return kept.len()
+    return kept.len() as i32
 
 fn main() i32:
     let Holder@(i32) typed = Holder(0..3)

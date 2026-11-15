@@ -9,7 +9,7 @@ enum Shape:
 
 fn show(nom Shape s) i32:
     match nom s:
-        Shape.Pair(nom a, _) -> return a.len()
+        Shape.Pair(nom a, _) -> return a.len() as i32
         Shape.Nil -> return 0
     return 0
 

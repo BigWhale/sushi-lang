@@ -4,7 +4,7 @@
 # args is main's borrowed view of C argv -- borrow it downstream (never move it by value).
 fn run_test(peek string[] args) i32 | StdError:
     let i32 i = 0
-    while (i < args.len()):
+    while (i < args.len() as i32):
         println(args.get(i).or_err(nom StdError.Error)??)
         i := i + 1
     return Result.Ok(0)

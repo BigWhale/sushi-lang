@@ -21,7 +21,7 @@ fn find(i32 k) i32:
         Word.A(s) | Word.B(s) ->
             if (s == "b1"):
                 println("found {s}")
-                return s.len() + 2
+                return (s.len() as i32) + 2
             return 0
         Word.Gone -> return 0
 

@@ -23,19 +23,19 @@ use <collections/hashmap>
 # Pick random word from vocabulary
 # vocab is read on every step -- borrow it peek so the caller keeps ownership.
 fn random_word(peek string[] vocab) string:
-    let i32 idx = rand_range(0, vocab.len())
+    let i32 idx = rand_range(0, vocab.len() as i32)
     return vocab[idx].clone()
 
 # Pick word from pipe-delimited options
 fn pick_from_options(string options) string:
     let string[] choices = options.split("|")
-    let i32 idx = rand_range(0, choices.len())
+    let i32 idx = rand_range(0, choices.len() as i32)
     return choices[idx].clone()
 
 # Build the Markov chain from word pairs (mutates the chain)
 fn build_chain(poke HashMap@(string, string) chain, string[] words) ~:
     let i32 i = 0
-    while (i < words.len() - 1):
+    while (i < (words.len() as i32) - 1):
         # The array keeps its elements, so the map gets independent copies.
         let string current = words[i].clone()
         let string next_word = words[i + 1].clone()

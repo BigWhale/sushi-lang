@@ -11,7 +11,7 @@ fn kb@(T)(nom T x) T:
 fn main() i32:
     let string w = "Harmless"
     let string s = "Mostly {w}"
-    let fn(i32) -> i32 r = kb(nom |i32 x| x + s.len())
+    let fn(i32) -> i32 r = kb(nom |i32 x| x + (s.len() as i32))
     println(r(3))
     let string t = "Mostly {w}"
     let fn(i32) -> string g = kb(nom |i32 n| t.s(0, n))

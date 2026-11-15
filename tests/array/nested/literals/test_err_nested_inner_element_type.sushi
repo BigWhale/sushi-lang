@@ -6,4 +6,4 @@
 fn main() i32:
     let i32[2][2] m = [[1, 2], [3, "x"]]
     let i32[][] d = from([from([1]), from(["a"])])
-    return m.len() + d.len()
+    return (m.len() as i32) + (d.len() as i32)

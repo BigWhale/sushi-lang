@@ -8,10 +8,10 @@ struct Wrap:
     i32 n
 
 fn take(nom Wrap w) i32:
-    return w.out.len()
+    return w.out.len() as i32
 
 fn rest(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn add(i32 a, i32 b) i32:
     return a + b

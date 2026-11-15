@@ -48,11 +48,11 @@ fn main() i32:
     map.debug()
 
     # After resize, tombstones should be cleared
-    let i32 tomb_count = map.tombstone_count()
+    let i32 tomb_count = map.tombstone_count() as i32
     if (tomb_count == 0):
         println("\n✓ Tombstones cleared after resize")
 
-    let i32 size = map.len()
+    let i32 size = map.len() as i32
     if (size == 10):
         println("✓ Correct size after resize (10 items)")
 

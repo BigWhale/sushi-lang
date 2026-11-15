@@ -20,7 +20,7 @@ enum Shape:
 
 fn describe(peek Shape s) i32:
     match s:
-        Shape.Poly(cells) -> return cells.len()
+        Shape.Poly(cells) -> return cells.len() as i32
         Shape.Empty -> return 0
 
 fn run() i32:

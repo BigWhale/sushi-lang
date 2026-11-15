@@ -1,0 +1,10 @@
+# A length is an i64 (ADR 0001, the contract step), and Sushi has no implicit narrowing:
+# `let i32 n = xs.len()` of an array is refused. `as i32` is the escape.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 a = xs.len()
+    let i32 ok = xs.len() as i32
+    println("{a} {ok}")
+    return 0

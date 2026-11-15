@@ -12,8 +12,8 @@ if TYPE_CHECKING:
 
 
 def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value) -> ir.Value:
-    """The capacity of the dynamic array at the address `array_value`."""
-    return gep_utils.load_cap(codegen, array_value, "array_capacity")
+    """The capacity of the dynamic array at the address `array_value`, the stored i64."""
+    return gep_utils.load_stored_cap(codegen, array_value, "array_capacity")
 
 
 def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,

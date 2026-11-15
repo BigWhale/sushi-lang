@@ -15,7 +15,7 @@ struct Crew:
     i32 count
 
 fn eat(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn captain(nom Crew c) string:
     return nom c.name

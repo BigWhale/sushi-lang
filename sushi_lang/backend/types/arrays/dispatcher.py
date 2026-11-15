@@ -48,7 +48,7 @@ def emit_array_method(codegen: 'LLVMCodegen', name: str, receiver: ir.Value,
 
     match name:
         case "len":
-            return array_length(codegen, receiver, array_type)
+            return array_length(codegen, receiver, array_type, stored=True)
 
         case "capacity":
             return core.emit_dynamic_array_capacity(codegen, _descriptor(receiver, array_type,

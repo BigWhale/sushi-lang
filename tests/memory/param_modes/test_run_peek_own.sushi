@@ -12,7 +12,7 @@ struct Holder:
 
 fn look(peek Own@(Note) o) i32:
     println("look {o.get().text}")
-    return o.get().text.len()
+    return o.get().text.len() as i32
 
 fn main() i32:
     let Own@(Note) o = Own.alloc(Note("box {1}"))

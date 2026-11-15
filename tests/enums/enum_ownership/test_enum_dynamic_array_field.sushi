@@ -11,7 +11,7 @@ fn total(Value v) i32:
         Value.Empty ->
             return 0
         Value.Ints(arr) ->
-            let i32 count = arr.len()
+            let i32 count = arr.len() as i32
             let i32 sum = 0
             foreach(n in arr.iter()):
                 sum := sum + n

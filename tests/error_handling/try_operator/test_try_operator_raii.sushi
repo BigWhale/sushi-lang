@@ -15,7 +15,7 @@ fn might_fail(bool succeed) i32 | StdError:
     # Direct initialization from function call with ?? operator
     let i32[] temp = create_array()  # RAII: must cleanup on error
     if (succeed):
-        return Result.Ok(temp.len())
+        return Result.Ok(temp.len() as i32)
     return Result.Err(StdError.Error)  # Must free temp before returning via ??
 
 fn caller(bool flag) i32 | StdError:

@@ -80,8 +80,9 @@ Asking for index 42 of a four-element array would crash with `crew[42]`, but `cr
 calmly hands back `Maybe.None()`, and the `match` handles it. Use direct indexing when you
 *know* the index is valid; reach for `.get(...)` when you're not sure.
 
-An index is always an `i32`, in `arr[i]` and in `arr.get(i)`. An index variable of a
-different integer type, such as a `u8`, is an error; convert it with `as i32`.
+An index can be a value of any integer type, in `arr[i]` and in `arr.get(i)`: an `i32`, a
+`u8` and an `i64` all work. `.len()` answers an `i64`, so `let i64 n = crew.len()` needs no
+cast. To keep a length in an `i32`, write the cast: `let i32 n = crew.len() as i32`.
 
 ## Changing an element
 
@@ -165,7 +166,7 @@ model, which [Chapter 12](12-memory-management.md) explores.)
 
 A few more methods save you from index arithmetic. `.first()` and `.last()` answer a
 `Maybe@(T)`, so an empty array is not a crash. `.contains(x)` answers a `bool`, and
-`.index_of(x)` answers the index as a `Maybe@(i32)`. `.truncate(n)` keeps the first `n`
+`.index_of(x)` answers the index as a `Maybe@(i64)`. `.truncate(n)` keeps the first `n`
 elements, and `.clear()` removes all of them. Both keep the capacity, so you can use the
 buffer again.
 
@@ -268,9 +269,9 @@ ragged rows: 3, first row: 1 7
   as plain literals like `[1, 2, 3]`.
 - Dynamic arrays (`T[]`) grow at runtime; build them with `from([...])` or start empty with
   `new()`.
-- `.len()` reports the current length.
+- `.len()` reports the current length as an `i64`.
 - `arr[i]` is fast but crashes ([RE2020](../error-catalog.md#re2020)) on a bad index; `arr.get(i)` is safe and returns
-  `Maybe@(T)`. An index is an `i32`.
+  `Maybe@(T)`. An index can be a value of any integer type.
 - `arr[i] := value` writes one element, on both kinds of array. A fixed array's *length* is
   fixed; its contents are not.
 - `.push()`, `.pop()`, `.iter()`, and `.clone()` are the everyday dynamic-array methods,

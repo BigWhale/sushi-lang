@@ -24,7 +24,7 @@ fn mk(bool named) Shape:
 
 fn pick(bool hit) i32:
     match find(hit):
-        Maybe.Some(s) -> return s.len()
+        Maybe.Some(s) -> return s.len() as i32
         Maybe.None -> return 0
 
 fn main() i32:

@@ -23,7 +23,7 @@ fn go() string:
 
 fn main() i32:
     # a method receiver
-    let i32 n = go().len()
+    let i32 n = go().len() as i32
     println(n)
 
     # a condition operand
@@ -34,7 +34,7 @@ fn main() i32:
     let i32 total = 0
     let i32 seen = 0
     while (seen < 5):
-        total := total + go().len()
+        total := total + (go().len() as i32)
         seen := seen + 1
     println(total)
     return 0

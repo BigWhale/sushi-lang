@@ -4,6 +4,7 @@ from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from sushi_lang.backend import gep_utils
+from sushi_lang.backend.stored_width import as_stored_i64
 from sushi_lang.sushi_stdlib.src.type_definitions import get_dynamic_array_type
 from ..types import get_entry_type
 from sushi_lang.backend.constants import (
@@ -57,24 +58,24 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
 
 
 def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.len() -> i32"""
+    """`HashMap@(K, V).len()`: the i32 size field as the i64 of a count."""
     builder = codegen.builder
     size_ptr = builder.gep(hashmap_value, HASHMAP_SIZE_INDICES, name="size_ptr")
-    return builder.load(size_ptr, name="hashmap_size")
+    return as_stored_i64(builder, builder.load(size_ptr, name="hashmap_size"))
 
 
 def emit_hashmap_is_empty(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
     """Emit HashMap<K, V>.is_empty() -> bool"""
     size = emit_hashmap_len(codegen, hashmap_value)
-    zero = ir.Constant(codegen.types.i32, 0)
+    zero = ir.Constant(size.type, 0)
     return codegen.builder.icmp_signed("==", size, zero, name="is_empty")
 
 
 def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.tombstone_count() -> i32"""
+    """`HashMap@(K, V).tombstone_count()`: the i32 field as the i64 of a count."""
     builder = codegen.builder
     tombstones_ptr = builder.gep(hashmap_value, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr")
-    return builder.load(tombstones_ptr, name="hashmap_tombstones")
+    return as_stored_i64(builder, builder.load(tombstones_ptr, name="hashmap_tombstones"))
 
 
 def emit_hashmap_get(

@@ -5,7 +5,7 @@
 use "helpers/ev_c5_tpl_other"
 
 extend T[] tally() i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     let i32[] xs = from([4, 5, 6])

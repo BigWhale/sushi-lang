@@ -11,7 +11,7 @@ fn main() i32:
 
     let i32 sum = 0
     let i32 wrong = 0
-    foreach(i in 0..buf.len()):
+    foreach(i in 0..buf.len() as i32):
         let i32 byte = buf[i] as i32
         sum := sum + byte
         if (byte != 48 + i % 10):

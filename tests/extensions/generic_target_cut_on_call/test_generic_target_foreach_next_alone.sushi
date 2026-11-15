@@ -7,7 +7,7 @@ struct Feed@(T):
     i32 at
 
 extend Feed@(T: Clone) next(poke self) Maybe@(T):
-    if (self.at >= self.items.len()):
+    if (self.at >= self.items.len() as i32):
         return Maybe.None()
     let i32 i = self.at
     self.at := self.at + 1

@@ -5,7 +5,7 @@
 use <collections/strings>
 
 fn look(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn show(string t) ~:
     println("value {look(nom t)}")

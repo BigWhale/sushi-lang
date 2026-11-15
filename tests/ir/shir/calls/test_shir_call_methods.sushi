@@ -10,13 +10,13 @@ extend i32 twice() i32:
     return self * 2
 
 fn length(string s) i32:
-    return s.trim().len()
+    return s.trim().len() as i32
 
 fn sliced(string s) string:
     return s.s(0, 3)
 
 fn literal() i32:
-    return "Mostly Harmless".len()
+    return "Mostly Harmless".len() as i32
 
 fn opaque() i32:
     return 100 / (5).twice()

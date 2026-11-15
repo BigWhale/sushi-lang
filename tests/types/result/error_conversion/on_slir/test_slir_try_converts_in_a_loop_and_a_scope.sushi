@@ -23,8 +23,8 @@ fn walk(i32[] xs) i32 | AppError:
         let string note = "at {x}"
         if (x == 99):
             break
-        sum := sum + tokenize(x)?? + note.len() - note.len()
-    return Result.Ok(sum + head.len() - head.len())
+        sum := sum + tokenize(x)?? + (note.len() as i32) - (note.len() as i32)
+    return Result.Ok(sum + (head.len() as i32) - (head.len() as i32))
 
 fn nested(i32 n) i32 | AppError:
     let i32 v = 0
@@ -32,7 +32,7 @@ fn nested(i32 n) i32 | AppError:
         let string inner = "inner {n}"
         while (true):
             let string step = "step"
-            v := tokenize(n)?? + inner.len() - step.len()
+            v := tokenize(n)?? + (inner.len() as i32) - (step.len() as i32)
             break
     return Result.Ok(v)
 

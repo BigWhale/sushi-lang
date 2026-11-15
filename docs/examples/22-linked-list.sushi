@@ -38,7 +38,7 @@ struct Node:
 # Returns a List@(Node) where nodes link to each other via indices
 fn build_list(i32[] values) List@(Node) | StdError:
     let List@(Node) nodes = List.new()
-    let i32 len = values.len()
+    let i32 len = values.len() as i32
 
     # Build all nodes with proper links
     let i32 i = 0
@@ -152,7 +152,7 @@ fn main() i32:
         print_forward(peek list_final, 0)
 
         # Traverse backward from tail
-        print_backward(peek list_final, list_final.len() - 1)
+        print_backward(peek list_final, (list_final.len() as i32) - 1)
         println("")
 
         # Calculate sum
@@ -176,7 +176,7 @@ fn main() i32:
         println("")
 
         print_forward(peek second_final, 0)
-        print_backward(peek second_final, second_final.len() - 1)
+        print_backward(peek second_final, (second_final.len() as i32) - 1)
 
         let i32 sum2 = sum_list(peek second_final, 0)
         println("Sum: {sum2}")

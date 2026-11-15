@@ -19,7 +19,7 @@ fn make() i32[]:
 
 fn make_len() i32:
     let i32[] b = make()
-    return b.len()
+    return b.len() as i32
 
 fn main() i32:
     println("n={make_len()}")

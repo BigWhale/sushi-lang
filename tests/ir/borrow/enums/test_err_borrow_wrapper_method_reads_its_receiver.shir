@@ -30,7 +30,7 @@ ShirBody reads
     Assign(LocalRef(_5), adopt Call(Builtin(LocalRef(_4), "realise"), [(Lit("bad"), Guaranteed)]), is_init: true)
     Assign(LocalRef(_6), adopt Call(Builtin(LocalRef(_4), "expect"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
     Assign(LocalRef(_7), adopt Call(Builtin(LocalRef(_4), "err"), []), is_init: true)
-    If(Binary(and, Binary(and, Binary(and, Binary(and, Call(Builtin(LocalRef(_1), "is_some"), []), Unary(not, Call(Builtin(LocalRef(_1), "is_none"), []))), Call(Builtin(LocalRef(_4), "is_ok"), [])), Unary(not, Call(Builtin(LocalRef(_4), "is_err"), []))), Call(Builtin(LocalRef(_7), "is_none"), [])), then: [Return(adopt Binary(+, Binary(+, Binary(+, Call(Builtin(LocalRef(_2), "len"), []), Call(Builtin(LocalRef(_3), "len"), [])), Call(Builtin(LocalRef(_5), "len"), [])), Call(Builtin(LocalRef(_6), "len"), [])))])
+    If(Binary(and, Binary(and, Binary(and, Binary(and, Call(Builtin(LocalRef(_1), "is_some"), []), Unary(not, Call(Builtin(LocalRef(_1), "is_none"), []))), Call(Builtin(LocalRef(_4), "is_ok"), [])), Unary(not, Call(Builtin(LocalRef(_4), "is_err"), []))), Call(Builtin(LocalRef(_7), "is_none"), [])), then: [Return(adopt Binary(+, Binary(+, Binary(+, Cast(adopt Call(Builtin(LocalRef(_2), "len"), []), i32), Cast(adopt Call(Builtin(LocalRef(_3), "len"), []), i32)), Cast(adopt Call(Builtin(LocalRef(_5), "len"), []), i32)), Cast(adopt Call(Builtin(LocalRef(_6), "len"), []), i32)))])
     Return(adopt Lit(0))
 
 ShirBody moved

@@ -11,7 +11,7 @@
 
 fn read(Result@(string, StdError) r) i32 | StdError:
     let string s = r??
-    return Result.Ok(s.len())
+    return Result.Ok(s.len() as i32)
 
 fn make() string | StdError:
     return Result.Ok("Mostly {42}")
@@ -25,4 +25,4 @@ fn main() i32:
         xs.push("b{2}")
     let Result@(string, StdError) r = make()
     println(read(r).realise(-1))
-    return xs.len() - 2
+    return (xs.len() as i32) - 2

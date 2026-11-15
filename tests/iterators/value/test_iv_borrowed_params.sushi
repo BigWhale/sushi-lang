@@ -31,13 +31,13 @@ fn sum_peek(peek Iterator@(i32) it) ~:
 fn length_plain(Iterator@(peek string) it) ~:
     let i32 n = 0
     foreach(w in it.clone()):
-        n := n + w.len()
+        n := n + (w.len() as i32)
     println("plain {n}")
 
 fn length_peek(peek Iterator@(peek string) it) ~:
     let i32 n = 0
     foreach(w in it.clone()):
-        n := n + w.len()
+        n := n + (w.len() as i32)
     println("peek {n}")
 
 fn main() i32:

@@ -75,7 +75,7 @@ if (ages.contains_key("Arthur")):
     println("Arthur exists")
 ```
 
-### `.len() -> i32`
+### `.len() -> i64`
 
 Get number of entries.
 
@@ -92,7 +92,7 @@ if (ages.is_empty()):
     println("no entries")
 ```
 
-### `.tombstone_count() -> i32`
+### `.tombstone_count() -> i64`
 
 The number of slots that a `.remove()` marked as deleted. `.rehash()` clears them.
 

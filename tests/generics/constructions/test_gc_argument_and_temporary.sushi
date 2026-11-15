@@ -11,7 +11,7 @@ fn read(Box@(i32) b) i32:
     return b.value
 
 fn length(Box@(string) b) i32:
-    return b.value.len()
+    return b.value.len() as i32
 
 fn make() Box@(i32):
     return Box(1)

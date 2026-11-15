@@ -1,7 +1,8 @@
 """Basic String Operations"""
 
 import llvmlite.ir as ir
-from sushi_lang.backend.string_layout import string_size
+from sushi_lang.backend.string_layout import string_size, string_size_i64
+from sushi_lang.backend.stored_width import as_stored_i64
 from ..intrinsics import declare_utf8_count_intrinsic
 from ..common import declare_malloc, declare_memcpy, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -10,7 +11,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc, emit
 
 
 def emit_string_size(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_size({i8*, i64, i8} str)`."""
+    """Emit `i64 string_size({i8*, i64, i8} str)`: the stored size field."""
     func_name = "string_size"
 
     if func_name in module.globals:
@@ -20,21 +21,20 @@ def emit_string_size(module: ir.Module) -> ir.Function:
 
     i8, i8_ptr, i32, i64, string_type = get_string_types()
 
-    fn_ty = ir.FunctionType(i32, [string_type])
+    fn_ty = ir.FunctionType(i64, [string_type])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
 
     entry_block = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry_block)
 
-    size = string_size(builder, func.args[0], name="size")
-    builder.ret(size)
+    builder.ret(string_size_i64(builder, func.args[0], name="size"))
 
     return func
 
 
 def emit_string_len(module: ir.Module) -> ir.Function:
-    """Emit `i32 string_len({i8*, i64, i8} str)`."""
+    """Emit `i64 string_len({i8*, i64, i8} str)`: the count of UTF-8 characters."""
     func_name = "string_len"
 
     if func_name in module.globals:
@@ -44,7 +44,7 @@ def emit_string_len(module: ir.Module) -> ir.Function:
 
     i8, i8_ptr, i32, i64, string_type = get_string_types()
 
-    fn_ty = ir.FunctionType(i32, [string_type])
+    fn_ty = ir.FunctionType(i64, [string_type])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
 
@@ -57,7 +57,7 @@ def emit_string_len(module: ir.Module) -> ir.Function:
     size = string_size(builder, func.args[0], name="size")
 
     char_count = builder.call(utf8_count, [data, size], name="char_count")
-    builder.ret(char_count)
+    builder.ret(as_stored_i64(builder, char_count))
 
     return func
 

@@ -22,10 +22,10 @@ fn main() -> i32 {
     let _18: string
     let _19: i32
     let _20: string                        // old
-    let _21: i32
-    let _22: i32
+    let _21: i64
+    let _22: i64
     let _23: bool
-    let _24: i32
+    let _24: i64
     let _25: string
     let _26: ~
 
@@ -108,13 +108,13 @@ fn main() -> i32 {
     StorageLive(_21)
     _21 = call builtin hashmap.len(copy _1 @guaranteed)
     StorageLive(_22)
-    _22 = user copy _21 + const 1_i32
+    _22 = user copy _21 + const 1_i64
     StorageLive(_23)
     _23 = copy _12
     StorageLive(_24)
     _24 = call builtin hashmap.len(copy _1 @guaranteed)
     StorageLive(_25)
-    _25 = call builtin interp@(i32, string, string, string, bool, string, string, string, i32)(copy _22 @guaranteed, const " " @guaranteed, copy _11 @guaranteed, const " " @guaranteed, copy _23 @guaranteed, const " " @guaranteed, copy _20 @guaranteed, const " " @guaranteed, copy _24 @guaranteed)
+    _25 = call builtin interp@(i64, string, string, string, bool, string, string, string, i64)(copy _22 @guaranteed, const " " @guaranteed, copy _11 @guaranteed, const " " @guaranteed, copy _23 @guaranteed, const " " @guaranteed, copy _20 @guaranteed, const " " @guaranteed, copy _24 @guaranteed)
     StorageLive(_26)
     _26 = call builtin println@(string)(copy _25 @guaranteed)
     StorageDead(_26)

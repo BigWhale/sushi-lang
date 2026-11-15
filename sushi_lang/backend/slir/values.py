@@ -330,14 +330,15 @@ def _binary(state: FunctionState, rvalue: r.Binary) -> ir.Value:
                                         type_of_operand(state, rvalue.left))
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
     ty = _scalar_type(state, rvalue, type_of_operand(state, rvalue.left))
-    _scalar_type(state, rvalue, type_of_operand(state, rvalue.right))
+    right_type = _scalar_type(state, rvalue, type_of_operand(state, rvalue.right))
     left = operand_value(state, rvalue.left)
     right = operand_value(state, rvalue.right)
     op = rvalue.op
     if op in ARITHMETIC_OPS:
         return emit_arithmetic(codegen, op, left, right, ty, checked=rvalue.user)
     if op in BITWISE_OPS + SHIFT_OPS:
-        return emit_bitwise(codegen, op, left, right, ty)
+        return emit_bitwise(codegen, op, left, right, ty, right_type,
+                            checked=rvalue.user and not isinstance(rvalue.right, p.Const))
     if op in COMPARISON_OPS:
         answer = emit_number_comparison(codegen, op, left, right, ty)
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))

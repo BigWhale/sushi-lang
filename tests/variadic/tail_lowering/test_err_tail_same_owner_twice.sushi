@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2405
 
 fn tot2(...string xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let string w = "Mostly {'Harmless'}"

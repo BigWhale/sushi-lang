@@ -6,7 +6,7 @@
 # EXPECT_NO_LEAKS: true
 
 fn size(...string xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn mk(i32 a) string:
     return "v{a}"

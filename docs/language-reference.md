@@ -737,11 +737,18 @@ fn main() i32:
 ```
 
 A computed count -- a loop index, a value read from a file -- cannot be read at
-compile time, so it is not an error. It has a defined answer instead: a shift by a
-count at or above the width moves every bit out of the type and gives **0**. An
-arithmetic right shift fills from the sign bit, so it leaves the sign behind: 0 for
-a positive value and -1 for a negative one. A negative count is out of range at the
-other end and answers the same way.
+compile time, so it is not an error. A computed count that is equal to or larger than the
+width, or a negative count of a signed count type, follows the overflow mode
+([Overflow](#overflow), [the overflow-mode decision](adr/0002-overflow-mode.md)):
+
+- `trap` (the default): the program stops with [RE2034](error-catalog.md#re2034), which
+  names the count, the operator and the type
+  (`shift count 8 is out of range: '<<' on u8`). The program exits 1.
+- `wrap`: the count is masked to the width, as Rust does: `value << (places & (W - 1))`
+  for a type of width `W`. So `value << 8` on a `u8` is `value << 0`.
+
+The range is read from the count as it is written. A `u64` count of 256 on a `u8` is out of
+range, and is not narrowed to 0 first.
 
 ```sushi
 fn shift(u8 value, u8 places) u8:
@@ -749,16 +756,12 @@ fn shift(u8 value, u8 places) u8:
 
 fn main() i32:
     println("{shift(0x12, 3)}")     # 144
-    println("{shift(0x12, 8)}")     # 0 -- every bit has left the u8
+    println("{shift(0x12, 7)}")     # 0 -- the last legal count of a u8
     return 0
 ```
 
-The count is never masked. Masking is what the hardware does and what Java and Rust
-expose, and it would answer `value << 8` on a `u8` with the value itself -- a wrong
-answer that reads like a working shift. Sushi follows Go here: shifting by one place
-at a time is the rule, so a count that empties the type gives an empty result. It
-costs one compare and one conditional move, and nothing at all when the count is a
-constant.
+To shift every bit out of the type, cast the value to a wider type first, or test the
+count before the shift.
 
 ### Arithmetic
 
@@ -831,6 +834,11 @@ the sum of two locals, is checked when the program runs. The flag
   (`integer overflow: '+' on u8`). The program exits 1.
 - `wrap`: the bits that leave the type are lost, and nothing reports it.
 
+A shift count that the compiler cannot read follows the mode too: in `trap` mode a count
+that is equal to or larger than the width, or negative, stops the program with
+[RE2034](error-catalog.md#re2034); in `wrap` mode the count is masked to the width (see
+[Operand types](#operand-types)).
+
 ```sushi
 fn main() i32:
     let u8 a = 200
@@ -852,7 +860,7 @@ division by zero gives an infinity or a NaN, and nothing reports it.
 ```sushi
 fn main(string[] args) i32:
     let i32 a = 7
-    let i32 b = args.len() - 1    # 0 when the program gets no argument
+    let i32 b = (args.len() as i32) - 1    # 0 when the program gets no argument
     println("{a / b}")            # RE2030: integer division by zero
     return 0
 ```
@@ -1024,8 +1032,9 @@ integer literal is `i32`, so a literal receiver also needs the cast:
 `(0x80 as u8).trailing_zeros()`.
 
 **The low `n` bits, reversed.** Use the shift: `c.reverse_bits() >> (W - n)`. For `n = W`
-the count is 0, and the answer is the full reversal. For `n = 0` the count is `W`. A
-computed shift count at or above the width gives 0, so the answer is 0. Write the count
+the count is 0, and the answer is the full reversal. For `n = 0` the count is `W`, which is
+out of range: [RE2034](error-catalog.md#re2034) in the default mode. So test `n == 0`
+first when `n` can be 0. Write the count
 as an expression of `n`: a count that the compiler can read must be from 0 to `W - 1`,
 so `c.reverse_bits() >> 32` on a `u32` is [CE2512](error-catalog.md#ce2512).
 
@@ -1384,7 +1393,7 @@ fn mean(i32[] xs) i32:
     let i32 total = 0
     foreach(x in xs.iter()):
         total := total + x
-    return total / xs.len()
+    return total / (xs.len() as i32)
 
 fn main() i32:
     let i32[] xs = from([3, 4, 5])
@@ -1441,7 +1450,7 @@ value above the `i32` range as it clamps any count above the length.
 
 A range bound (`a..b`) is no index position: the range has the type of its bounds (see
 [For-Each Loops](#for-each-loops)), and a typed bound of another type than the range is
-[`CE2121`](error-catalog.md#ce2121). `len()` still answers `i32`. A `ptr` offset (`p.load_i64(96)`) is no index position,
+[`CE2121`](error-catalog.md#ce2121). `len()` answers `i64`, so `0..xs.len()` is a range of `i64`. A `ptr` offset (`p.load_i64(96)`) is no index position,
 and it is `i32`.
 
 ### Fixed Arrays
@@ -1478,7 +1487,7 @@ struct Counts:
     i32[MAX_BITS] slots
 
 fn walk(i32[MAX_BITS] counts) i32:
-    return counts.len()
+    return counts.len() as i32
 
 fn main() i32:
     let i32[MAX_BITS] counts = [1, 2, 3, 4]
@@ -1556,8 +1565,9 @@ A count you can see that spells nothing is a typo, so `[0; 0]` stays an error. A
 you cannot see is **data**: `from([0; n])` with `n` at zero gives an empty `T[]`, the
 same value `new()` gives. A run-time count that is **negative** is clamped to zero and
 gives the same empty array: a count of zero is already data rather than an error, so a
-negative one reaching the same answer needs no rule of its own. A length is an `i32`, so a
-count above the `i32` maximum stops the program with RE2033: the array cannot hold it.
+negative one reaching the same answer needs no rule of its own. `len()` answers an `i64`,
+but a count above the `i32` maximum still stops the program with RE2033: the array cannot
+hold it.
 
 The value is evaluated once, and every slot takes its own copy. A type that owns heap
 memory costs one allocation per slot, so use a long run of one only when you mean that.
@@ -3927,7 +3937,7 @@ Use single-quote strings for string arguments inside interpolation expressions:
 let string text = "hello"
 let string[] parts = from(["a", "b"])
 println("{text.pad_left(10, '*')}")       # Padding character
-println("{text.find('world').realise(-1)}")   # Search string; find answers Maybe@(i32)
+println("{text.find('world').realise(-1)}")   # Search string; find answers Maybe@(i64)
 println("{text.replace('old', 'new')}")   # Multiple string args
 println("{','.join(parts)}")              # Separator string
 ```

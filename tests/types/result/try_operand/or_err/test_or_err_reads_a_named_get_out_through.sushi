@@ -10,7 +10,7 @@ error AppError:
 fn at(string[] xs, i32 i) i32 | AppError:
     let string s = xs.get(i).or_err(nom AppError.Missing("no element {i}"))??
     println(s)
-    return Result.Ok(xs.len())
+    return Result.Ok(xs.len() as i32)
 
 fn main() i32:
     let string[] xs = from(["ford {1}", "arthur {2}"])

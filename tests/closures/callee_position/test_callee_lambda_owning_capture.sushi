@@ -5,6 +5,6 @@ use <collections/strings>
 
 fn main() i32:
     let string s = "Mostly Harmless"
-    let i32 r = (|i32 q| s.len() + q)(0)
+    let i32 r = (|i32 q| (s.len() as i32) + q)(0)
     println(r)
     return 0

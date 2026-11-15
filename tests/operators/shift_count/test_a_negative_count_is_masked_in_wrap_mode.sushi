@@ -1,0 +1,16 @@
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n-2147483648\n2\n"
+# A negative count is refused when the compiler can read it (CE2512). One that
+# arrives at run time is out of range. In wrap mode the count is masked to the
+# width: -1 on an i32 is 31, and -31 is 1. In trap mode it is RE2034.
+
+fn shl_i32(i32 value, i32 places) i32:
+    return value << places
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shl_i32(1, -1)}")
+    println("{shl_i32(1, -31)}")
+
+    return 0

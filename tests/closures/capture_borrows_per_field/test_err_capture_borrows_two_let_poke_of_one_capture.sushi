@@ -10,7 +10,7 @@ fn main() i32:
         let poke i32[] a = xs
         let poke i32[] b = xs
         a.push(k)
-        b.push(y.len())
-        return a.len()
+        b.push(y.len() as i32)
+        return a.len() as i32
     println(f(0))
     return 0

@@ -13,7 +13,7 @@ struct Steps:
     i32 fail_at
 
 extend Steps next(poke self) Maybe@(Result@(string, Bad)):
-    if (self.pos >= self.items.len()):
+    if (self.pos >= self.items.len() as i32):
         return Maybe.None
     self.pos := self.pos + 1
     if (self.pos == self.fail_at):

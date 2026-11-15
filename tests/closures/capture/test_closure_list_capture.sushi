@@ -6,7 +6,7 @@
 fn run() i32:
     let List@(i32) xs = List.new()
     xs.push(10)
-    let fn(i32) -> i32 f = |i32 x| x + xs.len()
+    let fn(i32) -> i32 f = |i32 x| x + (xs.len() as i32)
     return f(5)
 
 fn main() i32:

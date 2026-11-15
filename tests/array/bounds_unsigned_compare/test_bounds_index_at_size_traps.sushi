@@ -8,6 +8,6 @@ fn same(i32 x) i32:
 
 fn main() i32:
     let i32[] xs = from([10, 20, 30])
-    let i32 i = same(xs.len())
+    let i32 i = same(xs.len() as i32)
     println(xs[i])
     return 0

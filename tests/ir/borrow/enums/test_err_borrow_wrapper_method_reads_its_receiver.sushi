@@ -30,7 +30,7 @@ fn reads(i32 n) i32:
     let string d = r.expect("Mostly Harmless")
     let Maybe@(StdError) e = r.err()
     if (m.is_some() and not m.is_none() and r.is_ok() and not r.is_err() and e.is_none()):
-        return a.len() + b.len() + c.len() + d.len()
+        return (a.len() as i32) + (b.len() as i32) + (c.len() as i32) + (d.len() as i32)
     return 0
 
 fn moved(i32 n) bool:

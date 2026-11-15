@@ -30,7 +30,7 @@ fn run_test() i32 | StdError:
 
             # Print each byte
             let i32 i = 0
-            while (i < bytes.len()):
+            while (i < bytes.len() as i32):
                 let u8 byte = bytes.get(i).or_err(nom StdError.Error)??
                 println("Byte {i}: {byte}")
                 i := i + 1

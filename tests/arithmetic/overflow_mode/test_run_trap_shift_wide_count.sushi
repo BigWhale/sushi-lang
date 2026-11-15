@@ -1,0 +1,14 @@
+# The range is read from the count as written: a u64 count of 256 on a u8 stops the
+# program, and is not narrowed to 0 first.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "72\n"
+# EXPECT_STDERR_CONTAINS: "RE2034"
+# EXPECT_STDERR_CONTAINS: "shift count 256 is out of range: '<<' on u8"
+
+fn shl(u8 value, u64 places) u8:
+    return value << places
+
+fn main() i32:
+    println("{shl(0x12, 2)}")
+    println("{shl(0x12, 256)}")
+    return 0

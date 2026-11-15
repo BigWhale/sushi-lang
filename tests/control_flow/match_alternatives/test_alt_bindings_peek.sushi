@@ -18,7 +18,7 @@ fn describe(peek Label l) ~:
 
 fn length(peek Label l) i32:
     match l:
-        Label.Short(peek s) | Label.Long(peek s) -> return s.len()
+        Label.Short(peek s) | Label.Long(peek s) -> return s.len() as i32
         Label.Blank -> return 0
 
 fn main() i32:

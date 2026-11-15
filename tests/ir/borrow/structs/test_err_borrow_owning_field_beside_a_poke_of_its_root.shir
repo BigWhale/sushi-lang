@@ -4,7 +4,7 @@ ShirBody both
   params : [(_0 "s": string, Guaranteed), (_1 "b": Box, Inout)]
   locals : []
   block  :
-    Assign(Field(LocalRef(_1), "n"), adopt Call(Builtin(LocalRef(_0), "len"), []), is_init: false)
+    Assign(Field(LocalRef(_1), "n"), adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32), is_init: false)
 
 ShirBody count
   params : [(_0 "n": i32, Guaranteed), (_1 "b": Box, Inout)]

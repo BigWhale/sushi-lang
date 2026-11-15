@@ -17,8 +17,8 @@ fn main() i32:
     # Shrink to exact size
     data.shrink_to_fit()
 
-    let i32 cap = data.capacity()
-    let i32 len = data.len()
+    let i32 cap = data.capacity() as i32
+    let i32 len = data.len() as i32
 
     if (cap != len):
         println("ERROR: Capacity should equal length after shrink_to_fit")

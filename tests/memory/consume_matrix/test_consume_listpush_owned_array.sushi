@@ -23,7 +23,7 @@ struct Buf:
 
 fn head_len(peek List@(Buf) l) i32 | StdError:
     let Buf first = l.get(0).or_err(nom StdError.Error)??
-    return Result.Ok(first.data.len())
+    return Result.Ok(first.data.len() as i32)
 
 fn main() i32:
     let Buf w = Buf(from([1, 2, 3]))

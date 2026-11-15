@@ -128,7 +128,7 @@ value to the callee, write `nom` on the parameter and again at the call site:
 
 ```sushi
 fn eat(nom i32[] items) i32:
-    return items.len()
+    return items.len() as i32
     # items is freed here -- this function is the owner now
 
 fn main() i32:

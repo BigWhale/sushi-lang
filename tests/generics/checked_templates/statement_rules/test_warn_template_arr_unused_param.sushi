@@ -4,7 +4,7 @@
 # EXPECT_STDERR_CONTAINS: :6:21: warning [CW1001]: unused parameter 'spare'.
 
 extend T[] size(i32 spare) i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     println("Mostly Harmless")

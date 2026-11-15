@@ -12,7 +12,7 @@ struct Counter:
 
 extend Counter with Sink:
     fn accept(u8[] data) i32:
-        return data.len()
+        return data.len() as i32
 
 struct Holder:
     Counter out

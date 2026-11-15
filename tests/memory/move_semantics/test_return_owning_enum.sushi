@@ -16,7 +16,7 @@ fn make() Msg:
 fn arr_len(Msg m) i32:
     match m:
         Msg.Arr(xs) ->
-            return xs.len()
+            return xs.len() as i32
         Msg.Text(_) ->
             return 0
 

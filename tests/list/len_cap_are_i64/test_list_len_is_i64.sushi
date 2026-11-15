@@ -1,0 +1,19 @@
+# `len()`, `capacity()`, `index_of` and `index_of_from` of a `List@(T)` answer i64 (ADR
+# 0001, the contract step). Arithmetic on the answer goes above 2^31 with no overflow.
+# EXPECT_STDOUT_EXACT: "3000000000 true 1 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(4)
+    xs.push(5)
+    xs.push(4)
+    let i64 n = xs.len()
+    let i64 big = n * 1000000000
+    let i64 cap = xs.capacity()
+    let i64 at = xs.index_of(5).realise(-1)
+    let i64 later = xs.index_of_from(4, 1).realise(-1)
+    println("{big} {cap >= n} {at} {later}")
+    xs.free()
+    return 0

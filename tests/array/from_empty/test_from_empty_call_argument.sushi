@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS: true
 
 fn count(u8[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     println("{count(from([]))}")

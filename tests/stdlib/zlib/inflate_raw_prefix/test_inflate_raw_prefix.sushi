@@ -22,19 +22,19 @@ fn run() ~ | ZError:
     padded.push(0xff)
     padded.push(0x00)
     let (u8[] out, i32 used) = inflate_raw_prefix(padded)??
-    println("fixed [{out.to_string()}] used all {used == fixed.len()}")
+    println("fixed [{out.to_string()}] used all {used == fixed.len() as i32}")
 
     let u8[] padded_stored = stored.clone()
     padded_stored.push(0x07)
     let (u8[], i32) got = inflate_raw_prefix(padded_stored)??
-    println("stored [{got.0.to_string()}] used all {got.1 == stored.len()}")
+    println("stored [{got.0.to_string()}] used all {got.1 == stored.len() as i32}")
 
     let u8[] two = fixed.clone()
     let u8[] panic = deflate_raw("Don't Panic".to_bytes(), 6)??
     two.extend(panic)
     let (_, i32 first) = inflate_raw_prefix(two)??
     let (u8[] second, i32 rest) = inflate_raw_prefix(two.s(first, two.len()))??
-    println("second [{second.to_string()}] at end {first + rest == two.len()}")
+    println("second [{second.to_string()}] at end {first + rest == two.len() as i32}")
 
     let u8[] empty = from([])
     println("empty {fault(inflate_raw_prefix(empty))}")
@@ -51,7 +51,7 @@ fn run() ~ | ZError:
     let u8[] blank = from([])
     let u8[] nothing = deflate_raw(blank, 6)??
     let (u8[] none, i32 n) = inflate_raw_prefix(nothing)??
-    println("nothing {none.len()} used all {n == nothing.len()}")
+    println("nothing {none.len() as i32} used all {n == nothing.len() as i32}")
     return Result.Ok(~)
 
 fn main() i32:

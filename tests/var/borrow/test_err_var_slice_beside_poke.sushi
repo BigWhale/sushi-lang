@@ -5,7 +5,7 @@
 var i32[] buf = from([])
 
 fn take(peek i32[] a, poke i32[] b) ~:
-    b.push(a.len())
+    b.push(a.len() as i32)
 
 fn main() i32:
     take(peek buf[0..2], poke buf)

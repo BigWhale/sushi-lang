@@ -21,7 +21,7 @@ fn shapes@(T: Clone, E)(nom T a, nom T b, Result@(T, E) r) i32:
     let T other = keep(nom boxed.item)
     xs.push(other)
     let List@(T) mapped = xs.map(same)
-    let i32 n = xs.len() + pair.1 + mapped.len()
+    let i32 n = (xs.len() as i32) + pair.1 + (mapped.len() as i32)
     if (r.is_ok()):
         return n
     match m:

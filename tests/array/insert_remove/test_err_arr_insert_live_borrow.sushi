@@ -5,13 +5,13 @@ fn rows() i32:
     let i32[][] g = from([from([0]), from([1])])
     let peek i32[] row = g[0]
     g.insert(0, from([2]))
-    return row.len()
+    return row.len() as i32
 
 fn whole() i32:
     let i32[] a = from([1, 2])
     let peek i32[] view = a
     a.remove(0)
-    return view.len()
+    return view.len() as i32
 
 fn main() i32:
     return rows() + whole()

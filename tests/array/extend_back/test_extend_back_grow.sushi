@@ -7,7 +7,7 @@ fn main() i32:
     let i32[] a = from([1, 2, 3])
     a.extend_back(3, 100000)
     let i32 bad = 0
-    foreach(k in 0..a.len()):
+    foreach(k in 0..a.len() as i32):
         if (a[k] != (k % 3) + 1):
             bad := bad + 1
     println("{a.len()} {bad} {a[0]} {a[50000] - 1} {a[100002]} {a[99999]}")
@@ -17,7 +17,7 @@ fn main() i32:
     b.truncate(3)
     b.extend_back(3, 100000)
     let i32 wrong = 0
-    foreach(k in 0..b.len()):
+    foreach(k in 0..b.len() as i32):
         if (b[k] != k % 3):
             wrong := wrong + 1
     println("{b.len()} {wrong} {b[100002]}")

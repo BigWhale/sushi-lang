@@ -26,7 +26,7 @@ extend Crate static light() Crate:
     return Crate(5)
 
 extend List@(T) size_ev() i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     println(3.outer_step())

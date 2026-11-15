@@ -29,7 +29,7 @@ println(encode("Mostly Harmless".to_bytes()))
 ```
 :##
 public fn encode(u8[] data) string:
-    let i32 n = data.len()
+    let i32 n = data.len() as i32
     let u8[] out = from([0; (n + 2) / 3 * 4])
     let i32 full = n / 3
     foreach(g in 0..full):
@@ -73,7 +73,7 @@ match decode("TW9zdGx5IEhhcm1sZXNz"):
 ```
 :##
 public fn decode(string text) u8[] | Base64Error:
-    let i32 n = text.size()
+    let i32 n = text.size() as i32
     if (n % 4 != 0):
         return Result.Err(Base64Error.BadLength)
     let i32 pad = 0
@@ -91,7 +91,7 @@ public fn decode(string text) u8[] | Base64Error:
             return Result.Err(Base64Error.BadChar(i))
         values[i] := v as u8
     let u8[] out = from([0; n / 4 * 3 - pad])
-    foreach(i in 0..out.len()):
+    foreach(i in 0..out.len() as i32):
         let i32 g = i / 3
         let i32 k = i % 3
         let u8 first = values[4 * g + k]

@@ -45,7 +45,7 @@ perk method, a lambda and a function type. There is no default error type.
 fn parse(string text) i32 | StdError:    # a channel: the call returns Result@(i32, StdError)
     if (text.is_empty()):
         return Result.Err(StdError.Error)
-    return Result.Ok(text.len())
+    return Result.Ok(text.len() as i32)
 
 fn double(i32 x) i32:                    # bare: the call returns i32
     return x * 2
@@ -708,7 +708,7 @@ value, and `??` on it is **[CE2507](error-catalog.md#ce2507)**. `m.or_err(nom e)
 ```sushi
 fn find_and_parse(string text) i32 | StdError:
     # or_err turns a None into an Err, and ?? propagates it
-    let i32 pos = text.find("x").or_err(nom StdError.Error)??
+    let i32 pos = text.find("x").or_err(nom StdError.Error)?? as i32
     return Result.Ok(pos * 2)
 
 fn main() i32:
@@ -804,7 +804,7 @@ error LexError:
     BadByte(i32)
 
 fn at(peek u8[] src, i32 i) u8:
-    if (i < 0 or i >= src.len()):
+    if (i < 0 or i >= src.len() as i32):
         return 0
     return src[i]
 
@@ -891,7 +891,7 @@ use <io/files>
 
 fn count_entries(string dir) i32 | IoError:
     let string[] names = read_dir(dir)??    # FileError as IoError, from <io/error>
-    return Result.Ok(names.len())
+    return Result.Ok(names.len() as i32)
 
 fn main() i32:
     match count_entries("/no/such/dir"):

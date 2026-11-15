@@ -73,7 +73,7 @@ Reads the next byte.
 - Errors: `MpError.Truncated` at the end of the buffer.
 :##
 fn take(peek u8[] buf, poke MpCursor cur) u8 | MpError:
-    if (cur.pos >= buf.len()):
+    if (cur.pos >= buf.len() as i32):
         return Result.Err(MpError.Truncated(cur.pos))
     let u8 b = buf[cur.pos]
     cur.pos := cur.pos + 1
@@ -93,9 +93,9 @@ fn be_uint(peek u8[] buf, poke MpCursor cur, i32 nbytes) u64 | MpError:
     let u64 value = 0
     match nbytes:
         1 -> return Result.Ok(take(peek buf, poke cur)?? as u64)
-        2 -> value := buf.read_u16_be(cur.pos).or_err(nom MpError.Truncated(buf.len()))?? as u64
-        4 -> value := buf.read_u32_be(cur.pos).or_err(nom MpError.Truncated(buf.len()))?? as u64
-        _ -> value := buf.read_u64_be(cur.pos).or_err(nom MpError.Truncated(buf.len()))??
+        2 -> value := buf.read_u16_be(cur.pos).or_err(nom MpError.Truncated(buf.len() as i32))?? as u64
+        4 -> value := buf.read_u32_be(cur.pos).or_err(nom MpError.Truncated(buf.len() as i32))?? as u64
+        _ -> value := buf.read_u64_be(cur.pos).or_err(nom MpError.Truncated(buf.len() as i32))??
     cur.pos := cur.pos + nbytes
     return Result.Ok(value)
 
@@ -115,7 +115,7 @@ negative count and decode as an empty value.
 :##
 fn len(peek u8[] buf, poke MpCursor cur, i32 nbytes) i32 | MpError:
     let u64 raw = be_uint(peek buf, poke cur, nbytes)??
-    let u64 left = (buf.len() - cur.pos) as u64
+    let u64 left = ((buf.len() as i32) - cur.pos) as u64
     if (raw > left):
         return Result.Err(MpError.Truncated(cur.pos))
     return Result.Ok(raw as i32)
@@ -150,7 +150,7 @@ path gets here with no `len` check, so this function does the bounds check itsel
 - Errors: `MpError.Truncated` at the end of the buffer when it is too short.
 :##
 fn take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) peek u8[] | MpError:
-    if (count > buf.len() - cur.pos):
+    if (count > (buf.len() as i32) - cur.pos):
         return Result.Err(MpError.Truncated(cur.pos))
     let i32 start = cur.pos
     cur.pos := cur.pos + count
@@ -314,7 +314,7 @@ match decode(buf):
 public fn decode(u8[] buf) MsgValue | MpError:
     let MpCursor cur = MpCursor(0)
     let MsgValue v = decode_value(peek buf, poke cur)??
-    if (cur.pos < buf.len()):
+    if (cur.pos < buf.len() as i32):
         return Result.Err(MpError.Trailing(cur.pos))
     return Result.Ok(v)
 
@@ -379,7 +379,7 @@ match map_index(m, "b"):
 public fn map_index(MsgValue m, string key) Maybe@(i32):
     match m:
         MsgValue.Map(pairs) ->
-            foreach(i in 0..pairs.len()):
+            foreach(i in 0..pairs.len() as i32):
                 if (is_key(pairs[i].0, key)):
                     return Maybe.Some(i)
             return Maybe.None()

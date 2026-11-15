@@ -8,5 +8,5 @@ fn div(i32 a, i32 b) i32:
     return a / b
 
 fn main(string[] args) i32:
-    println("{div(7, args.len() - 1)}")
+    println("{div(7, (args.len() as i32) - 1)}")
     return 0

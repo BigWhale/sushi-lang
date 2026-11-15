@@ -9,7 +9,7 @@ enum Wrap@(T):
     Zero
 
 fn size@(U)(U[] a) i32:
-    return a.len()
+    return a.len() as i32
 
 fn main() i32:
     let i32[] xs = from([4, 5, 6])

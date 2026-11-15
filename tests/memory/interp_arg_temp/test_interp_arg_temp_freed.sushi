@@ -15,10 +15,10 @@ use <collections/strings>
 use <collections/hashmap>
 
 fn look(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn eat(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     let string tail = "cd"

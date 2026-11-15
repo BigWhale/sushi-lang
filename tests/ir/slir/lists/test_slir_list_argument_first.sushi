@@ -12,6 +12,6 @@ fn main() i32:
     let List@(i32) xs = List.new()
     xs.push(3)
     xs.push(xs.pop().realise(0) * 10)
-    let bool found = xs.contains(xs.len() + 1)
+    let bool found = xs.contains((xs.len() as i32) + 1)
     println("{xs.len() + 1} {xs.last().realise(-1)} {found}")
     return 0

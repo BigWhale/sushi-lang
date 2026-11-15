@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 
 fn count(...string xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn label(string head, ...i32 xs) string:
     if (xs.len() == 0):
@@ -15,6 +15,6 @@ fn label(string head, ...i32 xs) string:
 fn main() i32:
     println(count())
     let i32[] none = from([])
-    println(none.len() + count())
+    println((none.len() as i32) + count())
     println(label("Mostly {'Harmless'}"))
     return 0

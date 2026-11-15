@@ -14,7 +14,7 @@ fn corner(peek i32[2][3] m) i32:
     return m[2][1]
 
 fn rows(i32[][3] f) i32:
-    return f[2].len()
+    return f[2].len() as i32
 
 fn grow(poke i32[][] d) ~:
     d[0].push(9)
@@ -25,7 +25,7 @@ fn bump(poke i32[2][3] m) ~:
     m[0][0] := 9
 
 fn eat(nom i32[3][] g) i32:
-    return g.len()
+    return g.len() as i32
 
 fn swallow(nom i32[][3] f) i32:
     return f[1][0]

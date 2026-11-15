@@ -5,9 +5,9 @@ fn main() i32:
     let List@(i32) crew_sizes = List.new()
 
     # Test initial state
-    let i32 size = crew_sizes.len()
+    let i32 size = crew_sizes.len() as i32
     let bool empty = crew_sizes.is_empty()
-    let i32 cap = crew_sizes.capacity()
+    let i32 cap = crew_sizes.capacity() as i32
 
     println("Initial size: {size}")
     println("Is empty: {empty}")

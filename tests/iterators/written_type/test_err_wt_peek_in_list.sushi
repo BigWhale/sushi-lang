@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2419
 
 fn size(List@(peek string) xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     return 0

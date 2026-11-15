@@ -42,7 +42,7 @@ fn shapes@(T: Display, ...Ts: Render + Display + Clone)(T head, ...Ts args) i32 
             Maybe.None -> println("none")
         let (x, n) = (a.clone(), 1)
         println(x.render())
-        total := total + n + from([a.clone()]).len()
+        total := total + n + (from([a.clone()]).len() as i32)
         let fn() -> string f = |~| x.render()
         println(f())
         total := total + checked(a)??

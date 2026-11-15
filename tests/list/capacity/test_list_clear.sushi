@@ -9,7 +9,7 @@ fn main() i32:
     data.push(4)
     data.push(5)
 
-    let i32 cap_before = data.capacity()
+    let i32 cap_before = data.capacity() as i32
     if (data.len() != 5):
         println("ERROR: Expected length 5")
         return 1
@@ -27,7 +27,7 @@ fn main() i32:
         return 3
 
     # Capacity should be preserved
-    let i32 cap_after = data.capacity()
+    let i32 cap_after = data.capacity() as i32
     if (cap_after != cap_before):
         println("ERROR: Capacity should be preserved after clear")
         return 4

@@ -18,7 +18,7 @@ struct Wrapper:
     Buffer inner
 
 fn total(Buffer b) i32:
-    return b.data.len()
+    return b.data.len() as i32
 
 fn main() i32:
     let Wrapper w = Wrapper(inner: Buffer(data: from([1, 2, 3])))

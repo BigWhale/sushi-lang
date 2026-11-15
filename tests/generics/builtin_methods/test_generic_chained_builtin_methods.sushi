@@ -11,7 +11,7 @@ fn shout@(T: Display)(T value) string:
     return value.to_str().upper()
 
 fn measure@(T: Display)(T value) i32:
-    return value.to_str().len()
+    return value.to_str().len() as i32
 
 fn describe@(T: Hashable)(T value) string:
     return value.hash().to_str()

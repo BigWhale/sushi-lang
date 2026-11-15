@@ -8,7 +8,7 @@
 
 fn tail_len(i32[] xs, i32 end) i32 dont_panic because "the caller passes a non-empty array":
     let i32 first = xs[0]
-    return xs[1..end].len() + first
+    return (xs[1..end].len() as i32) + first
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])

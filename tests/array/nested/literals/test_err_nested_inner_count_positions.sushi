@@ -5,10 +5,10 @@
 # EXPECT_STDERR_CONTAINS: "array literal has 1 elements but declared type expects 2"
 # EXPECT_STDERR_CONTAINS: "array literal has 3 elements but declared type expects 2"
 fn rows(i32[2][2] m) i32:
-    return m.len()
+    return m.len() as i32
 
 fn main() i32:
     let i32[2][3] first = [[1], [2, 3], [4, 5]]
     let i32[2][] dynamic = from([[1, 2], [3, 4, 5]])
     let i32[2][2][2] deep = [[[1, 2], [3, 4]], [[5, 6], [7]]]
-    return rows([[1, 2], [3]]) + first.len() + dynamic.len() + deep.len()
+    return rows([[1, 2], [3]]) + (first.len() as i32) + (dynamic.len() as i32) + (deep.len() as i32)

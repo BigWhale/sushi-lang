@@ -9,7 +9,7 @@ fn run(bool yes) fn(i32) -> i32:
     let fn(i32) -> i32 f = inc
     let string s = "abcd".clone()
     if (yes):
-        f := |i32 x| x + s.len()
+        f := |i32 x| x + (s.len() as i32)
     let fn(i32) -> i32 g = f
     return g
 

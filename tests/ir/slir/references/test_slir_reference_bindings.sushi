@@ -31,7 +31,7 @@ fn main() i32:
     p.n := 9
     let Shape s = Shape.Named(1, from([4]))
     match s:
-        Shape.Named(poke n, peek sides) -> n := n + sides.len() + 1
+        Shape.Named(poke n, peek sides) -> n := n + (sides.len() as i32) + 1
         Shape.Empty -> println("empty")
     match s:
         Shape.Named(n, _) -> println("{o.get().n} {n} {o.get().name}")

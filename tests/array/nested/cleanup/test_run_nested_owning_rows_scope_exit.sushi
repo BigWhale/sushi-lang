@@ -22,8 +22,8 @@ fn fixed_in_dyn() ~:
 fn early(bool go) i32:
     let Row[][2] g = [from([row("g", 1)]), from([row("h", 2), row("i", 3)])]
     if (go):
-        return g[0].len()
-    return g[1][1].cells.len() + 2
+        return g[0].len() as i32
+    return (g[1][1].cells.len() as i32) + 2
 
 fn main() i32:
     dyn_dyn()

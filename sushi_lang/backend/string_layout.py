@@ -1,9 +1,10 @@
 """The string value `{i8* data, i64 size, i8 owned}`: its type, its size field and its
 construction (ADR 0001, docs/design/string-representation.md).
 
-The size field is an i64. The surface `size()` and `len()` still answer an i32, so
-`string_size` truncates and `string_value` extends an i32 size. `string_size_i64` gives the
-stored width for a byte count (`malloc`, `mem*`). No other code reads or writes field 1.
+The size field is an i64, and the surface `size()` answers it (`string_size_i64`). The
+generated string functions compute in i32, so `string_size` truncates and `string_value`
+extends an i32 size. `string_size_i64` also gives the stored width for a byte count
+(`malloc`, `mem*`). No other code reads or writes field 1.
 """
 from __future__ import annotations
 
@@ -44,12 +45,16 @@ def string_size_i64(builder: ir.IRBuilder, value: ir.Value, name: str = "") -> i
     return builder.extract_value(value, SIZE_FIELD, name=name)
 
 
-def string_size_at(builder: ir.IRBuilder, address: ir.Value, name: str = "") -> ir.Value:
-    """The size of the string at `address` as the surface i32."""
+def string_size_at(builder: ir.IRBuilder, address: ir.Value, name: str = "", *,
+                   stored: bool = False) -> ir.Value:
+    """The size of the string at `address`: as the surface i32, or at its stored width when
+    `stored` is set."""
     i32 = ir.IntType(32)
     slot = builder.gep(address, [ir.Constant(i32, 0), ir.Constant(i32, SIZE_FIELD)])
-    stored = builder.load(slot, name=f"{name}_i64" if name else "")
-    return as_surface_i32(builder, stored, name)
+    if stored:
+        return builder.load(slot, name=name)
+    size = builder.load(slot, name=f"{name}_i64" if name else "")
+    return as_surface_i32(builder, size, name)
 
 
 def with_string_size(builder: ir.IRBuilder, value: ir.Value, size: ir.Value,

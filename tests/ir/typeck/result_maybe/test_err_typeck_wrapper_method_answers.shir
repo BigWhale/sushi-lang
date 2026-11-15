@@ -38,4 +38,4 @@ ShirBody main
   locals : [_0 "s": string]
   block  :
     Assign(LocalRef(_0), Call(Builtin(Call(Free(@parse), [(Lit(1), Guaranteed)]), "is_ok"), []), is_init: true)
-    Return(Binary(+, Call(Free(@tests), [(Lit(4), Guaranteed)]), Call(Builtin(LocalRef(_0), "len"), [])))
+    Return(Binary(+, Call(Free(@tests), [(Lit(4), Guaranteed)]), Cast(Call(Builtin(LocalRef(_0), "len"), []), i32)))

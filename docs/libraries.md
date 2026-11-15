@@ -516,6 +516,16 @@ CE3504: platform mismatch: library compiled for 'linux', current platform is 'da
 The check is skipped entirely for a source library, and `--lib-info` prints no `Platform`
 line for one, because the field means nothing there.
 
+### Overflow Mode
+
+A binary or hybrid library records the overflow mode that it was built with
+(`--overflow=trap|wrap`, see [Integer Overflow](compiler-reference.md#integer-overflow)) in the
+manifest key `overflow`, and `--lib-info` prints it as `Overflow: wrap`. A library keeps
+its own mode: its compiled code does not change when a consumer builds with a different
+mode. A generic template of the library is monomorphized in the consumer, so it follows
+the mode of the consumer. A source library is compiled by the consumer, so all of its code
+follows the mode of the consumer, and its manifest has no `overflow` key.
+
 Portable as text is not the same as portable in behaviour. See Limitation #1 below.
 
 ## Versions and Compatibility

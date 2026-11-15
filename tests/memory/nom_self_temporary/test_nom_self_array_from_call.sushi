@@ -7,7 +7,7 @@ fn make(i32 n) i32[]:
     return from([n, n + 1, n + 2])
 
 extend T[] total(nom self) i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     println(make(1).total())

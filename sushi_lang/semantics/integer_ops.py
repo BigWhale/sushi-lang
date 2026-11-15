@@ -145,8 +145,8 @@ def _divide(op: str, left: int, right: int, ty: Type) -> Answer:
 
 
 def _shift(op: str, value: int, count: int, ty: Type, width: int) -> Answer:
-    """A count past the width is defined and not checked (Go's rule): 0, or the sign bit of
-    a signed `>>`. The count is clamped to the width, because a Python shift by a count of
+    """A count past the width is CE2512 at the shift, so no program reads this answer: 0, or
+    the sign bit of a signed `>>`. The count is clamped to the width, because a Python shift by a count of
     millions builds the number that it names.
 
     A held value is in its own range, so Python's `>>` is the machine's: it fills from the

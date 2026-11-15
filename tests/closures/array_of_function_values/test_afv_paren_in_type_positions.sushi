@@ -5,7 +5,7 @@ fn inc(i32 x) i32:
     return x + 1
 
 fn count(List@(fn(i32) -> i32) fs) i32:
-    return fs.len()
+    return fs.len() as i32
 
 fn pick() (fn(i32) -> i32):
     return inc

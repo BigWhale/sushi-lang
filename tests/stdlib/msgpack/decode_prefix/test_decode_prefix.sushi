@@ -9,7 +9,7 @@ use <encoding/msgpack>
 
 fn walk(u8[] stream) i32 | MpError:
     let i32 at = 0
-    while (at < stream.len()):
+    while (at < stream.len() as i32):
         let (MsgValue v, i32 used) = decode_prefix(stream.s(at, stream.len()))??
         println("{show(v)} used {used}")
         at := at + used

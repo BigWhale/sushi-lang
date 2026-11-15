@@ -21,7 +21,7 @@ fn first_one(i32[] xs) peek i32[]:
     return head(xs, 1)
 
 fn checked(i32[] xs, i32 n) peek i32[] | ReadError:
-    if (n > xs.len()):
+    if (n > xs.len() as i32):
         return Result.Err(ReadError.Short)
     return Result.Ok(xs[0..n])
 

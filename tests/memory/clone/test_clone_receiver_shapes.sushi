@@ -14,7 +14,7 @@ fn make() Holder:
     return Holder("{base}d", from([1]))
 
 fn eat(nom Holder h) i32:
-    return h.xs.len()
+    return h.xs.len() as i32
 
 fn main() i32:
     let string base = "a"

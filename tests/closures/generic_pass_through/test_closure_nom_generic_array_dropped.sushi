@@ -5,7 +5,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 fn count@(T)(nom T[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn kb@(T)(nom T x) T:
     return x

@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS
 
 fn count(nom string[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn pieces(string s) string[]:
     return s.split("-")

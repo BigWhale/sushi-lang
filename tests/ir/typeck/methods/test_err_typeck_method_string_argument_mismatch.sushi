@@ -10,5 +10,5 @@ fn main() i32:
     let string p = s.pad_left(3, 4)
     let string t = s.sleft(2)
     if (a):
-        return p.len()
-    return t.len()
+        return p.len() as i32
+    return t.len() as i32

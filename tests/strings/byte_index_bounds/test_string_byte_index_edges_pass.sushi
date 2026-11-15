@@ -10,6 +10,6 @@ fn same(i32 x) i32:
 fn main() i32:
     let string s = "Mostly Harmless"
     let i32 first = same(0)
-    let i32 last = same(s.size() - 1)
+    let i32 last = same((s.size() as i32) - 1)
     println("{s[first]} {s[last]}")
     return 0

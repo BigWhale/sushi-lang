@@ -6,7 +6,7 @@ ShirBody measure
   regions : [_1: {_0} until #4]
   block  :
     Assign(LocalRef(_1), reject LocalRef(_0), is_init: true)
-    Return(adopt Call(Builtin(LocalRef(_1), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_1), "len"), []), i32))
 
 ShirBody pick
   params : [(_0 "first": bool, Guaranteed)]
@@ -21,7 +21,7 @@ ShirBody pick
     Assign(LocalRef(_4), adopt Lit(0), is_init: true)
     Loop(Cond(Binary(<, LocalRef(_4), Lit(2))), [ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_3), "is_some"), []), Guaranteed)])), Assign(LocalRef(_4), adopt Binary(+, LocalRef(_4), Lit(1)), is_init: false)])
     ExprStmt(Call(Builtin(LocalRef(_1), "clear"), []))
-    Return(adopt Call(Builtin(LocalRef(_1), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_1), "len"), []), i32))
 
 ShirBody main
   params : []

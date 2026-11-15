@@ -21,7 +21,7 @@ struct Row:
     i32[] cells
 
 extend Row size() i32:
-    return self.cells.len()
+    return self.cells.len() as i32
 
 enum E:
     A

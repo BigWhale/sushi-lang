@@ -6,7 +6,7 @@
 
 fn run_test() i32:
     let i32[] xs = from([10, 20, 30])
-    let i32[] index = from([0..xs.len()])
+    let i32[] index = from([0..xs.len() as i32])
     println("{index.len()} {index[0]} {index[1]} {index[2]}")
     return 0
 

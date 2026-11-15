@@ -11,7 +11,7 @@ fn word_len(i32 n) i32 | AppError:
     let Maybe@(string) m = Maybe.Some("word {n}")
     let string w = m.or_err(nom AppError.Empty)??
     println(m.is_some())
-    return Result.Ok(w.len())
+    return Result.Ok(w.len() as i32)
 
 fn main() i32:
     println(word_len(3).realise(0))

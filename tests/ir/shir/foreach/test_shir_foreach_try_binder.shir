@@ -15,7 +15,7 @@ ShirBody typed
   block  :
     Assign(LocalRef(_0), adopt Call(Static(BufReader@(File), @BufReader@(File).new), [(adopt Try(adopt Call(Method(StorageRef(@stdin), @File.share, Guaranteed), [])), Owned), (Lit(64), Guaranteed)]), is_init: true)
     Assign(LocalRef(_1), adopt Lit(0), is_init: true)
-    Loop(Items(adopt Call(Method(move LocalRef(_0), @BufReader@(File).lines, Owned), []), _2, Bare), [Assign(LocalRef(_3), adopt Try(move LocalRef(_2)), is_init: true), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Call(Builtin(LocalRef(_3), "len"), [])), is_init: false)], in_place: false)
+    Loop(Items(adopt Call(Method(move LocalRef(_0), @BufReader@(File).lines, Owned), []), _2, Bare), [Assign(LocalRef(_3), adopt Try(move LocalRef(_2)), is_init: true), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Cast(adopt Call(Builtin(LocalRef(_3), "len"), []), i32)), is_init: false)], in_place: false)
     Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_1)]))
 
 ShirBody skipped

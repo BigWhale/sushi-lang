@@ -7,16 +7,16 @@
 # stands for Maybe.None.
 use <collections/strings>
 
-fn index_of(Maybe@(i32) m) i32:
+fn index_of(Maybe@(i64) m) i64:
     match m:
         Maybe.Some(i) -> return i
         Maybe.None -> return -1
 
 fn probe(string text, string needle) ~:
     let bool has = text.contains(needle)
-    let i32 first = index_of(text.find(needle))
-    let i32 last = index_of(text.find_last(needle))
-    let i32 n = text.count(needle)
+    let i64 first = index_of(text.find(needle))
+    let i64 last = index_of(text.find_last(needle))
+    let i32 n = text.count(needle) as i32
     println("[{text}] [{needle}] contains={has} find={first} find_last={last} count={n}")
 
 fn main() i32:

@@ -13,4 +13,4 @@ ShirBody main
     ExprStmt(Call(Intrinsic("println"), [(Index(LocalRef(_3), Lit(0), unchecked: false), Guaranteed)]))
     ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(adopt Lit(4), Owned)]))
     If(LocalRef(_2), then: [ExprStmt(Call(Intrinsic("println"), [(Index(LocalRef(_3), Lit(1), unchecked: false), Guaranteed)]))])
-    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
+    Return(adopt Cast(adopt Call(Builtin(LocalRef(_0), "len"), []), i32))

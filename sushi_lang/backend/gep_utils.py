@@ -101,6 +101,25 @@ def load_cap(codegen: 'LLVMCodegen | None', header_ptr: 'ir.Value', name: str = 
     return _load_count(codegen, header_ptr, _DESCRIPTOR_CAP, name, builder)
 
 
+def _load_stored_count(codegen, header_ptr, field, name, builder) -> 'ir.Value':
+    b = _builder_of(codegen, builder)
+    return b.load(_descriptor_field(codegen, header_ptr, field, "", b), name=name)
+
+
+def load_stored_len(codegen: 'LLVMCodegen | None', header_ptr: 'ir.Value', name: str = "len",
+                    builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
+    """The length of the `T[]` or `List@(T)` at `header_ptr` at its stored width, the i64
+    that `len()` answers."""
+    return _load_stored_count(codegen, header_ptr, _DESCRIPTOR_LEN, name, builder)
+
+
+def load_stored_cap(codegen: 'LLVMCodegen | None', header_ptr: 'ir.Value', name: str = "cap",
+                    builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
+    """The capacity of the `T[]` or `List@(T)` at `header_ptr` at its stored width, the i64
+    that `capacity()` answers."""
+    return _load_stored_count(codegen, header_ptr, _DESCRIPTOR_CAP, name, builder)
+
+
 def store_len(codegen: 'LLVMCodegen | None', header_ptr: 'ir.Value', value: 'ir.Value',
               builder: 'ir.IRBuilder | None' = None) -> None:
     """Write the length of the `T[]` or `List@(T)` at `header_ptr`."""

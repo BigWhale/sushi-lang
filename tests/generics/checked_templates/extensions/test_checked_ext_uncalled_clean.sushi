@@ -22,10 +22,10 @@ extend Box@(T) pick@(U)(nom U a) U:
     return a
 
 extend T[] count_all() i32:
-    return self.len()
+    return self.len() as i32
 
 extend List@(T) first_len() i32:
-    return self.len()
+    return self.len() as i32
 
 fn main() i32:
     println("Mostly Harmless")

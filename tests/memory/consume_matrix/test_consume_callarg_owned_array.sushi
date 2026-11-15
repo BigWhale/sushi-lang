@@ -11,7 +11,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 fn eat(i32[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     let i32[] a = from([1, 2, 3])

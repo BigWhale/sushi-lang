@@ -14,7 +14,7 @@ error AppError:
 extend TokenError as AppError:
     match self:
         TokenError.Bad(_) -> return AppError.Token(self)
-        TokenError.Cut(s) -> return AppError.Short(s.len())
+        TokenError.Cut(s) -> return AppError.Short(s.len() as i32)
 
 fn tokenize(i32 n) i32 | TokenError:
     if (n < 0):
@@ -26,7 +26,7 @@ fn tokenize(i32 n) i32 | TokenError:
 fn run(i32 n) i32 | AppError:
     let string label = "run {n}"
     let i32 v = tokenize(n)??
-    return Result.Ok(v + label.len() - label.len())
+    return Result.Ok(v + (label.len() as i32) - (label.len() as i32))
 
 fn show(Result@(i32, AppError) r) ~:
     match r:

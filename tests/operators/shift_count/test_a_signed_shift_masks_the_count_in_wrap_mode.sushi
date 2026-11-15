@@ -1,0 +1,17 @@
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n-2\n100\n-1\n0\n"
+# A right shift on a signed value fills from the sign bit. In wrap mode a count at
+# or above the width is masked to the width: 32 on an i32 is 0, and 200 is 8.
+
+fn shr_i32(i32 value, i32 places) i32:
+    return value >> places
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shr_i32(-2, 32)}")
+    println("{shr_i32(100, 32)}")
+    println("{shr_i32(-2, 200)}")
+    println("{shr_i32(100, 200)}")
+
+    return 0

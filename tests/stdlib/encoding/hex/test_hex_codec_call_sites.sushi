@@ -8,7 +8,7 @@ use <encoding/hex> as hex
 
 fn count(string text) i32 | hex.HexError:
     let u8[] bytes = hex.decode(text)??
-    return Result.Ok(bytes.len())
+    return Result.Ok(bytes.len() as i32)
 
 fn explain(string text) string:
     match count(text):

@@ -21,7 +21,7 @@ fn main() i32:
     let i32 name_chars = 0
     foreach(name in scores.keys()):
         key_count := key_count + 1
-        name_chars := name_chars + name.len()
+        name_chars := name_chars + (name.len() as i32)
     println("Number of names: {key_count}")
     println("Total name length: {name_chars}")
 

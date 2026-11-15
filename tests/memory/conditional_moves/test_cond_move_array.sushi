@@ -12,7 +12,7 @@ fn never_moves() i32:
         if (i == n):
             keeper := tmp
         i := i + 1
-    return keeper.len()
+    return keeper.len() as i32
 
 fn moves_once() i32:
     let i32[] keeper = from([9])
@@ -22,7 +22,7 @@ fn moves_once() i32:
         if (i == 0):
             keeper := tmp
         i := i + 1
-    return keeper.len()
+    return keeper.len() as i32
 
 fn main() i32:
     let i32 a = never_moves()

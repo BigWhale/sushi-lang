@@ -6,7 +6,7 @@ fn main() i32:
     xs.push(1)
     let fn() -> i32 f = |~|:
         xs.push(0)
-        return xs.len()
+        return xs.len() as i32
     let fn() -> i32 g = f.clone()
     println(f())
     println(f())

@@ -13,7 +13,7 @@ fn strip_zeros(string digits) string:
     return digits.trim_start_matches("0")
 
 fn take(nom string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn tail_of(string text) string:
     let string owned = text.clone()

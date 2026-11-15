@@ -11,7 +11,7 @@ fn main() i32:
     map.insert(42, "answer")
 
     # Check size
-    let i32 size = map.len()
+    let i32 size = map.len() as i32
     println("Size after insert: {size}")
 
     if (size != 1):

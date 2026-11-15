@@ -9,7 +9,7 @@ fn read(peek i32 n) i32:
     return n
 
 fn size_of(nom string[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn echo(nom string s) string:
     return s

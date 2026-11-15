@@ -125,7 +125,7 @@ environment becomes the only owner, and it frees the value when the closure is f
 ```sushi
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
-    let fn() -> i32 f = |~| nums.len()   # moves nums into f's environment
+    let fn() -> i32 f = |~| nums.len() as i32   # moves nums into f's environment
     println(f())              # 3
     return 0
 ```

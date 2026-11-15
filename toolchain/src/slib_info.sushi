@@ -115,7 +115,7 @@ Gives the number of elements of an `Arr` value.
 fn len(MsgValue v) i32:
     match v:
         MsgValue.Arr(items) ->
-            return items.len()
+            return items.len() as i32
         _ ->
             return 0
 
@@ -192,11 +192,11 @@ Finds the last position of `mark` in `text`.
 fn last_index_of(string text, string mark) i32:
     let i32 found = -1
     let i32 cursor = 0
-    while (cursor < text.len()):
+    while (cursor < text.len() as i32):
         match text.s(cursor, text.len()).find(mark):
             Maybe.Some(at) ->
-                found := cursor + at
-                cursor := cursor + at + 1
+                found := cursor + (at as i32)
+                cursor := cursor + (at as i32) + 1
             Maybe.None() ->
                 return found
     return found
@@ -213,7 +213,7 @@ fn tuples_to_surface(string name) string:
     while (start >= 0):
         let i32 i = start + 7
         let i32 depth = 1
-        while (depth > 0 and i < out.len()):
+        while (depth > 0 and i < out.len() as i32):
             let string c = out.char_at(i)
             if (c == "<"):
                 depth := depth + 1
@@ -271,7 +271,7 @@ fn mark_at(string line, i32 i) string:
     if (one == "`"):
         return "`"
     if (one == "*"):
-        if (i + 1 < line.len() and line.char_at(i + 1) == "*"):
+        if (i + 1 < line.len() as i32 and line.char_at(i + 1) == "*"):
             return "**"
         return "*"
     return ""
@@ -300,7 +300,7 @@ Finds the next position of `mark`, at `start` or after it.
 :##
 fn close_at(string line, i32 start, string mark) Maybe@(i32):
     match line.s(start, line.len()).find(mark):
-        Maybe.Some(at) -> return Maybe.Some(start + at)
+        Maybe.Some(at) -> return Maybe.Some(start + (at as i32))
         Maybe.None() -> return Maybe.None()
 
 ##:
@@ -317,7 +317,7 @@ fn is_span(string mark, string inner) bool:
         return false
     if (mark == "`"):
         return true
-    let i32 last = inner.len() - 1
+    let i32 last = (inner.len() as i32) - 1
     if (inner.char_at(0) == " " or inner.char_at(last) == " "):
         return false
     return true
@@ -333,7 +333,7 @@ fn render_inline(string line, Opts o) string:
     if (o.reset == ""):
         return line.clone()
     let string[] pieces = from([])
-    let i32 n = line.len()
+    let i32 n = line.len() as i32
     let i32 i = 0
     while (i < n):
         let string mark = mark_at(line, i)
@@ -341,7 +341,7 @@ fn render_inline(string line, Opts o) string:
             pieces.push(line.char_at(i))
             i := i + 1
             continue
-        let i32 mlen = mark.len()
+        let i32 mlen = mark.len() as i32
         let i32 next = i + mlen
         match close_at(line, next, mark):
             Maybe.Some(close) ->
@@ -415,13 +415,13 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
     if (returns != ""):
         if (printed):
             println("")
-        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len(), o)
+        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len() as i32, o)
         printed := true
     let string errors = get_str(doc, "errors")
     if (errors != ""):
         if (printed):
             println("")
-        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len(), o)
+        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len() as i32, o)
         printed := true
     printed := print_examples_at(doc, indent, printed, o)
     return printed
@@ -472,7 +472,7 @@ fn print_param_tags(MsgValue declared, MsgValue doc, string indent, bool printed
                     # The width is the PLAIN opener's, so it cannot drift from what prints.
                     let string pplain = "- Parameter {pn}: "
                     let string popener = "- {o.blue}Parameter{o.reset} {o.cyan}{pn}{o.reset}: "
-                    print_lines(indent, ptext, popener, pplain.len(), o)
+                    print_lines(indent, ptext, popener, pplain.len() as i32, o)
                     p := true
             return p
         _ ->
@@ -533,7 +533,7 @@ fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
                     println("{indent}- {o.blue}Example{o.reset}:")
                 else:
                     print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
-                                "- Example: ".len(), o)
+                                "- Example: ".len() as i32, o)
                 print_code(indent, get_str(ex, "code"), o)
                 p := true
             return p
@@ -1598,6 +1598,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string plat = get_str(meta, "platform")
     let string comp = get_str(meta, "compiler_version")
     let string req = get_str(meta, "requires_compiler")
+    let string ovf = get_str(meta, "overflow")
     let string at = get_str(meta, "compiled_at")
     let string proto = get_str(meta, "sushi_lib_version")
     println("Library: {libname}")
@@ -1605,6 +1606,8 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     println("Kind: {kind}")
     if (kind != "source"):
         println("Platform: {plat}")
+    if (ovf != ""):
+        println("Overflow: {ovf}")
     println("Compiler: {comp}")
     if (req != ""):
         println("Requires compiler: {req}")
@@ -1783,7 +1786,7 @@ fn run_tool(peek string[] args) i32:
     let string path = ""
     let bool show_docs = false
     let string colour = "auto"
-    let i32 n = args.len()
+    let i32 n = args.len() as i32
     let i32 i = 1
     while (i < n):
         let string a = args[i]

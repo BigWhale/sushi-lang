@@ -14,7 +14,10 @@ const string ROOT = "/tmp/sushi_read_library_required_when_flag"
 
 fn push_le(poke u8[] out, u64 value, i32 count) ~:
     foreach(i in 0..count):
-        out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
+        if (i < 8):
+            out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
+        else:
+            out.push(0)
 
 fn push_str(poke u8[] out, string s) ~:
     out.push(0xa0 | (s.size() as u8))

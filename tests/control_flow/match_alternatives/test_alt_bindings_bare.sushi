@@ -46,7 +46,7 @@ fn picked((Color, i32) p) i32:
 
 fn size(Label l) i32:
     match l:
-        Label.Short(s) | Label.Long(s) -> return s.len()
+        Label.Short(s) | Label.Long(s) -> return s.len() as i32
         Label.Blank -> return 0
 
 fn show(Pair p) ~:

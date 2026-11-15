@@ -11,7 +11,7 @@ extend Stack@(T) pop(poke self) Maybe@(T):
     return self.items.pop()
 
 extend Stack@(T) size() i32:
-    return self.items.len()
+    return self.items.len() as i32
 
 extend Stack@(T) mapped@(U)(fn(T) -> U f) Stack@(U) | StdError:
     let Stack@(U) out = Stack.new()
@@ -30,7 +30,7 @@ fn main() i32:
         Maybe.Some(top) -> println("popped {top}")
         Maybe.None() -> println("the stack is empty")
 
-    let Stack@(i32) lengths = crew.mapped(|string s| s.size()).realise(Stack.new())
+    let Stack@(i32) lengths = crew.mapped(|string s| s.size() as i32).realise(Stack.new())
     while (lengths.size() > 0):
         match lengths.pop():
             Maybe.Some(n) -> println("a name of {n} bytes")

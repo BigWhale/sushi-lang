@@ -11,6 +11,6 @@ fn dup(poke fn(i32) -> i32 f) i32:
 
 fn main() i32:
     let string tag = "abcd {1}"
-    let fn(i32) -> i32 c = |i32 x| x + tag.len()
+    let fn(i32) -> i32 c = |i32 x| x + (tag.len() as i32)
     println("{dup(poke c)}")
     return 0

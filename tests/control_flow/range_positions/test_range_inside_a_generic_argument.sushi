@@ -5,10 +5,10 @@ struct Holder@(T):
     T it
 
 fn size@(T)(T[] xs) i32:
-    return xs.len()
+    return xs.len() as i32
 
 fn held@(T)(Holder@(T[]) h) i32:
-    return h.it.len()
+    return h.it.len() as i32
 
 fn main() i32:
     println(size(from([0..3, 7])))

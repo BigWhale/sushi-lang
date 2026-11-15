@@ -16,7 +16,7 @@ fn run() i32:
     xs.push(1)
     let fn() -> i32 f = |~|:
         grow(poke xs)
-        return xs.len()
+        return xs.len() as i32
     let i32 a = f()
     let i32 b = f()
     return a + b

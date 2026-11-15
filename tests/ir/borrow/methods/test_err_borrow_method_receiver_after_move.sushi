@@ -12,8 +12,8 @@ fn make(i32 n) string:
 
 fn main() i32:
     let string text = make(42)
-    let i32 first = text.len()
+    let i32 first = text.len() as i32
     let string other = text
-    let i32 second = text.len()
+    let i32 second = text.len() as i32
     println(other)
     return first + second

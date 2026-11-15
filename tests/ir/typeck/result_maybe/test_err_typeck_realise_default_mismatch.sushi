@@ -18,4 +18,4 @@ fn name(i32 n) Maybe@(string):
 fn main() i32:
     let i32 a = parse(3).realise("zero")
     let string s = name(1).realise(true)
-    return a + s.len()
+    return a + (s.len() as i32)

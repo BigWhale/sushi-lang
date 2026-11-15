@@ -5,7 +5,7 @@
 
 extend T[] with Ord:
     fn compare(T[] other) i32:
-        return self.len() - other.len()
+        return (self.len() as i32) - (other.len() as i32)
 
 struct Wrap:
     i32[] xs

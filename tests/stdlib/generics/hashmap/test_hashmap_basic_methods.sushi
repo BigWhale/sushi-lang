@@ -8,9 +8,9 @@ fn main() i32:
     let HashMap@(string, i32) map = HashMap.new()
 
     # Test initial state
-    let i32 size = map.len()
+    let i32 size = map.len() as i32
     let bool empty = map.is_empty()
-    let i32 tombs = map.tombstone_count()
+    let i32 tombs = map.tombstone_count() as i32
 
     println("Initial size: {size}")
     println("Is empty: {empty}")

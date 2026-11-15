@@ -193,10 +193,10 @@ fn main() i32:
 ```
 
 **String methods:**
-- `.len() -> i32` - Character count (UTF-8 aware)
-- `.size() -> i32` - Byte count
+- `.len() -> i64` - Character count (UTF-8 aware)
+- `.size() -> i64` - Byte count
 - `.is_empty() -> bool` - Check if string is empty
-- `.find(string) -> Maybe@(i32)` - Find substring position
+- `.find(string) -> Maybe@(i64)` - Find substring position
 - `.split(string) -> string[]` - Split into array by delimiter
 - `.trim() -> string` - Remove leading/trailing whitespace
 - `.upper() -> string` - Convert to uppercase (ASCII only)
@@ -232,7 +232,7 @@ Functions are the building blocks of Sushi programs. Every function has explicit
 fn parse_count(string text) i32 | StdError:  # a channel: the call returns Result@(i32, StdError)
     if (text.is_empty()):
         return Result.Err(StdError.Error)
-    return Result.Ok(text.len())
+    return Result.Ok(text.len() as i32)
 
 fn add(i32 a, i32 b) i32:  # bare: the call returns i32
     return a + b
@@ -709,8 +709,9 @@ fn main() i32:
 count argument of a built-in method (`.get()`, `.insert()`, `.sleft()`) take a value of any integer
 type, so a `u8` or an `i64` needs no cast. A bare literal there is an `i64`. A float is
 [`CE2121`](error-catalog.md#ce2121) ([`CE2006`](error-catalog.md#ce2006) as a method argument). The bounds check compares at 64 bits, so a negative
-index and an index of 2^32 both stop the program with [`RE2020`](error-catalog.md#re2020). A range bound (`a..b`) is still an `i32`,
-and `len()` still answers `i32`.
+index and an index of 2^32 both stop the program with [`RE2020`](error-catalog.md#re2020). A range bound (`a..b`) has the type of its bounds.
+`len()`, `size()`, `capacity()` and `count()` answer `i64`, and `index_of` and `find` answer a
+`Maybe@(i64)`. An `i32` binding needs the cast: `let i32 n = arr.len() as i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
 index is bounds-checked exactly like a read, so an index past the end aborts with [`RE2020`](error-catalog.md#re2020) (and an

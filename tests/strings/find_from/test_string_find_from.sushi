@@ -13,8 +13,13 @@ fn index_of(Maybe@(i32) m) i32:
         Maybe.Some(i) -> return i
         Maybe.None -> return -1
 
+fn found_at(Maybe@(i64) m) i64:
+    match m:
+        Maybe.Some(i) -> return i
+        Maybe.None -> return -1
+
 fn oracle(string text, string needle) ~:
-    let i32 first = index_of(text.find(needle))
+    let i64 first = found_at(text.find(needle))
     let i32 from0 = index_of(text.find_from(needle, 0))
     println("[{text}] [{needle}] find={first} from0={from0}")
 

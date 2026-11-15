@@ -17,7 +17,7 @@ fn main() i32:
     foreach(e in m.entries()):
         if (e.key == 1):
             continue
-        total := total + e.value.len()
+        total := total + (e.value.len() as i32)
         seen := seen + 1
     println("total {total} seen {seen}")
     return 0

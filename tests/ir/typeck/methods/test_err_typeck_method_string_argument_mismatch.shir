@@ -8,5 +8,5 @@ ShirBody main
     Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "starts_with"), [Lit(5)]), is_init: true)
     Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "pad_left"), [(Lit(3), Guaranteed), Lit(4)]), is_init: true)
     Assign(LocalRef(_3), Call(Builtin(LocalRef(_0), "sleft"), [(Lit(2), Guaranteed)]), is_init: true)
-    If(LocalRef(_1), then: [Return(Call(Builtin(LocalRef(_2), "len"), []))])
-    Return(Call(Builtin(LocalRef(_3), "len"), []))
+    If(LocalRef(_1), then: [Return(Cast(Call(Builtin(LocalRef(_2), "len"), []), i32))])
+    Return(Cast(Call(Builtin(LocalRef(_3), "len"), []), i32))

@@ -9,11 +9,11 @@ fn main() i32:
     let fn(i32) -> i32 f = inc
     println(f(1))
     let string s = "abcd".clone()
-    f := |i32 x| x + s.len()
+    f := |i32 x| x + (s.len() as i32)
     println(f(1))
     let fn(i32) -> i32 g = f
     let string t = "abcdefg".clone()
-    let fn(i32) -> i32 h = |i32 x| x + t.len()
+    let fn(i32) -> i32 h = |i32 x| x + (t.len() as i32)
     g := h
     println(g(1))
     return 0

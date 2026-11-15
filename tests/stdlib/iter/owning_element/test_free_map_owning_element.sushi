@@ -9,7 +9,7 @@ fn run() i32:
     let List@(string) xs = List.new()
     xs.push("ab")
     xs.push("cde")
-    let List@(i32) lens = map(xs, |string s| s.len())
+    let List@(i32) lens = map(xs, |string s| s.len() as i32)
     foreach(n in lens.iter()):
         println(n)
     return 0

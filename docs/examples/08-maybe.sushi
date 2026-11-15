@@ -20,7 +20,7 @@ fn find_crew_member(peek string[] crew, string name) Maybe@(i32) | StdError:
     # Returns Maybe.Some(index) if found, Maybe.None() if not found
     let i32 i = 0
 
-    while (i < crew.len()):
+    while (i < crew.len() as i32):
         let Maybe@(string) member = crew.get(i)
         if (member.is_some()):
             if (member.realise("") == name):

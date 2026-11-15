@@ -8,6 +8,6 @@ fn main() i32:
     let fn(i32) -> i32 f = |i32 k|:
         let peek i32[] y = ys
         xs.push(k)
-        return xs.len() + y.len()
+        return (xs.len() as i32) + (y.len() as i32)
     println(f(0))
     return 0

@@ -22,8 +22,8 @@ fn main() i32:
     match m:
         Maybe.Some(f) -> println(f(3))
         Maybe.None -> println(0)
-    let fn(i32) -> i32 k = pick(nom |i32 x| x + s.len(), nom |i32 x| x + a, true)
+    let fn(i32) -> i32 k = pick(nom |i32 x| x + (s.len() as i32), nom |i32 x| x + a, true)
     println(k(1))
-    let fn(i32) -> i32 j = pick(nom |i32 x| x + t.len(), nom |i32 x| x + a, false)
+    let fn(i32) -> i32 j = pick(nom |i32 x| x + (t.len() as i32), nom |i32 x| x + a, false)
     println(j(1))
     return 0

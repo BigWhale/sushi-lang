@@ -25,7 +25,7 @@ struct Buf:
 
 fn at_len(peek HashMap@(i32, Buf) m, i32 key) i32 | StdError:
     let Buf found = m.get(key).or_err(nom StdError.Error)??
-    return Result.Ok(found.data.len())
+    return Result.Ok(found.data.len() as i32)
 
 fn main() i32:
     let Buf w = Buf(from([1, 2, 3]))

@@ -10,7 +10,7 @@
 
 fn measure(string s) i32:
     let string v = s
-    return v.len()
+    return v.len() as i32
 
 fn pick(bool first) i32:
     let List@(string) xs = List.new()
@@ -26,7 +26,7 @@ fn pick(bool first) i32:
         println(l.is_some())
         i := i + 1
     xs.clear()
-    return xs.len()
+    return xs.len() as i32
 
 fn main() i32:
     println(measure("Mostly {42}"))

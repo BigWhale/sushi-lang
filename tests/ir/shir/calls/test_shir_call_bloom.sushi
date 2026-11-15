@@ -6,7 +6,7 @@
 # it.
 
 fn sum(...i32 nums) i32:
-    return nums.len()
+    return nums.len() as i32
 
 fn forward(nom i32[] xs) i32:
     return sum(xs...)

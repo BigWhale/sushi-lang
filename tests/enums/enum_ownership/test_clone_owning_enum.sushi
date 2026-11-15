@@ -15,12 +15,12 @@ fn main() i32:
     let i32 lb = 0
     match a:
         Msg.Arr(xs) ->
-            la := xs.len()
+            la := xs.len() as i32
         Msg.Text(_) ->
             la := 0
     match b:
         Msg.Arr(ys) ->
-            lb := ys.len()
+            lb := ys.len() as i32
         Msg.Text(_) ->
             lb := 0
     println("a={la} b={lb}")

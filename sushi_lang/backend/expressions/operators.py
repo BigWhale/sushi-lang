@@ -189,11 +189,14 @@ def _emit_wrapping_division(codegen: 'LLVMCodegen', op: str, left: ir.Value,
     return builder.select(minus_one, ir.Constant(left.type, 0), builder.srem(left, divisor))
 
 
-def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit bitwise operations on integer values. Two constants are an instruction too."""
+def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value,
+                 left_type: 'Optional[Type]' = None, right_type: 'Optional[Type]' = None,
+                 checked: bool = False) -> ir.Value:
+    """Emit bitwise operations on integer values. Two constants are an instruction too.
+    `checked` is the user mark: a shift that the user wrote follows the overflow mode."""
     if (op in SHIFT_OPS
             and isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType)):
-        return _emit_shift(codegen, op, left, right, left_type)
+        return _emit_shift(codegen, op, left, right, left_type, right_type, checked)
 
     _require_one_width(op, left, right)
 
@@ -210,28 +213,14 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
 
 
 def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Value,
-                value_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit a shift, with an answer for a count that leaves the type.
-
-    A count at or above the width of the value moves every bit out of it, so the
-    result is 0 -- or the sign bit repeated, when an arithmetic right shift fills
-    from it. That is what shifting one place at a time would reach, and it is Go's
-    rule. A count is never masked: masking answers `value << 8` on a u8 with the
-    value itself, which reads like a working shift.
-
-    Three details carry the rule:
-    - the range is read from the count AS WRITTEN, before it is brought to the
-      value's width, because a u64 count of 256 narrowed to a u8 is 0;
-    - the shift instruction is given a masked count, so LLVM never emits an
-      out-of-range shift, whose result is poison it may then use as it likes;
-    - a count the compiler can read never arrives out of range. That is CE2512,
-      and LLVM folds this whole sequence back to one shift for a constant in range.
-    """
-
+                value_type: 'Optional[Type]', count_type: 'Optional[Type]',
+                checked: bool) -> ir.Value:
+    """A shift; an out-of-range count follows the overflow mode (docs/design/ir.md 8.7)."""
     builder = codegen.builder
     width = value.type.width
 
-    leaves_the_type = builder.icmp_unsigned(">=", count, ir.Constant(count.type, width))
+    if _follows(codegen, checked, OverflowMode.TRAP):
+        _trap_on_shift_count(codegen, op, count, width, value_type, count_type)
 
     if count.type.width > width:
         places = builder.trunc(count, value.type)
@@ -242,16 +231,41 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     places = builder.and_(places, ir.Constant(value.type, width - 1))
 
     if op == SHL_OP:
-        shifted = builder.shl(value, places)
-        emptied = ir.Constant(value.type, 0)
-    elif is_unsigned_int(value_type):
-        shifted = builder.lshr(value, places)
-        emptied = ir.Constant(value.type, 0)
-    else:
-        shifted = builder.ashr(value, places)
-        emptied = builder.ashr(value, ir.Constant(value.type, width - 1))
+        return builder.shl(value, places)
+    if is_unsigned_int(value_type):
+        return builder.lshr(value, places)
+    return builder.ashr(value, places)
 
-    return builder.select(leaves_the_type, emptied, shifted)
+
+def _trap_on_shift_count(codegen: 'LLVMCodegen', op: str, count: ir.Value, width: int,
+                         value_type: 'Optional[Type]', count_type: 'Optional[Type]') -> None:
+    """Stop the program with RE2034 when `count` is out of `0..width`."""
+    from sushi_lang.semantics.generics.type_display import display_type
+    builder = codegen.builder
+    type_name = display_type(value_type) if value_type is not None else f"i{width}"
+    fail, written = codegen.runtime.errors.exit_block_with_i64(
+        builder.function, "RE2034", op=op, type=type_name)
+    written.add_incoming(_count_as_i64(codegen, count, count_type), builder.block)
+    high = builder.lshr(count, ir.Constant(count.type, width.bit_length() - 1))
+    held = builder.append_basic_block(name="shift_count_in_range")
+    switch = builder.switch(high, fail)
+    switch.add_case(ir.Constant(count.type, 0), held)
+    builder.position_at_end(held)
+
+
+def _count_as_i64(codegen: 'LLVMCodegen', count: ir.Value,
+                  count_type: 'Optional[Type]') -> ir.Value:
+    """The count of a shift as the i64 of `%lld`. A u64 above the i64 maximum is the i64
+    maximum."""
+    builder = codegen.builder
+    i64 = ir.IntType(64)
+    unsigned = is_unsigned_int(count_type)
+    if count.type.width < 64:
+        return builder.zext(count, i64) if unsigned else builder.sext(count, i64)
+    if not unsigned:
+        return count
+    negative = builder.icmp_signed("<", count, ir.Constant(i64, 0))
+    return builder.select(negative, ir.Constant(i64, (1 << 63) - 1), count)
 
 
 def emit_xor(codegen: 'LLVMCodegen', lhs: ir.Value, rhs: ir.Value, to_i1: bool) -> ir.Value:

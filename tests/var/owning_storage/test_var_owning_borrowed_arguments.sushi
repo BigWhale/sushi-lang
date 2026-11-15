@@ -14,7 +14,7 @@ fn show(peek string s) ~:
     println(s)
 
 fn size(string s) i32:
-    return s.len()
+    return s.len() as i32
 
 fn main() i32:
     add(poke greeting, " Harmless")

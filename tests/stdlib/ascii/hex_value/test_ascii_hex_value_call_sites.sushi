@@ -13,7 +13,7 @@ fn main() i32:
     let string s = "bEe"
     let i32 n = 0
     let i32 i = 0
-    while (i < s.size()):
+    while (i < s.size() as i32):
         n := n * 16 + (s[i].hex_value().realise(0) as i32)
         i := i + 1
     println(n)

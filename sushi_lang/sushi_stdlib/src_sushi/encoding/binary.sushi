@@ -19,7 +19,7 @@ Tells if `width` bytes start at an offset of a buffer.
 - Returns: `false` when `at` is negative or the bytes go past the end.
 :##
 fn fits(u8[] buf, i32 at, i32 width) bool:
-    return at >= 0 and at <= buf.len() - width
+    return at >= 0 and at <= (buf.len() as i32) - width
 
 ##:
 Reads `width` bytes at an offset, the least significant byte first.

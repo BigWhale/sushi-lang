@@ -159,7 +159,7 @@ fn count_items(MsgValue m, string key) i32 | StdError:
             match map_index(m, key):
                 Maybe.Some(i) ->
                     match pairs[i].1:
-                        MsgValue.Arr(items) -> return Result.Ok(items.len())
+                        MsgValue.Arr(items) -> return Result.Ok(items.len() as i32)
                         _ -> return Result.Ok(0)
                 Maybe.None() -> return Result.Ok(0)
         _ ->
