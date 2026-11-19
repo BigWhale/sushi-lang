@@ -1,7 +1,7 @@
 """The Result of a stdlib call whose generated function answers a bare status value.
 
 The contract: a NEGATIVE status is a failure and answers `Result.Err(<error variant>)`;
-any other status is the success value. `<time>` and `<sys/env>` obey it.
+any other status is the success value. `setenv` of `<sys/env>` obeys it.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING

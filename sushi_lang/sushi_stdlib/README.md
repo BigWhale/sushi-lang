@@ -6,15 +6,15 @@ know which one your change belongs to before you start.
 ## 1. Compiled IR generators (`src/`)
 
 Most of the stdlib is Python code under `src/` that builds LLVM IR directly with
-`llvmlite.ir` (see e.g. `src/time/sleep.py`). These are
+`llvmlite.ir` (see e.g. `src/sys/env/functions.py`). These are
 NOT interpreted at compile time per-program — `build.py` runs them once to produce
 per-platform bitcode:
 
 ```
 sushi_stdlib/
-  src/            generators: time/, sys/, io/, collections/, _platform/
+  src/            generators: sys/, io/, net/, collections/, _platform/
   src_sushi/      bundled real-Sushi source modules (see section 2)
-  dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/time.bc)
+  dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/sys/env.bc)
                     plus symbols.json: what those .bc files DEFINE
   build.py        drives src/ -> dist/<platform>/*.bc
 ```
@@ -76,6 +76,11 @@ compiled like user code instead of precompiled to bitcode. Among them:
 - `random` (`src_sushi/random.sushi`) — all of `<random>`: `rand`, `rand_f64`,
   `rand_range` and `srand`, over `random()` and `srandom()` of the C library
   through an `unsafe external` block. It has no `.bc`, so it is in `_virtual_units`.
+- `time` (`src_sushi/time.sushi`) — all of `<time>`: `sleep`, `msleep`,
+  `usleep`, `nanosleep`, `now` and `monotonic_ns`, over `nanosleep()` and
+  `clock_gettime()` of the C library through an `unsafe external` block. It
+  reads the clock ids, the `timespec` size and `EINTR` from `<sys/platform>`. It
+  has no `.bc`, so it is in `_virtual_units`.
 - `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
   unsigned integers in a `u8[]` and back, in either byte order, as extension
   methods on `u8[]`.

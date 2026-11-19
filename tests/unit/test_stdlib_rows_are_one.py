@@ -29,20 +29,18 @@ SPECIAL_CASES = {"exit", "run"}
 
 READERS = {
     ROOT / "semantics" / "generics" / "instantiate" / "expressions.py": set(),
-    STDLIB_EMITTERS / "time.py": set(),
     STDLIB_EMITTERS / "env.py": set(),
     STDLIB_EMITTERS / "process.py": SPECIAL_CASES,
 }
 
 REGISTRY_MODULES = {
-    "time": ("sushi_lang.sushi_stdlib.src.time", "time"),
     "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "env"),
     "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "process"),
 }
 
 # The modules whose generated functions are named `sushi_<name>`: the emitter declares
 # each one from its row, and the declaration must match what the generator built.
-GENERATED_MODULES = ("time", "sys/env", "sys/process")
+GENERATED_MODULES = ("sys/env", "sys/process")
 
 
 def _every_row_name() -> set[str]:
@@ -58,7 +56,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("sleep", "now", "monotonic_ns", "setenv", "getenv", "chdir",
+    for spelled in ("setenv", "getenv", "chdir",
                     "getcwd", "run", "copy", "remove", "fd_readln"):
         assert spelled in names
 
@@ -111,12 +109,11 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 12
+    assert checked >= 6
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.
 GENERATORS = {
-    "time": ("sushi_lang.sushi_stdlib.src.time", "sushi_"),
     "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "sushi_"),
     "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "sushi_"),
     "io/files": ("sushi_lang.sushi_stdlib.src.io.files", "sushi_io_files_"),
@@ -156,11 +153,11 @@ def test_a_generated_function_with_no_row_is_found():
 
     from llvmlite import ir
 
-    module = importlib.import_module(GENERATORS["time"][0]).generate_module_ir()
+    module = importlib.import_module(GENERATORS["sys/env"][0]).generate_module_ir()
     orphan = ir.Function(module, ir.FunctionType(ir.VoidType(), []), "sushi_mostly_harmless")
     orphan.append_basic_block().name = "entry"
     ir.IRBuilder(orphan.blocks[0]).ret_void()
-    assert _rowless("time", module) == ["sushi_mostly_harmless"]
+    assert _rowless("sys/env", module) == ["sushi_mostly_harmless"]
 
 
 def _scanner(generic_funcs=None, func_table=None):
@@ -172,6 +169,6 @@ def _scanner(generic_funcs=None, func_table=None):
 
 
 def test_a_user_generic_takes_the_name_before_the_row():
-    assert _scanner()._stdlib_row("now") is not None
-    assert _scanner(generic_funcs={"now": object()})._stdlib_row("now") is None
+    assert _scanner()._stdlib_row("getenv") is not None
+    assert _scanner(generic_funcs={"getenv": object()})._stdlib_row("getenv") is None
     assert _scanner(func_table={"copy": object()})._stdlib_row("copy") is None

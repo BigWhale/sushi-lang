@@ -333,6 +333,8 @@ type-suffixed variants):
 
 ### Time (`use <time>`)
 
+The module is Sushi source (`src_sushi/time.sushi`).
+
 Sleep functions:
 - `sleep(i64)` - Sleep for N seconds
 - `msleep(i64)` - Sleep for N milliseconds
@@ -343,7 +345,8 @@ Clocks:
 - `now()` - Wall-clock time, in seconds since the Unix epoch (`i64`)
 - `monotonic_ns()` - A monotonic clock in nanoseconds (`i64`), for intervals
 
-Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and answer a bare `i64`.
+Each sleep function answers `Result@(i32, StdError)`. The clocks answer a bare `i64`. If
+`clock_gettime()` fails, the program stops with `RE2026`.
 
 ### Random (`use <random>`)
 

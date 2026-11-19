@@ -150,12 +150,6 @@ def get_maybe_type(some_type: ir.Type) -> ir.LiteralStructType:
     return ir.LiteralStructType([i32, data_array])
 
 
-def get_timespec_type() -> ir.LiteralStructType:
-    """Get the POSIX timespec struct type."""
-    i64 = ir.IntType(64)
-    return ir.LiteralStructType([i64, i64])
-
-
 def get_tuple_type(element_types: Iterable[ir.Type]) -> ir.LiteralStructType:
     """The VALUE type of a tuple whose elements have these LLVM types, in order.
 

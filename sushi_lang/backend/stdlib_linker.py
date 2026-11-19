@@ -125,6 +125,7 @@ class StdlibLinker:
         "random",
         "sys/platform",
         "text/ascii",
+        "time",
         "toolchain/slib",
     }
 

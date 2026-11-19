@@ -1,0 +1,13 @@
+# A program that imports `<time>` and also `<sys/platform>` gets no clash and no warning:
+# the import of `<sys/platform>` inside `<time>` does not collide with the import of the
+# program.
+# EXPECT_STDOUT_EXACT: "EINTR ok\nmsleep(0) = 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <time>
+use <sys/platform>
+
+fn main() i32:
+    if (EINTR > 0):
+        println("EINTR ok")
+    println("msleep(0) = {msleep(0 as i64).realise(7)}")
+    return 0

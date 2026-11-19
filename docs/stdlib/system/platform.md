@@ -111,22 +111,19 @@ sushi_stdlib/src/_platform/
 │   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
 │   ├── net.py         # the socket calls
 │   ├── process.py     # getcwd/chdir/exit/getpid/getuid/tmpfile/fileno/waitpid/
-│   │                  #   posix_spawnp + file_actions helpers/environ
-│   └── time.py        # nanosleep, clock_gettime
+│                      #   posix_spawnp + file_actions helpers/environ
 ├── darwin/            # macOS
 │   ├── env.py         # re-exports posix/env.py
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
 │   ├── net.py         # macOS socket constants and structure layouts
 │   ├── process.py     # re-exports posix/process.py
-│   ├── stdio.py       # the __stderrp handle name
-│   └── time.py        # re-exports posix/time.py, plus the macOS clock ids
-└── linux/             # Linux: the same six files
+│   └── stdio.py       # the __stderrp handle name
+└── linux/             # Linux: the same five files
     ├── env.py
     ├── files.py       # Linux O_CREAT/O_TRUNC bit values
     ├── net.py         # Linux socket constants and structure layouts
     ├── process.py
-    ├── stdio.py       # the stderr handle name
-    └── time.py        # re-exports posix/time.py, plus the Linux clock ids
+    └── stdio.py       # the stderr handle name
 ```
 
 There is no `windows/` directory.
@@ -134,10 +131,10 @@ There is no `windows/` directory.
 Each of `darwin/` and `linux/` has one file per platform module. Most of them are thin
 re-export shims over `posix/`, because those calls are identical POSIX libc functions on
 both operating systems: `env.py` and `process.py` re-export `posix/`
-unchanged, and `time.py` adds only the clock ids of the platform. Four modules have real,
-distinct darwin/linux content: `stdio` (the stderr global symbol name),
-`files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`), `net` (the socket
-constants and structure layouts) and the clock ids in `time`.
+unchanged. Three modules have real, distinct darwin/linux content: `stdio` (the stderr
+global symbol name), `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`) and
+`net` (the socket constants and structure layouts). The clock ids of `<time>` are in
+`<sys/platform>`, below.
 
 ### Platform Module Helper
 
@@ -188,8 +185,7 @@ def generate_getenv(module: ir.Module) -> None:
     # ... builds the sushi_getenv IR using the platform-specific declaration ...
 ```
 
-`sushi_stdlib/src/time/sleep.py` (backs `use <time>`) follows the identical pattern with
-`get_platform_module('time')`, and `sushi_stdlib/src/error_emission.py` does the same
+`sushi_stdlib/src/error_emission.py` follows the identical pattern
 with `get_platform_module('stdio')` to name the `stderr` handle a runtime error prints
 to. The platform module is resolved once per generator module, at import time, and
 reused for every function it generates.
@@ -283,8 +279,7 @@ sushi_stdlib/dist/
 │   ├── io/files.bc
 │   ├── net/socket.bc
 │   ├── sys/env.bc
-│   ├── sys/process.bc
-│   └── time.bc
+│   └── sys/process.bc
 └── linux/                     # Linux builds — same unit layout as darwin/, built
     └── ...                    #   separately on a Linux host (see Cross-Compilation below)
 ```
@@ -345,7 +340,6 @@ error rather than silently picking a wrong platform's bitcode.
 
 **Features:**
 - POSIX `getenv()`/`setenv()` (via `posix/env.py`)
-- POSIX `nanosleep()` (via `posix/time.py`)
 - File I/O: `stat`/`access`/`unlink`/`rename`/`open`/`read`/`write`/`close`/`mkdir`/
   `rmdir` (via `posix/files.py`), plus macOS-specific `O_CREAT`/`O_TRUNC` bit values
   (`darwin/files.py`)
@@ -366,7 +360,7 @@ error rather than silently picking a wrong platform's bitcode.
 `sushi_stdlib/src/_platform/posix/` for everything that is not Linux-specific.
 
 **Features:**
-- POSIX `getenv()`/`setenv()`, `nanosleep()`, file I/O, and process control — same
+- POSIX `getenv()`/`setenv()`, file I/O, and process control — same
   `posix/` implementations macOS uses (identical libc surface on both)
 - Linux-specific `O_CREAT`/`O_TRUNC` bit values (`linux/files.py` — the numeric flag
   values differ from macOS's even though the function signatures match)
@@ -394,7 +388,7 @@ hold a third platform, but no Windows-specific code path exists.
 
 ## Adding Platform-Specific Functionality
 
-The following steps describe the actual pattern used by the existing `env`, `time`,
+The following steps describe the actual pattern used by the existing `env`,
 `files`, `process`, and `stdio` modules. Only Windows support is out of reach
 today — there is nothing to route to.
 
