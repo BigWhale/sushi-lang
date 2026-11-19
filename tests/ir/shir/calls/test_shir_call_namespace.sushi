@@ -3,7 +3,7 @@
 #
 # the SHIR dump of a call through a namespace: a stdlib module behind `use ... as`, and
 # a C function behind an `unsafe external` block. The typecheck pass resolves the callee
-# through the alias: a stdlib function is `Stdlib` with its module, a C function is `Extern`
+# through the alias: a function of a Sushi stdlib module is `Free`, a C function is `Extern`
 # with its link name, and a built-in static on a type behind an alias is `BuiltinStatic` on
 # the instance type, as on a bare type name.
 

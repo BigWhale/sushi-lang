@@ -15,7 +15,7 @@ from sushi_lang.semantics.stdlib_registry import (
 
 def _semantic_modules() -> set[str]:
     registry = get_stdlib_registry()
-    answered = {path for path in registry.get_all_modules()
+    answered = {path for path in StdlibRegistry.KNOWN_MODULES
                 if registry.get_module(path).functions}
     return answered | set(signature_tables()) | set(StdlibRegistry.KNOWN_MODULES)
 

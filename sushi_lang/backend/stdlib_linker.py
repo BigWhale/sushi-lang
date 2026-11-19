@@ -114,6 +114,7 @@ class StdlibLinker:
         "io/error",
         "io/fs",
         "io/path",
+        "math",
         "net/dns",
         "net/error",
         "net/handle",

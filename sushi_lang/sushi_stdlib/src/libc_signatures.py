@@ -20,8 +20,6 @@ def _c(ret: str, *params: str, var_arg: bool = False) -> LibcSignature:
     return LibcSignature(ret, params, var_arg)
 
 
-_MATH_1 = _c("double", "double")
-_MATH_2 = _c("double", "double", "double")
 _CTYPE = _c("int", "int")
 
 #: Every libc symbol that the compiler declares. The key is the C name; a platform
@@ -115,8 +113,4 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "freeaddrinfo": _c("void", "struct addrinfo*"),
     "getnameinfo": _c("int", "const struct sockaddr*", "socklen_t", "char*", "socklen_t",
                       "char*", "socklen_t", "int"),
-    # <math> functions that libc provides
-    "tan": _MATH_1, "asin": _MATH_1, "acos": _MATH_1, "atan": _MATH_1,
-    "sinh": _MATH_1, "cosh": _MATH_1, "tanh": _MATH_1,
-    "atan2": _MATH_2, "hypot": _MATH_2,
 }

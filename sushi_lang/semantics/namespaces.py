@@ -367,14 +367,11 @@ class StdlibNamespace(Provider):
         func = self._module.functions.get(name)
         if func is not None:
             return Binding("function", name, self, func)
-        const = self._module.constants.get(name)
-        if const is not None:
-            return Binding("constant", name, self, const)
         kind = self._types.get(name)
         return None if kind is None else Binding(kind, name, self)
 
     def _own_members(self) -> Iterable[str]:
-        return (*self._module.functions, *self._module.constants, *self._types)
+        return (*self._module.functions, *self._types)
 
 
 class GenericNamespace(Provider):
@@ -471,16 +468,13 @@ class NamespaceTable:
         of the typecheck pass and the borrow pass.
 
         Behind an alias (`geo.SIZE`), what the namespace holds. A bare name, the constant
-        or `var` of `constants` that the scope reaches, else the stdlib constant that a flat
-        import brings.
+        or `var` of `constants` that the scope reaches.
         """
-        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
         alias, dot, name = written.rpartition(".")
         if dot:
             binding = self.lookup(alias, name)
             return None if binding is None else binding.record
-        record = constants.lookup(written, scope=self.scope)
-        return record if record is not None else lookup_stdlib_constant(written, self.scope)
+        return constants.lookup(written, scope=self.scope)
 
 
 def body_namespaces(node: Any,

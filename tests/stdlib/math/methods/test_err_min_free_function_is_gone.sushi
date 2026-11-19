@@ -1,0 +1,8 @@
+# `min` is a method of the number types: `<math>` has no free function `min`.
+# EXPECT_ERROR_CODE: CE2008
+use <math>
+
+fn main() i32:
+    let i32 a = -7
+    println("{min(a, 2)} {sqrt(4.0)}")
+    return 0

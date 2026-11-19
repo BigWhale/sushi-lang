@@ -12,7 +12,7 @@ import operator
 from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import (Callable, Iterator, List, Mapping, Optional, Tuple, TypeGuard,
-                    Union, TYPE_CHECKING)
+                    Union)
 
 
 from sushi_lang.internals.report import Reporter, Span
@@ -35,9 +35,6 @@ from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.operators import (
     ADD_OP, COMPLEMENT_OP, DIVISION_OPS, NEG_OP, NOT_OP, SHIFT_OPS)
-
-if TYPE_CHECKING:
-    from sushi_lang.semantics.stdlib_registry import StdlibFunction
 
 # Which unit's namespace table answers for a unit name. None for a unit the reader does
 # not know, which means an unrestricted scope and no alias -- the scratch reader's view.
@@ -445,26 +442,15 @@ class ConstantEvaluator:
 
     def _evaluate_constant_ref(self, ref: NamespaceRef,
                                span: Optional[Span]) -> Optional[ConstantValue]:
-        """The constant an alias reaches: a registry module's, or a unit's own."""
-        if ref.producer == "stdlib":
-            from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
-            module = get_stdlib_registry().get_module(ref.origin)
-            record = module.constants.get(ref.name) if module is not None else None
-            return None if record is None else self._stdlib_value(record)
+        """The constant an alias reaches: a unit's own."""
         sig = self.const_table.lookup(ref.name, ref.origin)
         return None if sig is None else self._fold_constant(sig, span)
 
-    def _stdlib_value(self, record: 'StdlibFunction') -> ScalarConstant:
-        """A registry constant folds from the value its record carries (#560)."""
-        return ScalarConstant(record.value, record.get_return_type())
-
-    def value_of(self, record: Union[ConstSig, 'StdlibFunction'],
+    def value_of(self, record: ConstSig,
                  span: Optional[Span]) -> Optional[ConstantValue]:
-        """The value of a declared constant or of a stdlib constant: the constant table's
-        answer for a reader of a name that is already resolved (docs/design/ir.md 7.4)."""
-        if isinstance(record, ConstSig):
-            return self._fold_constant(record, span)
-        return self._stdlib_value(record)
+        """The value of a declared constant: the constant table's answer for a reader of a
+        name that is already resolved (docs/design/ir.md 7.4)."""
+        return self._fold_constant(record, span)
 
     def _evaluate_struct_construction(self, expr: Call, expected_type: Type,
                                      span: Optional[Span]) -> Optional[ConstantValue]:
@@ -739,18 +725,11 @@ class ConstantEvaluator:
 
     def _evaluate_name(self, expr: Name, expected_type: Type,
                        span: Optional[Span]) -> Optional[ConstantValue]:
-        """A bare name: a constant this unit may write, else a stdlib constant in scope."""
+        """A bare name: a constant this unit may write."""
         const_name = expr.id
 
         const_sig = self.const_table.lookup(const_name, self.unit_name, self.scope)
         if const_sig is None:
-            # Below every declared constant: a stdlib constant a flat `use <module>`
-            # brought is a constant too, and it folds from the value its record
-            # carries (#560).
-            from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
-            stdlib_const = lookup_stdlib_constant(const_name, self.scope)
-            if stdlib_const is not None:
-                return self._stdlib_value(stdlib_const)
             # Silent. The scope pass walks every initializer and owns "what kind of name
             # is this": a name that reaches nothing is CE1001 and a TYPE name is CE2105,
             # both at this same token. The CE1002 that stood here was the second

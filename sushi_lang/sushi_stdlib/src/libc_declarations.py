@@ -103,13 +103,6 @@ def declare_libc(module: ir.Module, name: str, link_name: str | None = None) -> 
                           var_arg=fn_ty.var_arg)
 
 
-def declare_math(module: ir.Module, name: str, arity: int) -> Any:
-    """An f64 function of `arity` arguments: an LLVM intrinsic, or a libc function."""
-    if name.startswith("llvm."):
-        return declare_extern(module, name, _f64, [_f64] * arity)
-    return declare_libc(module, name)
-
-
 def declare_malloc(module: ir.Module) -> Any:
     return declare_libc(module, "malloc")
 

@@ -6,15 +6,15 @@ know which one your change belongs to before you start.
 ## 1. Compiled IR generators (`src/`)
 
 Most of the stdlib is Python code under `src/` that builds LLVM IR directly with
-`llvmlite.ir` (see e.g. `src/time/sleep.py`, `src/math/operations.py`). These are
+`llvmlite.ir` (see e.g. `src/time/sleep.py`). These are
 NOT interpreted at compile time per-program — `build.py` runs them once to produce
 per-platform bitcode:
 
 ```
 sushi_stdlib/
-  src/            generators: time/, math/, random/, sys/, io/, collections/, _platform/
+  src/            generators: time/, random/, sys/, io/, collections/, _platform/
   src_sushi/      bundled real-Sushi source modules (see section 2)
-  dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/math.bc)
+  dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/time.bc)
                     plus symbols.json: what those .bc files DEFINE
   build.py        drives src/ -> dist/<platform>/*.bc
 ```
@@ -69,10 +69,10 @@ compiled like user code instead of precompiled to bitcode. Among them:
   that are written in Sushi (the strict parses, the number formatters,
   `StringBuilder`). One `use <collections/strings>` loads both. It is not in
   `_virtual_units`, because it has a `.bc`.
-- `math` (`src_sushi/math.sushi`) — the Sushi half of `<math>`, the other
-  module with TWO halves: the functions and the constants are the `.bc` unit,
-  and this file adds `divmod` on each integer type. It is not in
-  `_virtual_units`, because it has a `.bc`.
+- `math` (`src_sushi/math.sushi`) — all of `<math>`: the `f64` functions (each
+  one calls an LLVM intrinsic or the C library through an `unsafe external`
+  block), the constants `PI`, `E` and `TAU`, and the methods `abs`, `min`, `max`
+  and `divmod` on the number types. It has no `.bc`, so it is in `_virtual_units`.
 - `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
   unsigned integers in a `u8[]` and back, in either byte order, as extension
   methods on `u8[]`.
@@ -113,8 +113,7 @@ does for free) or that is simply better written in Sushi than in llvmlite calls.
   (`<sys/platform>`, under `src_sushi/_platform/`) is an entry in
   `PLATFORM_SOURCE_MODULES`; the compiler selects the host's file.
 
-The typecheck pass reads the row of a call from `stdlib_row`
-(`semantics/stdlib_registry.py`): the row of the signature table, or the row of a
-`<math>` family at the type of the first argument. SLIR lowering names the generated
+The typecheck pass reads the row of a call from `stdlib_signature`
+(`semantics/stdlib_registry.py`): the row of the signature table. SLIR lowering names the generated
 function with `stdlib_symbol`, and the verifier counts the parameters with
 `stdlib_arity`.

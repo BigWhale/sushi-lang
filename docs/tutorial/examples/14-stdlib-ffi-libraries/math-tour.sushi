@@ -1,16 +1,18 @@
 use <math>
 
 fn main() i32:
-    # Polymorphic helpers work across numeric types.
-    let i32 biggest = max(7, 42)
-    let i32 magnitude = abs(-42)
+    # abs, min and max are methods of the number types. They need no import.
+    let i32 seven = 7
+    let i32 biggest = seven.max(42)
+    let i32 neg = -42
+    let i32 magnitude = neg.abs()
 
     # Floating-point intrinsics.
     let f64 root = sqrt(1764.0)
     let f64 hyp = hypot(3.0, 4.0)
 
-    println("max(7, 42) = {biggest}")
-    println("abs(-42) = {magnitude}")
+    println("7.max(42) = {biggest}")
+    println("(-42).abs() = {magnitude}")
     println("sqrt(1764) = {root}")
     println("hypot(3, 4) = {hyp}")
 

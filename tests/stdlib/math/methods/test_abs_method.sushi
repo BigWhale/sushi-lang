@@ -1,0 +1,29 @@
+# `x.abs()` on each signed width and on each float answers the size of the value, in the
+# type of the value. A method of a built-in type needs no import of `<math>`.
+# EXPECT_STDOUT_EXACT: "i8 7 7\ni16 300 300\ni32 70000 0\ni64 5000000000 5000000000\nf32 2.5 2.5\nf64 3.25 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let i8 a8 = -7
+    let i8 b8 = 7
+    println("i8 {a8.abs()} {b8.abs()}")
+
+    let i16 a16 = -300
+    println("i16 {a16.abs()} {(300 as i16).abs()}")
+
+    let i32 a32 = -70000
+    let i32 z32 = 0
+    println("i32 {a32.abs()} {z32.abs()}")
+
+    let i64 a64 = -5000000000
+    let i64 b64 = 5000000000
+    println("i64 {a64.abs()} {b64.abs()}")
+
+    let f32 f = -2.5
+    let f32 g = 2.5
+    println("f32 {f.abs()} {g.abs()}")
+
+    let f64 d = -3.25
+    let f64 nz = -0.0
+    println("f64 {d.abs()} {nz.abs()}")
+    return 0

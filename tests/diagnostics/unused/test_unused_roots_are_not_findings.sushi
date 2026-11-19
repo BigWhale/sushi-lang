@@ -39,6 +39,6 @@ fn main() i32:
     println(exposed())
     let i32 side = square_of(3).side
     println(same(nom side).doubled())
-    println(m.abs(-5))
+    println(m.sqrt(25.0))
     println("abc".starts_with("a"))
     return 0

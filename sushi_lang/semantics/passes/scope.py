@@ -36,14 +36,14 @@ if TYPE_CHECKING:
 # slot of its own, so a store through it is undefined behaviour and not a diagnostic
 # (#330). A TYPE is deliberately absent -- the iterable walk answers CE2105 first.
 _NOT_A_POKE_CONTAINER: frozenset[BareName] = frozenset({
-    BareName.CONSTANT, BareName.STDLIB_CONSTANT, BareName.FUNCTION,
+    BareName.CONSTANT, BareName.FUNCTION,
 })
 
 
 # The rungs of a name that SHIR keeps as a `ConstRef` or a `StorageRef`. The borrow pass
 # asks the gate at a `ConstRef`, bare or behind an alias, and a `var` takes both modes.
 _RECORDS_THE_BORROW_PASS_READS: frozenset[BareName] = frozenset({
-    BareName.CONSTANT, BareName.STDLIB_CONSTANT,
+    BareName.CONSTANT,
 })
 
 
@@ -323,15 +323,6 @@ class ScopeAnalyzer:
             return True
         return self.constants.lookup(name, self.namespaces.scope.unit,
                                      self.namespaces.scope) is not None
-
-    def is_stdlib_constant(self, name: str) -> bool:
-        """A registry module's constant a flat `use <module>` brought.
-
-        It stands BELOW every declaration above it (#560): the module has to be in
-        scope, and a local, a constant or a variable of that name wins here.
-        """
-        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
-        return lookup_stdlib_constant(name, self.namespaces.scope) is not None
 
     def is_function(self, name: str) -> bool:
         """A function this unit may name, referenced as a value.

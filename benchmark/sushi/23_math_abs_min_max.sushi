@@ -1,0 +1,13 @@
+fn main() i32:
+    let i64 n = 5000000
+    let i64 acc = 0
+    let f64 facc = 0.0
+    foreach(i in 0..n):
+        let i64 a = (i * 7919) % 1000 - 500
+        let i64 b = (i * 104729) % 1000 - 500
+        acc := acc + a.abs() + a.min(b) + a.max(b)
+        let f64 x = (a as f64) * 0.5
+        let f64 y = (b as f64) * 0.25
+        facc := facc + x.abs() + x.min(y) + x.max(y)
+    println("{acc} {facc as i64}")
+    return 0

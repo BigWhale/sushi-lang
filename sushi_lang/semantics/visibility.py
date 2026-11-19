@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import AbstractSet, Any, Optional
+from typing import AbstractSet, Any, Mapping, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
@@ -343,6 +343,29 @@ def reject_private_cross_unit_use(
     return True
 
 
+@dataclass(frozen=True)
+class StdlibReach:
+    """Which bundled stdlib units the flat scope of each unit reaches.
+
+    A stdlib export is a name of a unit only where a flat `use` brings it, directly or
+    through a `public use` (`docs/design/unit-namespaces.md` section 8). Behind an alias,
+    or in a unit with no import, the export is no name of the unit, so a declaration of
+    the same name is no shadow (CW3002 says so: an alias takes the shadow away).
+    """
+
+    stdlib_units: frozenset = frozenset()
+    flat: Mapping[str, frozenset] = field(default_factory=dict)
+
+    def hides(self, owner_unit: Optional[str], current_unit: Optional[str]) -> bool:
+        """Is `owner_unit` a stdlib unit that the flat scope of `current_unit` does not
+        reach?"""
+        return (owner_unit in self.stdlib_units
+                and owner_unit not in self.flat.get(current_unit, frozenset()))
+
+    def is_stdlib(self, unit: Optional[str]) -> bool:
+        return unit in self.stdlib_units
+
+
 def library_clash_origin(
     table: Optional[VisibilityTable],
     kind: str,
@@ -386,15 +409,17 @@ def warn_shadowed_export(
     owner: Optional[str],
     export_span: Optional[Span] = None,
     export_filename: Optional[str] = None,
+    kind: str = "function",
 ) -> None:
-    """CW3002: a consumer function takes the name of a function that a library exports.
+    """CW3002: a consumer declaration takes the name of a function or a constant that a
+    library or a stdlib module exports.
 
     The one emitter for every library kind (#1103). The collect pass calls it for a
     source library, and the `libraries` step calls it for a binary or a hybrid
     library. A manifest record has no span, so its warning has no note.
     """
     diagnostic = er.emit_with(reporter, er.ERR.CW3002, name_span, filename=filename,
-                              name=name, kind="function", owner=owner)
+                              name=name, kind=kind, owner=owner)
     if export_span is not None and export_filename is not None:
         diagnostic = diagnostic.note_at("exported here", export_span, export_filename)
     diagnostic.emit()

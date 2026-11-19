@@ -47,8 +47,8 @@ Drive online. Anything is now infinitely probable.
 ### Math
 
 The `<math>` module gives numeric functions. Three of them are **polymorphic**: `abs`,
-`min` and `max` accept any numeric type, and the result has the type of the arguments.
-There are no type-suffixed forms such as `abs_i32`. The other functions (`sqrt`, `hypot`,
+`abs`, `min` and `max` are methods of the number types: `x.abs()`, `a.min(b)`, `a.max(b)`.
+They need no `use <math>`, and the argument has the type of the receiver. The other functions (`sqrt`, `hypot`,
 `pow`, `sin`, `log` and more) take and return `f64` only. For an `f32` or an integer, cast
 the argument with `as f64`.
 
@@ -59,8 +59,8 @@ the argument with `as f64`.
 Output:
 
 ```
-max(7, 42) = 42
-abs(-42) = 42
+7.max(42) = 42
+(-42).abs() = 42
 sqrt(1764) = 42
 hypot(3, 4) = 5
 ```

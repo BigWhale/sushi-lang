@@ -11,7 +11,6 @@
 # - Stdlib functions and methods that answer a tuple: `divmod`, `split_once`,
 #   `enumerate`, `zip` and `HashMap.pairs()`
 
-use <math>
 use <collections/iter>
 use <collections/hashmap>
 
@@ -20,8 +19,8 @@ fn min_max(i32[] xs) (i32, i32):
     let i32 lo = xs[0]
     let i32 hi = xs[0]
     foreach(x in xs.iter()):
-        lo := min(lo, x)
-        hi := max(hi, x)
+        lo := lo.min(x)
+        hi := hi.max(x)
     return (lo, hi)
 
 # A tuple pattern matches the parts. An integer literal is legal in a pattern.

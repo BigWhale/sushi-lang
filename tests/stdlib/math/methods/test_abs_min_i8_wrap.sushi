@@ -1,0 +1,9 @@
+# Under `--overflow=wrap`, `abs` of the smallest i8 wraps to the same value.
+# COMPILER_FLAGS: --overflow=wrap
+# EXPECT_STDOUT_EXACT: "-128\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main(string[] args) i32:
+    let i8 m = (args.len() as i8) - 127 - 2
+    println("{m.abs()}")
+    return 0

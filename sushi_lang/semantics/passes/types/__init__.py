@@ -371,8 +371,7 @@ class TypeValidator:
         return None if record is None else self.constant_value(record)
 
     def constant_value(self, record) -> Optional['ConstantValue']:
-        """The value of a declared constant or of a stdlib constant, or None when its
-        initializer has an error."""
+        """The value of a declared constant, or None when its initializer has an error."""
         return self.constant_evaluator().value_of(record, None)
 
     def written_of(self, decl):

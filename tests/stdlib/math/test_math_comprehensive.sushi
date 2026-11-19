@@ -23,11 +23,11 @@ fn main() i32:
     # Test abs
     println("abs() function:")
     let i32 neg = -42
-    let i32 pos = abs(neg)
+    let i32 pos = neg.abs()
     println("  abs(-42) = {pos}")
 
     let f64 neg_float = -3.14
-    let f64 pos_float = abs(neg_float)
+    let f64 pos_float = neg_float.abs()
     println("  abs(-3.14) = {pos_float}")
     println("")
 
@@ -35,13 +35,13 @@ fn main() i32:
     println("min() and max() functions:")
     let i32 a = 10
     let i32 b = 20
-    println("  min(10, 20) = {min(a, b)}")
-    println("  max(10, 20) = {max(a, b)}")
+    println("  min(10, 20) = {a.min(b)}")
+    println("  max(10, 20) = {a.max(b)}")
 
     let f64 x = 3.14
     let f64 y = 2.71
-    println("  min(3.14, 2.71) = {min(x, y)}")
-    println("  max(3.14, 2.71) = {max(x, y)}")
+    println("  min(3.14, 2.71) = {x.min(y)}")
+    println("  max(3.14, 2.71) = {x.max(y)}")
     println("")
 
     # Test sqrt

@@ -1,0 +1,14 @@
+# Behind an alias, a stdlib export is no name of the unit, so an own function of the
+# same name shadows nothing, and the program compiles with no CW3002. The bare call is
+# the own function, and the export stays behind the dot.
+# EXPECT_STDOUT_EXACT: "own x\na/b\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <io/path> as p
+
+fn join(string a) string:
+    return "own {a}"
+
+fn main() i32:
+    println(join("x"))
+    println(p.join("a", "b"))
+    return 0

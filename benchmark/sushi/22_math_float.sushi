@@ -1,0 +1,11 @@
+use <math>
+
+fn main() i32:
+    let i64 n = 2000000
+    let f64 acc = 0.0
+    foreach(i in 0..n):
+        let f64 x = ((i % 1000) as f64) * 0.001 + 0.5
+        acc := acc + sqrt(x) + sin(x) + cos(x) + exp(x) + log(x)
+        acc := acc + pow(x, 1.5) + floor(x * 10.0) + atan2(x, 1.0) + hypot(x, 2.0)
+    println(acc as i64)
+    return 0

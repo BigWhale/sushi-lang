@@ -125,8 +125,7 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         return user_method(low, callee, resolved)
     if isinstance(callee, Stdlib):
         name = unqualified(low.decls.name_of(callee.decl))
-        types = [low.type_of(arg.value) for arg in node.args]
-        return st.Direct(stdlib_symbol(callee.module, name, types), name, callee.module)
+        return st.Direct(stdlib_symbol(callee.module, name), name, callee.module)
     if isinstance(callee, Extern):
         return st.Direct(callee.symbol, unqualified(low.decls.name_of(callee.decl)))
     if isinstance(callee, Intrinsic):

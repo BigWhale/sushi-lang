@@ -1,0 +1,8 @@
+# `max` is a method of the number types: `<math>` has no free function `max`.
+# EXPECT_ERROR_CODE: CE2008
+use <math>
+
+fn main() i32:
+    let i32 a = -7
+    println("{max(a, 2)} {sqrt(4.0)}")
+    return 0

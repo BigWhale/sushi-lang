@@ -1,5 +1,7 @@
 # Unit-level storage is a declaration of this unit like any other, so a `var`
-# named `TAU` is this unit's storage and the rebind reaches it (#560).
+# named `TAU` is this unit's storage and the rebind reaches it (#560). It shadows the
+# export (CW3002).
+# EXPECT_ERROR_CODES_EXACT: CW3002
 # EXPECT_STDOUT_EXACT: "1 2\n"
 use <math>
 

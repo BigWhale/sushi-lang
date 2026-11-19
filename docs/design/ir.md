@@ -1152,23 +1152,14 @@ it is what the namespace of the module holds. Both are the callee row `Stdlib(de
 module)` (`check_stdlib_call`, `passes/types/calls/user_defined.py`). A row of the
 signature table goes through the one argument check at the types of its row, and each
 argument borrows (a `nom` marker is [CE2427](../error-catalog.md#ce2427), and it names
-the parameter by the member of its type, `F64`). A member of a `<math>`
-family (`abs`, `min`, `max`) checks its two arguments as a pair, as the
-operands of a binary operator are checked (`check_operand_pair`,
-`passes/types/visit/operators.py`), so a lone literal takes the type of the other
-argument ([CE2073](../error-catalog.md#ce2073) when it does not fit). Then a wrong count
-is [CE2009](../error-catalog.md#ce2009) at the name and skips the argument types. An
-argument of a type outside the family is [CE2006](../error-catalog.md#ce2006), with the
-name of the family types in the text, and a second argument of another type than the
-first is CE2006 too. The call yields the return type of its row (`stdlib_row`,
-`semantics/stdlib_registry.py`, with the `Result`, the `Maybe` or the tuple that the row
-names interned), also after an error of an argument. A member of a family whose first
-argument has no row yields nothing, so the `let` that takes it says nothing more. The
+the parameter by the member of its type, `F64`). The call yields the return type of its
+row (`stdlib_signature`, `semantics/stdlib_registry.py`, with the `Result`, the `Maybe` or
+the tuple that the row names interned), also after an error of an argument. The
 reference of the target answers the function type of the row, with the `Result` of the
 row as its channel.
 
 **Every registry module is typed by its rows.** There is no set of typed modules:
-each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_row`, the one reader).
+each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_signature`, the one reader).
 The call answers the type of the row. An answer that owns (`getcwd` answers `string |
 ProcessError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
 value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
@@ -3366,13 +3357,11 @@ A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`
 the name of the function with no alias, and `module` is the `use` path of its module.
 `symbol` is the generated function of its row (`stdlib_symbol`,
 `semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`
-(`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers), and
-`sushi_<name>_<type>` for a member of a `<math>` family, at the type of its first argument
-(#817). Every other `Direct` callee has no module. The printer writes the call as
-`call @<math>.sqrt(copy _1 @guaranteed)`. The emitter gives a `Direct` callee with a
+(`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers). Every other `Direct`
+callee has no module. The printer writes the call as `call @<time>.now()`. The emitter gives a `Direct` callee with a
 module to the row of its module in `STDLIB_EMITTERS` with the value and the type of each
 operand (9.7); every operand is evaluated first. The row of each module reads the row of
-the call (`stdlib_row`), declares the generated function of the symbol from that row and
+the call (`stdlib_signature`), declares the generated function of the symbol from that row and
 calls it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
 `<time>` sleep answers a bare status, and the call builds its `Result` from it
 (`status_result.py`: a negative status is `Result.Err`).

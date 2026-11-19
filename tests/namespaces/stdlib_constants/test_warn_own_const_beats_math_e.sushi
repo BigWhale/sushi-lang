@@ -1,6 +1,8 @@
 # A unit's own declaration wins over a flat stdlib import (unit-namespaces.md
 # section 8, row 2 over row 3), and a stdlib CONSTANT is no exception: `E` here
-# is this unit's 1.5 and never the standard library's 2.71828 (#560).
+# is this unit's 1.5 and never the standard library's 2.71828 (#560). The own
+# declaration shadows the export (CW3002), as an own function does.
+# EXPECT_ERROR_CODES_EXACT: CW3002
 # EXPECT_STDOUT_EXACT: "1.5\n"
 use <math>
 

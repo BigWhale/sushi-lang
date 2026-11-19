@@ -14,43 +14,43 @@ fn main() i32:
     let f64 exp2_10 = exp2(10.0)
 
     # Verify exp(0) = 1
-    if (abs(exp_0 - 1.0) > 0.0001):
+    if ((exp_0 - 1.0).abs() > 0.0001):
         return 1
 
     # Verify exp(1) = E
-    if (abs(exp_1 - E) > 0.0001):
+    if ((exp_1 - E).abs() > 0.0001):
         return 2
 
     # Verify exp(2) = E^2
     let f64 e_squared = E * E
-    if (abs(exp_2 - e_squared) > 0.0001):
+    if ((exp_2 - e_squared).abs() > 0.0001):
         return 3
 
     # Verify exp2(0) = 1
-    if (abs(exp2_0 - 1.0) > 0.0001):
+    if ((exp2_0 - 1.0).abs() > 0.0001):
         return 4
 
     # Verify exp2(1) = 2
-    if (abs(exp2_1 - 2.0) > 0.0001):
+    if ((exp2_1 - 2.0).abs() > 0.0001):
         return 5
 
     # Verify exp2(3) = 8
-    if (abs(exp2_3 - 8.0) > 0.0001):
+    if ((exp2_3 - 8.0).abs() > 0.0001):
         return 6
 
     # Verify exp2(10) = 1024
-    if (abs(exp2_10 - 1024.0) > 0.0001):
+    if ((exp2_10 - 1024.0).abs() > 0.0001):
         return 7
 
     # Verify exp/log round-trip
     let f64 x = 3.5
     let f64 roundtrip = exp(log(x))
-    if (abs(roundtrip - x) > 0.0001):
+    if ((roundtrip - x).abs() > 0.0001):
         return 8
 
     # Verify exp2/log2 round-trip
     let f64 roundtrip2 = exp2(log2(x))
-    if (abs(roundtrip2 - x) > 0.0001):
+    if ((roundtrip2 - x).abs() > 0.0001):
         return 9
 
     return 0

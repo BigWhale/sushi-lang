@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import (
     Reporter, diagnostic_identity, in_source_order)
+from sushi_lang.semantics.stdlib_registry import flat_stdlib_reach
 from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, FuncDef
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.dont_panic import MarkerGate
@@ -413,6 +414,7 @@ class SemanticAnalyzer:
         collector = CollectorPass(
             self.reporter,
             library_units={u.name for u in compilation_order if u.provenance is not None},
+            stdlib_reach=flat_stdlib_reach(compilation_order),
         )
         # The collect pass fills ONE set of tables, in place, once per unit -- so what
         # it holds IS the whole program's answer and nothing copies it into a second

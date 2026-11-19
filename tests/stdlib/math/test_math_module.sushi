@@ -26,15 +26,15 @@ fn main() i32:
     # Test abs() with different types
     println("2. Testing abs():")
     let i32 neg_int = -42
-    let i32 pos_int = abs(neg_int)
+    let i32 pos_int = neg_int.abs()
     println("   abs(-42) = {pos_int}")
 
     let i64 neg_big = -9999 as i64
-    let i64 pos_big = abs(neg_big)
+    let i64 pos_big = neg_big.abs()
     println("   abs(-9999) = {pos_big}")
 
     let f64 neg_float = -3.14
-    let f64 pos_float = abs(neg_float)
+    let f64 pos_float = neg_float.abs()
     println("   abs(-3.14) = {pos_float}")
     println("")
 
@@ -42,21 +42,21 @@ fn main() i32:
     println("3. Testing min() and max():")
     let i32 a = 10
     let i32 b = 20
-    let i32 minimum = min(a, b)
-    let i32 maximum = max(a, b)
+    let i32 minimum = a.min(b)
+    let i32 maximum = a.max(b)
     println("   min(10, 20) = {minimum}")
     println("   max(10, 20) = {maximum}")
 
     let f64 x = 3.14
     let f64 y = 2.71
-    let f64 min_float = min(x, y)
-    let f64 max_float = max(x, y)
+    let f64 min_float = x.min(y)
+    let f64 max_float = x.max(y)
     println("   min(3.14, 2.71) = {min_float}")
     println("   max(3.14, 2.71) = {max_float}")
 
     let i64 la = 100 as i64
     let i64 lb = 200 as i64
-    let i64 min_int64 = min(la, lb)
+    let i64 min_int64 = la.min(lb)
     println("   min(100i64, 200i64) = {min_int64}")
     println("")
 

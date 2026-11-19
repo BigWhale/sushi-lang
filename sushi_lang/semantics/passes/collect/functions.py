@@ -38,6 +38,7 @@ from sushi_lang.semantics.generics.types import (
 
 from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
+    StdlibReach,
     EXTENSION_METHOD,
     ExtensionClaim,
     VisibilityTable,
@@ -368,7 +369,7 @@ class FunctionTable(UnitOwnedSymbols[FuncSig]):
         the whole table answers, which is what a reader with no unit gets.
         """
         for (module_path, name), func in self._stdlib_functions.items():
-            if name != function_name or getattr(func, "is_constant", False):
+            if name != function_name:
                 continue
             if scope is not None and not scope.holds_module(module_path):
                 continue
@@ -684,6 +685,7 @@ class FunctionCollector:
         # library already follows (docs/design/libraries.md section 7). Without this,
         # `--lib-kind` would change program semantics rather than just distribution.
         self.library_units: Set[str] = set()
+        self.stdlib_reach = StdlibReach()
         # The bodies that name a type pack as one type (CE0147, #1167) or hold a
         # misplaced `expand` (#1070): no copy of one can be cut, so the analysis stops
         # after the collect pass.
@@ -784,9 +786,6 @@ class FunctionCollector:
             for _func_name, stdlib_func in module.functions.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_func)
 
-            for _const_name, stdlib_const in module.constants.items():
-                self.funcs.register_stdlib_function(module_path, stdlib_const)
-
     def _redeclaration(self, name: str, name_span: Optional[Span],
                        prev: 'FuncSig | GenericFuncDef',
                        *, may_coexist: bool) -> Redeclaration:
@@ -813,7 +812,8 @@ class FunctionCollector:
         clash = library_clash_origin(
             self.visibility, "function", name,
             current_unit=self.current_unit_name, library_units=self.library_units)
-        if clash is not None and clash.is_public:
+        if (clash is not None and clash.is_public
+                and not self.stdlib_reach.hides(clash.unit_name, self.current_unit_name)):
             self._warn_shadowed_export(name, name_span, clash)
             return Redeclaration.REPLACE
         prev_unit = prev.unit_name

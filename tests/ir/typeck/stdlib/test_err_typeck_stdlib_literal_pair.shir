@@ -5,7 +5,7 @@ ShirBody main
   locals : [_0 "x": u8, _1 "lo": u8, _2 "hi": u8]
   block  :
     Assign(LocalRef(_0), Lit(7), is_init: true)
-    Assign(LocalRef(_1), Call(Stdlib(<math>, @min), [(LocalRef(_0), Guaranteed), (Lit(2), Guaranteed)]), is_init: true)
-    Assign(LocalRef(_2), Call(Stdlib(<math>, @max), [(Lit(300), Guaranteed), (LocalRef(_0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), Call(Method(LocalRef(_0), @u8.min, Guaranteed), [(Lit(2), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), Call(Method(LocalRef(_0), @u8.max, Guaranteed), [(Lit(300), Guaranteed)]), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), " ", LocalRef(_2), ""]), Guaranteed)]))
     Return(Lit(0))

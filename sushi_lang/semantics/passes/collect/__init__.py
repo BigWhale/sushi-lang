@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program
+from sushi_lang.semantics.visibility import StdlibReach
 from sushi_lang.semantics.predefined_types import (
     builtin_generic_enums,
     builtin_generic_structs,
@@ -71,11 +72,14 @@ class CollectorPass:
     """Collect constants, structs, enums, functions, and perks from the AST."""
 
     def __init__(self, reporter: Reporter,
-                 library_units: Optional[Set[str]] = None) -> None:
+                 library_units: Optional[Set[str]] = None,
+                 stdlib_reach: Optional[StdlibReach] = None) -> None:
         """Initialize collector pass with all sub-collectors.
 
         `library_units` names the units that arrived from a source library, so a
         consumer definition of the same name shadows theirs instead of colliding.
+        `stdlib_reach` says which stdlib units the flat scope of each unit reaches: a
+        stdlib export is a name to shadow only there.
         """
         self.r = reporter
 
@@ -157,6 +161,8 @@ class CollectorPass:
         for collector in self._collectors:
             collector.library_units = set(library_units or ())
             collector.visibility = self.visibility
+        self.constant_collector.stdlib_reach = stdlib_reach or StdlibReach()
+        self.function_collector.stdlib_reach = stdlib_reach or StdlibReach()
 
         # The whole-program tables, built here and filled in place. A unit's `run`
         # adds to what the units before it left, so this IS the program's answer and

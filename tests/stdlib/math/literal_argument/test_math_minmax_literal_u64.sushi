@@ -1,14 +1,14 @@
-# A bare literal argument of min or max takes the type of the other argument (#842).
+# A literal argument of `a.min(b)` or `a.max(b)` takes the type of the receiver (#842).
 # EXPECT_STDOUT_EXACT: "18000000000000000000\n7\n18000000000000000000\n7\n"
 # EXPECT_RUNTIME_EXIT: 0
 use <math>
 
 fn main() i32:
     let u64 b = 18000000000000000000
-    let u64 hi = max(b, 7)
-    let u64 lo = min(7, b)
+    let u64 hi = b.max(7)
+    let u64 lo = b.min(7)
     println("{hi}")
     println("{lo}")
-    println("{max(7, b)}")
-    println("{min(b, 7)}")
+    println("{b.max(7)}")
+    println("{b.min(7)}")
     return 0

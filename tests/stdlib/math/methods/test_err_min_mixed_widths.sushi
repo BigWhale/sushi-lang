@@ -1,0 +1,8 @@
+# The argument of `a.min(b)` has the type of `a`: an i64 argument of an i32 is refused.
+# EXPECT_ERROR_CODE: CE2006
+
+fn main() i32:
+    let i32 a = 7
+    let i64 b = 2
+    println("{a.min(b)}")
+    return 0

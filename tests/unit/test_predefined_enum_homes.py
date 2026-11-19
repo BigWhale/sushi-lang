@@ -42,7 +42,7 @@ def test_std_error_is_the_one_global():
 
 def test_every_home_is_a_stdlib_module():
     registry = get_stdlib_registry()
-    modules = set(SOURCE_STDLIB_MODULES) | set(GENERIC_UNIT_TYPES) | set(registry.get_all_modules())
+    modules = set(SOURCE_STDLIB_MODULES) | set(GENERIC_UNIT_TYPES) | set(registry.KNOWN_MODULES)
     for name, home in PREDEFINED_ENUM_HOMES.items():
         if home is not None:
             assert home in modules, f"{name} is homed at <{home}>, which is no module"
