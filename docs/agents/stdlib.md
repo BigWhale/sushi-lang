@@ -128,6 +128,13 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   stays in its unit, so a program with its own `EINTR` gets no clash. A sleep stopped by a
   signal answers the remaining microseconds (no retry, saturated at `i32` max). When
   `clock_gettime()` fails, `now`/`monotonic_ns` stop with RE2026 (an `assert` in the module).
+- **`<sys/env>` is Sushi source**: `src_sushi/sys/env.sushi` (a `SOURCE_STDLIB_MODULES` row
+  and a `_virtual_units` row) calls `getenv()` and `setenv()` of the C library through an
+  `unsafe external` block. `getenv` returns the `Maybe@(string)` of the extern: the
+  boundary gives `None` for NULL and an owned copy for a value. `setenv` always overwrites.
+  It reads `errno()` directly after the C call: `ENOMEM` (from `<sys/platform>`) stops with
+  RE2026 (an `assert` in the module), and any other failure gives `EnvError.InvalidValue`.
+  `EnvError` stays a predefined enum with its home at `<sys/env>`.
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,

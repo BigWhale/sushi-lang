@@ -46,7 +46,6 @@ sushi_lang/sushi_stdlib/
 │   ├── io/
 │   │   └── files/        # -> io/files.bc
 │   ├── sys/
-│   │   ├── env/          # -> sys/env.bc
 │   │   └── process/      # -> sys/process.bc
 │   ├── net/              # -> net/socket.bc
 │   ├── _platform/         # per-OS constants (darwin/, linux/, posix/) used by
@@ -58,7 +57,7 @@ sushi_lang/sushi_stdlib/
     │   ├── core/primitives.bc
     │   ├── io/files.bc
     │   ├── net/socket.bc
-    │   ├── sys/{env,process}.bc
+    │   ├── sys/process.bc
     │   ├── symbols.json         # the symbols that the .bc files define
     │   └── .build_fingerprint   # marker written by stdlib_builder.py
     └── linux/              # same layout; only produced by building on Linux
@@ -86,7 +85,7 @@ def generate_module_ir() -> ir.Module:
 
 `build.py` imports the package, calls `generate_module_ir()`, and writes the result as
 `.bc`. Platform-specific behavior (e.g. which libc symbols to declare for
-`nanosleep`/`getenv`) is resolved inside the generator via `_platform/{darwin,linux}`,
+`open`/`socket`) is resolved inside the generator via `_platform/{darwin,linux}`,
 not by branching in `build.py` — the *emitted* IR reflects the platform Python is
 running on, `build.py`'s `--platform` argument only picks the output subdirectory.
 

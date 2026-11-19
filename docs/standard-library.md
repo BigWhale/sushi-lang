@@ -361,8 +361,11 @@ The module is Sushi source (`src_sushi/random.sushi`).
 
 ### Environment (`use <sys/env>`)
 
+The module is Sushi source (`src_sushi/sys/env.sushi`).
+
 - `getenv()` - Get environment variable
-- `setenv()` - Set environment variable
+- `setenv()` - Set environment variable. A key that the C library refuses gives
+  `EnvError.InvalidValue`. When no memory is free, the program stops with `RE2026`
 
 ### Encoding (`use <encoding/hex>`, `use <encoding/base64>`)
 

@@ -70,6 +70,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/udp": _SRC_SUSHI_ROOT / "net" / "udp.sushi",
     "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
     "random": _SRC_SUSHI_ROOT / "random.sushi",
+    "sys/env": _SRC_SUSHI_ROOT / "sys" / "env.sushi",
     "text/ascii": _SRC_SUSHI_ROOT / "text" / "ascii.sushi",
     "time": _SRC_SUSHI_ROOT / "time.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
@@ -258,11 +259,9 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798)."""
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.sys.env import ENV_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
 
     return {
-        "sys/env": ENV_SIGNATURES,
         "sys/process": PROCESS_SIGNATURES,
         "io/files": FILES_SIGNATURES,
         "net/socket": SOCKET_SIGNATURES,
@@ -308,7 +307,6 @@ class StdlibRegistry:
     """Central registry for stdlib functions."""
 
     KNOWN_MODULES = {
-        "sys/env": "sushi_lang.sushi_stdlib.src.sys.env",
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
         "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",

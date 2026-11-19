@@ -1,22 +1,22 @@
 # EXPECT_DUMP_SLIR: test_slir_stdlib_calls.slir
-# EXPECT_STDOUT_EXACT: "4 3 7\n0 9\n"
+# EXPECT_STDOUT_EXACT: "4 3 7\n9 false\n"
 # EXPECT_RUNTIME_EXIT: 0
 #
 # A call of a function of a registry stdlib module is a `Direct` callee with the use path
 # of its module and the symbol of its generated function, and a call of a `<math>` function
 # or method is a call of a Sushi function. Each argument is `Guaranteed`, behind an alias
-# too. A row of `<sys/env>` whose generated function answers a
-# bare status answers a `Result` at the call.
+# too. A row of `<io/files>` that answers a `Result` answers it at the call, and a bare row
+# answers its bare value.
 use <math>
-use <sys/env> as e
+use <io/files> as f
 
 fn main() i32:
     let f64 r = sqrt(16.0)
     let u8 a = 9
     let u8 lo = a.min(3)
     let i32 hi = (7).max(2)
-    let i32 set = e.setenv("SUSHI_SLIR_STDLIB", "1").realise(9)
-    let i32 failed = e.setenv("", "1").realise(9)
+    let i32 removed = f.remove("slir_stdlib_no_such_file").realise(9)
+    let bool found = f.exists("slir_stdlib_no_such_file")
     println("{r} {lo} {hi}")
-    println("{set} {failed}")
+    println("{removed} {found}")
     return 0

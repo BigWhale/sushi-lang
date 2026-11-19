@@ -94,21 +94,17 @@ def llvm_ok_type(ty) -> Optional[ir.Type]:
 
 
 def llvm_return_type(sig: Signature) -> ir.Type:
-    """The LLVM return type of a row: a Result struct, or the bare value.
-
-    A `bare_ok` row answers its Ok payload bare, and the call site builds the Result.
-    """
+    """The LLVM return type of a row: a Result struct, or the bare value."""
     from sushi_lang.sushi_stdlib.src.type_definitions import (
         get_result_type, get_unit_enum_type,
     )
 
     if sig.ok is None and sig.bare == BuiltinType.BLANK:
         return ir.VoidType()
-    if sig.ok is None or sig.bare_ok is not None:
-        answered = sig.ok if sig.bare_ok is not None else sig.bare
-        bare = llvm_value_type(answered)
+    if sig.ok is None:
+        bare = llvm_value_type(sig.bare)
         if bare is None:
-            raise_internal_error("CE0145", type=display_type(answered))
+            raise_internal_error("CE0145", type=display_type(sig.bare))
         return bare
     ok = llvm_ok_type(sig.ok)
     if ok is None:
@@ -134,7 +130,9 @@ def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, sy
     (`stdlib_signature`), and `symbol` is the symbol that SLIR lowering derived for it. Each operand borrows. A `cstr`
     parameter crosses as the copy of the one C-string seam (`emit_cstr_arg`), which the
     call frees right after it returns (S23)."""
-    from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg, free_cstr_args
+    from sushi_lang.backend.expressions.calls.utils import (
+        emit_cstr_arg, free_cstr_args, restore_errno, save_errno,
+    )
     from sushi_lang.semantics.stdlib_registry import stdlib_signature
 
     sig = stdlib_signature(module_path, func_name)
@@ -150,15 +148,17 @@ def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, sy
             copies.append(value)
         values.append(value)
     result = emit_row_call(codegen, func_name, symbol, sig, values)
+    saved = save_errno(codegen) if copies else None
     free_cstr_args(codegen, copies)
+    if saved is not None:
+        restore_errno(codegen, saved)
     return result
 
 
 def emit_row_call(codegen: 'LLVMCodegen', func_name: str, symbol: str, sig: Signature,
                   args: Sequence[ir.Value]) -> ir.Value:
     """Declare the generated function of a row, call it with the values of its arguments,
-    and answer its value. A `bare_ok` row answers a bare status, and the call builds the
-    Result (`status_result.py`). A row that answers `~` answers an undefined `i32`."""
+    and answer its value. A row that answers `~` answers an undefined `i32`."""
     from sushi_lang.backend.functions import declare_stdlib_function
 
     if len(args) != sig.arity:
@@ -170,19 +170,7 @@ def emit_row_call(codegen: 'LLVMCodegen', func_name: str, symbol: str, sig: Sign
     if isinstance(function_type.return_type, ir.VoidType):
         builder.call(stdlib_func, list(args))
         return ir.Constant(ir.IntType(32), ir.Undefined)
-    result = builder.call(stdlib_func, list(args), name=f"{func_name}_result")
-    if sig.bare_ok is not None:
-        result = _result_from_bare_ok(codegen, sig, result)
-    return result
-
-
-def _result_from_bare_ok(codegen: 'LLVMCodegen', sig: Signature, value: ir.Value) -> ir.Value:
-    """The Result a `bare_ok` row answers, built from the bare value (`status_result.py`)."""
-    from sushi_lang.backend.expressions.calls.stdlib.status_result import status_result
-
-    if sig.bare_ok is None or sig.ok is None or sig.error is None:
-        raise_internal_error("CE0024", type="stdlib signature", method=str(sig))
-    return status_result(codegen, value, sig.ok, sig.error, sig.bare_ok.failure)
+    return builder.call(stdlib_func, list(args), name=f"{func_name}_result")
 
 
 def as_param_value(codegen: 'LLVMCodegen', param: Param, value: ir.Value) -> ir.Value:

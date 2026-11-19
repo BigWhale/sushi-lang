@@ -13,7 +13,8 @@ answers `~` writes `~` into the place of the call.
 A `ptr` crosses as itself. A `Maybe@(ptr)` or a `Maybe@(string)` argument crosses as a null
 pointer for `None` and as its marshalled payload for `Some`. The answer becomes a Sushi value
 through `foreign.py`. The emitter reads the answer before it frees the C
-copies, because C can answer a pointer into one of them.
+copies, because C can answer a pointer into one of them. The `errno` of the C call is kept
+across the copy of the answer and the frees (`save_errno`, `restore_errno`).
 """
 from __future__ import annotations
 
@@ -22,10 +23,12 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 
 from sushi_lang.backend import enum_utils
-from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg, free_cstr_args
+from sushi_lang.backend.expressions.calls.utils import (
+    emit_cstr_arg, free_cstr_args, restore_errno, save_errno,
+)
 from sushi_lang.backend.gep_utils import gep_dynamic_array_data
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.slir.foreign import c_answer
+from sushi_lang.backend.slir.foreign import c_answer, c_answer_allocates
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import (
     constant_value, operand_address, operand_value, place_address, type_of_operand,
@@ -60,11 +63,15 @@ def emit_extern(state: FunctionState, statement: st.Call, direct: st.Direct,
         state.fault(f"the call of '{direct.symbol}' does not agree with its declaration "
                     f"{function_type}")
     value = state.call(callee, args)
+    saved = (save_errno(state.codegen)
+             if copies or c_answer_allocates(extern.ret_type) else None)
     if isinstance(function_type.return_type, ir.VoidType):
         value = constant_value(state, k.Blank())
     else:
         value = c_answer(state, value, extern.ret_type)
     free_cstr_args(state.codegen, copies)
+    if saved is not None:
+        restore_errno(state.codegen, saved)
     state.builder.store(value, place_address(state, statement.dest))
 
 

@@ -5,8 +5,8 @@ unsafe external "C" as libc because "string length via libc strlen":
 
 # Safe wrapper - ordinary Sushi. strlen cannot fail, so this wrapper is bare. A
 # wrapper of a C call that can fail writes `| E` and folds the raw value into a
-# Result. The `string` argument is marshalled to a C char* and freed at scope
-# exit, so there is no leak.
+# Result. The `string` argument is marshalled to a C char* and freed directly
+# after the call, so there is no leak.
 fn length(string s) i64:
     return libc.strlen(s)
 

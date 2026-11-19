@@ -38,6 +38,12 @@ def c_answer(state: FunctionState, raw: ir.Value, ty: Optional[Type]) -> ir.Valu
     return raw
 
 
+def c_answer_allocates(ty: Optional[Type]) -> bool:
+    """Whether `c_answer` allocates for a C value of the declared type `ty`: a `string` and
+    a `Maybe@(string)` become an owned copy."""
+    return BuiltinType.STRING in (ty, nullable_payload(ty))
+
+
 def extern_variable(state: FunctionState,
                     symbol: str) -> Optional[tuple[ir.Value, ExternalVarSig]]:
     """The declaration of the C global whose link name is `symbol`, or None."""

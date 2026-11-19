@@ -4,13 +4,15 @@
 # EXPECT_NO_LEAKS: true
 #
 # A call of a row with a `cstr` parameter is a `Direct` callee of its module, and the
-# string operand is `Guaranteed`: no SLIR local holds the C copy. The answer of `getenv`
+# string operand is `Guaranteed`: no SLIR local holds the C copy. The answer of `read_dir`
 # owns, so its place drops at the end of its scope.
-use <sys/env>
+use <io/files>
 
 fn main() i32:
-    setenv("SLIR_STDLIB_ROW", "Mostly Harmless").realise(-1)
-    let string key = "SLIR_STDLIB_ROW"
-    let Maybe@(string) value = getenv(key)
-    println(value.realise("none"))
+    mkdir("Mostly Harmless", 0o755).realise(-1)
+    let string dir = "."
+    let string[] names = read_dir(dir).realise(from([]))
+    foreach(name in names.iter()):
+        println(name)
+    rmdir("Mostly Harmless").realise(-1)
     return 0

@@ -1,0 +1,17 @@
+# `setenv` gives `EnvError.InvalidValue` when the C library refuses the key with EINVAL:
+# an empty key and a key with '='. A valid key is the control.
+# EXPECT_STDOUT_EXACT: "empty key: InvalidValue\nkey with '=': InvalidValue\nvalid key: Ok(0)\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/env>
+
+fn show(string label, string key) ~:
+    match setenv(key, "x"):
+        Result.Ok(v) -> println("{label}: Ok({v})")
+        Result.Err(EnvError.InvalidValue) -> println("{label}: InvalidValue")
+        Result.Err(_) -> println("{label}: other Err")
+
+fn main() i32:
+    show("empty key", "")
+    show("key with '='", "A=B")
+    show("valid key", "SUSHI_SETENV_EINVAL_OK")
+    return 0

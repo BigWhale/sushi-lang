@@ -107,19 +107,16 @@ sushi_stdlib/src/_platform/
 ├── __init__.py       # get_platform_module() helper
 ├── README.md
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
-│   ├── env.py         # getenv/setenv
 │   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
 │   ├── net.py         # the socket calls
 │   ├── process.py     # getcwd/chdir/exit/getpid/getuid/tmpfile/fileno/waitpid/
 │                      #   posix_spawnp + file_actions helpers/environ
 ├── darwin/            # macOS
-│   ├── env.py         # re-exports posix/env.py
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
 │   ├── net.py         # macOS socket constants and structure layouts
 │   ├── process.py     # re-exports posix/process.py
 │   └── stdio.py       # the __stderrp handle name
-└── linux/             # Linux: the same five files
-    ├── env.py
+└── linux/             # Linux: the same four files
     ├── files.py       # Linux O_CREAT/O_TRUNC bit values
     ├── net.py         # Linux socket constants and structure layouts
     ├── process.py
@@ -130,7 +127,7 @@ There is no `windows/` directory.
 
 Each of `darwin/` and `linux/` has one file per platform module. Most of them are thin
 re-export shims over `posix/`, because those calls are identical POSIX libc functions on
-both operating systems: `env.py` and `process.py` re-export `posix/`
+both operating systems: `process.py` re-exports `posix/`
 unchanged. Three modules have real, distinct darwin/linux content: `stdio` (the stderr
 global symbol name), `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`) and
 `net` (the socket constants and structure layouts). The clock ids of `<time>` are in
@@ -170,19 +167,16 @@ branch.
 
 ### Usage in Standard Library Modules
 
-**Example:** `sushi_stdlib/src/sys/env/functions.py` (backs the `sys/env` unit; the
-`getenv`/`setenv` builtins used from Sushi source)
+**Example:** `sushi_stdlib/src/sys/process/functions.py` (backs the `sys/process` unit)
 
 ```python
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-_platform_env = get_platform_module('env')
-
-def generate_getenv(module: ir.Module) -> None:
-    """Generate getenv function: getenv(string key) -> Maybe@(string)"""
-    # Declare external functions
-    libc_getenv = _platform_env.declare_getenv(module)
-    # ... builds the sushi_getenv IR using the platform-specific declaration ...
+def generate_getcwd(module: ir.Module) -> None:
+    """Generate getcwd() -> Result<string, ProcessError>"""
+    platform_process = get_platform_module('process')
+    libc_getcwd = platform_process.declare_getcwd(module)
+    # ... builds the sushi_getcwd IR using the platform-specific declaration ...
 ```
 
 `sushi_stdlib/src/error_emission.py` follows the identical pattern
@@ -218,7 +212,8 @@ same names of the same types in the same order:
 - the socket constants: families, types, levels, options, the `addrinfo` and `sockaddr`
   offsets, and the SIGPIPE pair (`SO_NOSIGPIPE`, `MSG_NOSIGNAL`, 0 where a platform has
   none);
-- the errno numbers the standard library maps to an error variant.
+- the errno numbers the standard library maps to an error variant, and `ENOMEM`, which
+  makes `setenv` of `<sys/env>` stop the program.
 
 ```sushi
 use <sys/platform>
@@ -247,7 +242,8 @@ file is made in the `linux/amd64` container.
 
 - **The fixtures ask C.** `tests/stdlib/platform/` causes each behaviour a constant
   names and compares the answer with the constant: `open` with the flags, `lseek` with
-  the whences, both clocks, each file and socket errno caused on purpose, `stat` and
+  the whences, both clocks, each file and socket errno caused on purpose, `ENOMEM` from a `malloc`
+  that cannot succeed, `stat` and
   `lstat` of a file, a directory and a link, a `readdir` walk, the `addrinfo` and
   `sockaddr` fields of a numeric `getaddrinfo`, and each socket option set and read back.
   They run in the Linux CI and in the macOS CI, so each platform checks its own file
@@ -278,7 +274,6 @@ sushi_stdlib/dist/
 │   ├── core/primitives.bc
 │   ├── io/files.bc
 │   ├── net/socket.bc
-│   ├── sys/env.bc
 │   └── sys/process.bc
 └── linux/                     # Linux builds — same unit layout as darwin/, built
     └── ...                    #   separately on a Linux host (see Cross-Compilation below)
@@ -339,7 +334,6 @@ error rather than silently picking a wrong platform's bitcode.
 `sushi_stdlib/src/_platform/posix/` for everything that is not macOS-specific.
 
 **Features:**
-- POSIX `getenv()`/`setenv()` (via `posix/env.py`)
 - File I/O: `stat`/`access`/`unlink`/`rename`/`open`/`read`/`write`/`close`/`mkdir`/
   `rmdir` (via `posix/files.py`), plus macOS-specific `O_CREAT`/`O_TRUNC` bit values
   (`darwin/files.py`)
@@ -360,7 +354,7 @@ error rather than silently picking a wrong platform's bitcode.
 `sushi_stdlib/src/_platform/posix/` for everything that is not Linux-specific.
 
 **Features:**
-- POSIX `getenv()`/`setenv()`, file I/O, and process control — same
+- File I/O and process control — same
   `posix/` implementations macOS uses (identical libc surface on both)
 - Linux-specific `O_CREAT`/`O_TRUNC` bit values (`linux/files.py` — the numeric flag
   values differ from macOS's even though the function signatures match)
@@ -388,7 +382,7 @@ hold a third platform, but no Windows-specific code path exists.
 
 ## Adding Platform-Specific Functionality
 
-The following steps describe the actual pattern used by the existing `env`,
+The following steps describe the actual pattern used by the existing
 `files`, `process`, and `stdio` modules. Only Windows support is out of reach
 today — there is nothing to route to.
 

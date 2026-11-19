@@ -184,7 +184,7 @@ _add(ErrorMessage("CE2427", Severity.ERROR,
 
 _add(ErrorMessage("CE2428", Severity.ERROR,
     "`nom` has no meaning on the foreign parameter '{name}'",
-    Category.BORROW, "FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (docs/design/borrow-model.md S5)."))
+    Category.BORROW, "FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees directly after the call, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (docs/design/borrow-model.md S5)."))
 
 
 # --- The unbound chained borrow (#352 ruling, #407) --------------------------------------

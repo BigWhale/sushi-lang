@@ -74,9 +74,7 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "opendir": _c("DIR*", "const char*"),
     "readdir": _c("struct dirent*", "DIR*"),
     "closedir": _c("int", "DIR*"),
-    # Environment, process
-    "getenv": _c("char*", "const char*"),
-    "setenv": _c("int", "const char*", "const char*", "int"),
+    # Process
     "getcwd": _c("char*", "char*", "size_t"),
     "chdir": _c("int", "const char*"),
     "getpid": _c("pid_t"),

@@ -123,6 +123,7 @@ class StdlibLinker:
         "net/udp",
         "net/url",
         "random",
+        "sys/env",
         "sys/platform",
         "text/ascii",
         "time",

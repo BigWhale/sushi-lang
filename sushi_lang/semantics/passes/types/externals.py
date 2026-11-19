@@ -329,7 +329,7 @@ def _signature_notes(decl: 'ExternalDecl') -> List[str]:
     if has_string:
         notes.append(
             f"'{decl.name}' uses `string`: UTF-8 Sushi string <-> C null-terminated; "
-            f"marshalling required (freed at scope exit)"
+            f"marshalling required (freed directly after the call)"
         )
 
     if any(isinstance(p.ty, ForeignPtrType) for p in decl.params):

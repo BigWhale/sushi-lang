@@ -1,0 +1,29 @@
+# A `string` argument of a C call crosses as a C copy, and the call frees the copy right
+# after it returns. A `free` can change `errno`, so the call keeps the `errno` of the C call
+# across the frees: `errno()` on the next line gives the errno of the C call. A call with
+# no copy to free has nothing to keep.
+# COMPILER_FLAGS: --opt none
+# EXPECT_IR_HOLDS: remove_path store i32 %errno_of_call,
+# EXPECT_IR_LACKS: close_fd errno_of_call
+# EXPECT_STDOUT_EXACT: "unlink: -1 errno 2\nclose: -1 errno 9\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "reading errno after a C call":
+    fn unlink(string path) i32 = "unlink"
+    fn close(i32 fd) i32 = "close"
+
+fn remove_path(string path) i32:
+    let i32 rc = libc.unlink(path)
+    let i32 code = errno()
+    println("unlink: {rc} errno {code}")
+    return rc
+
+fn close_fd(i32 fd) i32:
+    let i32 rc = libc.close(fd)
+    let i32 code = errno()
+    println("close: {rc} errno {code}")
+    return rc
+
+fn main() i32:
+    let i32 a = remove_path("errno_after_marshal_no_such_file")
+    let i32 b = close_fd(-1)
+    return a + b + 2
