@@ -1,9 +1,10 @@
 # A stdlib module and a user unit both offer `encode`. The help of CE3012 spells
 # the stdlib module with its stdlib import, `use <encoding/hex>`. The two functions
 # have one signature, so the call has one type whichever candidate it names.
-# CW3002 is the shadow warning at the user declaration.
+# The user unit does not import the stdlib module, so its declaration shadows nothing
+# (no CW3002).
 # EXPECT_ERROR_CODE: CE3012
-# EXPECT_ERROR_CODES_EXACT: CW3002, CE3012
+# EXPECT_ERROR_CODES_EXACT: CE3012
 # EXPECT_STDERR_CONTAINS: use <encoding/hex> as u
 use <encoding/hex>
 use "helpers/amb_spell_hex_twin"

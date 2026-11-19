@@ -110,11 +110,12 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   rebuilds a stale stdlib). A `src_sushi` module is in the cache key through the dependency graph.
 - A stdlib symbol that wants a C string takes `i8*` and the CALL SITE marshals it through
   `emit_cstr_arg` (the one seam — see the table above). Do not marshal inside a generated body.
-- **`<math>` has TWO halves, the same way**: the functions and the constants are the `.bc`
-  unit, and `src_sushi/math.sushi` (a `SOURCE_STDLIB_MODULES` row and a
-  `BUILTIN_TYPE_METHOD_MODULES` row) holds the methods on the integer types (`divmod`). The
-  `namespaces` pass hands on the names of the generator half through the source unit
-  (`_stdlib_provider`), so `use <math>` gives both halves.
+- **`<math>` is Sushi source**: `src_sushi/math.sushi` (a `SOURCE_STDLIB_MODULES` row and a
+  `BUILTIN_TYPE_METHOD_MODULES` row) holds the `f64` free functions and the constants
+  (`PI`, `E`, `TAU`), which need `use <math>`, and the methods on the number types
+  (`abs`, `min`, `max`, `divmod`), which need no import. `abs`, `min` and `max` are NOT free
+  functions: there is no alias. `abs` of the smallest signed value follows `--overflow`
+  (RE2032 under `trap`).
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,

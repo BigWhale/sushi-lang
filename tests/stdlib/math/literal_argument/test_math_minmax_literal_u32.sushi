@@ -1,17 +1,17 @@
-# A bare literal argument of min or max takes the type of the other argument (#842).
-# The compare is unsigned: 4000000000 is the LARGER value. Two literals keep i32.
+# A literal argument of `a.min(b)` or `a.max(b)` takes the type of the receiver (#842).
+# The compare is unsigned: 4000000000 is the LARGER value. A literal receiver is an i32.
 # EXPECT_STDOUT_EXACT: "4000000000\n1\n4000000000\n1\n4\n"
 # EXPECT_RUNTIME_EXIT: 0
 use <math>
 
 fn main() i32:
     let u32 b = 4000000000
-    let u32 hi = max(b, 1)
-    let u32 lo = min(1, b)
+    let u32 hi = b.max(1)
+    let u32 lo = b.min(1)
     println("{hi}")
     println("{lo}")
-    println("{max(1, b)}")
-    println("{min(b, 1)}")
-    let i32 both = max(3, 4)
+    println("{b.max(1)}")
+    println("{b.min(1)}")
+    let i32 both = (3).max(4)
     println("{both}")
     return 0

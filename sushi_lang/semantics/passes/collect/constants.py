@@ -12,7 +12,8 @@ from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
-    VisibilityTable, library_clash_for_storage_name, record_declaration)
+    StdlibReach, VisibilityTable, library_clash_for_storage_name, record_declaration,
+    warn_shadowed_export)
 
 
 @dataclass
@@ -88,6 +89,7 @@ class ConstantCollector:
         # Which units came from a source library, and who declared what: a consumer's
         # constant of a name a library EXPORTS is the duplicate CE0105 answers.
         self.library_units: Set[str] = set()
+        self.stdlib_reach = StdlibReach()
         self.visibility: Optional[VisibilityTable] = None
         self.constants = constants
 
@@ -99,8 +101,9 @@ class ConstantCollector:
                 if isinstance(const, ConstDef) and self.refused.admits(const):
                     self._collect_constant_def(const)
 
-    def _shadows_a_library_export(self, name: str) -> bool:
-        """Is this a name a source library EXPORTS?
+    def _library_export(self, name: str):
+        """The PUBLIC constant or `var` of a library or a stdlib unit that this name takes,
+        or None.
 
         A library's PUBLIC constant is a name the consumer can see and read, so taking
         it again is a duplicate. Its PRIVATE one is not: the consumer cannot see it, and
@@ -112,7 +115,26 @@ class ConstantCollector:
         clash = library_clash_for_storage_name(
             self.visibility, name,
             current_unit=self.current_unit_name, library_units=self.library_units)
-        return clash is not None and clash.is_public
+        return clash if clash is not None and clash.is_public else None
+
+    def _takes_a_library_export(self, name: str, name_span: Optional[Span]) -> bool:
+        """Is this the duplicate of a library export (CE0105)?
+
+        A stdlib export is no duplicate: the unit's own declaration wins, as it wins over
+        any flat import (`docs/design/unit-namespaces.md` section 8). Where the flat scope
+        of the unit reaches the stdlib unit, CW3002 says so; behind an alias, or with no
+        import, the export is no name of the unit, and nothing is said.
+        """
+        clash = self._library_export(name)
+        if clash is None:
+            return False
+        if not self.stdlib_reach.is_stdlib(clash.unit_name):
+            return True
+        if not self.stdlib_reach.hides(clash.unit_name, self.current_unit_name):
+            warn_shadowed_export(self.r, name, name_span, self.current_unit_file,
+                                 owner=clash.unit_name, export_span=clash.name_span,
+                                 export_filename=clash.filename, kind=clash.kind)
+        return False
 
     def _collect_constant_def(self, const: ConstDef) -> None:
         """Collect a single constant definition."""
@@ -150,7 +172,7 @@ class ConstantCollector:
             prev_unit = prev.unit_name
             if (prev_unit is None
                     or prev_unit == self.current_unit_name
-                    or self._shadows_a_library_export(name)):
+                    or self._takes_a_library_export(name, name_span)):
                 diag = er.emit_with(self.r, ERR.CE0105, name_span, name=name)
                 if prev.name_span is not None:
                     diag.note_at("first defined here", prev.name_span, prev.filename)

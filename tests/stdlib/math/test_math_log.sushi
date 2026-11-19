@@ -17,41 +17,41 @@ fn main() i32:
     let f64 log10_100 = log10(100.0)
 
     # Verify log(1) = 0
-    if (abs(log_1) > 0.0001):
+    if (log_1.abs() > 0.0001):
         return 1
 
     # Verify log(E) = 1
-    if (abs(log_e - 1.0) > 0.0001):
+    if ((log_e - 1.0).abs() > 0.0001):
         return 2
 
     # Verify log2(1) = 0
-    if (abs(log2_1) > 0.0001):
+    if (log2_1.abs() > 0.0001):
         return 3
 
     # Verify log2(2) = 1
-    if (abs(log2_2 - 1.0) > 0.0001):
+    if ((log2_2 - 1.0).abs() > 0.0001):
         return 4
 
     # Verify log2(8) = 3
-    if (abs(log2_8 - 3.0) > 0.0001):
+    if ((log2_8 - 3.0).abs() > 0.0001):
         return 5
 
     # Verify log10(1) = 0
-    if (abs(log10_1) > 0.0001):
+    if (log10_1.abs() > 0.0001):
         return 6
 
     # Verify log10(10) = 1
-    if (abs(log10_10 - 1.0) > 0.0001):
+    if ((log10_10 - 1.0).abs() > 0.0001):
         return 7
 
     # Verify log10(100) = 2
-    if (abs(log10_100 - 2.0) > 0.0001):
+    if ((log10_100 - 2.0).abs() > 0.0001):
         return 8
 
     # Verify log/exp round-trip
     let f64 x = 2.5
     let f64 roundtrip = log(exp(x))
-    if (abs(roundtrip - x) > 0.0001):
+    if ((roundtrip - x).abs() > 0.0001):
         return 9
 
     return 0

@@ -3,9 +3,9 @@
 # EXPECT_RUNTIME_EXIT: 0
 #
 # A call of a function of a registry stdlib module is a `Direct` callee with the use path
-# of its module and the symbol of its generated function. A member of a `<math>` family
-# takes the symbol of the row at the type of its first argument. Each argument is
-# `Guaranteed`, behind an alias too. A row of `<time>` whose generated function answers a
+# of its module and the symbol of its generated function, and a call of a `<math>` function
+# or method is a call of a Sushi function. Each argument is `Guaranteed`, behind an alias
+# too. A row of `<time>` whose generated function answers a
 # bare status answers a `Result` at the call.
 use <math>
 use <time> as t
@@ -13,8 +13,8 @@ use <time> as t
 fn main() i32:
     let f64 r = sqrt(16.0)
     let u8 a = 9
-    let u8 lo = min(a, 3)
-    let i32 hi = max(7, 2)
+    let u8 lo = a.min(3)
+    let i32 hi = (7).max(2)
     let i32 slept = t.msleep(0 as i64).realise(9)
     let i32 failed = t.msleep(-1 as i64).realise(9)
     println("{r} {lo} {hi}")

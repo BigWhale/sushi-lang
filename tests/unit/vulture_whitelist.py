@@ -23,10 +23,6 @@ _TYPES = "sushi_lang/semantics/passes/types/"
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
-    ("sushi_lang/sushi_stdlib/src/*", "is_builtin_*_constant",
-     "StdlibRegistry reads f'is_builtin_{module}_constant' by getattr"),
-    ("sushi_lang/sushi_stdlib/src/*", "get_builtin_*_constant_value",
-     "StdlibRegistry reads f'get_builtin_{module}_constant_value' by getattr"),
     ("sushi_lang/sushi_stdlib/src/_platform/*/files.py", "ST_*_OFFSET",
      "io/files/stat.py reads each offset by name with getattr"),
     ("sushi_lang/internals/styling.py", "italic",

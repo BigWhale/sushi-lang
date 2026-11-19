@@ -4,7 +4,7 @@ ShirBody root
   params : [(_0 "x": f64, Guaranteed)]
   locals : []
   block  :
-    Return(adopt Call(Stdlib(<math>, @m.sqrt), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt Call(Free(@m.sqrt), [(LocalRef(_0), Guaranteed)]))
 
 ShirBody magnitude
   params : [(_0 "x": i32, Guaranteed)]

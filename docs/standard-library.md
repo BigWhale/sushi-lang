@@ -316,9 +316,12 @@ fn greet() ~ | IoError:
 
 ### Math (`use <math>`)
 
-All functions use a single polymorphic name (no type-suffixed variants):
-- Absolute value / min / max: `abs()`, `min()`, `max()` (return the argument's type; a
-  literal argument of `min`/`max` takes the type of the other argument)
+The module is Sushi source (`src_sushi/math.sushi`). The functions use one name each (no
+type-suffixed variants):
+- Absolute value / min / max: the methods `x.abs()`, `a.min(b)` and `a.max(b)` on the
+  number types, with no import (the argument has the type of the receiver; `abs` has no
+  unsigned form; `abs` of the smallest signed value follows `--overflow`; a float `min`
+  and `max` ignore a NaN on one side)
 - Integer division: the method `a.divmod(b)` answers `(a / b, a % b)` on each integer type,
   with no import; a divisor of 0 stops the program, the same as `/`
 - Floating-point (f64): `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`, `trunc()`

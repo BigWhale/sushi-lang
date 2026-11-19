@@ -8,7 +8,7 @@ fn main() i32:
 
     # Test abs
     let i32 neg = -42
-    let i32 pos = abs(neg)
+    let i32 pos = neg.abs()
     println("abs(-42) = {pos}")
 
     # Test sqrt

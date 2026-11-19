@@ -22,7 +22,7 @@ lost (D2), are not typed yet, and stop the walk of their body.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -49,7 +49,6 @@ from sushi_lang.semantics.unit_symbols import global_symbol
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.types import GenericStructType
     from sushi_lang.semantics.passes.types import TypeValidator
-    from sushi_lang.semantics.stdlib_registry import StdlibFunction
 
 #: The name of a base in the text of CE2070.
 _RADIX_NAMES = {2: "binary", 8: "octal", 10: "decimal", 16: "hexadecimal"}
@@ -188,7 +187,7 @@ def check_storage_ref(validator: TypeValidator, node: e.StorageRef,
 
 
 def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
-                           record: Union[ConstSig, StdlibFunction]) -> None:
+                           record: ConstSig) -> None:
     """The value row of `node`. A constant with no value after an error of the program
     (its initializer has one) gets no row: the walk goes on, and the body holds that error
     (`refused_before`). With no error, a constant with no value is an internal error."""
@@ -202,7 +201,7 @@ def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
 
 
 def constant_record(validator: TypeValidator,
-                    written: str) -> Optional[Union[ConstSig, StdlibFunction]]:
+                    written: str) -> Optional[ConstSig]:
     """The record of the constant that the written name of a `ConstRef` names in this body
     (`NamespaceTable.constant_record`)."""
     return validator.namespaces.constant_record(written, validator.const_table)

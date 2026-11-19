@@ -1,11 +1,833 @@
 ##:
-math -- the Sushi half of the math module.
+math -- the math module.
 
-The module has two halves. The functions (`sqrt`, `pow`, `abs`, `min`, `max` and the
-others) and the constants are compiled into the stdlib bitcode; the methods of this file
-on the integer types ship as Sushi source. A method of a built-in type needs no import,
-so `a.divmod(b)` works with no `use <math>`.
+The free functions (`sqrt`, `pow`, `sin` and the others) and the constants `PI`, `E` and
+`TAU` need `use <math>`. The methods of this file on the number types (`x.abs()`,
+`a.min(b)`, `a.max(b)`, `a.divmod(b)`) need no import, because a method of a built-in
+type needs none.
 :##
+
+unsafe external "C" as math_llvm because "the LLVM math intrinsics":
+    fn sqrt(f64 x) f64 = "llvm.sqrt.f64"
+    fn pow(f64 base, f64 exponent) f64 = "llvm.pow.f64"
+    fn floor(f64 x) f64 = "llvm.floor.f64"
+    fn ceil(f64 x) f64 = "llvm.ceil.f64"
+    fn round(f64 x) f64 = "llvm.round.f64"
+    fn trunc(f64 x) f64 = "llvm.trunc.f64"
+    fn sin(f64 x) f64 = "llvm.sin.f64"
+    fn cos(f64 x) f64 = "llvm.cos.f64"
+    fn log(f64 x) f64 = "llvm.log.f64"
+    fn log2(f64 x) f64 = "llvm.log2.f64"
+    fn log10(f64 x) f64 = "llvm.log10.f64"
+    fn exp(f64 x) f64 = "llvm.exp.f64"
+    fn exp2(f64 x) f64 = "llvm.exp2.f64"
+    fn fabs_f32(f32 a) f32 = "llvm.fabs.f32"
+    fn fabs_f64(f64 a) f64 = "llvm.fabs.f64"
+    fn minnum_f32(f32 a, f32 b) f32 = "llvm.minnum.f32"
+    fn minnum_f64(f64 a, f64 b) f64 = "llvm.minnum.f64"
+    fn maxnum_f32(f32 a, f32 b) f32 = "llvm.maxnum.f32"
+    fn maxnum_f64(f64 a, f64 b) f64 = "llvm.maxnum.f64"
+
+unsafe external "C" as math_libm because "the C library math functions":
+    fn tan(f64 x) f64 = "tan"
+    fn asin(f64 x) f64 = "asin"
+    fn acos(f64 x) f64 = "acos"
+    fn atan(f64 x) f64 = "atan"
+    fn atan2(f64 y, f64 x) f64 = "atan2"
+    fn sinh(f64 x) f64 = "sinh"
+    fn cosh(f64 x) f64 = "cosh"
+    fn tanh(f64 x) f64 = "tanh"
+    fn hypot(f64 x, f64 y) f64 = "hypot"
+
+##:
+The ratio of the circumference of a circle to its diameter.
+:##
+public const f64 PI = 3.141592653589793
+
+##:
+The base of the natural logarithm.
+:##
+public const f64 E = 2.718281828459045
+
+##:
+Two times `PI`: one full turn, in radians.
+:##
+public const f64 TAU = 6.283185307179586
+
+##:
+Gives the square root of `x`. A negative `x` gives NaN.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{sqrt(9.0)}")
+  ```
+  This prints `3`.
+:##
+public fn sqrt(f64 x) f64:
+    return math_llvm.sqrt(x)
+
+##:
+Gives `base` to the power `exponent`.
+
+- Parameter base: The first value.
+- Parameter exponent: The second value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{pow(2.0, 10.0)}")
+  ```
+  This prints `1024`.
+:##
+public fn pow(f64 base, f64 exponent) f64:
+    return math_llvm.pow(base, exponent)
+
+##:
+Gives the largest whole number that is not more than `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{floor(2.7)}")
+  ```
+  This prints `2`.
+:##
+public fn floor(f64 x) f64:
+    return math_llvm.floor(x)
+
+##:
+Gives the smallest whole number that is not less than `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{ceil(2.1)}")
+  ```
+  This prints `3`.
+:##
+public fn ceil(f64 x) f64:
+    return math_llvm.ceil(x)
+
+##:
+Gives the whole number nearest to `x`. A half goes away from zero.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{round(2.5)}")
+  ```
+  This prints `3`.
+:##
+public fn round(f64 x) f64:
+    return math_llvm.round(x)
+
+##:
+Gives `x` without its fraction, toward zero.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{trunc(-2.7)}")
+  ```
+  This prints `-2`.
+:##
+public fn trunc(f64 x) f64:
+    return math_llvm.trunc(x)
+
+##:
+Gives the sine of `x`, in radians.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{sin(0.0)}")
+  ```
+  This prints `0`.
+:##
+public fn sin(f64 x) f64:
+    return math_llvm.sin(x)
+
+##:
+Gives the cosine of `x`, in radians.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{cos(0.0)}")
+  ```
+  This prints `1`.
+:##
+public fn cos(f64 x) f64:
+    return math_llvm.cos(x)
+
+##:
+Gives the natural logarithm of `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{log(E)}")
+  ```
+  This prints `1`.
+:##
+public fn log(f64 x) f64:
+    return math_llvm.log(x)
+
+##:
+Gives the base-2 logarithm of `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{log2(8.0)}")
+  ```
+  This prints `3`.
+:##
+public fn log2(f64 x) f64:
+    return math_llvm.log2(x)
+
+##:
+Gives the base-10 logarithm of `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{log10(1000.0)}")
+  ```
+  This prints `3`.
+:##
+public fn log10(f64 x) f64:
+    return math_llvm.log10(x)
+
+##:
+Gives `E` to the power `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{exp(0.0)}")
+  ```
+  This prints `1`.
+:##
+public fn exp(f64 x) f64:
+    return math_llvm.exp(x)
+
+##:
+Gives 2 to the power `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{exp2(10.0)}")
+  ```
+  This prints `1024`.
+:##
+public fn exp2(f64 x) f64:
+    return math_llvm.exp2(x)
+
+##:
+Gives the tangent of `x`, in radians, with the bits of the C library `tan`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{tan(0.0)}")
+  ```
+  This prints `0`.
+:##
+public fn tan(f64 x) f64:
+    return math_libm.tan(x)
+
+##:
+Gives the arc sine of `x`, in radians.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{asin(0.0)}")
+  ```
+  This prints `0`.
+:##
+public fn asin(f64 x) f64:
+    return math_libm.asin(x)
+
+##:
+Gives the arc cosine of `x`, in radians.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{acos(1.0)}")
+  ```
+  This prints `0`.
+:##
+public fn acos(f64 x) f64:
+    return math_libm.acos(x)
+
+##:
+Gives the arc tangent of `x`, in radians.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{atan(0.0)}")
+  ```
+  This prints `0`.
+:##
+public fn atan(f64 x) f64:
+    return math_libm.atan(x)
+
+##:
+Gives the angle of the point `(x, y)`, in radians, from -PI to PI.
+
+- Parameter y: The first value.
+- Parameter x: The second value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{atan2(1.0, 1.0) * 4.0}")
+  ```
+  This prints `3.14159`.
+:##
+public fn atan2(f64 y, f64 x) f64:
+    return math_libm.atan2(y, x)
+
+##:
+Gives the hyperbolic sine of `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{sinh(0.0)}")
+  ```
+  This prints `0`.
+:##
+public fn sinh(f64 x) f64:
+    return math_libm.sinh(x)
+
+##:
+Gives the hyperbolic cosine of `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{cosh(0.0)}")
+  ```
+  This prints `1`.
+:##
+public fn cosh(f64 x) f64:
+    return math_libm.cosh(x)
+
+##:
+Gives the hyperbolic tangent of `x`.
+
+- Parameter x: The value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{tanh(0.0)}")
+  ```
+  This prints `0`.
+:##
+public fn tanh(f64 x) f64:
+    return math_libm.tanh(x)
+
+##:
+Gives the length of the hypotenuse, `sqrt(x * x + y * y)`, without an overflow.
+
+- Parameter x: The first value.
+- Parameter y: The second value.
+- Returns: The result, as an f64.
+- Example:
+  ```sushi
+  println("{hypot(3.0, 4.0)}")
+  ```
+  This prints `5`.
+:##
+public fn hypot(f64 x, f64 y) f64:
+    return math_libm.hypot(x, y)
+
+##:
+Gives the size of the value: the value without its sign.
+
+The smallest i8 has no size that an i8 holds. Under `--overflow=trap` the program stops with a runtime error; under `--overflow=wrap` the value stays the same.
+
+- Returns: The value if it is not negative, else the negated value.
+- Example:
+  ```sushi
+  let i8 n = -7
+  println("{n.abs()}")
+  ```
+  This prints `7`.
+:##
+public extend i8 abs() i8:
+    let i8 negated = 0 - self
+    if (self < 0):
+        return negated
+    return self
+
+##:
+Gives the size of the value: the value without its sign.
+
+The smallest i16 has no size that an i16 holds. Under `--overflow=trap` the program stops with a runtime error; under `--overflow=wrap` the value stays the same.
+
+- Returns: The value if it is not negative, else the negated value.
+- Example:
+  ```sushi
+  let i16 n = -7
+  println("{n.abs()}")
+  ```
+  This prints `7`.
+:##
+public extend i16 abs() i16:
+    let i16 negated = 0 - self
+    if (self < 0):
+        return negated
+    return self
+
+##:
+Gives the size of the value: the value without its sign.
+
+The smallest i32 has no size that an i32 holds. Under `--overflow=trap` the program stops with a runtime error; under `--overflow=wrap` the value stays the same.
+
+- Returns: The value if it is not negative, else the negated value.
+- Example:
+  ```sushi
+  let i32 n = -7
+  println("{n.abs()}")
+  ```
+  This prints `7`.
+:##
+public extend i32 abs() i32:
+    let i32 negated = 0 - self
+    if (self < 0):
+        return negated
+    return self
+
+##:
+Gives the size of the value: the value without its sign.
+
+The smallest i64 has no size that an i64 holds. Under `--overflow=trap` the program stops with a runtime error; under `--overflow=wrap` the value stays the same.
+
+- Returns: The value if it is not negative, else the negated value.
+- Example:
+  ```sushi
+  let i64 n = -7
+  println("{n.abs()}")
+  ```
+  This prints `7`.
+:##
+public extend i64 abs() i64:
+    let i64 negated = 0 - self
+    if (self < 0):
+        return negated
+    return self
+
+##:
+Gives the size of the value: the value without its sign.
+
+A NaN stays NaN, and -0.0 gives 0.0.
+
+- Returns: The value if it is not negative, else the negated value.
+- Example:
+  ```sushi
+  let f32 n = -2.5
+  println("{n.abs()}")
+  ```
+  This prints `2.5`.
+:##
+public extend f32 abs() f32:
+    return math_llvm.fabs_f32(self)
+
+##:
+Gives the size of the value: the value without its sign.
+
+A NaN stays NaN, and -0.0 gives 0.0.
+
+- Returns: The value if it is not negative, else the negated value.
+- Example:
+  ```sushi
+  let f64 n = -2.5
+  println("{n.abs()}")
+  ```
+  This prints `2.5`.
+:##
+public extend f64 abs() f64:
+    return math_llvm.fabs_f64(self)
+
+##:
+Gives the smaller of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let i8 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend i8 min(i8 b) i8:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let i16 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend i16 min(i16 b) i16:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let i32 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend i32 min(i32 b) i32:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let i64 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend i64 min(i64 b) i64:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let u8 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend u8 min(u8 b) u8:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let u16 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend u16 min(u16 b) u16:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let u32 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend u32 min(u32 b) u32:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let u64 n = 7
+  println("{n.min(3)}")
+  ```
+  This prints `3`.
+:##
+public extend u64 min(u64 b) u64:
+    if (self < b):
+        return self
+    return b
+
+##:
+Gives the smaller of the value and `b`.
+
+A NaN on one side gives the other value, as the C `fmin` does.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let f32 n = -2.5
+  println("{n.min(3.0)}")
+  ```
+  This prints `-2.5`.
+:##
+public extend f32 min(f32 b) f32:
+    return math_llvm.minnum_f32(self, b)
+
+##:
+Gives the smaller of the value and `b`.
+
+A NaN on one side gives the other value, as the C `fmin` does.
+
+- Parameter b: The other value.
+- Returns: The smaller of the two values.
+- Example:
+  ```sushi
+  let f64 n = -2.5
+  println("{n.min(3.0)}")
+  ```
+  This prints `-2.5`.
+:##
+public extend f64 min(f64 b) f64:
+    return math_llvm.minnum_f64(self, b)
+
+##:
+Gives the larger of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let i8 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend i8 max(i8 b) i8:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let i16 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend i16 max(i16 b) i16:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let i32 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend i32 max(i32 b) i32:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let i64 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend i64 max(i64 b) i64:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let u8 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend u8 max(u8 b) u8:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let u16 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend u16 max(u16 b) u16:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let u32 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend u32 max(u32 b) u32:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+The compare is unsigned.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let u64 n = 7
+  println("{n.max(3)}")
+  ```
+  This prints `7`.
+:##
+public extend u64 max(u64 b) u64:
+    if (self > b):
+        return self
+    return b
+
+##:
+Gives the larger of the value and `b`.
+
+A NaN on one side gives the other value, as the C `fmax` does.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let f32 n = -2.5
+  println("{n.max(3.0)}")
+  ```
+  This prints `3`.
+:##
+public extend f32 max(f32 b) f32:
+    return math_llvm.maxnum_f32(self, b)
+
+##:
+Gives the larger of the value and `b`.
+
+A NaN on one side gives the other value, as the C `fmax` does.
+
+- Parameter b: The other value.
+- Returns: The larger of the two values.
+- Example:
+  ```sushi
+  let f64 n = -2.5
+  println("{n.max(3.0)}")
+  ```
+  This prints `3`.
+:##
+public extend f64 max(f64 b) f64:
+    return math_llvm.maxnum_f64(self, b)
 
 ##:
 Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.

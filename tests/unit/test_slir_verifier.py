@@ -1015,17 +1015,15 @@ def test_the_declared_parameters_of_a_method_are_its_receiver_then_its_parameter
 
 def test_the_declared_parameters_of_a_stdlib_function_are_the_row_of_its_module():
     """A function of a registry stdlib module borrows each argument. The count is the arity
-    of its row, and of its family for `min`; a name that the module has no row for is no
-    row, and so is a user function of the same name."""
+    of its row; a name that the module has no row for is no row, and so is a user function
+    of the same name."""
     funcs, extensions = FunctionTable(), ExtensionTable()
-    assert declared_params(funcs, extensions, st.Direct("sushi_sqrt", "sqrt", "math")) \
+    assert declared_params(funcs, extensions, st.Direct("sushi_msleep", "msleep", "time")) \
         == DeclaredParams((GUARANTEED,))
-    assert declared_params(funcs, extensions, st.Direct("sushi_min_u8", "min", "math")) \
-        == DeclaredParams((GUARANTEED, GUARANTEED))
     assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "time")) \
         == DeclaredParams(())
-    assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "math")) is None
-    assert declared_params(funcs, extensions, st.Direct("sushi_sqrt", "sqrt")) is None
+    assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "random")) is None
+    assert declared_params(funcs, extensions, st.Direct("sushi_msleep", "msleep")) is None
 
 
 def test_the_declared_parameters_of_a_conversion_are_one_owned_parameter():

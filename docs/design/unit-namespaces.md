@@ -644,12 +644,13 @@ unqualified name, and it is short:
 | 2 | a declaration of this unit |
 | 3 | a name a flat `use` of this unit brought in — one candidate resolves, two or more is [`CE3012`](../error-catalog.md#ce3012) |
 
-Row 3 holds a registry stdlib module's CONSTANT as it holds its functions. One scope-aware
-lookup answers `PI`, `E` and `TAU` (`stdlib_registry.lookup_stdlib_constant`), at row 3: a
-unit that did not import `<math>` has no `PI`, a unit's own `E` wins, and a `const`
-initializer folds `PI / 2.0` like any other constant.
-`tests/unit/test_stdlib_constants_take_the_ladder.py` keeps the module's hooks readable
-by the registry alone.
+Row 3 holds a stdlib constant as it holds any other constant of an imported unit. `PI`, `E`
+and `TAU` are `public const` declarations of `math.sushi`: a unit that did not import
+`<math>` has no `PI`, a unit's own `E` wins (with CW3002, as an own function does), and a
+`const` initializer folds `PI / 2.0` like any other constant. A stdlib export shadows only
+in a unit whose flat scope reaches its module: behind `use <math> as m`, or in a unit with
+no import, an own `E` or `sin` is no shadow and gets no warning (`StdlibReach`,
+`semantics/visibility.py`).
 
 #### The KIND ladder
 

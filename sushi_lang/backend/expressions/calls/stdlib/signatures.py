@@ -130,15 +130,14 @@ def llvm_function_type(sig: Signature) -> ir.FunctionType:
 def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, symbol: str,
                     args: Sequence[tuple[ir.Value, Type]]) -> ir.Value:
     """Emit the call of a function of a registry stdlib module from the values and the
-    types of its operands (docs/design/ir.md 8.6). The row is the row of the call
-    (`stdlib_row`: a member of a family at the type of its first argument), and `symbol`
-    is the symbol that SLIR lowering derived for it. Each operand borrows. A `cstr`
+    types of its operands (docs/design/ir.md 8.6). The row is the row of the function
+    (`stdlib_signature`), and `symbol` is the symbol that SLIR lowering derived for it. Each operand borrows. A `cstr`
     parameter crosses as the copy of the one C-string seam (`emit_cstr_arg`), which the
     call frees right after it returns (S23)."""
     from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg, free_cstr_args
-    from sushi_lang.semantics.stdlib_registry import stdlib_row
+    from sushi_lang.semantics.stdlib_registry import stdlib_signature
 
-    sig = stdlib_row(module_path, func_name, [ty for _, ty in args])
+    sig = stdlib_signature(module_path, func_name)
     if sig is None:
         raise_internal_error("CE0024", type=module_path, method=func_name)
     if len(args) != sig.arity:

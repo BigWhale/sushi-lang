@@ -33,27 +33,22 @@ READERS = {
     STDLIB_EMITTERS / "env.py": set(),
     STDLIB_EMITTERS / "process.py": SPECIAL_CASES,
     STDLIB_EMITTERS / "random.py": set(),
-    STDLIB_EMITTERS / "math.py": set(),
 }
 
 REGISTRY_MODULES = {
     "time": ("sushi_lang.sushi_stdlib.src.time", "time"),
     "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "env"),
     "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "process"),
-    "math": ("sushi_lang.sushi_stdlib.src.math", "math"),
     "random": ("sushi_lang.sushi_stdlib.src.random", "random"),
 }
 
 # The modules whose generated functions are named `sushi_<name>`: the emitter declares
 # each one from its row, and the declaration must match what the generator built.
-GENERATED_MODULES = ("time", "sys/env", "sys/process", "math", "random")
+GENERATED_MODULES = ("time", "sys/env", "sys/process", "random")
 
 
 def _every_row_name() -> set[str]:
-    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
-
-    return ({name for table in signature_tables().values() for name in table}
-            | set(MATH_FAMILIES))
+    return {name for table in signature_tables().values() for name in table}
 
 
 def _string_constants(path: Path) -> set[str]:
@@ -86,22 +81,17 @@ def test_a_registry_module_reads_its_own_table(module_path):
     assert table
     for name, sig in table.items():
         record = registry.get_function(module_path, name)
-        assert record is not None and not record.is_constant
+        assert record is not None
         assert record.get_return_type([param.ty for param in sig.params]) == sig.return_type()
         assert stdlib_signature(module_path, name) is sig
     assert registry.get_function(module_path, "mostly_harmless") is None
 
 
 def _generated_rows():
-    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES, family_row
-
     for module_path in GENERATED_MODULES:
         for name, sig in signature_tables()[module_path].items():
             if name not in SPECIAL_CASES:
                 yield module_path, f"sushi_{name}", sig
-    for name, (_arity, types) in MATH_FAMILIES.items():
-        for ty in types:
-            yield "math", f"sushi_{name}_{ty}", family_row(name, ty)
 
 
 def test_every_row_declares_the_function_its_generator_built():
@@ -123,7 +113,7 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 50
+    assert checked >= 16
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.
@@ -131,7 +121,6 @@ GENERATORS = {
     "time": ("sushi_lang.sushi_stdlib.src.time", "sushi_"),
     "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "sushi_"),
     "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "sushi_"),
-    "math": ("sushi_lang.sushi_stdlib.src.math", "sushi_"),
     "random": ("sushi_lang.sushi_stdlib.src.random", "sushi_"),
     "io/files": ("sushi_lang.sushi_stdlib.src.io.files", "sushi_io_files_"),
     "net/socket": ("sushi_lang.sushi_stdlib.src.net", "sushi_net_"),
@@ -139,13 +128,7 @@ GENERATORS = {
 
 
 def _row_symbols(module_path: str, prefix: str) -> set[str]:
-    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
-
-    symbols = {f"{prefix}{name}" for name in signature_tables()[module_path]}
-    if module_path == "math":
-        symbols |= {f"{prefix}{name}_{ty}"
-                    for name, (_arity, types) in MATH_FAMILIES.items() for ty in types}
-    return symbols
+    return {f"{prefix}{name}" for name in signature_tables()[module_path]}
 
 
 def _rowless(module_path: str, module) -> list[str]:
@@ -181,18 +164,6 @@ def test_a_generated_function_with_no_row_is_found():
     orphan.append_basic_block().name = "entry"
     ir.IRBuilder(orphan.blocks[0]).ret_void()
     assert _rowless("time", module) == ["sushi_mostly_harmless"]
-
-
-def test_a_math_family_row_is_one_type_throughout():
-    """`min` over u8 takes two u8 and answers u8; `abs` has no unsigned row."""
-    from sushi_lang.semantics.typesys import BuiltinType
-    from sushi_lang.sushi_stdlib.src.math import family_row
-
-    row = family_row("min", BuiltinType.U8)
-    assert [param.ty for param in row.params] == [BuiltinType.U8, BuiltinType.U8]
-    assert row.bare == BuiltinType.U8
-    assert family_row("abs", BuiltinType.U8) is None
-    assert family_row("sqrt", BuiltinType.F64) is None
 
 
 def _scanner(generic_funcs=None, func_table=None):

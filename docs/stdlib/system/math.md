@@ -10,22 +10,20 @@ Mathematical functions for numeric types.
 use <math>
 ```
 
-The module has two halves. The functions and the constants are compiled into the stdlib
-bitcode. The methods on the integer types (`divmod`) are written in Sushi
-(`sushi_lang/sushi_stdlib/src_sushi/math.sushi`). A method of a built-in type needs no
-import, so `a.divmod(b)` works with no `use <math>`.
+The module is Sushi source (`sushi_lang/sushi_stdlib/src_sushi/math.sushi`). The `f64`
+functions and the constants need `use <math>`. The methods on the number types (`abs`,
+`min`, `max`, `divmod`) need no import, because a method of a built-in type needs none.
 
 ## Overview
 
 The math module provides mathematical operations for numeric types. All functions are
-referred to by a single, **polymorphic** name — there are no type-suffixed variants such as
-`abs_i32` or `sqrt_f64`. Two families exist:
+referred to by one name, with no type-suffixed variants such as `abs_i32` or `sqrt_f64`.
+Two groups exist:
 
-- `abs`, `min`, and `max` accept any matching numeric type and return that same type.
-- All other functions (`sqrt`, `pow`, the trigonometric, hyperbolic, logarithmic, and
+- `abs`, `min`, `max` and `divmod` are **methods** of the number types: `x.abs()`,
+  `a.min(b)`, `a.max(b)`, `a.divmod(b)`. There are no free functions `abs`, `min` and `max`.
+- The free functions (`sqrt`, `pow`, the trigonometric, hyperbolic, logarithmic, and
   exponential functions, and `hypot`) operate on `f64` and return `f64`.
-
-`divmod` is a method of each integer type, not a function: `a.divmod(b)`.
 
 `sqrt`, `pow`, `floor`, `ceil`, `round`, `trunc`, `sin`, `cos`, the logarithms and the
 exponentials compile to LLVM intrinsics. `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`,
@@ -42,30 +40,39 @@ the module has no `PI` ([CE1001](../../error-catalog.md#ce1001)), `use <math> as
 a unit's own `const f64 E`, a local `PI` or a `var TAU` wins over the module's. A `const`
 initializer folds them like any other constant.
 
-## Polymorphic Functions: abs, min, max
+## Methods: abs, min, max
 
-These three functions adapt to the type of their arguments.
+These three are methods of the number types. They need no `use <math>`. The argument of
+`min` and `max` has the type of the receiver, and a literal argument takes that type.
 
 ```sushi
-use <math>
-
 fn main() i32:
-    let i32 a = abs(-42)        # 42 (i32)
-    let f64 b = abs(-3.14)      # 3.14 (f64)
-    let i32 c = min(10, 20)     # 10 (i32)
-    let f64 d = max(1.5, 2.5)   # 2.5 (f64)
-
+    let i32 n = -42
+    let f64 f = -3.14
+    let i32 ten = 10
+    let f64 low = 1.5
+    println("{n.abs()}")        # 42
+    println("{f.abs()}")        # 3.14
+    println("{ten.min(20)}")    # 10
+    println("{low.max(2.5)}")   # 2.5
     return 0
 ```
 
-**Functions:**
-- `abs(T value) -> T` — absolute value. `T` must be a **signed integer** (`i8`, `i16`,
-  `i32`, `i64`) or a **float** (`f32`, `f64`).
-- `min(T a, T b) -> T` — smaller of two values. `T` may be any numeric type. Two typed
-  arguments must have the same type ([CE2006](../../error-catalog.md#ce2006)). A literal argument takes the type of the
-  other argument, so `max(b, 1)` with `b: u32` compares two `u32` values. A literal that
-  does not fit that type is [CE2073](../../error-catalog.md#ce2073).
-- `max(T a, T b) -> T` — larger of two values. Same typing rules as `min`.
+- `x.abs() -> T` — absolute value. `T` is a signed integer (`i8`, `i16`, `i32`, `i64`) or
+  a float (`f32`, `f64`). An unsigned type has no `abs` ([CE2008](../../error-catalog.md#ce2008)).
+- `a.min(T b) -> T` — the smaller of two values. `T` is any of the eight integer types,
+  `f32` or `f64`. A mismatched typed argument is
+  [CE2006](../../error-catalog.md#ce2006). A literal that does not fit `T` is
+  [CE2073](../../error-catalog.md#ce2073).
+- `a.max(T b) -> T` — the larger of two values. Same rules as `min`.
+
+`abs` of the smallest signed value (for example `i32` -2147483648) does not fit `T`. It
+follows `--overflow`: in the default mode `trap` it stops the program with the runtime
+error [RE2032](../../error-catalog.md#re2032), and with `--overflow=wrap` the value stays the
+same.
+
+A float `min` or `max` ignores a NaN on one side: the other value comes back, as C `fmin`
+and `fmax` do.
 
 ## Integer Division: divmod
 

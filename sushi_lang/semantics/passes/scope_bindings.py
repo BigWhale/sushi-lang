@@ -23,7 +23,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.ast_walk import walk_nodes
 from sushi_lang.semantics.name_ladder import BareName
 from sushi_lang.semantics.shir.bindings import (
-    Bindings, Capture, Const, Function, Namespace, Resolution, TypeName, Unresolved,
+    Bindings, Capture, Function, Namespace, Resolution, TypeName, Unresolved,
 )
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId
 
@@ -32,7 +32,6 @@ Binders = Iterator[tuple[object, str]]
 # The answer of each rung that names a declaration, or nothing. The scope pass answers
 # LOCAL (the local of the binder) and CONSTANT (a `const`, or the `Storage` of a `var`).
 DECLARED_ANSWERS: dict[BareName, Callable[[str], Resolution]] = {
-    BareName.STDLIB_CONSTANT: Const,
     BareName.FUNCTION: Function,
     BareName.NAMESPACE: Namespace,
     BareName.TYPE: TypeName,

@@ -2,13 +2,13 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, AbstractSet, Callable, Optional, Dict, Sequence, Tuple, List
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Optional, Dict, Sequence, Tuple, List
 import importlib
 import re
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program
-    from sushi_lang.semantics.typesys import Type
+    from sushi_lang.semantics.visibility import StdlibReach
     from sushi_lang.sushi_stdlib.src.signatures import Signature
 
 
@@ -210,13 +210,9 @@ class StdlibFunction:
     """Metadata for a single stdlib function."""
     name: str
     module_path: str
-    is_constant: bool = False
     get_return_type: Optional[Callable] = None
     params: Optional[List] = None  # None=polymorphic, []=no args, [Type,...]=typed args
     is_variadic: bool = False  # True if the last param is a native '...T' collecting variadic
-    # A constant's folded value, read once at discovery. The front end folds it and the
-    # back end emits it from here, so no reader has to know which module declared it.
-    value: Optional[object] = None
 
 
 @dataclass
@@ -224,7 +220,6 @@ class StdlibModule:
     """Metadata for a stdlib module."""
     path: str
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
-    constants: Dict[str, StdlibFunction] = field(default_factory=dict)
     # The stdlib modules this one RE-EXPORTS (`docs/design/unit-namespaces.md` section
     # 8.1): a registry module has no `public use` to write, so its Python module names
     # them in a `REEXPORTS` tuple and every importer gets their names beside this one's.
@@ -244,10 +239,7 @@ def _get_param_specs():
     if _param_specs_cache is not None:
         return _param_specs_cache
 
-    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
-
-    # A math FAMILY takes any of its types, so the registry holds no one spec for it.
-    specs = {("math", name): None for name in MATH_FAMILIES}
+    specs = {}
 
     # A module with a signature table keeps its parameter types in it, beside its
     # generators, and every reader takes its row from there (#550).
@@ -261,13 +253,8 @@ def _get_param_specs():
 
 
 def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
-    """Every registry module's ONE signature table, keyed by its `use` path (#798).
-
-    The math FAMILIES (`abs`, `min`, `max`) have one row per argument type and are not
-    here: `math.family_row` builds the row for the type a call reaches.
-    """
+    """Every registry module's ONE signature table, keyed by its `use` path (#798)."""
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.math import MATH_SIGNATURES
     from sushi_lang.sushi_stdlib.src.random import RANDOM_SIGNATURES
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.env import ENV_SIGNATURES
@@ -280,31 +267,12 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
         "sys/process": PROCESS_SIGNATURES,
         "io/files": FILES_SIGNATURES,
         "net/socket": SOCKET_SIGNATURES,
-        "math": MATH_SIGNATURES,
         "random": RANDOM_SIGNATURES,
     }
 
 
-def family_tables() -> Dict[str, Dict[Callable, Tuple[str, ...]]]:
-    """Every registry module's FAMILIES: a resolver over argument types, and its names.
-
-    A family has one row per argument type, so it has no one entry in its module's
-    signature table. Only `<math>` has families today (`abs`, `min`, `max`).
-    """
-    from sushi_lang.sushi_stdlib.src.math import (
-        MATH_FAMILIES,
-        get_builtin_math_function_return_type,
-    )
-
-    return {"math": {get_builtin_math_function_return_type: tuple(MATH_FAMILIES)}}
-
-
 def _row_resolver(sig: "Signature") -> Callable:
     return lambda param_types=(): sig.return_type()
-
-
-def _family_resolver(family: Callable, name: str) -> Callable:
-    return lambda param_types=(): family(name, list(param_types))
 
 
 def stdlib_signature(module_path: str, name: str) -> Optional["Signature"]:
@@ -312,29 +280,8 @@ def stdlib_signature(module_path: str, name: str) -> Optional["Signature"]:
     return signature_tables().get(module_path, {}).get(name)
 
 
-def _is_family(module_path: str, name: str) -> bool:
-    return any(name in names for names in family_tables().get(module_path, {}).values())
-
-
-def stdlib_row(module_path: str, name: str,
-               arg_types: Sequence[Optional["Type"]]) -> Optional["Signature"]:
-    """The row of one call of a registry stdlib function (docs/design/ir.md 7.6, 8.6).
-
-    A member of a family has a row for each type: the row at the type of the first
-    argument, or None when that argument has no type or the family has no row for it.
-    """
-    if not _is_family(module_path, name):
-        return stdlib_signature(module_path, name)
-    from sushi_lang.sushi_stdlib.src.math import family_row
-    first = arg_types[0] if arg_types else None
-    return None if first is None else family_row(name, first)
-
-
 def stdlib_arity(module_path: str, name: str) -> Optional[int]:
     """The number of parameters of a registry stdlib function, or None for no function."""
-    if _is_family(module_path, name):
-        from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
-        return MATH_FAMILIES[name][0]
     row = stdlib_signature(module_path, name)
     return None if row is None else row.arity
 
@@ -343,14 +290,10 @@ def stdlib_arity(module_path: str, name: str) -> Optional[int]:
 _SYMBOL_PREFIXES = {"io/files": "sushi_io_files_", "net/socket": "sushi_net_"}
 
 
-def stdlib_symbol(module_path: str, name: str, arg_types: Sequence["Type"]) -> str:
+def stdlib_symbol(module_path: str, name: str) -> str:
     """The symbol of the generated function that a call of a registry stdlib function
     calls: the ONE derivation (docs/design/ir.md 8.6). It is `sushi_<name>`
-    (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers), and
-    `sushi_<name>_<type>` for a member of a family, at the type of its first argument: an
-    LLVM integer has no sign, so `min` of two u8 is `sushi_min_u8` (#817)."""
-    if _is_family(module_path, name):
-        return f"sushi_{name}_{arg_types[0]}"
+    (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers)."""
     return f"{_SYMBOL_PREFIXES.get(module_path, 'sushi_')}{name}"
 
 
@@ -368,7 +311,6 @@ class StdlibRegistry:
 
     KNOWN_MODULES = {
         "time": "sushi_lang.sushi_stdlib.src.time",
-        "math": "sushi_lang.sushi_stdlib.src.math",
         "sys/env": "sushi_lang.sushi_stdlib.src.sys.env",
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "random": "sushi_lang.sushi_stdlib.src.random",
@@ -413,19 +355,14 @@ class StdlibRegistry:
 
         self._discover_functions(stdlib_module, module_name, python_path)
 
-        constant_checker_name = f"is_builtin_{module_name}_constant"
-        constant_checker = getattr(py_module, constant_checker_name, None)
-        if constant_checker:
-            self._discover_constants(stdlib_module, module_name, constant_checker, py_module)
-
         self._modules[module_path] = stdlib_module
 
     def _discover_functions(self, module: StdlibModule, module_name: str,
                             python_path: str) -> None:
-        """Register one function per row of the module's table, and per family (#908).
+        """Register one function per row of the module's table (#908).
 
-        Every resolver has one shape: it takes the argument types. A row ignores them and
-        answers its declared type; a family answers the row of its argument types.
+        Every resolver has one shape: it takes the argument types, and a row ignores them
+        and answers its declared type.
         """
         rows = signature_tables().get(module.path)
         if rows is None:
@@ -435,64 +372,18 @@ class StdlibRegistry:
                 "signature_tables()"
             )
 
-        resolvers: Dict[str, Callable] = {
-            name: _family_resolver(family, name)
-            for family, names in family_tables().get(module.path, {}).items()
-            for name in names
-        }
-        resolvers.update({name: _row_resolver(sig) for name, sig in rows.items()})
+        resolvers: Dict[str, Callable] = {name: _row_resolver(sig) for name, sig in rows.items()}
 
         for name, get_ret_type in resolvers.items():
             func = StdlibFunction(
                 name=name,
                 module_path=module.path,
-                is_constant=False,
                 get_return_type=get_ret_type,
                 params=_get_param_specs().get((module_name, name)),
                 is_variadic=(module_name, name) in _VARIADIC_STDLIB
             )
             module.functions[name] = func
             self._function_lookup[(module.path, name)] = func
-
-    def _discover_constants(
-        self,
-        module: StdlibModule,
-        module_name: str,
-        checker: Callable[[str], bool],
-        py_module: any
-    ) -> None:
-        """Discover a module's constants: the names its checker accepts, with their values.
-
-        The value getter is the second half of the protocol, and it is required: a
-        constant the registry cannot fold is a name every reader would have to special-
-        case, which is the bug #560 was (`tests/unit/test_stdlib_constants_take_the_ladder.py`).
-        """
-        from sushi_lang.semantics.typesys import BuiltinType
-
-        common_constants = ["PI", "E", "TAU"]
-
-        constant_getter_name = f"get_builtin_{module_name}_constant_value"
-        getter = getattr(py_module, constant_getter_name, None)
-        if getter is None:
-            raise RuntimeError(
-                f"stdlib registry: module '{module.path}' declares constants and is "
-                f"missing {constant_getter_name}"
-            )
-
-        for name in common_constants:
-            if checker(name):
-                type_name, value = getter(name)
-                const_type = BuiltinType(type_name)
-
-                func = StdlibFunction(
-                    name=name,
-                    module_path=module.path,
-                    is_constant=True,
-                    get_return_type=lambda ty=const_type: ty,
-                    value=value,
-                )
-                module.constants[name] = func
-                self._function_lookup[(module.path, name)] = func
 
     def get_function(self, module_path: str, function_name: str) -> Optional[StdlibFunction]:
         """Get function metadata by module and name."""
@@ -502,9 +393,6 @@ class StdlibRegistry:
         """Get module metadata by path."""
         return self._modules.get(module_path)
 
-    def get_all_modules(self) -> List[str]:
-        """Get list of all registered module paths."""
-        return list(self._modules.keys())
 
 
 _global_registry: Optional[StdlibRegistry] = None
@@ -519,24 +407,35 @@ def get_stdlib_registry() -> StdlibRegistry:
     return _global_registry
 
 
-def lookup_stdlib_constant(name: str, scope: object) -> Optional[StdlibFunction]:
-    """The registry constant a BARE name reaches in `scope`, or None.
+def flat_stdlib_reach(units: Sequence[Any]) -> "StdlibReach":
+    """The bundled stdlib units that the flat scope of each unit of the build reaches.
 
-    Section 8's ladder, its last rung for a value: a stdlib constant is a name a flat
-    `use <module>` brings, so it answers only after a local, this unit's own declaration
-    and every imported unit's, and only in a unit whose scope holds the module. A reader
-    with no scope -- a scratch validator, a table built by hand -- sees every module,
-    which is what `UnitScope.unrestricted()` means. Every reader of a bare name -- the
-    scope pass, the inference visitor, the constant evaluator, the back end -- asks THIS
-    and nothing module-specific, so a shadowed builtin cannot recur (#560).
+    A flat `use <m>` reaches `m`, and what `m` re-exports with a `public use` (or, for a
+    registry module, with its `REEXPORTS`), to the end of the chain.
     """
+    from sushi_lang.semantics.visibility import StdlibReach
+
+    by_name = {unit.name: unit for unit in units}
+    stdlib = frozenset(unit.name for unit in units
+                       if unit.provenance is not None and not unit.from_library)
     registry = get_stdlib_registry()
-    everything = scope is None or getattr(scope, "everything", True)
-    module_paths = (registry.get_all_modules() if everything
-                    else getattr(scope, "modules", ()))
-    for module_path in module_paths:
+
+    def reexports(module_path: str) -> list:
+        unit = by_name.get(module_path)
+        if unit is not None and unit.ast is not None:
+            return [use.path for use in unit.ast.uses if use.is_stdlib and use.is_public]
         module = registry.get_module(module_path)
-        record = module.constants.get(name) if module is not None else None
-        if record is not None:
-            return record
-    return None
+        return list(module.reexports) if module is not None else []
+
+    flat = {}
+    for unit in units:
+        todo = ([use.path for use in unit.ast.uses if use.is_stdlib and use.alias is None]
+                if unit.ast is not None else [])
+        seen: set = set()
+        while todo:
+            module_path = todo.pop()
+            if module_path not in seen:
+                seen.add(module_path)
+                todo.extend(reexports(module_path))
+        flat[unit.name] = frozenset(seen)
+    return StdlibReach(stdlib_units=stdlib, flat=flat)

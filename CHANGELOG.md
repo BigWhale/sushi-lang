@@ -6,6 +6,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`<math>` is Sushi source, and `abs`, `min` and `max` are methods.** Write `x.abs()`,
+  `a.min(b)` and `a.max(b)`. `abs` is a method of `i8`, `i16`, `i32`, `i64`, `f32` and `f64`.
+  `min` and `max` are methods of the eight integer types, `f32` and `f64`. The argument has
+  the type of the receiver. The methods need no import. The free functions `abs`, `min` and
+  `max` are removed, with no alias. `abs` of the smallest signed value follows `--overflow`:
+  the default `trap` stops the program with `RE2032`, and `wrap` keeps the value. A float
+  `min` or `max` ignores a NaN on one side. The free functions `sqrt`, `pow` and the others,
+  and the constants `PI`, `E` and `TAU`, still need `use <math>`. BREAKING.
 - **`len()`, `size()`, `capacity()`, `index_of`, `find` and the counts answer `i64`.** The
   `len()` and `capacity()` of `T[N]`, `T[]` and `List@(T)`, the `len()` and
   `tombstone_count()` of `HashMap@(K, V)`, and the `len()`, `size()` and `count()` of a

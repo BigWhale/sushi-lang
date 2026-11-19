@@ -25,7 +25,6 @@ class BareName(Enum):
 
     LOCAL = "local"
     CONSTANT = "constant"
-    STDLIB_CONSTANT = "stdlib constant"
     FUNCTION = "function"
     NAMESPACE = "namespace"
     TYPE = "type"
@@ -37,7 +36,6 @@ class BareName(Enum):
 RUNGS: tuple[BareName, ...] = (
     BareName.LOCAL,
     BareName.CONSTANT,
-    BareName.STDLIB_CONSTANT,
     BareName.FUNCTION,
     BareName.NAMESPACE,
     BareName.TYPE,
@@ -59,9 +57,6 @@ class Rungs(Protocol):
     def is_constant(self, name: str) -> bool:
         """A `const` or a unit `var` this unit may write, its own or an imported one."""
 
-    def is_stdlib_constant(self, name: str) -> bool:
-        """A registry module's constant a flat `use <module>` brought (#560)."""
-
     def is_function(self, name: str) -> bool:
         """A function this unit may call, generic or plain, referenced as a value."""
 
@@ -78,8 +73,6 @@ def classify(name: str, rungs: Rungs) -> BareName:
         return BareName.LOCAL
     if rungs.is_constant(name):
         return BareName.CONSTANT
-    if rungs.is_stdlib_constant(name):
-        return BareName.STDLIB_CONSTANT
     if rungs.is_function(name):
         return BareName.FUNCTION
     if rungs.is_namespace(name):

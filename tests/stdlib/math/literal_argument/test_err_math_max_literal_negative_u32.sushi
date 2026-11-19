@@ -1,9 +1,9 @@
-# A literal argument of max that does not fit the other argument's type is CE2073 (#842).
+# A literal argument of `a.max(b)` that does not fit the type of the receiver is CE2073 (#842).
 # EXPECT_ERROR_CODE: CE2073
 use <math>
 
 fn main() i32:
     let u32 b = 7
-    let u32 m = max(b, -1)
+    let u32 m = b.max(-1)
     println("{m}")
     return 0
