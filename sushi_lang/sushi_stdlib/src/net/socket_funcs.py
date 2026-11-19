@@ -29,6 +29,7 @@ from sushi_lang.sushi_stdlib.src.signatures import (
 )
 
 I32 = BuiltinType.I32
+I64 = BuiltinType.I64
 U64 = BuiltinType.U64
 BYTES = DynamicArrayType(BuiltinType.U8)
 STRINGS = DynamicArrayType(BuiltinType.STRING)
@@ -55,14 +56,14 @@ SOCKET_SIGNATURES: Dict[str, Signature] = {
     "sock_peer":             Signature(params_of(I32),
                                        ok=tuple_ref((I32, U64, U64, I32)), error=NET),
     # A descriptor and a count, or a descriptor and bytes.
-    "sock_recv":             Signature(params_of(I32, I32), ok=BYTES, error=NET),
-    "sock_send":             Signature(params_of(I32, BYTES), ok=I32, error=NET),
+    "sock_recv":             Signature(params_of(I32, I64), ok=BYTES, error=NET),
+    "sock_send":             Signature(params_of(I32, BYTES), ok=I64, error=NET),
     "sock_set_recv_timeout": Signature(params_of(I32, I32), ok=I32, error=NET),
     "sock_set_send_timeout": Signature(params_of(I32, I32), ok=I32, error=NET),
     # The datagram pair: send names its peer, receive answers who sent it.
     "sock_udp_send_to":      Signature(params_of(I32, BYTES, cstr(), I32),
-                                       ok=I32, error=NET),
-    "sock_udp_recv_from":    Signature(params_of(I32, I32),
+                                       ok=I64, error=NET),
+    "sock_udp_recv_from":    Signature(params_of(I32, I64),
                                        ok=UnknownType("Datagram"), error=NET),
 }
 

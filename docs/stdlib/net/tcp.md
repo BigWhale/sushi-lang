@@ -102,7 +102,7 @@ fn main() i32:
     return 0
 ```
 
-### `s.send_all(u8[] data) ~ | NetError` and `s.recv_exact(i32 count) u8[] | NetError`
+### `s.send_all(u8[] data) ~ | NetError` and `s.recv_exact(i64 count) u8[] | NetError`
 
 The two loops every caller would otherwise write. One send may take fewer bytes than it was offered and one receive answers whatever arrived, so anything that depends on a byte count wants these rather than `send` and `read_bytes`.
 
@@ -140,11 +140,11 @@ fn main() i32:
         Result.Err(_) -> return 1
 ```
 
-### `s.send(u8[] data) i32 | NetError`
+### `s.send(u8[] data) i64 | NetError`
 
 One write, answering how many bytes it took. This is the one write that answers a COUNT: a socket's partial write says what the peer's window took, and the contract's `write_bytes` -- which writes everything -- cannot say that.
 
-There is no `recv` beside it. One read on a socket is the contract's `read_bytes(i32 max)`: it answers an empty array when the peer closed cleanly, and a timeout is an error instead, so the two never read alike. Every `NetError` a read can answer has its `IoError` twin, so a second name would have carried nothing of its own.
+There is no `recv` beside it. One read on a socket is the contract's `read_bytes(i64 max)`: it answers an empty array when the peer closed cleanly, and a timeout is an error instead, so the two never read alike. Every `NetError` a read can answer has its `IoError` twin, so a second name would have carried nothing of its own.
 
 ### `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError` and `l.set_timeout(i32 accept_ms) ~ | NetError`
 

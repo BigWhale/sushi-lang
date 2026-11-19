@@ -1,0 +1,49 @@
+# The TCP functions take an i64 count and answer an i64 count (ADR 0001): send(),
+# recv_exact(), read(), read_bytes(), and the primitives sock_send() and sock_recv().
+# EXPECT_STDOUT_EXACT: "sent 2\nexact 42\nraw sent 2\nraw 42\nread 42\nbytes 2\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+use <net/socket>
+use <collections/strings>
+
+fn run(poke TcpStream client, poke TcpStream served) ~ | IoError:
+    let i64 two = 2
+    let u8[] answer = "42".to_bytes()
+    let i64 sent = client.send(answer).realise(-1)
+    println("sent {sent}")
+    let u8[] empty = from([])
+    let u8[] heard = served.recv_exact(two).realise(empty)
+    println("exact {heard.to_string()}")
+
+    let i64 raw_sent = sock_send(client.fd, answer).realise(-1)
+    println("raw sent {raw_sent}")
+    let u8[] empty2 = from([])
+    let u8[] raw = sock_recv(served.fd, two).realise(empty2)
+    println("raw {raw.to_string()}")
+
+    client.write("42")??
+    println("read {served.read(two)??}")
+    client.write("42")??
+    println("bytes {served.read_bytes(two)??.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let TcpListener listener = listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
+    if (listener.fd < 0):
+        println("listen failed")
+        return 1
+    if (not listener.set_timeout(5000).is_ok()):
+        return 1
+    let i32 port = listener.local_port().realise(-1)
+    let TcpStream client = connect("127.0.0.1", port).realise(TcpStream(-1))
+    if (not client.set_timeouts(5000, 5000).is_ok()):
+        return 1
+    let (TcpStream served, _) = listener.accept().realise((TcpStream(-1), IpAddr.V4(0)))
+    if (not served.set_timeouts(5000, 5000).is_ok()):
+        return 1
+    match run(poke client, poke served):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("run failed")
+    return 0

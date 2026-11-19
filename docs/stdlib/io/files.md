@@ -128,8 +128,8 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 
 | method | signature | provider |
 |---|---|---|
-| `read` | `(poke self, i32 max) string \| IoError` -- one read, as text | `Reader` |
-| `read_bytes` | `(poke self, i32 max) u8[] \| IoError` -- one read, as bytes | `Reader` |
+| `read` | `(poke self, i64 max) string \| IoError` -- one read, as text | `Reader` |
+| `read_bytes` | `(poke self, i64 max) u8[] \| IoError` -- one read, as bytes | `Reader` |
 | `write` | `(poke self, string data) ~ \| IoError` -- every byte, or an error | `Writer` |
 | `write_bytes` | `(poke self, u8[] data) ~ \| IoError` | `Writer` |
 | `flush` | `(poke self) ~ \| IoError` -- a successful no-op on a descriptor | `Writer` |
@@ -139,8 +139,8 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `readch` | `(poke self) string \| IoError` -- one byte, as text | `File` |
 | `writeln` | `(poke self, string data) ~ \| IoError` | `File` |
 | `tell` | `(poke self) i64 \| IoError` | `File` |
-| `read_at` | `(i64 offset, i32 count) u8[] \| IoError` -- one read at an offset; the position does not move | `File` |
-| `write_at` | `(i64 offset, u8[] data) i32 \| IoError` -- one write at an offset, answers the count; the position does not move | `File` |
+| `read_at` | `(i64 offset, i64 count) u8[] \| IoError` -- one read at an offset; the position does not move | `File` |
+| `write_at` | `(i64 offset, u8[] data) i64 \| IoError` -- one write at an offset, answers the count; the position does not move | `File` |
 | `share` | `() File \| IoError` -- `dup(2)`: a second OWNER over the SAME open file description, so the offset is SHARED | `File` |
 | `is_open` | `() bool` -- false once `close()` has run | `File` |
 | `is_terminal` | `() bool` -- true only for a terminal | `File` |
@@ -163,7 +163,7 @@ remove. `readln()` is the one-line unbuffered read and can serve in a pinch;
 answers the rest of the file from the current position.
 
 ```sushi
-fn File.read(i32 max) string | IoError
+fn File.read(i64 max) string | IoError
 fn File.read_all() string | IoError
 ```
 
@@ -366,8 +366,8 @@ of the wrapper that holds it with `into_inner()`.
 ### read_at and write_at
 
 ```sushi
-fn File.read_at(i64 offset, i32 count) u8[] | IoError
-fn File.write_at(i64 offset, u8[] data) i32 | IoError
+fn File.read_at(i64 offset, i64 count) u8[] | IoError
+fn File.write_at(i64 offset, u8[] data) i64 | IoError
 ```
 
 The offset is an ARGUMENT, so neither call moves the file position: a `read()` or a
@@ -933,8 +933,8 @@ which is what makes them the ones a handle is written on.
 
 `fd_open`, `fd_dup`, `fd_close` and `fd_isatty` belong to neither half.
 
-### `fd_pread(i32 fd, i64 offset, i32 max) u8[] | FileError`
-### `fd_pwrite(i32 fd, i64 offset, u8[] data) i32 | FileError`
+### `fd_pread(i32 fd, i64 offset, i64 max) u8[] | FileError`
+### `fd_pwrite(i32 fd, i64 offset, u8[] data) i64 | FileError`
 
 Read or write at an offset **without moving the descriptor's file position**. That is
 what makes them the answer for concurrent reads of one file: the offset is an argument,
@@ -965,14 +965,14 @@ read-only, which is the safe reading of a value this function does not know.
 
 `mode` is the permission bits a newly created file gets, as an integer — `420` is `0644`.
 
-### `fd_read(i32 fd, i32 max) u8[] | FileError`
+### `fd_read(i32 fd, i64 max) u8[] | FileError`
 
 ONE `read(2)` from the descriptor's current position, which it advances. The answer
 carries what ARRIVED and may be shorter than asked for; an **empty array is end of file**
 and not an error, so a caller loops until the answer is empty.
 
-### `fd_write(i32 fd, u8[] data) i32 | FileError`
-### `fd_write_str(i32 fd, string s) i32 | FileError`
+### `fd_write(i32 fd, u8[] data) i64 | FileError`
+### `fd_write_str(i32 fd, string s) i64 | FileError`
 
 Write every byte, looping past a short write, and answer the count. `fd_write_str` takes
 the string's own bytes with no `to_bytes()` copy in front of them — a fat pointer already

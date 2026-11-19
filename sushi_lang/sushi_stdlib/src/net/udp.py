@@ -7,7 +7,7 @@ the instant its datagram arrives. So recv_from() answers with a Datagram --
 the bytes and the sender together -- rather than with bytes alone.
 """
 from llvmlite import ir
-from sushi_lang.backend.gep_utils import extract_len, insert_cap, insert_len
+from sushi_lang.backend.gep_utils import extract_stored_len, insert_cap, insert_len
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
@@ -77,7 +77,7 @@ def generate_bind(module: ir.Module) -> None:
 
 
 def generate_send_to(module: ir.Module) -> None:
-    """Emit `Result<i32, NetError> sushi_net_sock_udp_send_to(i32, bytes, i8*, i32)`.
+    """Emit `Result<i64, NetError> sushi_net_sock_udp_send_to(i32, bytes, i8*, i32)`.
 
     The destination is resolved per call. That is the cost of a stateless API
     and it is what a caller sending to many peers from one socket wants.
@@ -91,7 +91,7 @@ def generate_send_to(module: ir.Module) -> None:
     sendto_fn = platform_net.declare_sendto(module)
 
     array_ty = get_byte_array_type()
-    result_type = get_result_type(i32, get_unit_enum_type())
+    result_type = get_result_type(i64, get_unit_enum_type())
     func = ir.Function(module,
                        ir.FunctionType(result_type, [i32, array_ty, i8_ptr, i32]),
                        name="sushi_net_sock_udp_send_to")
@@ -130,11 +130,10 @@ def generate_send_to(module: ir.Module) -> None:
     salen = addr.load_i32_at(builder, res, platform_net.AI_ADDRLEN_OFFSET, "ai_addrlen")
     addr.emit_patch_port(builder, sockaddr, port)
 
-    length = extract_len(None, data, name="data_len", builder=builder)
+    length = extract_stored_len(None, data, name="data_len", builder=builder)
     buffer = builder.extract_value(data, 2, name="data_ptr")
-    length64 = builder.zext(length, i64, name="data_len64")
     sent = builder.call(sendto_fn, [
-        fd, buffer, length64, ir.Constant(i32, platform_net.SEND_FLAGS),
+        fd, buffer, length, ir.Constant(i32, platform_net.SEND_FLAGS),
         sockaddr, salen,
     ], name="sent")
 
@@ -151,12 +150,11 @@ def generate_send_to(module: ir.Module) -> None:
     builder.ret(emit_err_result(builder, result_type, tag))
 
     builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type,
-                               builder.trunc(sent, i32, name="sent32"), 4))
+    builder.ret(emit_ok_result(builder, result_type, sent, 8))
 
 
 def generate_recv_from(module: ir.Module) -> None:
-    """Emit `Result<Datagram, NetError> sushi_net_sock_udp_recv_from(i32, i32)`.
+    """Emit `Result<Datagram, NetError> sushi_net_sock_udp_recv_from(i32, i64)`.
 
     The sender is rendered with getnameinfo and NI_NUMERICHOST, which asks no
     resolver. A sender that cannot be rendered leaves peer_ip empty rather than
@@ -173,7 +171,7 @@ def generate_recv_from(module: ir.Module) -> None:
     array_ty = get_byte_array_type()
     datagram_ty = get_datagram_type()
     result_type = get_datagram_result_type()
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, i32]),
+    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64]),
                        name="sushi_net_sock_udp_recv_from")
     fd, maximum = func.args
     fd.name, maximum.name = "fd", "max"
@@ -189,10 +187,9 @@ def generate_recv_from(module: ir.Module) -> None:
     ip_slot = entry_alloca(builder, i8_ptr, name="ip_slot")
     ip_len_slot = entry_alloca(builder, i32, name="ip_len_slot")
 
-    max64 = builder.zext(maximum, i64, name="max64")
-    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="recv_buf")
+    buffer = emit_checked_malloc(builder, malloc_fn, maximum, name="recv_buf")
     got = builder.call(recvfrom_fn, [
-        fd, buffer, max64, zero, storage, len_slot,
+        fd, buffer, maximum, zero, storage, len_slot,
     ], name="got")
     ok = builder.icmp_signed(">=", got, ir.Constant(i64, 0), name="recv_ok")
 

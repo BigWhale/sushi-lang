@@ -80,7 +80,7 @@ resolves that peer each time round.
 - Returns: How many bytes were sent.
 - Errors: NetError, when the destination is unknown or the send failed.
 :##
-public extend UdpSocket send_to(u8[] data, string host, i32 port) i32 | NetError:
+public extend UdpSocket send_to(u8[] data, string host, i32 port) i64 | NetError:
     return Result.Ok(sock_udp_send_to(self.fd, data, host, port)??)
 
 ##:
@@ -94,7 +94,7 @@ receive: the bytes did arrive.
 - Returns: The bytes, and the address and port they came from.
 - Errors: NetError, when the receive failed or its bound expired.
 :##
-public extend UdpSocket recv_from(i32 max) Datagram | NetError:
+public extend UdpSocket recv_from(i64 max) Datagram | NetError:
     return Result.Ok(sock_udp_recv_from(self.fd, max)??)
 
 ##:

@@ -48,10 +48,10 @@ public enum MsgValue:
     Map((MsgValue, MsgValue)[])    # (key, value) pairs, wire order kept
 
 public error MpError:
-    Truncated(i32)      # offset of the read that could not complete
+    Truncated(i64)      # offset of the read that could not complete
     Unsupported(u8)     # ext, fixext, timestamp, or the never-used 0xc1 tag
-    BadUtf8(i32)        # offset just past the offending str payload
-    Trailing(i32)       # bytes remain after the root value
+    BadUtf8(i64)        # offset just past the offending str payload
+    Trailing(i64)       # bytes remain after the root value
 ```
 
 `e.text()` gives one stable line for an `MpError`, with no payload, so a caller can
@@ -98,7 +98,7 @@ fn main() i32:
     return 0
 ```
 
-### `decode_prefix(u8[] buf) -> (MsgValue, i32) | MpError`
+### `decode_prefix(u8[] buf) -> (MsgValue, i64) | MpError`
 
 Decode ONE value from the start of the buffer, and answer it with the count of bytes it
 used. Bytes after the value are not an error, so a caller can read several values from one
@@ -143,7 +143,7 @@ fn main() i32:
     return 0
 ```
 
-### `map_index(MsgValue m, string key) -> Maybe@(i32)`
+### `map_index(MsgValue m, string key) -> Maybe@(i64)`
 
 The position of a string key in a `Map`, in wire order; the first key that matches wins.
 A missing key, or a non-map argument, gives `Maybe.None`. Nothing is copied: use the

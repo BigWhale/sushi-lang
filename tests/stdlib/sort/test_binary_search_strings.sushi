@@ -7,6 +7,6 @@ use <collections/sort>
 fn main() i32:
     let string[] words = from(["fig{0}", "kiwi{1}", "lime{2}"])
     let string needle = "kiwi{1}"
-    let i32 at = words.binary_search(needle).realise(-1)
+    let i64 at = words.binary_search(needle).realise(-1)
     println("{at} {needle}")
     return 0

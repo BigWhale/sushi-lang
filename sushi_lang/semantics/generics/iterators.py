@@ -2,7 +2,7 @@
 
 The compiler's own type, as `HashMap@(K, V)` is (docs/design/iteration.md). The item is
 OWNED (`Iterator@(T)`) or LENT (`Iterator@(peek T)`); a tuple item takes the mode per
-element (`Iterator@((i32, peek string))`). `IteratorType.peeks` holds the mode, and
+element (`Iterator@((i64, peek string))`). `IteratorType.peeks` holds the mode, and
 `IteratorType.element_type` holds the value type with no `peek` in it.
 
 Three directions, one module: a WRITTEN item to the type (`iterator_of`, the AST builder
@@ -130,13 +130,13 @@ def lends_a_part(iterator: IteratorType) -> bool:
 
 
 def enumerated(iterator: IteratorType) -> Optional[IteratorType]:
-    """`enumerate`: `(i32, item)`, the item in its own mode, or None when that mode would
+    """`enumerate`: `(i64, item)`, the item in its own mode, or None when that mode would
     stand deeper than one tuple element (a tuple item with parts of two modes)."""
     from sushi_lang.semantics.typesys import BuiltinType
     lent = lent_whole(iterator)
     if lent is None:
         return None
-    return IteratorType(element_type=tuple_ref((BuiltinType.I32, iterator.element_type)),
+    return IteratorType(element_type=tuple_ref((BuiltinType.I64, iterator.element_type)),
                         peeks=(False, lent))
 
 
@@ -186,7 +186,7 @@ def iterator_of(item: Type, *, base_name: Optional[str] = None,
 
 
 def written_item(iterator: IteratorType) -> Type:
-    """The item as a program writes it: `peek string`, or `(i32, peek string)`."""
+    """The item as a program writes it: `peek string`, or `(i64, peek string)`."""
     if not iterator.peeks:
         return iterator.element_type
     if len(iterator.peeks) == 1:

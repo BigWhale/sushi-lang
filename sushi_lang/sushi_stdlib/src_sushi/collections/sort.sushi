@@ -16,7 +16,7 @@ Puts the array in ascending order by `<`, in place.
 The sort is stable: equal elements keep their order. The algorithm is a bottom-up merge
 sort of the element INDEXES, followed by one pass that puts each element in its place
 with `.swap()`. The merge sort makes O(n log n) comparisons in the worst case, and it uses
-two `i32[]` buffers of length n. The last pass makes fewer than n swaps.
+two `i64[]` buffers of length n. The last pass makes fewer than n swaps.
 
 - Example:
   ```sushi
@@ -45,7 +45,7 @@ the algorithm of `sort`.
   ```
 :##
 public extend T[] sort_by(poke self, fn(T, T) -> i32 cmp) ~:
-    let i32[] order = stable_order(self, cmp)
+    let i64[] order = stable_order(self, cmp)
     apply_order(poke self, nom order)
 
 ##:
@@ -64,11 +64,11 @@ it never reads outside the array.
   println(xs.binary_search(3).realise(-1))
   ```
 :##
-public extend (T: Ord)[] binary_search(T v) Maybe@(i32):
-    let i32 lo = 0
-    let i32 hi = self.len() as i32
+public extend (T: Ord)[] binary_search(T v) Maybe@(i64):
+    let i64 lo = 0
+    let i64 hi = self.len()
     while (lo < hi):
-        let i32 mid = lo + (hi - lo) / 2
+        let i64 mid = lo + (hi - lo) / 2
         if (self[mid] < v):
             lo := mid + 1
         else:
@@ -103,22 +103,22 @@ equal elements keep their order.
 - Returns: The indexes of `xs` in sorted order: element `i` of the sorted array is
   `xs[order[i]]`.
 :##
-fn stable_order@(T)(T[] xs, fn(T, T) -> i32 cmp) i32[]:
-    let i32 n = xs.len() as i32
-    let i32[] order = from([0..n])
-    let i32[] spare = from([0; n])
-    let i32 width = 1
+fn stable_order@(T)(T[] xs, fn(T, T) -> i32 cmp) i64[]:
+    let i64 n = xs.len()
+    let i64[] order = from([0..n])
+    let i64[] spare = from([0; n])
+    let i64 width = 1
     while (width < n):
-        let i32 lo = 0
+        let i64 lo = 0
         while (lo < n):
-            let i32 mid = n
+            let i64 mid = n
             if (width < n - lo):
                 mid := lo + width
-            let i32 hi = n
+            let i64 hi = n
             if (width < n - mid):
                 hi := mid + width
-            let i32 i = lo
-            let i32 j = mid
+            let i64 i = lo
+            let i64 j = mid
             foreach(k in lo..hi):
                 let bool take_left = j >= hi
                 if (not take_left and i < mid):
@@ -144,10 +144,10 @@ value, so the pass makes fewer swaps than there are elements.
 - Parameter xs: The array to put in order.
 - Parameter order: The sorted indexes from `stable_order`.
 :##
-fn apply_order@(T)(poke T[] xs, nom i32[] order) ~:
-    foreach(start in 0..order.len() as i32):
-        let i32 cur = start
-        let i32 next = order[cur]
+fn apply_order@(T)(poke T[] xs, nom i64[] order) ~:
+    foreach(start in 0..order.len()):
+        let i64 cur = start
+        let i64 next = order[cur]
         order[cur] := cur
         while (next != start):
             xs.swap(cur, next)

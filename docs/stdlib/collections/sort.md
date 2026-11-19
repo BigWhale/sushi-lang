@@ -72,7 +72,7 @@ fn main() i32:
     return 0
 ```
 
-## `.binary_search(T v) -> Maybe@(i32)`
+## `.binary_search(T v) -> Maybe@(i64)`
 
 Finds `v` in an array sorted in ascending order by `<`. The answer is `Maybe.Some(i)` when
 element `i` is neither less than `v` nor greater than `v`, and `Maybe.None()` when no such

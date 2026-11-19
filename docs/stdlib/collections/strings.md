@@ -156,7 +156,7 @@ match text.find_last('hello'):
         println("Not found")
 ```
 
-### `.find_from(string needle, i32 start) -> Maybe@(i32)`
+### `.find_from(string needle, i64 start) -> Maybe@(i64)`
 
 Finds the first match of `needle` at or after the character index `start` (written in
 Sushi, see [Methods written in Sushi](#methods-written-in-sushi)). `start` and the answer
@@ -914,7 +914,7 @@ contract: use the methods.
 | `new` | `extend StringBuilder static new() StringBuilder` | Makes an empty builder. |
 | `push` | `extend StringBuilder push(poke self, string s) ~` | Appends the bytes of `s`. The string is a borrow: it stays yours. |
 | `push_byte` | `extend StringBuilder push_byte(poke self, u8 b) ~` | Appends one byte. |
-| `size` | `extend StringBuilder size() i32` | Gives the count of BYTES so far. |
+| `size` | `extend StringBuilder size() i64` | Gives the count of BYTES so far. |
 | `is_empty` | `extend StringBuilder is_empty() bool` | Gives true when the builder holds no byte. An empty piece appends no byte. |
 | `finish` | `extend StringBuilder finish(nom self) string` | Gives the string and spends the builder. |
 

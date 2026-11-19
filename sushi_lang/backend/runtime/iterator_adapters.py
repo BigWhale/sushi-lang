@@ -285,7 +285,7 @@ def _enumerate_next(codegen: 'LLVMCodegen', fn: ir.Function, state: ir.Value,
     b.position_at_end(found)
     count_ptr = _field(codegen, state, _SECOND)
     count = b.load(count_ptr, name="count")
-    b.store(b.add(count, ir.Constant(codegen.types.i32, 1)), count_ptr)
+    b.store(b.add(count, ir.Constant(codegen.types.i64, 1)), count_ptr)
     pair = _tuple(codegen, result.element_type, (count, item()))
     emit_return(codegen, fn, emit_maybe_some(codegen, result.element_type, pair))
     b.position_at_end(done)
@@ -345,7 +345,7 @@ def _closure_field(codegen: 'LLVMCodegen') -> ir.Type:
 
 
 def _count_field(codegen: 'LLVMCodegen') -> ir.Type:
-    return codegen.types.i32
+    return codegen.types.i64
 
 
 _MAP = LazyKind("map", _closure_field, True, _map_next)
@@ -371,7 +371,7 @@ def emit_filter(codegen: 'LLVMCodegen', inner: ir.Value, predicate: ir.Value,
 
 def emit_enumerate(codegen: 'LLVMCodegen', inner: ir.Value, source: IteratorType,
                    result: IteratorType, heap: bool) -> ir.Value:
-    return _emit_lazy(codegen, _ENUMERATE, (inner, ir.Constant(codegen.types.i32, 0)),
+    return _emit_lazy(codegen, _ENUMERATE, (inner, ir.Constant(codegen.types.i64, 0)),
                       (source, result), (source, result), heap)
 
 

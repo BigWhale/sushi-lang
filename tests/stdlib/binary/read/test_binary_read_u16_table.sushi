@@ -13,12 +13,12 @@ fn show(Maybe@(u16) m) string:
         Maybe.Some(v) -> return "{v}"
         Maybe.None() -> return "none"
 
-fn line(u8[] buf, i32 at, string tag) ~:
+fn line(u8[] buf, i64 at, string tag) ~:
     println("{tag} le={show(buf.read_u16_le(at))} be={show(buf.read_u16_be(at))}")
 
 fn main() i32:
     let u8[] buf = from([0x01, 0x02, 0x03, 0x04, 0x05])
-    foreach(at in 0..4):
+    foreach(at in 0..(4 as i64)):
         line(buf, at, "at {at}")
     line(buf, -1, "at -1")
     line(buf, 4, "at 4")

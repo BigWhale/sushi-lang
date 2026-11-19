@@ -7,17 +7,17 @@ use <io/contracts>
 
 struct Bytes:
     u8[] data
-    i32 at
+    i64 at
 
 extend Bytes with Reader:
-    fn read(poke self, i32 max) string | IoError:
+    fn read(poke self, i64 max) string | IoError:
         let u8[] got = self.read_bytes(max)??
         return Result.Ok(got.to_string())
 
-    fn read_bytes(poke self, i32 max) u8[] | IoError:
-        let i32 end = self.at + max
-        if (end > self.data.len() as i32):
-            end := self.data.len() as i32
+    fn read_bytes(poke self, i64 max) u8[] | IoError:
+        let i64 end = self.at + max
+        if (end > self.data.len()):
+            end := self.data.len()
         let u8[] got = self.data.s(self.at, end)
         self.at := end
         return Result.Ok(got)

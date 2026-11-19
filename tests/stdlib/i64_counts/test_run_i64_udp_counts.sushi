@@ -1,0 +1,37 @@
+# The UDP functions take an i64 count and answer an i64 count (ADR 0001): send_to(),
+# recv_from(), and the primitives sock_udp_send_to() and sock_udp_recv_from().
+# EXPECT_STDOUT_EXACT: "sent 15\ngot Mostly Harmless\nraw sent 2\nraw 42\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/udp>
+use <net/socket>
+use <collections/strings>
+
+fn main() i32:
+    let UdpSocket a = bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    let UdpSocket b = bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    if (a.fd < 0 or b.fd < 0):
+        println("bind failed")
+        return 1
+    if (not a.set_timeouts(5000, 5000).is_ok()):
+        return 1
+    if (not b.set_timeouts(5000, 5000).is_ok()):
+        return 1
+    let i32 port_b = b.local_port().realise(-1)
+    let i64 max = 64
+
+    let u8[] greeting = "Mostly Harmless".to_bytes()
+    let i64 sent = a.send_to(greeting, "127.0.0.1", port_b).realise(-1)
+    println("sent {sent}")
+    match b.recv_from(max):
+        Result.Ok(dg) -> println("got {dg.data.to_string()}")
+        Result.Err(_) -> println("recv_from failed")
+
+    let u8[] answer = "42".to_bytes()
+    let i64 raw_sent = sock_udp_send_to(a.fd, answer, "127.0.0.1", port_b).realise(-1)
+    println("raw sent {raw_sent}")
+    match sock_udp_recv_from(b.fd, max):
+        Result.Ok(dg) -> println("raw {dg.data.to_string()}")
+        Result.Err(_) -> println("raw recv_from failed")
+    return 0

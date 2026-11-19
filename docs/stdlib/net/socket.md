@@ -73,11 +73,11 @@ Connect to a host and port. The host may be a name or a numeric address; a name 
 
 Take the next connection waiting on a listener, and the peer address that `accept(2)` wrote. The tuple is `(fd, version, high, low)`: the new descriptor, the IP version (`4`, `6`, or `0` for another address family), and the address bits. An IPv4 address is the low 32 bits of `low`; an IPv6 address is `high` then `low`, as `IpAddr.V6` holds it. `TcpListener.accept()` builds the `IpAddr` from these. Give the listener a timeout first and this answers `TimedOut` instead of waiting forever.
 
-### `sock_send(i32 fd, u8[] data) i32 | NetError`
+### `sock_send(i32 fd, u8[] data) i64 | NetError`
 
 Write bytes, and answer how many went. **One write may take fewer bytes than it was offered**; `send_all()` in `<net/tcp>` is the loop. The buffer stays the caller's: this borrows it and never frees it.
 
-### `sock_recv(i32 fd, i32 max) u8[] | NetError`
+### `sock_recv(i32 fd, i64 max) u8[] | NetError`
 
 Read what one read gives, up to `max` bytes.
 
@@ -109,11 +109,11 @@ Bound how long a read or a write may wait; both answer `Result@(i32, NetError)`.
 
 Bind a datagram socket. `SO_REUSEADDR` is deliberately **not** set here: on a datagram socket it means several sockets sharing a port, which is a different thing to ask for.
 
-### `sock_udp_send_to(i32 fd, u8[] data, string host, i32 port) i32 | NetError`
+### `sock_udp_send_to(i32 fd, u8[] data, string host, i32 port) i64 | NetError`
 
 Send one datagram. The destination is resolved on every call.
 
-### `sock_udp_recv_from(i32 fd, i32 max) Datagram | NetError`
+### `sock_udp_recv_from(i32 fd, i64 max) Datagram | NetError`
 
 Wait for one datagram and answer it with its sender. `Datagram` is a predefined struct:
 

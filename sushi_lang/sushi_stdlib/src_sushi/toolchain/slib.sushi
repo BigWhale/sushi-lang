@@ -30,10 +30,10 @@ const u64 HEADER_SIZE = 52
 const u64 MAGIC_SIZE = 16
 
 ##: The offset of the container version (a u32) in the header. :##
-const i32 VERSION_AT = 16
+const i64 VERSION_AT = 16
 
 ##: The offset of the metadata length (a u64) in the header. :##
-const i32 METADATA_LENGTH_AT = 44
+const i64 METADATA_LENGTH_AT = 44
 
 ##: The container version that this reader reads. :##
 const u64 CONTAINER_VERSION = 5
@@ -153,7 +153,7 @@ Reads the bytes of one part of a section, after it makes sure that the file has 
 fn read_part(poke File f, u64 count, u64 left, SlibSection section) u8[] | SlibError:
     if (count > left):
         return Result.Err(SlibError.Truncated(section, count, left))
-    match f.read_bytes(count as i32):
+    match f.read_bytes(count as i64):
         Result.Ok(nom bytes) ->
             if ((bytes.len() as u64) < count):
                 return Result.Err(SlibError.Truncated(section, count, bytes.len() as u64))

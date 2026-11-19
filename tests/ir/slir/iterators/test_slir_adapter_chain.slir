@@ -16,11 +16,11 @@ fn main() -> i32 {
     let _12: string
     let _13: ~
     let _14: Iterator@(peek string)
-    let _15: Iterator@((i32, peek string))
-    let _16: Iterator@((i32, peek string))
-    let _17: Maybe@((i32, string)) view
+    let _15: Iterator@((i64, peek string))
+    let _16: Iterator@((i64, peek string))
+    let _17: Maybe@((i64, string)) view
     let _18: i32
-    let _19: (i32, string) view            // p
+    let _19: (i64, string) view            // p
     let _20: bool
     let _21: string
     let _22: ~
@@ -108,7 +108,7 @@ fn main() -> i32 {
     BeginBorrow(b1, _16, peek, for _19)
     _19 = copy ((_17 as Some).0)
     StorageLive(_20)
-    _20 = user copy (_19.0) == const 1_i32
+    _20 = user copy (_19.0) == const 1_i64
     switchInt(copy _20) -> [0: bb10, otherwise: bb9]
 
   bb7:
@@ -141,7 +141,7 @@ fn main() -> i32 {
   bb9:
     StorageDead(_20)
     StorageLive(_21)
-    _21 = call builtin interp@(i32, string, string)(copy (_19.0) @guaranteed, const ":" @guaranteed, copy (_19.1) @guaranteed)
+    _21 = call builtin interp@(i64, string, string)(copy (_19.0) @guaranteed, const ":" @guaranteed, copy (_19.1) @guaranteed)
     StorageLive(_22)
     _22 = call builtin println@(string)(copy _21 @guaranteed)
     EndBorrow(b1)

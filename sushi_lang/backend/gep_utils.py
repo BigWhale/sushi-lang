@@ -139,6 +139,14 @@ def extract_len(codegen: 'LLVMCodegen | None', header: 'ir.Value', name: str = "
     return as_surface_i32(b, b.extract_value(header, _DESCRIPTOR_LEN), name)
 
 
+def extract_stored_len(codegen: 'LLVMCodegen | None', header: 'ir.Value', name: str = "len",
+                       builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
+    """The length of the `T[]` or `List@(T)` VALUE `header` at its stored width, the i64
+    that `len()` answers."""
+    b = _builder_of(codegen, builder)
+    return b.extract_value(header, _DESCRIPTOR_LEN, name=name)
+
+
 def extract_cap(codegen: 'LLVMCodegen | None', header: 'ir.Value', name: str = "cap",
                 builder: 'ir.IRBuilder | None' = None) -> 'ir.Value':
     """The capacity of the `T[]` or `List@(T)` VALUE `header`, as an i32."""

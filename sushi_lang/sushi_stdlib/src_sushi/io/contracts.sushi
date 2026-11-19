@@ -48,7 +48,7 @@ public perk Reader:
     - Returns: The text that arrived, empty at end of input.
     - Errors: IoError, when the read failed.
     :##
-    fn read(poke self, i32 max) string | IoError
+    fn read(poke self, i64 max) string | IoError
 
     ##:
     Reads what one read gives, as bytes.
@@ -57,7 +57,7 @@ public perk Reader:
     - Returns: The bytes that arrived, empty at end of input.
     - Errors: IoError, when the read failed.
     :##
-    fn read_bytes(poke self, i32 max) u8[] | IoError
+    fn read_bytes(poke self, i64 max) u8[] | IoError
 
 ##:
 Reads everything left in a reader, as text.

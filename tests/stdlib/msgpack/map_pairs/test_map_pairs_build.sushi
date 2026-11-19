@@ -14,7 +14,7 @@ fn main() i32:
     ])
     let MsgValue m = MsgValue.Map(pairs)
     println(show(m))
-    let i32 at = map_index(m, "b").realise(-1)
+    let i64 at = map_index(m, "b").realise(-1)
     println("index b {at}")
     let string got = map_get_str(m, "s").realise("none")
     println("str s {got}")

@@ -5,7 +5,7 @@
 # and the argument stay owned by the caller, and both are freed at the end of main.
 use <collections/strings>
 
-fn index_of(Maybe@(i32) m) i32:
+fn index_of(Maybe@(i64) m) i64:
     match m:
         Maybe.Some(i) -> return i
         Maybe.None -> return -1

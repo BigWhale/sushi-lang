@@ -63,7 +63,7 @@ adapter gets [CW3006](../../error-catalog.md#cw3006) under `--warn-unused`.
 |---|---|
 | `it.map(nom f)` | `Iterator@(U)`: the answer of `f` for each item. `f` reads the item as a borrow |
 | `it.filter(nom pred)` | The same iterator type: the items for which `pred` answers `true` |
-| `it.enumerate()` | `Iterator@((i32, T))`: each item with its count, from 0 |
+| `it.enumerate()` | `Iterator@((i64, T))`: each item with its count, from 0 |
 | `it.zip(nom other)` | `Iterator@((T, U))`: the items of the two iterators side by side, to the end of the shorter one |
 | `it.clone_each()` | `Iterator@(T)`: one `.clone()` for each borrowed item |
 | `it.fold(nom init, nom f)` | The last accumulator. `f` reads each item as a borrow |
@@ -78,7 +78,7 @@ at its end allocates a result. Each adapter takes its receiver and its function 
 **Item modes.** `xs.iter()` gives `Iterator@(peek T)`: each item is a borrow, and nothing
 is copied. `filter` keeps the mode. `map` answers the owned result of its function.
 `enumerate` and `zip` keep the mode of each side in its tuple element, so
-`names.iter().enumerate()` is `Iterator@((i32, peek string))`. `clone_each` makes each
+`names.iter().enumerate()` is `Iterator@((i64, peek string))`. `clone_each` makes each
 item owned. For a plain item (an `i32`) the two modes are one type.
 
 `collect` and `partition` keep each item in a `List`, and there is no `List@(peek T)`. So
@@ -241,7 +241,7 @@ the answer with `.iter()`, and destructure the item in the `foreach`.
 
 | Free function | Answer |
 |---|---|
-| `enumerate@(T: Clone)(List@(T) xs)` | `List@((i32, T))`: each element with its index, from 0 |
+| `enumerate@(T: Clone)(List@(T) xs)` | `List@((i64, T))`: each element with its index, from 0 |
 | `zip@(T: Clone, U: Clone)(List@(T) xs, List@(U) ys)` | `List@((T, U))`: the elements side by side; it stops at the shorter list |
 | `partition@(T: Clone)(List@(T) xs, fn(T) -> bool pred)` | `(List@(T), List@(T))`: the elements that `pred` keeps, then the others, each in order |
 | `unzip@(T: Clone, U: Clone)(List@((T, U)) xs)` | `(List@(T), List@(U))`: the first elements, then the second elements |

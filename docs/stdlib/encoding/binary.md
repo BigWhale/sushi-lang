@@ -42,7 +42,7 @@ fn main() i32:
 For a float, read the bits and use `f64.from_bits` (or `f32.from_bits`), and write
 `f.to_bits()`.
 
-A program that declares its own `extend u8[] read_u16_le(i32 at)` (or any other name of this
+A program that declares its own `extend u8[] read_u16_le(i64 at)` (or any other name of this
 module) gets [CE2097](../../error-catalog.md#ce2097), with a note at the method of this
 module: a stdlib method on a built-in type is visible in every unit, so an extension of
 its name could never be called. This holds with or without an import.
@@ -51,12 +51,12 @@ its name could never be called. This holds with or without an import.
 
 | Method | Width | Byte order |
 |---|---|---|
-| `read_u16_le(i32 at) Maybe@(u16)` | 2 bytes | least significant first |
-| `read_u16_be(i32 at) Maybe@(u16)` | 2 bytes | most significant first |
-| `read_u32_le(i32 at) Maybe@(u32)` | 4 bytes | least significant first |
-| `read_u32_be(i32 at) Maybe@(u32)` | 4 bytes | most significant first |
-| `read_u64_le(i32 at) Maybe@(u64)` | 8 bytes | least significant first |
-| `read_u64_be(i32 at) Maybe@(u64)` | 8 bytes | most significant first |
+| `read_u16_le(i64 at) Maybe@(u16)` | 2 bytes | least significant first |
+| `read_u16_be(i64 at) Maybe@(u16)` | 2 bytes | most significant first |
+| `read_u32_le(i64 at) Maybe@(u32)` | 4 bytes | least significant first |
+| `read_u32_be(i64 at) Maybe@(u32)` | 4 bytes | most significant first |
+| `read_u64_le(i64 at) Maybe@(u64)` | 8 bytes | least significant first |
+| `read_u64_be(i64 at) Maybe@(u64)` | 8 bytes | most significant first |
 
 A read gives `Maybe.Some(v)`, where `v` is the value of the W bytes from `buf[at]` to
 `buf[at + W - 1]` in the given byte order (W is the width). The receiver is a plain borrow,
@@ -68,7 +68,7 @@ The answer is `Maybe.None()` when the bytes are not all in the array:
 - `at + W` is more than `len()`. The last offset that gives a value is `len() - W`.
 - The array is shorter than W bytes. An empty array always gives `Maybe.None()`.
 
-A very large `at` (to the `i32` maximum) also gives `Maybe.None()`. It does not wrap to a
+A very large `at` (to the `i64` maximum) also gives `Maybe.None()`. It does not wrap to a
 negative offset.
 
 ```sushi

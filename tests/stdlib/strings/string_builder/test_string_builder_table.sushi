@@ -45,7 +45,7 @@ fn main() i32:
     utf.push("héllo")
     utf.push(" ")
     utf.push("wörld😀")
-    let i32 utf_size = utf.size()
+    let i64 utf_size = utf.size()
     let string u = utf.finish()
     println("{utf_size} {u.len()} {u}")
 
@@ -55,14 +55,14 @@ fn main() i32:
     blank.push("a")
     blank.push("")
     blank.push("b")
-    let i32 blank_size = blank.size()
+    let i64 blank_size = blank.size()
     let bool blank_empty = blank.is_empty()
     println("{blank.finish()} {blank_size} {blank_empty}")
 
     let StringBuilder nothing = StringBuilder.new()
     nothing.push("")
     nothing.push("")
-    let i32 nothing_size = nothing.size()
+    let i64 nothing_size = nothing.size()
     let bool nothing_empty = nothing.is_empty()
     println("{nothing_size} {nothing_empty} [{nothing.finish()}]")
     return 0

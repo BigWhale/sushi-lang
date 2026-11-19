@@ -85,7 +85,7 @@ extend TcpStream with Reader:
     - Returns: The text that arrived, empty when the peer closed.
     - Errors: IoError, when the read failed.
     :##
-    fn read(poke self, i32 max) string | IoError:
+    fn read(poke self, i64 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
         return Result.Ok(chunk.to_string())
 
@@ -99,7 +99,7 @@ extend TcpStream with Reader:
     - Returns: The bytes that arrived, empty when the peer closed.
     - Errors: IoError, when the read failed.
     :##
-    fn read_bytes(poke self, i32 max) u8[] | IoError:
+    fn read_bytes(poke self, i64 max) u8[] | IoError:
         return Result.Ok(sock_recv(self.fd, max)??)
 
 ##:
@@ -279,7 +279,7 @@ carried nothing of its own.
 - Returns: How many bytes were written.
 - Errors: NetError, when the write failed.
 :##
-public extend TcpStream send(u8[] data) i32 | NetError:
+public extend TcpStream send(u8[] data) i64 | NetError:
     return Result.Ok(sock_send(self.fd, data)??)
 
 ##:
@@ -290,11 +290,11 @@ Writes every byte, looping until the buffer is gone.
 - Errors: NetError, when a write failed before the buffer was gone.
 :##
 public extend TcpStream send_all(u8[] data) ~ | NetError:
-    let i32 total = data.len() as i32
-    let i32 done = 0
+    let i64 total = data.len()
+    let i64 done = 0
     while (done < total):
         let u8[] rest = data[done..total]
-        let i32 sent = sock_send(self.fd, rest)??
+        let i64 sent = sock_send(self.fd, rest)??
         if (sent <= 0):
             return Result.Err(NetError.Closed)
         done := done + sent
@@ -310,10 +310,10 @@ an exact count has no use for a partial one.
 - Returns: Exactly `count` bytes.
 - Errors: NetError.Closed when the peer closed early, or the read's own error.
 :##
-public extend TcpStream recv_exact(i32 count) u8[] | NetError:
+public extend TcpStream recv_exact(i64 count) u8[] | NetError:
     let u8[] out = from([])
-    while (out.len() as i32 < count):
-        let u8[] chunk = sock_recv(self.fd, count - (out.len() as i32))??
+    while (out.len() < count):
+        let u8[] chunk = sock_recv(self.fd, count - out.len())??
         if (chunk.len() == 0):
             return Result.Err(NetError.Closed)
         out.extend(chunk)

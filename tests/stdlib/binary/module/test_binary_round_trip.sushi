@@ -22,7 +22,7 @@ fn main() i32:
         be.push_u16_be(v)
     let bool ok_le = true
     let bool ok_be = true
-    foreach(i in 0..4):
+    foreach(i in 0..(4 as i64)):
         ok_le := ok_le and le.read_u16_le(2 * i).realise(7) == v16[i]
         ok_be := ok_be and be.read_u16_be(2 * i).realise(7) == v16[i]
     check("u16 le", ok_le)
@@ -34,7 +34,7 @@ fn main() i32:
         be.push_u32_be(v)
     ok_le := true
     ok_be := true
-    foreach(i in 0..4):
+    foreach(i in 0..(4 as i64)):
         ok_le := ok_le and le.read_u32_le(4 * i).realise(7) == v32[i]
         ok_be := ok_be and be.read_u32_be(4 * i).realise(7) == v32[i]
     check("u32 le", ok_le)
@@ -46,7 +46,7 @@ fn main() i32:
         be.push_u64_be(v)
     ok_le := true
     ok_be := true
-    foreach(i in 0..4):
+    foreach(i in 0..(4 as i64)):
         ok_le := ok_le and le.read_u64_le(8 * i).realise(7) == v64[i]
         ok_be := ok_be and be.read_u64_be(8 * i).realise(7) == v64[i]
     check("u64 le", ok_le)
