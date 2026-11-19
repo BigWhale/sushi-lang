@@ -71,6 +71,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
     "random": _SRC_SUSHI_ROOT / "random.sushi",
     "text/ascii": _SRC_SUSHI_ROOT / "text" / "ascii.sushi",
+    "time": _SRC_SUSHI_ROOT / "time.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
 # A per-platform module is an ordinary source module on a host that has its file. On
@@ -259,10 +260,8 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.env import ENV_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.time import TIME_SIGNATURES
 
     return {
-        "time": TIME_SIGNATURES,
         "sys/env": ENV_SIGNATURES,
         "sys/process": PROCESS_SIGNATURES,
         "io/files": FILES_SIGNATURES,
@@ -309,7 +308,6 @@ class StdlibRegistry:
     """Central registry for stdlib functions."""
 
     KNOWN_MODULES = {
-        "time": "sushi_lang.sushi_stdlib.src.time",
         "sys/env": "sushi_lang.sushi_stdlib.src.sys.env",
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",

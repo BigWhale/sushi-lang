@@ -121,6 +121,13 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   `unsafe external` block. `rand()` gives 64 bits, `rand_f64()` gives `[0, 1)` with 53 bits,
   and `rand_range(min, max)` gives `[min, max)` with no bias (rejection sampling). When
   `min >= max`, `rand_range` stops with RE2026 (an `assert` in the module).
+- **`<time>` is Sushi source**: `src_sushi/time.sushi` (a `SOURCE_STDLIB_MODULES` row and a
+  `_virtual_units` row) calls `nanosleep()` and `clock_gettime()` of the C library through an
+  `unsafe external` block, and reads the clock ids, `TIMESPEC_SIZE` and `EINTR` from
+  `<sys/platform>`. It is the first source module that imports `<sys/platform>`; the import
+  stays in its unit, so a program with its own `EINTR` gets no clash. A sleep stopped by a
+  signal answers the remaining microseconds (no retry, saturated at `i32` max). When
+  `clock_gettime()` fails, `now`/`monotonic_ns` stop with RE2026 (an `assert` in the module).
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,

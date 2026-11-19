@@ -1,0 +1,166 @@
+##:
+time -- the time module.
+
+The sleep functions call `nanosleep()` of the C library, and the two clocks call
+`clock_gettime()`. A sleep that is not valid gives `StdError.Error`. A sleep that a signal
+stops gives the remaining time. A clock cannot fail for a valid clock id; if
+`clock_gettime()` fails, the program stops with RE2026.
+:##
+
+use <sys/platform>
+
+unsafe external "C" as libc because "the sleep and the clocks of the C library":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn nanosleep(ptr req, ptr rem) i32 = "nanosleep"
+    fn clock_gettime(i32 id, ptr ts) i32 = "clock_gettime"
+
+##:
+Reads one clock. When `clock_gettime()` fails, the program stops with RE2026.
+
+- Parameter id: The clock id.
+- Parameter nanoseconds: True gives the value in nanoseconds, false gives whole seconds.
+- Returns: The value of the clock.
+:##
+fn read_clock(i32 id, bool nanoseconds) i64:
+    let ptr ts = libc.malloc(TIMESPEC_SIZE as i64)
+    let i32 rc = libc.clock_gettime(id, ts)
+    let i64 sec = ts.load_i64(0)
+    let i64 nsec = ts.load_i64(8)
+    libc.free(ts)
+    assert(rc == 0, "clock_gettime failed")
+    if (nanoseconds):
+        return sec * 1_000_000_000 + nsec
+    return sec
+
+##:
+Converts a remaining time to microseconds. The value stops at the i32 maximum, and the
+function compares the seconds before it multiplies, so the multiplication cannot overflow.
+
+- Parameter sec: The remaining seconds.
+- Parameter nsec: The remaining nanoseconds.
+- Returns: The remaining time in microseconds, not more than 2,147,483,647.
+:##
+fn remaining_micros(i64 sec, i64 nsec) i32:
+    if (sec > 2147):
+        return 2147483647
+    let i64 micros = sec * 1_000_000 + nsec / 1_000
+    if (micros > 2147483647):
+        return 2147483647
+    return micros as i32
+
+##:
+Sleeps for a number of seconds and nanoseconds.
+
+- Parameter seconds: The number of seconds.
+- Parameter nanoseconds: The number of nanoseconds to add, from 0 to 999,999,999.
+- Returns: 0 when the sleep is complete. When a signal stops the sleep, the remaining time
+  in microseconds. A remaining time of more than 2,147,483,647 microseconds gives
+  2,147,483,647.
+- Errors: `StdError.Error` when the duration is not valid (a negative value, or
+  `nanoseconds` of 1,000,000,000 or more).
+- Example:
+  ```sushi
+  match nanosleep(0, 1_000_000):
+      Result.Ok(left) -> println("left: {left}")
+      Result.Err(_) -> println("not valid")
+  ```
+:##
+public fn nanosleep(i64 seconds, i64 nanoseconds) i32 | StdError:
+    let ptr req = libc.malloc((TIMESPEC_SIZE * 2) as i64)
+    let ptr rem = req.offset(TIMESPEC_SIZE)
+    req.store_i64(0, seconds)
+    req.store_i64(8, nanoseconds)
+    rem.store_i64(0, 0)
+    rem.store_i64(8, 0)
+    let i32 rc = libc.nanosleep(req, rem)
+    let i32 code = errno()
+    let i64 rem_sec = rem.load_i64(0)
+    let i64 rem_nsec = rem.load_i64(8)
+    libc.free(req)
+    if (rc == 0):
+        return Result.Ok(0)
+    if (code != EINTR):
+        return Result.Err(StdError.Error)
+    return Result.Ok(remaining_micros(rem_sec, rem_nsec))
+
+##:
+Sleeps for a number of seconds.
+
+- Parameter seconds: The number of seconds.
+- Returns: The same value as `nanosleep(seconds, 0)`.
+- Errors: `StdError.Error` when `seconds` is negative.
+- Example:
+  ```sushi
+  match sleep(0):
+      Result.Ok(left) -> println("left: {left}")
+      Result.Err(_) -> println("not valid")
+  ```
+  This prints `left: 0`.
+:##
+public fn sleep(i64 seconds) i32 | StdError:
+    let i32 left = nanosleep(seconds, 0)??
+    return Result.Ok(left)
+
+##:
+Sleeps for a number of milliseconds.
+
+- Parameter milliseconds: The number of milliseconds.
+- Returns: The same value as `nanosleep`.
+- Errors: `StdError.Error` when `milliseconds` is negative.
+- Example:
+  ```sushi
+  match msleep(5):
+      Result.Ok(left) -> println("left: {left}")
+      Result.Err(_) -> println("not valid")
+  ```
+:##
+public fn msleep(i64 milliseconds) i32 | StdError:
+    let i32 left = nanosleep(milliseconds / 1000, (milliseconds % 1000) * 1_000_000)??
+    return Result.Ok(left)
+
+##:
+Sleeps for a number of microseconds.
+
+- Parameter microseconds: The number of microseconds.
+- Returns: The same value as `nanosleep`.
+- Errors: `StdError.Error` when `microseconds` is negative.
+- Example:
+  ```sushi
+  match usleep(250):
+      Result.Ok(left) -> println("left: {left}")
+      Result.Err(_) -> println("not valid")
+  ```
+:##
+public fn usleep(i64 microseconds) i32 | StdError:
+    let i32 left = nanosleep(microseconds / 1_000_000, (microseconds % 1_000_000) * 1_000)??
+    return Result.Ok(left)
+
+##:
+Reads the wall clock: the whole seconds since 1970-01-01 00:00:00 UTC. The wall clock can
+change (for example, an NTP adjustment). To measure a duration, use `monotonic_ns()`.
+
+- Returns: The unix time in seconds.
+- Example:
+  ```sushi
+  println("{now() > 1_700_000_000}")
+  ```
+  This prints `true`.
+:##
+public fn now() i64:
+    return read_clock(CLOCK_REALTIME, false)
+
+##:
+Reads the monotonic clock in nanoseconds. The clock never goes back. Only the difference
+between two values has a meaning.
+
+- Returns: The value of the monotonic clock in nanoseconds.
+- Example:
+  ```sushi
+  let i64 start = monotonic_ns()
+  println("{monotonic_ns() >= start}")
+  ```
+  This prints `true`.
+:##
+public fn monotonic_ns() i64:
+    return read_clock(CLOCK_MONOTONIC, true)

@@ -54,7 +54,7 @@ class Signature:
     enum in the other arm. A function that answers its value BARE -- `fd_isatty`, which
     cannot fail in a way a caller can act on -- sets `ok` to None and puts the type in
     `bare` instead. `bare_ok` is set when the Sushi type is a Result but the generated
-    function answers only the Ok payload (`<time>`, `setenv`).
+    function answers only the Ok payload (`setenv`).
     """
     params: Tuple[Param, ...] = ()
     ok: Optional[SushiType] = None

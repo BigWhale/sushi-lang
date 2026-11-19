@@ -6,6 +6,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`<time>` is Sushi source, and a clock failure stops the program.** The module calls
+  `nanosleep()` and `clock_gettime()` of the C library through an `unsafe external` block,
+  and reads the clock ids and `EINTR` from `<sys/platform>`. When `clock_gettime()` fails,
+  `now()` and `monotonic_ns()` stop the program with `RE2026` (before, they gave -1). The
+  signatures and the sleep results do not change. BREAKING.
 - **`<random>` is Sushi source, and three of its results are correct.** `rand()` gives 64
   random bits (before, 62). `rand_f64()` gives a value in `[0, 1)` with 53 random bits
   (before, the value was always less than 0.25). `rand_range(min, max)` gives each value of

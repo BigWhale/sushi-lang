@@ -30,7 +30,7 @@ _i64 = ir.IntType(64)  # size_t and long are i64 on 64-bit systems
 _f64 = ir.DoubleType()
 _void = ir.VoidType()
 
-_INT32 = ("int", "pid_t", "uid_t", "mode_t", "socklen_t", "clockid_t")
+_INT32 = ("int", "pid_t", "uid_t", "mode_t", "socklen_t")
 _INT64 = ("long", "long long", "size_t", "ssize_t", "off_t")
 _BYTE_POINTERS = (
     "char*", "const char*", "void*", "const void*", "FILE*", "DIR*", "struct dirent*",
@@ -52,9 +52,6 @@ C_TYPE_LOWERING: dict[str, ir.Type] = {
 
 
 def _lower(c_type: str) -> ir.Type:
-    if c_type in ("struct timespec*", "const struct timespec*"):
-        from sushi_lang.sushi_stdlib.src.type_definitions import get_timespec_type
-        return get_timespec_type().as_pointer()
     return C_TYPE_LOWERING[c_type]
 
 

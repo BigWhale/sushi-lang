@@ -42,9 +42,8 @@ the channel of the method, or its bare return value.
 
 A plain type is a primitive, or a struct or an enum that is no instance of a generic type
 and whose name the unit did not lose. Every other target, and a call that another group
-types (a function of a stdlib module other than `<math>` and
-`<time>`, a C function that `visit/extern_calls.py` does not type, a method of a type
-whose name the unit lost), is an internal error. The trailing arguments of a variadic
+types (a function of a registry stdlib module, a C function that `visit/extern_calls.py`
+does not type, a method of a type whose name the unit lost), is an internal error. The trailing arguments of a variadic
 function are its tail (`visit/variadic_tails.py`). A
 call of a function or a method with a `peek` return has the source row of the call (`record_call_sources`).
 

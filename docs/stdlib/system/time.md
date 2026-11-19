@@ -22,7 +22,7 @@ The time module provides sleep functions with various granularities and two cloc
 - `now()` - Read the unix clock, in seconds
 - `monotonic_ns()` - Read the monotonic clock, in nanoseconds
 
-The sleep functions have the `StdError` error channel. They return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions cannot fail, so they are bare and return `i64`.
+The sleep functions have the `StdError` error channel. They return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions are bare and return `i64`. A clock cannot fail for a valid clock id; if `clock_gettime()` fails, the program stops with [RE2026](../../error-catalog.md#re2026).
 
 A literal argument takes its type from the parameter, so `msleep(500)` needs no cast. The
 examples use `match` or `.realise(...)` in `main`. `main` is bare, so `??` in `main` is
@@ -195,10 +195,15 @@ match msleep(1000):
 
 ## Implementation
 
-Uses POSIX `nanosleep()` system call:
-- Portable across Unix-like systems (macOS, Linux, BSD)
-- More precise than `sleep()` or `usleep()` from libc
-- Handles signal interruption correctly
+The module is Sushi source, `sushi_stdlib/src_sushi/time.sushi`. It calls the C library
+through an `unsafe external` block:
+- The sleep functions call `nanosleep()`. `sleep`, `msleep` and `usleep` divide their
+  argument into seconds and nanoseconds, and call `nanosleep`. The division truncates
+  toward zero, so a negative argument gives a negative part, and the sleep is not valid.
+- The clocks call `clock_gettime()`: `now()` reads `CLOCK_REALTIME`, and `monotonic_ns()`
+  reads `CLOCK_MONOTONIC`. The clock ids, the size of `struct timespec` and `EINTR` come
+  from `<sys/platform>`.
+- A sleep that a signal stops is not started again. The function gives the remaining time.
 
 ## Best Practices
 

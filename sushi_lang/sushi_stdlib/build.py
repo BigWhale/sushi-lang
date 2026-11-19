@@ -60,7 +60,6 @@ STDLIB_BITCODE_UNITS: tuple[StdlibBitcodeUnit, ...] = (
     StdlibBitcodeUnit("collections/strings", "sushi_lang.sushi_stdlib.src.collections.strings"),
     StdlibBitcodeUnit("core/primitives", "sushi_lang.backend.types.primitives"),
     StdlibBitcodeUnit("io/files", "sushi_lang.sushi_stdlib.src.io.files"),
-    StdlibBitcodeUnit("time", "sushi_lang.sushi_stdlib.src.time"),
     StdlibBitcodeUnit("sys/env", "sushi_lang.sushi_stdlib.src.sys.env"),
     StdlibBitcodeUnit("sys/process", "sushi_lang.sushi_stdlib.src.sys.process"),
     StdlibBitcodeUnit("net/socket", "sushi_lang.sushi_stdlib.src.net"),

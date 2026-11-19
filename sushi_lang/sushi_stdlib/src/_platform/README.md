@@ -34,12 +34,13 @@ We follow the **"libc first"** principle:
 _platform/
 ├── __init__.py         # Dynamic platform module loader (get_platform_module)
 ├── README.md           # This file
+├── posix/              # the POSIX declarations that both platforms share
 ├── darwin/             # macOS platform implementations
 │   ├── __init__.py
-│   └── time.py         # POSIX time declarations (nanosleep)
+│   └── files.py        # the macOS file constants, over posix/files.py
 └── linux/              # Linux platform implementations
     ├── __init__.py
-    └── time.py         # POSIX time declarations
+    └── files.py        # the Linux file constants, over posix/files.py
 ```
 
 ## Usage
@@ -50,8 +51,9 @@ Stdlib modules use `get_platform_module()` to dynamically load the correct platf
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
 # Selects darwin or linux from the build platform; any other platform is a RuntimeError
-platform_time = get_platform_module('time')
-declare_nanosleep = platform_time.declare_nanosleep
+platform_files = get_platform_module('files')
+declare_open = platform_files.declare_open
+o_creat = platform_files.O_CREAT
 ```
 
 This ensures the correct platform-specific declarations are used at build time without hardcoding platform names.
