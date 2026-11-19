@@ -1,0 +1,6 @@
+# A helper unit with its own `libc` block.
+unsafe external "C" as libc because "the helper binding of abs":
+    fn abs(i32 x) i32 = "abs"
+
+public fn helper_abs(i32 x) i32:
+    return libc.abs(x)

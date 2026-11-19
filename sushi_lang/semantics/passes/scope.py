@@ -457,7 +457,7 @@ class ScopeAnalyzer:
     def _namespace_bound_elsewhere(self, name: str) -> Optional[str]:
         """The unit whose `unsafe external` block binds this namespace, if another does.
 
-        The external table is program-wide and the BINDING is per unit (#503), so a
+        A namespace is a name of the unit whose block binds it (#503, #1314), so a
         name that reaches nothing here can still be a namespace next door -- and saying
         so is the difference between "undeclared" and "declared, elsewhere".
         """

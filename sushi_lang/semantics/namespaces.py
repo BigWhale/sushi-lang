@@ -269,19 +269,23 @@ class ExternalNamespace(Provider):
 
     namespace_kind = "extern"
 
-    def __init__(self, external_table: Any, ns: str) -> None:
+    def __init__(self, external_table: Any, ns: str, unit: Optional[str]) -> None:
         self._table = external_table
         self.origin = ns
+        # The unit whose block binds the namespace: the namespace is a name of that unit,
+        # and another unit's block of the same alias is another namespace (#1314).
+        self.unit = unit
 
     def _lookup_own(self, name: str) -> Optional[Binding]:
-        sig = self._table.lookup(self.origin, name)
+        sig = self._table.lookup(self.unit, self.origin, name)
         if sig is not None:
             return Binding("extern", name, self, sig)
-        var = self._table.lookup_variable(self.origin, name)
+        var = self._table.lookup_variable(self.unit, self.origin, name)
         return None if var is None else Binding("extern variable", name, self, var)
 
     def _own_members(self) -> Iterable[str]:
-        return tuple(sig.name for sig in self._table.records(self.origin))
+        return tuple(sig.name for sig in
+                     self._table.records(self.origin, unit=self.unit, any_unit=False))
 
 
 class UnitNamespace(Provider):
@@ -576,12 +580,12 @@ def import_help(origin: str, *, stdlib: bool = False,
 def externals_only(external_table: Any) -> NamespaceTable:
     """The FFI namespaces alone, for a reader with no unit of its own.
 
-    `ExternalTable` is flat and has always answered a `libc.printf` from any unit, so
-    every unit's table carries every FFI namespace. A scratch validator with no unit
-    gets this.
+    A scratch validator with no unit gets this: each namespace that a block binds, read
+    from the first unit that binds it.
     """
     table = NamespaceTable()
-    for ns in {*getattr(external_table, "by_namespace", {}),
-               *getattr(external_table, "variables", {})}:
-        table.bind(ns, ExternalNamespace(external_table, ns))
+    keys = external_table.namespace_keys() if external_table is not None else set()
+    for unit, ns in sorted(keys, key=lambda key: (key[1], key[0] or "")):
+        if not table.is_namespace(ns):
+            table.bind(ns, ExternalNamespace(external_table, ns, unit))
     return table

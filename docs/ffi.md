@@ -29,7 +29,7 @@ unsafe external "C" as libc because "bootstrap: call libc for the backend":
 |---|---|
 | `unsafe external` | A contextual keyword pair, valid only as a top-level declaration. |
 | `"C"` | The ABI. Only `"C"` is accepted; the slot reserves room for others. |
-| `as libc` | The **namespace binding**, chosen by you. It binds only in the unit that declares the block. Foreign names never enter Sushi's global scope. |
+| `as libc` | The **namespace binding**, chosen by you. It binds only in the unit that declares the block. Foreign names never enter Sushi's global scope. Two units may each declare a block with the same alias and the same functions (a stdlib module included); each unit reads its own block. One link name still has one signature in the program ([`CE5001`](error-catalog.md#ce5001)). |
 | `because "<reason>"` | **Optional.** The acknowledgment that silences the [`CW5001`](error-catalog.md#cw5001) warning (see below). |
 | `fn name(params) ret = "symbol"` | One foreign declaration. No body. The Sushi-visible `name` and the C link `symbol` are separated. |
 | `var type name = "symbol"` | One C global variable, read-only from Sushi ([External variables](#external-variables)). |

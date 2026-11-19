@@ -7,7 +7,7 @@ The free functions (`sqrt`, `pow`, `sin` and the others) and the constants `PI`,
 type needs none.
 :##
 
-unsafe external "C" as math_llvm because "the LLVM math intrinsics":
+unsafe external "C" as llvm because "the LLVM math intrinsics":
     fn sqrt(f64 x) f64 = "llvm.sqrt.f64"
     fn pow(f64 base, f64 exponent) f64 = "llvm.pow.f64"
     fn floor(f64 x) f64 = "llvm.floor.f64"
@@ -28,7 +28,7 @@ unsafe external "C" as math_llvm because "the LLVM math intrinsics":
     fn maxnum_f32(f32 a, f32 b) f32 = "llvm.maxnum.f32"
     fn maxnum_f64(f64 a, f64 b) f64 = "llvm.maxnum.f64"
 
-unsafe external "C" as math_libm because "the C library math functions":
+unsafe external "C" as libc because "the C library math functions":
     fn tan(f64 x) f64 = "tan"
     fn asin(f64 x) f64 = "asin"
     fn acos(f64 x) f64 = "acos"
@@ -66,7 +66,7 @@ Gives the square root of `x`. A negative `x` gives NaN.
   This prints `3`.
 :##
 public fn sqrt(f64 x) f64:
-    return math_llvm.sqrt(x)
+    return llvm.sqrt(x)
 
 ##:
 Gives `base` to the power `exponent`.
@@ -81,7 +81,7 @@ Gives `base` to the power `exponent`.
   This prints `1024`.
 :##
 public fn pow(f64 base, f64 exponent) f64:
-    return math_llvm.pow(base, exponent)
+    return llvm.pow(base, exponent)
 
 ##:
 Gives the largest whole number that is not more than `x`.
@@ -95,7 +95,7 @@ Gives the largest whole number that is not more than `x`.
   This prints `2`.
 :##
 public fn floor(f64 x) f64:
-    return math_llvm.floor(x)
+    return llvm.floor(x)
 
 ##:
 Gives the smallest whole number that is not less than `x`.
@@ -109,7 +109,7 @@ Gives the smallest whole number that is not less than `x`.
   This prints `3`.
 :##
 public fn ceil(f64 x) f64:
-    return math_llvm.ceil(x)
+    return llvm.ceil(x)
 
 ##:
 Gives the whole number nearest to `x`. A half goes away from zero.
@@ -123,7 +123,7 @@ Gives the whole number nearest to `x`. A half goes away from zero.
   This prints `3`.
 :##
 public fn round(f64 x) f64:
-    return math_llvm.round(x)
+    return llvm.round(x)
 
 ##:
 Gives `x` without its fraction, toward zero.
@@ -137,7 +137,7 @@ Gives `x` without its fraction, toward zero.
   This prints `-2`.
 :##
 public fn trunc(f64 x) f64:
-    return math_llvm.trunc(x)
+    return llvm.trunc(x)
 
 ##:
 Gives the sine of `x`, in radians.
@@ -151,7 +151,7 @@ Gives the sine of `x`, in radians.
   This prints `0`.
 :##
 public fn sin(f64 x) f64:
-    return math_llvm.sin(x)
+    return llvm.sin(x)
 
 ##:
 Gives the cosine of `x`, in radians.
@@ -165,7 +165,7 @@ Gives the cosine of `x`, in radians.
   This prints `1`.
 :##
 public fn cos(f64 x) f64:
-    return math_llvm.cos(x)
+    return llvm.cos(x)
 
 ##:
 Gives the natural logarithm of `x`.
@@ -179,7 +179,7 @@ Gives the natural logarithm of `x`.
   This prints `1`.
 :##
 public fn log(f64 x) f64:
-    return math_llvm.log(x)
+    return llvm.log(x)
 
 ##:
 Gives the base-2 logarithm of `x`.
@@ -193,7 +193,7 @@ Gives the base-2 logarithm of `x`.
   This prints `3`.
 :##
 public fn log2(f64 x) f64:
-    return math_llvm.log2(x)
+    return llvm.log2(x)
 
 ##:
 Gives the base-10 logarithm of `x`.
@@ -207,7 +207,7 @@ Gives the base-10 logarithm of `x`.
   This prints `3`.
 :##
 public fn log10(f64 x) f64:
-    return math_llvm.log10(x)
+    return llvm.log10(x)
 
 ##:
 Gives `E` to the power `x`.
@@ -221,7 +221,7 @@ Gives `E` to the power `x`.
   This prints `1`.
 :##
 public fn exp(f64 x) f64:
-    return math_llvm.exp(x)
+    return llvm.exp(x)
 
 ##:
 Gives 2 to the power `x`.
@@ -235,7 +235,7 @@ Gives 2 to the power `x`.
   This prints `1024`.
 :##
 public fn exp2(f64 x) f64:
-    return math_llvm.exp2(x)
+    return llvm.exp2(x)
 
 ##:
 Gives the tangent of `x`, in radians, with the bits of the C library `tan`.
@@ -249,7 +249,7 @@ Gives the tangent of `x`, in radians, with the bits of the C library `tan`.
   This prints `0`.
 :##
 public fn tan(f64 x) f64:
-    return math_libm.tan(x)
+    return libc.tan(x)
 
 ##:
 Gives the arc sine of `x`, in radians.
@@ -263,7 +263,7 @@ Gives the arc sine of `x`, in radians.
   This prints `0`.
 :##
 public fn asin(f64 x) f64:
-    return math_libm.asin(x)
+    return libc.asin(x)
 
 ##:
 Gives the arc cosine of `x`, in radians.
@@ -277,7 +277,7 @@ Gives the arc cosine of `x`, in radians.
   This prints `0`.
 :##
 public fn acos(f64 x) f64:
-    return math_libm.acos(x)
+    return libc.acos(x)
 
 ##:
 Gives the arc tangent of `x`, in radians.
@@ -291,7 +291,7 @@ Gives the arc tangent of `x`, in radians.
   This prints `0`.
 :##
 public fn atan(f64 x) f64:
-    return math_libm.atan(x)
+    return libc.atan(x)
 
 ##:
 Gives the angle of the point `(x, y)`, in radians, from -PI to PI.
@@ -306,7 +306,7 @@ Gives the angle of the point `(x, y)`, in radians, from -PI to PI.
   This prints `3.14159`.
 :##
 public fn atan2(f64 y, f64 x) f64:
-    return math_libm.atan2(y, x)
+    return libc.atan2(y, x)
 
 ##:
 Gives the hyperbolic sine of `x`.
@@ -320,7 +320,7 @@ Gives the hyperbolic sine of `x`.
   This prints `0`.
 :##
 public fn sinh(f64 x) f64:
-    return math_libm.sinh(x)
+    return libc.sinh(x)
 
 ##:
 Gives the hyperbolic cosine of `x`.
@@ -334,7 +334,7 @@ Gives the hyperbolic cosine of `x`.
   This prints `1`.
 :##
 public fn cosh(f64 x) f64:
-    return math_libm.cosh(x)
+    return libc.cosh(x)
 
 ##:
 Gives the hyperbolic tangent of `x`.
@@ -348,7 +348,7 @@ Gives the hyperbolic tangent of `x`.
   This prints `0`.
 :##
 public fn tanh(f64 x) f64:
-    return math_libm.tanh(x)
+    return libc.tanh(x)
 
 ##:
 Gives the length of the hypotenuse, `sqrt(x * x + y * y)`, without an overflow.
@@ -363,7 +363,7 @@ Gives the length of the hypotenuse, `sqrt(x * x + y * y)`, without an overflow.
   This prints `5`.
 :##
 public fn hypot(f64 x, f64 y) f64:
-    return math_libm.hypot(x, y)
+    return libc.hypot(x, y)
 
 ##:
 Gives the size of the value: the value without its sign.
@@ -455,7 +455,7 @@ A NaN stays NaN, and -0.0 gives 0.0.
   This prints `2.5`.
 :##
 public extend f32 abs() f32:
-    return math_llvm.fabs_f32(self)
+    return llvm.fabs_f32(self)
 
 ##:
 Gives the size of the value: the value without its sign.
@@ -471,7 +471,7 @@ A NaN stays NaN, and -0.0 gives 0.0.
   This prints `2.5`.
 :##
 public extend f64 abs() f64:
-    return math_llvm.fabs_f64(self)
+    return llvm.fabs_f64(self)
 
 ##:
 Gives the smaller of the value and `b`.
@@ -632,7 +632,7 @@ A NaN on one side gives the other value, as the C `fmin` does.
   This prints `-2.5`.
 :##
 public extend f32 min(f32 b) f32:
-    return math_llvm.minnum_f32(self, b)
+    return llvm.minnum_f32(self, b)
 
 ##:
 Gives the smaller of the value and `b`.
@@ -649,7 +649,7 @@ A NaN on one side gives the other value, as the C `fmin` does.
   This prints `-2.5`.
 :##
 public extend f64 min(f64 b) f64:
-    return math_llvm.minnum_f64(self, b)
+    return llvm.minnum_f64(self, b)
 
 ##:
 Gives the larger of the value and `b`.
@@ -810,7 +810,7 @@ A NaN on one side gives the other value, as the C `fmax` does.
   This prints `3`.
 :##
 public extend f32 max(f32 b) f32:
-    return math_llvm.maxnum_f32(self, b)
+    return llvm.maxnum_f32(self, b)
 
 ##:
 Gives the larger of the value and `b`.
@@ -827,7 +827,7 @@ A NaN on one side gives the other value, as the C `fmax` does.
   This prints `3`.
 :##
 public extend f64 max(f64 b) f64:
-    return math_llvm.maxnum_f64(self, b)
+    return llvm.maxnum_f64(self, b)
 
 ##:
 Divides the value by `b` and gives the quotient and the remainder, the same as `/` and `%`.

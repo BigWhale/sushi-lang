@@ -1,0 +1,15 @@
+# A namespace of an `unsafe external` block is a name of its unit. This unit's
+# `libc.snprintf` is no duplicate of the `libc.snprintf` in the bundled
+# `collections/strings` module, which `to_fixed` loads (#1314).
+# EXPECT_STDOUT_EXACT: "2.50 5\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+unsafe external "C" as libc because "a user binding of snprintf":
+    fn snprintf(poke u8[] buf, i64 n, string fmt, ...) i32 = "snprintf"
+
+fn main() i32:
+    let f64 x = 2.5
+    let u8[] buf = from([0 as u8; 16])
+    let i32 written = libc.snprintf(poke buf, 16, "%d", 12345)
+    println("{x.to_fixed(2)} {written}")
+    return 0

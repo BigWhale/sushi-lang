@@ -1,0 +1,6 @@
+# A helper unit with its own `libc` block, which binds `getpid`.
+unsafe external "C" as libc because "the helper binding of getpid":
+    fn getpid() i32 = "getpid"
+
+public fn helper_pid() i32:
+    return libc.getpid()

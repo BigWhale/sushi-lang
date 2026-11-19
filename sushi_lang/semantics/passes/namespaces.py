@@ -80,7 +80,8 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
     # the reach should be instead.
     external_table = getattr(tables, "externals", None)
     for block in program.externals or ():
-        table.bind(block.namespace, ExternalNamespace(external_table, block.namespace))
+        table.bind(block.namespace,
+                   ExternalNamespace(external_table, block.namespace, unit.name))
 
     declared = _names_declared_by(program)
     flat: list[Tuple[UseStatement, Provider]] = []
