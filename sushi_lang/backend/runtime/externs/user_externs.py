@@ -42,16 +42,19 @@ def declare_user_externs(codegen: 'LLVMCodegen', external_table: 'ExternalTable'
     if external_table is None:
         return
 
-    for namespace, decls in external_table.by_namespace.items():
+    # Keyed by the unit, the namespace and the name: two units may each bind one alias
+    # (#1314).
+    for (unit, namespace), decls in external_table.by_namespace.items():
         for name, sig in decls.items():
             llvm_fn = _declare_one(codegen, sig)
-            codegen.external_funcs[(namespace, name)] = llvm_fn
-            codegen.external_sigs[(namespace, name)] = sig
+            codegen.external_funcs[(unit, namespace, name)] = llvm_fn
+            codegen.external_sigs[(unit, namespace, name)] = sig
 
     codegen.external_vars = {}
-    for namespace, variables in external_table.variables.items():
+    for (unit, namespace), variables in external_table.variables.items():
         for name, var in variables.items():
-            codegen.external_vars[(namespace, name)] = (_declare_variable(codegen, var), var)
+            codegen.external_vars[(unit, namespace, name)] = (
+                _declare_variable(codegen, var), var)
 
 
 def _declare_variable(codegen: 'LLVMCodegen', var) -> ir.Value:

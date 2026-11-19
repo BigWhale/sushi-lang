@@ -47,7 +47,8 @@ _UNSIGNED = frozenset({BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, Builtin
 
 def emit_extern(state: FunctionState, statement: st.Call, direct: st.Direct,
                 extern: ExternalSig) -> None:
-    callee = state.codegen.external_funcs.get((extern.namespace, extern.name))
+    callee = state.codegen.external_funcs.get(
+        (extern.unit_name, extern.namespace, extern.name))
     if callee is None:
         state.fault(f"the module declares no C function '{extern.link_name}'")
     function_type = callee.type.pointee

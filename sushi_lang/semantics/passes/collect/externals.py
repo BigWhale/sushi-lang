@@ -46,27 +46,35 @@ class ExternalVarSig:
     unit_name: Optional[str] = None
 
 
+#: The key of a namespace: the unit whose block binds it, and the written alias. A
+#: namespace is a name of its unit, as a `use ... as` alias is (#503, #1314).
+NamespaceKey = Tuple[Optional[str], str]
+
+
 @dataclass
 class ExternalTable:
-    """Namespace-keyed table of foreign function signatures and C global variables."""
-    by_namespace: Dict[str, Dict[str, ExternalSig]] = field(default_factory=dict)
-    variables: Dict[str, Dict[str, ExternalVarSig]] = field(default_factory=dict)
+    """Foreign function signatures and C global variables, keyed by the unit and the
+    namespace of their block."""
+    by_namespace: Dict[NamespaceKey, Dict[str, ExternalSig]] = field(default_factory=dict)
+    variables: Dict[NamespaceKey, Dict[str, ExternalVarSig]] = field(default_factory=dict)
     # The link name of each declaration that writes it as a string constant (#1089), by
-    # the namespace, the name and the span of the name of the declaration, which a copy of
-    # the node keeps. `fold_link_names` is the one writer (`fold`).
-    folded: Dict[Tuple[str, str, Optional[Tuple[int, int]]], str] = field(default_factory=dict)
+    # the unit, the namespace, the name and the span of the name of the declaration,
+    # which a copy of the node keeps. `fold_link_names` is the one writer (`fold`).
+    folded: Dict[Tuple[Optional[str], str, str, Optional[Tuple[int, int]]], str] = field(
+        default_factory=dict)
 
     def is_namespace(self, ns: str) -> bool:
-        """True if `ns` is a registered external namespace."""
-        return ns in self.by_namespace or ns in self.variables
+        """True if a block of any unit binds `ns`."""
+        return any(key[1] == ns for key in (*self.by_namespace, *self.variables))
 
-    def lookup(self, ns: str, name: str) -> Optional[ExternalSig]:
-        """Look up a foreign function by namespace and Sushi-visible name."""
-        return self.by_namespace.get(ns, {}).get(name)
+    def lookup(self, unit: Optional[str], ns: str, name: str) -> Optional[ExternalSig]:
+        """The foreign function that the block `ns` of `unit` binds as `name`."""
+        return self.by_namespace.get((unit, ns), {}).get(name)
 
-    def lookup_variable(self, ns: str, name: str) -> Optional[ExternalVarSig]:
-        """Look up a C global variable by namespace and Sushi-visible name."""
-        return self.variables.get(ns, {}).get(name)
+    def lookup_variable(self, unit: Optional[str], ns: str,
+                        name: str) -> Optional[ExternalVarSig]:
+        """The C global variable that the block `ns` of `unit` binds as `name`."""
+        return self.variables.get((unit, ns), {}).get(name)
 
     def by_link_name(self, link_name: str, name: str) -> Optional[ExternalSig]:
         """The C function whose link name and name these are: the `Direct` callee of a
@@ -77,31 +85,39 @@ class ExternalTable:
                 return sig
         return None
 
-    def fold(self, namespace: str, decl: 'ExternalDecl | ExternalVar', link_name: str) -> None:
-        self.folded[_folded_key(namespace, decl)] = link_name
+    def fold(self, unit: Optional[str], namespace: str, decl: 'ExternalDecl | ExternalVar',
+             link_name: str) -> None:
+        self.folded[_folded_key(unit, namespace, decl)] = link_name
 
-    def link_name_of(self, namespace: str, decl: 'ExternalDecl | ExternalVar') -> str:
+    def link_name_of(self, unit: Optional[str], namespace: str,
+                     decl: 'ExternalDecl | ExternalVar') -> str:
         """The C symbol of an extern declaration: the written string, or the folded constant."""
-        return self.folded.get(_folded_key(namespace, decl), decl.link_name)
+        return self.folded.get(_folded_key(unit, namespace, decl), decl.link_name)
 
     def add(self, sig: ExternalSig) -> None:
-        self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
+        self.by_namespace.setdefault((sig.unit_name, sig.namespace), {})[sig.name] = sig
 
     def add_variable(self, sig: ExternalVarSig) -> None:
-        self.variables.setdefault(sig.namespace, {})[sig.name] = sig
+        self.variables.setdefault((sig.unit_name, sig.namespace), {})[sig.name] = sig
 
-    def records(self, ns: Optional[str] = None):
-        """Every function and variable record, of one namespace or of all of them."""
+    def namespace_keys(self) -> Set[NamespaceKey]:
+        """The unit and the namespace of every block."""
+        return {*self.by_namespace, *self.variables}
+
+    def records(self, ns: Optional[str] = None, *, unit: Optional[str] = None,
+                any_unit: bool = True):
+        """Every function and variable record: of one namespace or of all of them, and
+        of one unit, or of every unit when `any_unit` holds."""
         for table in (self.by_namespace, self.variables):
-            for name_space, decls in table.items():
-                if ns is None or name_space == ns:
+            for (owner, name_space), decls in table.items():
+                if (ns is None or name_space == ns) and (any_unit or owner == unit):
                     yield from decls.values()
 
 
-def _folded_key(namespace: str, decl: 'ExternalDecl | ExternalVar'
-                ) -> Tuple[str, str, Optional[Tuple[int, int]]]:
+def _folded_key(unit: Optional[str], namespace: str, decl: 'ExternalDecl | ExternalVar'
+                ) -> Tuple[Optional[str], str, str, Optional[Tuple[int, int]]]:
     at = decl.name_span
-    return namespace, decl.name, None if at is None else (at.line, at.col)
+    return unit, namespace, decl.name, None if at is None else (at.line, at.col)
 
 
 class ExternalCollector:
@@ -139,8 +155,9 @@ class ExternalCollector:
             self._collect_var(block, var)
 
     def _collect_var(self, block: 'ExternalBlock', var) -> None:
-        if (self.externals.lookup(block.namespace, var.name) is not None
-                or self.externals.lookup_variable(block.namespace, var.name) is not None):
+        unit = self.current_unit_name
+        if (self.externals.lookup(unit, block.namespace, var.name) is not None
+                or self.externals.lookup_variable(unit, block.namespace, var.name) is not None):
             er.emit(self.r, er.ERR.CE0101, var.name_span,
                     name=f"{block.namespace}.{var.name}")
             return
@@ -165,7 +182,7 @@ class ExternalCollector:
             unit_name=self.current_unit_name,
         )
 
-        existing = self.externals.lookup(block.namespace, decl.name)
+        existing = self.externals.lookup(self.current_unit_name, block.namespace, decl.name)
         if existing is not None:
             diag = er.emit_with(self.r, er.ERR.CE0101, decl.name_span,
                                 name=f"{block.namespace}.{decl.name}")
@@ -234,22 +251,23 @@ class LinkNames:
 
 
 def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
-                                  externals: ExternalTable, link_names: LinkNames) -> None:
+                                  externals: ExternalTable, link_names: LinkNames,
+                                  unit: Optional[str]) -> None:
     """CE5001 for each declaration in one unit whose link name another declaration
     holds with another C shape. It runs after the link names are folded."""
     filename = reporter.filename
     for block in program.externals:
         for decl in block.decls:
-            record = externals.lookup(block.namespace, decl.name)
-            link_name = externals.link_name_of(block.namespace, decl)
+            record = externals.lookup(unit, block.namespace, decl.name)
+            link_name = externals.link_name_of(unit, block.namespace, decl)
             if (link_name and _collected(record, decl, filename)
                     and _crosses(decl)):
                 shape = function_shape([p.ty for p in decl.params], decl.ret, decl.is_variadic)
                 link_names.admit(reporter, link_name, shape,
                                  decl.name_span or decl.loc, filename)
         for var in block.variables:
-            record = externals.lookup_variable(block.namespace, var.name)
-            link_name = externals.link_name_of(block.namespace, var)
+            record = externals.lookup_variable(unit, block.namespace, var.name)
+            link_name = externals.link_name_of(unit, block.namespace, var)
             if (link_name and _collected(record, var, filename)
                     and is_c_abi_variable(var.ty)):
                 link_names.admit(reporter, link_name, ("var", c_type(var.ty)),

@@ -562,7 +562,7 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             fold_link_names(unit_reporter, unit.ast, self.tables, unit.name)
             reject_external_naming_a_defined_symbol(
-                unit_reporter, unit.ast, self.tables, self.library_registry,
+                unit_reporter, unit.ast, self.tables, unit.name, self.library_registry,
                 self.generated_symbols)
             self._merge_unit(unit_reporter)
 
@@ -577,7 +577,7 @@ class SemanticAnalyzer:
                 continue
             unit_reporter = self._unit_reporter(unit)
             reject_disagreeing_link_names(unit_reporter, unit.ast, self.tables.externals,
-                                          link_names)
+                                          link_names, unit.name)
             self._merge_unit(unit_reporter)
 
     def _check_instance_clash(self, compilation_order: list[Unit]) -> None:
@@ -596,7 +596,7 @@ class SemanticAnalyzer:
                 continue
             unit_reporter = self._unit_reporter(unit)
             reject_external_naming_an_instance(unit_reporter, unit.ast,
-                                               self.tables.externals, instances)
+                                               self.tables.externals, instances, unit.name)
             self._merge_unit(unit_reporter)
 
     def _check_late_instance_clash(self, compilation_order: list[Unit],
@@ -614,7 +614,7 @@ class SemanticAnalyzer:
                 continue
             unit_reporter = self._unit_reporter(unit)
             reject_external_naming_an_instance(unit_reporter, unit.ast,
-                                               self.tables.externals, instances)
+                                               self.tables.externals, instances, unit.name)
             self._merge_unit(unit_reporter)
 
     def _collect_instantiations(self, compilation_order: list[Unit],

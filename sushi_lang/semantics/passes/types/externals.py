@@ -152,18 +152,18 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
                         type=display_type(value.semantic_type))
                 continue
             link_name = str(value.value)
-            tables.externals.fold(block.namespace, decl, link_name)
-            var = tables.externals.lookup_variable(block.namespace, decl.name)
+            tables.externals.fold(unit_name, block.namespace, decl, link_name)
+            var = tables.externals.lookup_variable(unit_name, block.namespace, decl.name)
             if var is not None:
                 var.link_name = link_name
-            sig = tables.externals.lookup(block.namespace, decl.name)
+            sig = tables.externals.lookup(unit_name, block.namespace, decl.name)
             if sig is not None:
                 sig.link_name = link_name
 
 
 def reject_external_naming_a_defined_symbol(
-    reporter: Reporter, program: 'Program', tables, registry=None,
-    generated_symbols=frozenset(),
+    reporter: Reporter, program: 'Program', tables, unit_name: Optional[str],
+    registry=None, generated_symbols=frozenset(),
 ) -> None:
     """CE5013: an `unsafe external` may name a FOREIGN symbol, never one this build defines.
 
@@ -184,7 +184,7 @@ def reject_external_naming_a_defined_symbol(
 
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            link_name = tables.externals.link_name_of(block.namespace, decl)
+            link_name = tables.externals.link_name_of(unit_name, block.namespace, decl)
             found = _defining_site(link_name, tables, registry, generated_symbols)
             if found is not None:
                 _emit_defined_symbol(reporter, decl, link_name, *found)
@@ -224,7 +224,8 @@ def monomorphized_instances(compilation_order, funcs) -> list[tuple]:
 
 
 def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
-                                       externals_table, instances: list[tuple]) -> None:
+                                       externals_table, instances: list[tuple],
+                                       unit_name: Optional[str]) -> None:
     """CE5013, the instance half: an extern that names a monomorphized instance (#1113).
 
     An instance exists only after the `monomorphize` pass, and the first half runs
@@ -238,7 +239,7 @@ def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
     bodies = {id(sig): fn for sig, fn in instances}
     for block in externals:
         for decl in [*block.decls, *block.variables]:
-            link_name = externals_table.link_name_of(block.namespace, decl)
+            link_name = externals_table.link_name_of(unit_name, block.namespace, decl)
             sig = _declaration_emitting(link_name, [sig for sig, _ in instances])
             if sig is None:
                 continue
