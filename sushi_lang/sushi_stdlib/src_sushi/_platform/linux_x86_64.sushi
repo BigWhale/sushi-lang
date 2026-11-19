@@ -247,6 +247,9 @@ public const i32 EISDIR = 21
 ##: errno: an argument is not valid. :##
 public const i32 EINVAL = 22
 
+##: errno: no memory is free. :##
+public const i32 ENOMEM = 12
+
 ##: errno: too many open files in the system. :##
 public const i32 ENFILE = 23
 

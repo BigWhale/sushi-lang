@@ -1,32 +1,34 @@
-# A row that answers an owning value (`getenv` a `Maybe@(string)`, `fd_readln` a
-# `Result@(Maybe@(string), FileError)`) answers a fresh value: bound, discarded, matched
-# and passed on, each is freed once.
+# A row that answers an owning value (`read_dir` a `Result@(string[], FileError)`,
+# `fd_readln` a `Result@(Maybe@(string), FileError)`) answers a fresh value: bound,
+# discarded, matched and passed on, each is freed once.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
-# EXPECT_STDOUT_EXACT: "bound:Mostly Harmless\nmatched:Mostly Harmless\npassed:15\nline:[So long]\nend:none\n"
-use <sys/env>
+# EXPECT_STDOUT_EXACT: "bound:rr_owning_answers_probe.txt\nmatched:rr_owning_answers_probe.txt\npassed:1\nline:[So long]\nend:none\n"
 use <io/files>
 
-fn length_of(nom Maybe@(string) value) i32:
-    match value:
-        Maybe.Some(text) -> return text.len() as i32
-        Maybe.None -> return -1
+fn count_of(nom Result@(string[], FileError) listing) i32:
+    match listing:
+        Result.Ok(names) -> return names.len() as i32
+        Result.Err(_) -> return -1
 
 fn main() i32:
-    setenv("RR_OWNING_ANSWER", "Mostly Harmless").realise(-1)
-    let Maybe@(string) bound = getenv("RR_OWNING_ANSWER")
-    println("bound:{bound.realise('missing')}")
-    getenv("RR_OWNING_ANSWER")
-    match getenv("RR_OWNING_ANSWER"):
-        Maybe.Some(text) -> println("matched:{text}")
-        Maybe.None -> println("matched:none")
-    println("passed:{length_of(nom getenv('RR_OWNING_ANSWER'))}")
-
     let i32 fd = fd_open("rr_owning_answers_probe.txt", 3, 420).realise(-1)
     if (fd < 0):
         println("open failed")
         return 1
+
+    let string[] bound = read_dir(".").realise(from([]))
+    foreach(name in bound.iter()):
+        println("bound:{name}")
+    read_dir(".").realise(from([]))
+    match read_dir("."):
+        Result.Ok(names) ->
+            foreach(name in names.iter()):
+                println("matched:{name}")
+        Result.Err(_) -> println("matched:failed")
+    println("passed:{count_of(nom read_dir('.'))}")
+
     fd_write_str(fd, "So long\n").realise(-1)
     fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
     let Maybe@(string) line = fd_readln(fd).realise(Maybe.None)

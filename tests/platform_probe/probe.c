@@ -149,6 +149,7 @@ int main(void) {
     num("ENOTDIR", ENOTDIR, "errno: not a directory.");
     num("EISDIR", EISDIR, "errno: is a directory.");
     num("EINVAL", EINVAL, "errno: an argument is not valid.");
+    num("ENOMEM", ENOMEM, "errno: no memory is free.");
     num("ENFILE", ENFILE, "errno: too many open files in the system.");
     num("EMFILE", EMFILE, "errno: too many open files in the process.");
     num("ENOSPC", ENOSPC, "errno: no space left on the device.");

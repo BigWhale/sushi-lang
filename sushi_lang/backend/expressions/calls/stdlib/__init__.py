@@ -7,7 +7,6 @@ from sushi_lang.backend.expressions.calls.stdlib.io import (
     emit_files_function,
 )
 from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
-from sushi_lang.backend.expressions.calls.stdlib.env import emit_env_function
 from sushi_lang.backend.expressions.calls.stdlib.process import emit_process_function
 from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 
@@ -15,7 +14,6 @@ from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 # the same set (`semantics/stdlib_registry.py`); a module it answers and this table
 # misses is an internal error of the SLIR emitter (`_stdlib`, `backend/slir/emit.py`).
 STDLIB_EMITTERS: dict[str, Callable] = {
-    "sys/env": emit_env_function,
     "sys/process": emit_process_function,
     "io/files": emit_files_function,
     "net/socket": emit_net_function,
@@ -25,7 +23,6 @@ __all__ = [
     "STDLIB_EMITTERS",
     "emit_files_function",
     "emit_stdlib_string_call",
-    "emit_env_function",
     "emit_process_function",
     "emit_net_function",
 ]

@@ -6,6 +6,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`<sys/env>` is Sushi source, and an out-of-memory `setenv` stops the program.** The
+  module calls `getenv()` and `setenv()` of the C library through an `unsafe external`
+  block. When `setenv()` fails with `ENOMEM`, the program stops with `RE2026` (before, it
+  gave `EnvError.InvalidValue`). Any other failure gives `EnvError.InvalidValue`, as before.
+  The signatures do not change. `<sys/platform>` has a new constant, `ENOMEM`. An own
+  `getenv` or `setenv` in a unit with a flat `use <sys/env>` now gets `CW3002`, as for
+  every Sushi source module. The status path of the registry rows, which made a `Result`
+  from a bare status at the call, is removed: `setenv` was its last user. BREAKING.
 - **`<time>` is Sushi source, and a clock failure stops the program.** The module calls
   `nanosleep()` and `clock_gettime()` of the C library through an `unsafe external` block,
   and reads the clock ids and `EINTR` from `<sys/platform>`. When `clock_gettime()` fails,

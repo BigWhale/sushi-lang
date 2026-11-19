@@ -17,6 +17,9 @@ The import brings `EnvError`, the module's error type: the bare name needs it, a
 
 The env module provides functions for reading and modifying environment variables. It uses POSIX `getenv()` and `setenv()` functions for Unix portability across macOS, Linux, and other Unix-like systems.
 
+The module is Sushi source (`sushi_stdlib/src_sushi/sys/env.sushi`). It calls the two C
+functions through an `unsafe external` block (see [FFI](../../ffi.md)).
+
 ## Functions
 
 ### getenv
@@ -94,7 +97,10 @@ An existing variable with the same name is always overwritten.
 
 **Returns:**
 - `Result.Ok(0)` on success
-- `Result.Err(EnvError.InvalidValue)` on failure (e.g., an empty name, a name that contains `=`, insufficient memory)
+- `Result.Err(EnvError.InvalidValue)` when the C library refuses the name (an empty name, or a name that contains `=`)
+
+When no memory is free for the new value (`ENOMEM`), the program stops with
+[`RE2026`](../../error-catalog.md#re2026). A program cannot recover from this failure.
 
 **Example:**
 
@@ -196,17 +202,11 @@ fn main() i32:
 
 ## Platform-Specific Behavior
 
-### macOS (darwin)
+### macOS (darwin) and Linux
 
-Platform-specific implementation in `sushi_stdlib/src/_platform/darwin/env.py`:
-- Uses standard POSIX `getenv()` and `setenv()`
-- Follows BSD semantics
-
-### Linux
-
-Platform-specific implementation in `sushi_stdlib/src/_platform/linux/env.py`:
-- Uses standard POSIX `getenv()` and `setenv()`
-- Follows GNU/Linux semantics
+The module calls the POSIX `getenv()` and `setenv()` of the C library on both platforms.
+It reads the value of `ENOMEM` from [`<sys/platform>`](platform.md). macOS follows BSD
+semantics, and Linux follows GNU/Linux semantics.
 
 ### Other platforms
 

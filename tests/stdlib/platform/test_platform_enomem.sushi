@@ -1,0 +1,19 @@
+# `ENOMEM` of `<sys/platform>` is right for this host: a `malloc()` of a size that no host
+# can give fails, and `errno()` is compared with the constant. The value is 12 on every
+# supported host.
+# EXPECT_STDOUT_EXACT: "ENOMEM 12\nENOMEM: ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/platform>
+use "helpers/check"
+
+unsafe external "C" as libc because "causing ENOMEM on purpose":
+    fn malloc(i64 n) Maybe@(ptr) = "malloc"
+
+fn main() i32:
+    let Maybe@(ptr) block = libc.malloc(9223372036854775807)
+    let i32 code = errno()
+    println("ENOMEM {ENOMEM}")
+    if (block.is_some()):
+        println("ENOMEM: the call did not fail")
+        return 1
+    return expect("ENOMEM", code as i64, ENOMEM as i64)
