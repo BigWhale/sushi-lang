@@ -1,0 +1,98 @@
+##:
+sys/process -- the Sushi half of the process module.
+
+The module has two halves. `run` and `exit` are compiled into the stdlib bitcode. The
+functions of this file call `getpid()`, `getuid()`, `chdir()` and `getcwd()` of the C
+library through an `unsafe external` block. One `use <sys/process>` gives both halves.
+
+`chdir` and `getcwd` give `FileError` on a failure, with the variant from `errno()`
+(`FileError.from_errno` of `<io/error>`). This module re-exports `<io/error>`, so
+`use <sys/process>` alone can name `FileError`.
+:##
+
+public use <io/error>
+use <sys/platform>
+
+unsafe external "C" as libc because "the process id, the user id and the working directory":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn getpid() i32 = "getpid"
+    fn getuid() i32 = "getuid"
+    fn chdir(string path) i32 = "chdir"
+    fn getcwd(ptr buf, i64 size) Maybe@(string) = "getcwd"
+
+##:
+Gives the process id of the program.
+
+- Returns: The process id, a number greater than 0.
+- Example:
+  ```sushi
+  if (getpid() > 0):
+      println("pid ok")
+  ```
+  This prints `pid ok`.
+:##
+public fn getpid() i32:
+    return libc.getpid()
+
+##:
+Gives the real user id of the program.
+
+- Returns: The user id. The C type is unsigned, so a user id of more than 2,147,483,647
+  gives a negative number.
+- Example:
+  ```sushi
+  let i32 uid = getuid()
+  println("uid {uid}")
+  ```
+:##
+public fn getuid() i32:
+    return libc.getuid()
+
+##:
+Changes the working directory of the program.
+
+- Parameter path: The new working directory.
+- Returns: 0.
+- Errors: The `FileError` variant of the errno: `FileError.NotFound` when the path does
+  not exist, `FileError.InvalidPath` when a part of the path is not a directory,
+  `FileError.PermissionDenied` when the program cannot search the directory.
+- Example:
+  ```sushi
+  match chdir("/no/such/dir"):
+      Result.Ok(_) -> println("changed")
+      Result.Err(e) -> println("not changed")
+  ```
+  This prints `not changed`.
+:##
+public fn chdir(string path) i32 | FileError:
+    let i32 rc = libc.chdir(path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Gives the working directory of the program.
+
+The buffer has `PATH_MAX` bytes (from `<sys/platform>`). A longer path is a failure.
+
+- Returns: The absolute path of the working directory.
+- Errors: The `FileError` variant of the errno: `FileError.NotFound` when the working
+  directory was removed, `FileError.PermissionDenied` when a part of the path cannot be
+  read, `FileError.Other` when the path is longer than the buffer.
+- Example:
+  ```sushi
+  match getcwd():
+      Result.Ok(path) -> println("in {path}")
+      Result.Err(_) -> println("no working directory")
+  ```
+:##
+public fn getcwd() string | FileError:
+    let ptr buf = libc.malloc(PATH_MAX as i64)
+    let Maybe@(string) path = libc.getcwd(buf, PATH_MAX as i64)
+    let i32 code = errno()
+    libc.free(buf)
+    match nom path:
+        Maybe.Some(nom p) -> return Result.Ok(p)
+        Maybe.None -> return Result.Err(FileError.from_errno(code))

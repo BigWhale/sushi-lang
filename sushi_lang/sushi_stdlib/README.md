@@ -85,6 +85,13 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `setenv`, over `getenv()` and `setenv()` of the C library through an
   `unsafe external` block. It reads `ENOMEM` from `<sys/platform>`. It has no
   `.bc`, so it is in `_virtual_units`.
+- `sys/process` (`src_sushi/sys/process.sushi`) — the Sushi half of
+  `<sys/process>`, a module with TWO halves: `getpid`, `getuid`, `chdir` and
+  `getcwd` call the C library through an `unsafe external` block, and `run` and
+  `exit` are the `.bc` unit of the same name. `chdir` and `getcwd` answer
+  `FileError` through `FileError.from_errno` of `io/error`, and `getcwd` reads
+  `PATH_MAX` from `<sys/platform>`. It is not in `_virtual_units`, because it
+  has a `.bc`.
 - `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
   unsigned integers in a `u8[]` and back, in either byte order, as extension
   methods on `u8[]`.

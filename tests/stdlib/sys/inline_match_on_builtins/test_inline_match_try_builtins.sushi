@@ -8,7 +8,7 @@ use <sys/process>
 use <sys/env>
 use <collections/strings>
 
-fn read_cwd() string | ProcessError:
+fn read_cwd() string | FileError:
   let string cwd = getcwd()??
   return Result.Ok(cwd)
 

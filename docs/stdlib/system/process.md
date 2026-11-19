@@ -10,12 +10,20 @@ System process control and information functions.
 use <sys/process>
 ```
 
-The import brings `ProcessError`, the module's error type: the bare name needs it, and
+The import brings `ProcessError`, the error type of `run`: the bare name needs it, and
 `use <sys/process> as proc` puts it behind the dot (`proc.ProcessError.SpawnFailed`).
+The module also re-exports `<io/error>`, so the import brings `FileError`, the error type
+of `chdir` and `getcwd`.
 
 ## Overview
 
-The process module provides functions for controlling and querying process state. It uses POSIX functions for Unix portability across macOS, Linux, and other Unix-like systems.
+The process module gives the functions that control and read the state of the process. It
+uses POSIX functions of the C library, so it works on macOS and on Linux.
+
+The module has two halves. `getpid`, `getuid`, `chdir` and `getcwd` are Sushi source
+(`sushi_stdlib/src_sushi/sys/process.sushi`): they call the C library through an
+`unsafe external` block. `exit` and `run` are compiled into the stdlib bitcode. One
+`use <sys/process>` gives both halves.
 
 ## Functions
 
@@ -27,13 +35,16 @@ declarations: `exit`, `getpid` and `getuid` return a bare value, not a `Result`.
 Get the current working directory.
 
 ```text
-getcwd() Result@(string, ProcessError)
+getcwd() Result@(string, FileError)
 ```
 
 **Returns:**
-- `Result.Ok(path)` containing the absolute path to the current working directory
-- `Result.Err(_)` if the directory cannot be determined (e.g., directory was deleted).
-  The `ProcessError` variant in this `Err` is not defined, so match it with `_`
+- `Result.Ok(path)` with the absolute path of the working directory
+- `Result.Err(e)` when the C library cannot give the path. The variant comes from `errno`
+  (`FileError.from_errno` of `<io/error>`): `FileError.NotFound` when the working
+  directory was removed, `FileError.PermissionDenied` when a part of the path cannot be
+  read. The buffer has `PATH_MAX` bytes (`<sys/platform>`), and a longer path gives
+  `FileError.Other`
 
 **Example:**
 
@@ -55,7 +66,7 @@ fn main() i32:
 ```sushi
 use <sys/process>
 
-fn show_cwd() i32 | ProcessError:
+fn show_cwd() i32 | FileError:
     let string cwd = getcwd()??
     println("Working in: {cwd}")
     return Result.Ok(0)
@@ -69,15 +80,19 @@ fn main() i32:
 Change the current working directory.
 
 ```text
-chdir(string path) Result@(i32, ProcessError)
+chdir(string path) Result@(i32, FileError)
 ```
 
 **Parameters:**
 - `path` - Absolute or relative path to the new directory
 
 **Returns:**
-- `Result.Ok(0)` on success
-- `Result.Ok(-1)` on failure (e.g., directory does not exist, permission denied)
+- `Result.Ok(0)` when the working directory changed
+- `Result.Err(e)` when it did not change. The variant comes from `errno`
+  (`FileError.from_errno` of `<io/error>`): `FileError.NotFound` when the path does not
+  exist (ENOENT), `FileError.InvalidPath` when a part of the path is not a directory
+  (ENOTDIR), `FileError.PermissionDenied` when the program cannot search the directory
+  (EACCES)
 
 **Example:**
 
@@ -86,13 +101,12 @@ use <sys/process>
 
 fn main() i32:
     match chdir("/tmp"):
-        Result.Ok(code) ->
-            if (code == 0):
-                println("Changed to /tmp")
-            else:
-                println("Failed to change directory")
+        Result.Ok(_) ->
+            println("Changed to /tmp")
+        Result.Err(FileError.NotFound) ->
+            println("No such directory")
         Result.Err(_) ->
-            println("chdir returned error")
+            println("Failed to change directory")
 
     return 0
 ```
@@ -102,21 +116,19 @@ fn main() i32:
 ```sushi
 use <sys/process>
 
-fn navigate() i32 | ProcessError:
+fn navigate() i32 | FileError:
     # Save current directory
     let string original = getcwd()??
 
     # Change to a different directory
-    let i32 result = chdir("/var/log")??
+    chdir("/var/log")??
+    println("Now in /var/log")
+    let string current = getcwd()??
+    println("Current: {current}")
 
-    if (result == 0):
-        println("Now in /var/log")
-        let string current = getcwd()??
-        println("Current: {current}")
-
-        # Restore original directory (clone: original is read again right after)
-        chdir(original.clone())??
-        println("Restored to {original}")
+    # Restore original directory (clone: original is read again right after)
+    chdir(original.clone())??
+    println("Restored to {original}")
 
     return Result.Ok(0)
 
@@ -343,7 +355,7 @@ Functions integrate with Sushi's error handling system:
 use <sys/process>
 
 # 1. Error propagation (??): the enclosing function carries the error type
-fn enter_tmp() string | ProcessError:
+fn enter_tmp() string | FileError:
     let string dir = getcwd()??
     chdir("/tmp")??
     return Result.Ok(dir)
@@ -400,19 +412,19 @@ fn main() i32:
 
 ## Platform-Specific Behavior
 
+The Sushi half calls the POSIX functions `getcwd()`, `chdir()`, `getpid()` and
+`getuid()` on each platform. `PATH_MAX` and the errno numbers come from
+`<sys/platform>`, one file for each platform.
+
 ### macOS (darwin)
 
-Platform-specific implementation in `sushi_stdlib/src/_platform/darwin/process.py`:
-- Uses standard POSIX `getcwd()`, `chdir()`, `getpid()`, `getuid()`
-- PATH_MAX is typically 1024 bytes
-- Follows BSD semantics
+- `PATH_MAX` is 1024 bytes
+- `run` and `exit` use `sushi_stdlib/src/_platform/darwin/process.py`
 
 ### Linux
 
-Platform-specific implementation in `sushi_stdlib/src/_platform/linux/process.py`:
-- Uses standard POSIX `getcwd()`, `chdir()`, `getpid()`, `getuid()`
-- PATH_MAX is typically 4096 bytes
-- Follows GNU/Linux semantics
+- `PATH_MAX` is 4096 bytes
+- `run` and `exit` use `sushi_stdlib/src/_platform/linux/process.py`
 
 ### Windows (not supported)
 
@@ -429,7 +441,7 @@ the operation as a **function value** (`fn() -> i32`) and calls through it — s
 ```sushi
 use <sys/process>
 
-fn with_directory(string path, fn() -> i32 operation) i32 | ProcessError:
+fn with_directory(string path, fn() -> i32 operation) i32 | FileError:
     # Save the current directory, then switch to the target
     let string original = getcwd()??
     chdir(path)??
@@ -510,7 +522,7 @@ Always validate paths to prevent directory traversal attacks:
 ```sushi
 use <sys/process>
 
-fn safe_chdir(string path) i32 | ProcessError:
+fn safe_chdir(string path) i32 | FileError:
     # Validate path doesn't contain ../ components
     # Add your validation logic here
 
@@ -523,9 +535,8 @@ fn main() i32:
 
     # Good: Validated path
     match safe_chdir("/tmp"):
-        Result.Ok(code) ->
-            if (code == 0):
-                println("Changed directory safely")
+        Result.Ok(_) ->
+            println("Changed directory safely")
         Result.Err(_) ->
             println("Invalid directory")
 
@@ -583,17 +594,14 @@ fn main() i32:
 use <sys/process>
 use <io/fs>
 
-fn process_directory(string dir_path) i32 | ProcessError:
+fn process_directory(string dir_path) i32 | FileError:
     println("Processing directory: {dir_path}")
 
     # Save current location
     let string original_dir = getcwd()??
 
-    # Change to target directory (clone: dir_path is read again below)
-    let i32 change_result = chdir(dir_path.clone())??
-    if (change_result != 0):
-        println("ERROR: Cannot access directory: {dir_path}")
-        return Result.Ok(1)
+    # Change to target directory: a failure goes back as the FileError
+    chdir(dir_path)??
 
     # Verify we're in the right place
     let string current = getcwd()??
@@ -603,9 +611,7 @@ fn process_directory(string dir_path) i32 | ProcessError:
     println("Processing files...")
 
     # Return to original directory
-    let i32 restore = chdir(original_dir)??
-    if (restore != 0):
-        println("WARNING: Could not restore directory")
+    chdir(original_dir)??
 
     return Result.Ok(0)
 
@@ -620,7 +626,7 @@ fn main() i32:
         println("ERROR: Do not run as root")
         exit(1)
 
-    # Process each directory (.realise maps a ProcessError to the failure code 1)
+    # Process each directory (.realise maps a FileError to the failure code 1)
     let i32 result1 = process_directory("/tmp").realise(1)
     let i32 result2 = process_directory("/var/log").realise(1)
 

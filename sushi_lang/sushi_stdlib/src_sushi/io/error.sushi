@@ -16,11 +16,55 @@ IoError is the ONE channel every io contract method answers -- a read, a write, 
 A conversion lives in the unit that declares its TARGET, so this module also holds
 `NetError as IoError`, and it imports `<net/error>` for that one name.
 
+`FileError.from_errno` is the one map from an errno number to a FileError variant. A
+wrapper of the C library calls it with the `errno()` of the call that failed.
+
 The variant ORDER of each is the ABI: the index is the tag the descriptor layer stores
 into a Result payload, so a variant is only ever appended.
 :##
 
 use <net/error>
+use <sys/platform>
+
+##:
+Gives the FileError variant for an errno number of a failed file-system call.
+
+The numbers come from `<sys/platform>`, so the map is right on each host. A number that
+has no row gives `FileError.Other`.
+
+- Parameter code: The errno number, from `errno()` directly after the failed call.
+- Returns: The FileError variant.
+- Example:
+  ```sushi
+  use <io/error>
+  use <sys/platform>
+
+  fn main() i32:
+      match FileError.from_errno(ENOENT):
+          FileError.NotFound -> println("not found")
+          _ -> println("other")
+      return 0
+  ```
+  This prints `not found`.
+:##
+public extend FileError static from_errno(i32 code) FileError:
+    if (code == ENOENT):
+        return FileError.NotFound
+    if (code == EPERM or code == EACCES):
+        return FileError.PermissionDenied
+    if (code == EEXIST):
+        return FileError.AlreadyExists
+    if (code == EISDIR):
+        return FileError.IsDirectory
+    if (code == ENOSPC):
+        return FileError.DiskFull
+    if (code == EMFILE):
+        return FileError.TooManyOpen
+    if (code == ENAMETOOLONG or code == ENOTDIR or code == ELOOP):
+        return FileError.InvalidPath
+    if (code == EIO):
+        return FileError.IOError
+    return FileError.Other
 
 ##:
 Turns a file-system error into the one channel the io contracts answer.

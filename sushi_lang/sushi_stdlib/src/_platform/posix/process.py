@@ -8,31 +8,11 @@ _i32 = ir.IntType(32)
 _i64 = ir.IntType(64)
 
 __all__ = [
-    "declare_getcwd", "declare_chdir", "declare_exit", "declare_getpid", "declare_getuid",
+    "declare_exit",
     "declare_tmpfile", "declare_fileno", "declare_waitpid", "declare_posix_spawnp",
     "declare_posix_spawn_file_actions_init", "declare_posix_spawn_file_actions_adddup2",
     "declare_posix_spawn_file_actions_destroy", "get_environ",
 ]
-
-
-def declare_getcwd(module: ir.Module) -> ir.Function:
-    """Declare getcwd: char* getcwd(char *buf, size_t size)"""
-    return declare_libc(module, "getcwd")
-
-
-def declare_chdir(module: ir.Module) -> ir.Function:
-    """Declare chdir: int chdir(const char *path)"""
-    return declare_libc(module, "chdir")
-
-
-def declare_getpid(module: ir.Module) -> ir.Function:
-    """Declare getpid: pid_t getpid(void)"""
-    return declare_libc(module, "getpid")
-
-
-def declare_getuid(module: ir.Module) -> ir.Function:
-    """Declare getuid: uid_t getuid(void)"""
-    return declare_libc(module, "getuid")
 
 
 # ==============================================================================

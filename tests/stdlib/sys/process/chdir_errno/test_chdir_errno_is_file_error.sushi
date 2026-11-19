@@ -1,0 +1,19 @@
+# `chdir` gives `FileError` with the variant of the errno: a missing path is `NotFound`
+# (ENOENT), and a path through a file is `InvalidPath` (ENOTDIR). A directory is the
+# control, and its Ok is 0.
+# EXPECT_STDOUT_EXACT: "missing: NotFound\nthrough a file: InvalidPath\nroot: Ok(0)\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/process>
+
+fn show(string label, string path) ~:
+    match chdir(path):
+        Result.Ok(v) -> println("{label}: Ok({v})")
+        Result.Err(FileError.NotFound) -> println("{label}: NotFound")
+        Result.Err(FileError.InvalidPath) -> println("{label}: InvalidPath")
+        Result.Err(_) -> println("{label}: other Err")
+
+fn main() i32:
+    show("missing", "/no/such/dir")
+    show("through a file", "/etc/passwd/x")
+    show("root", "/")
+    return 0

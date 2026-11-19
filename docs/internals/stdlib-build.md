@@ -46,7 +46,7 @@ sushi_lang/sushi_stdlib/
 │   ├── io/
 │   │   └── files/        # -> io/files.bc
 │   ├── sys/
-│   │   └── process/      # -> sys/process.bc
+│   │   └── process/      # -> sys/process.bc (run, exit; the rest is src_sushi/sys/process.sushi)
 │   ├── net/              # -> net/socket.bc
 │   ├── _platform/         # per-OS constants (darwin/, linux/, posix/) used by
 │   │                       # the generators above via common.py
@@ -54,7 +54,6 @@ sushi_lang/sushi_stdlib/
 └── dist/                  # Build output, one directory per target platform
     ├── darwin/
     │   ├── collections/strings.bc
-    │   ├── core/primitives.bc
     │   ├── io/files.bc
     │   ├── net/socket.bc
     │   ├── sys/process.bc
@@ -63,10 +62,11 @@ sushi_lang/sushi_stdlib/
     └── linux/              # same layout; only produced by building on Linux
 ```
 
-`core/primitives.bc` is generated from `sushi_lang/backend/types/primitives/`
-(`to_str.py`), not from anything under `sushi_stdlib/src/` — it lives with the rest of
-the primitive-type codegen because it's also used directly by the backend, not only
-shipped as a linkable unit.
+No bitcode unit holds the methods of the primitive types. The backend emits `to_str()` of
+a primitive at the call (`backend/types/display.py`), and the code of the primitive
+methods (`backend/types/primitives/`) is not a stdlib generator. `build.py` does not
+remove a `.bc` that no row makes, so a `dist/` from an older build can keep a `.bc` that
+no row makes; remove it by hand.
 
 `dist/` is a build-artifact directory, not tracked in git. Only the platform(s) you've
 actually built on will have a subdirectory; on a fresh checkout `dist/` may be empty
@@ -135,8 +135,6 @@ SHA-256 over:
 
 - every `*.py` under `sushi_stdlib/src/` (recursive — generators and shared helpers
   alike),
-- every `*.py` under `sushi_lang/backend/types/primitives/` (the package `build.py`
-  generates `core/primitives` from),
 - `sushi_lang/sushi_stdlib/build.py` itself,
 - `sushi_lang/backend/types/core/mapping.py` and `sizing.py` (the enum layout, which the
   `.bc` files must match byte for byte),

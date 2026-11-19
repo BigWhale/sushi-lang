@@ -7,10 +7,3 @@ import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 import sushi_lang.backend.types.primitives.bit_reinterpret  # noqa: F401
 import sushi_lang.backend.types.primitives.bit_ops  # noqa: F401
 import sushi_lang.backend.types.primitives.cloning  # noqa: F401
-
-from sushi_lang.backend.types.primitives.to_str import generate_module_ir
-
-
-__all__ = [
-    'generate_module_ir',
-]

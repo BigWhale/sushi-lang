@@ -73,6 +73,31 @@ for example) becomes `IoError.Other`, and not `IoError.Closed`. The socket varia
 from the net modules, through the conversion `NetError as IoError`. No stdlib call answers `WouldBlock` or
 `Os(i32)` today; a `match` that names them is legal.
 
+`chdir` and `getcwd` of `<sys/process>` also answer `FileError`, and `<sys/process>`
+re-exports this module.
+
+### `FileError.from_errno`
+
+```sushi
+public extend FileError static from_errno(i32 code) FileError
+```
+
+Gives the `FileError` variant for an errno number, with the rows of the block above. A
+number with no row gives `FileError.Other`. The numbers come from `<sys/platform>`, so the
+map is right on each host. It is the one errno map in Sushi source: a wrapper of the C
+library reads `errno()` directly after the failed call and gives the number to
+`from_errno`.
+
+```sushi
+use <io/error>
+use <sys/platform>
+
+fn main() i32:
+    println(FileError.from_errno(ENOTDIR))     # FileError.InvalidPath
+    println(FileError.from_errno(0))           # FileError.Other
+    return 0
+```
+
 The variant ORDER of each is the ABI: the index is the tag the descriptor layer stores
 into a Result payload, so a variant is only ever appended.
 

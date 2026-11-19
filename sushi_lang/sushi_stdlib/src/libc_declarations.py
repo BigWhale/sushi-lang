@@ -136,10 +136,6 @@ def declare_strtod(module: ir.Module) -> Any:
     return declare_libc(module, "strtod")
 
 
-def declare_sprintf(module: ir.Module) -> Any:
-    return declare_libc(module, "sprintf")
-
-
 def declare_fprintf(module: ir.Module) -> Any:
     return declare_libc(module, "fprintf")
 

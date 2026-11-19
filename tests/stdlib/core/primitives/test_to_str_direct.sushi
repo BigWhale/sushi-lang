@@ -1,9 +1,0 @@
-# EXPECT_STDOUT_EXACT: "42\n"
-# EXPECT_RUNTIME_EXIT: 0
-use <core/primitives>
-
-fn main() i32:
-  let i32 x = 42
-  let string s = x.to_str()
-  println(s)
-  return 0

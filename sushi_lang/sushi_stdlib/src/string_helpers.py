@@ -2,16 +2,7 @@
 
 import llvmlite.ir as ir
 from sushi_lang.backend.string_layout import string_size, string_value
-from sushi_lang.backend.string_constants import text_global
-from .libc_declarations import declare_malloc, declare_strlen
-
-
-def create_string_constant(module: ir.Module, builder: ir.IRBuilder, value: str, name: str = "str") -> ir.Value:
-    """Create a global string constant and return a pointer to it."""
-    global_str = text_global(module, module.get_unique_name(name), value)
-    i32 = ir.IntType(32)
-    zero = ir.Constant(i32, 0)
-    return builder.gep(global_str, [zero, zero], inbounds=True)
+from .libc_declarations import declare_malloc
 
 
 ALLOC_FAIL_BLOCK = "alloc_fail"
@@ -52,26 +43,6 @@ def _null_checked(builder: ir.IRBuilder, raw: ir.Value) -> ir.Value:
     builder.cbranch(failed, fail, ok)
     builder.position_at_end(ok)
     return raw
-
-
-def allocate_string_buffer(builder: ir.IRBuilder, malloc_fn: ir.Function, size: int) -> ir.Value:
-    """Allocate a string buffer on the heap."""
-    i64 = ir.IntType(64)  # malloc takes size_t (i64 on 64-bit systems)
-    return emit_checked_malloc(builder, malloc_fn, ir.Constant(i64, size), name="str_buffer")
-
-
-def cstr_to_fat_pointer(
-    module: ir.Module,
-    builder: ir.IRBuilder,
-    c_str: ir.Value,
-    owned: int,
-) -> ir.Value:
-    """Convert null-terminated C string to a string value."""
-    strlen_fn = declare_strlen(module)
-
-    size_i32 = builder.call(strlen_fn, [c_str], name="str_len")
-
-    return cstr_to_fat_pointer_with_len(builder, c_str, size_i32, owned)
 
 
 def cstr_to_fat_pointer_with_len(

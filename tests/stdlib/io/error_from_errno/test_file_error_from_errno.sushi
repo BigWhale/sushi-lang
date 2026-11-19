@@ -1,0 +1,29 @@
+# `FileError.from_errno` maps each errno number of `<sys/platform>` to its variant, and a
+# number with no row to `Other`.
+# EXPECT_STDOUT_EXACT: "NotFound PermissionDenied PermissionDenied AlreadyExists IsDirectory DiskFull TooManyOpen InvalidPath InvalidPath InvalidPath IOError Other Other\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <io/error>
+use <sys/platform>
+
+fn name(FileError e) string:
+    match e:
+        FileError.NotFound -> return "NotFound"
+        FileError.PermissionDenied -> return "PermissionDenied"
+        FileError.AlreadyExists -> return "AlreadyExists"
+        FileError.IsDirectory -> return "IsDirectory"
+        FileError.DiskFull -> return "DiskFull"
+        FileError.TooManyOpen -> return "TooManyOpen"
+        FileError.InvalidPath -> return "InvalidPath"
+        FileError.IOError -> return "IOError"
+        FileError.Other -> return "Other"
+
+fn main() i32:
+    let i32[13] codes = [ENOENT, EPERM, EACCES, EEXIST, EISDIR, ENOSPC, EMFILE, ENAMETOOLONG,
+                       ENOTDIR, ELOOP, EIO, ENFILE, 0]
+    let string line = ""
+    foreach(code in codes.iter()):
+        if (line.len() > 0):
+            line := "{line} "
+        line := "{line}{name(FileError.from_errno(code))}"
+    println(line)
+    return 0

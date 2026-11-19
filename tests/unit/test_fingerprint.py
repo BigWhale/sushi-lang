@@ -48,14 +48,3 @@ def test_stdlib_generator_sources_all_exist():
     sources = _stdlib_generator_sources()
     missing = [str(p) for p in sources if not p.exists()]
     assert not missing, f"fingerprinted generator sources do not exist: {missing}"
-
-
-def test_stdlib_generator_sources_cover_primitives_package():
-    """build.py generates core/primitives from backend/types/primitives/ (a package); its files
-    must be part of the stdlib source digest.
-    """
-    from sushi_lang.compiler.fingerprint import _stdlib_generator_sources
-
-    sources = _stdlib_generator_sources()
-    prim = [p for p in sources if "backend" in p.parts and "primitives" in p.parts]
-    assert prim, "no backend/types/primitives/ files in the stdlib source fingerprint"
