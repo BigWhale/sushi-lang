@@ -1,0 +1,12 @@
+# Two units each declare `as libc` with the same function. Each unit reads its own
+# block, so neither is a duplicate of the other (#1314).
+# EXPECT_STDOUT_EXACT: "3 4\n"
+# EXPECT_RUNTIME_EXIT: 0
+use "helpers/abs_helper"
+
+unsafe external "C" as libc because "the main binding of abs":
+    fn abs(i32 x) i32 = "abs"
+
+fn main() i32:
+    println("{libc.abs(-3)} {helper_abs(-4)}")
+    return 0

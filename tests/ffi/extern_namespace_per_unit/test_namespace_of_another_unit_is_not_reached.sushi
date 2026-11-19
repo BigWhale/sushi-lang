@@ -1,0 +1,12 @@
+# A unit reaches only its own namespaces: the helper's `libc` binds `getpid`, and this
+# unit's `libc` binds `abs`, so `libc.abs` here is this unit's (#1314).
+# EXPECT_STDOUT_EXACT: "7 true\n"
+# EXPECT_RUNTIME_EXIT: 0
+use "helpers/var_helper"
+
+unsafe external "C" as libc because "the main binding of abs":
+    fn abs(i32 x) i32 = "abs"
+
+fn main() i32:
+    println("{libc.abs(-7)} {helper_pid() > 0}")
+    return 0
