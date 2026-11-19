@@ -2202,7 +2202,7 @@ A `nom` parameter takes OWNERSHIP of its argument, and that must be visible wher
 
 **Message:** `` `nom` has no meaning on the foreign parameter '{name}' ``
 
-FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (see [the borrow model](design/borrow-model.md)).
+FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees directly after the call, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (see [the borrow model](design/borrow-model.md)).
 
 ### CE2429 {#ce2429}
 

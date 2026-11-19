@@ -1,0 +1,35 @@
+# A C function that answers a `string` gets an owned copy of the answer, and the copy calls
+# `strlen` and `malloc`. A `malloc` can change `errno`, so the call reads `errno` directly
+# after the C function returns, before the copy and before the frees of the arguments, and
+# writes it back after them. This holds for a call with a `string` argument and for a call
+# with no argument to free.
+# COMPILER_FLAGS: --opt none
+# EXPECT_IR_HOLDS: read_key store i32 %errno_of_call,
+# EXPECT_IR_HOLDS: login_name store i32 %errno_of_call,
+# EXPECT_STDOUT_EXACT: "key: none\nlogin: read\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "reading errno after a C call that answers a string":
+    fn getenv(string key) Maybe@(string) = "getenv"
+    fn getlogin() Maybe@(string) = "getlogin"
+
+fn read_key(string key) i32:
+    let Maybe@(string) value = libc.getenv(key)
+    let i32 code = errno()
+    match value:
+        Maybe.Some(_) -> println("key: set")
+        Maybe.None -> println("key: none")
+    return code
+
+fn login_name() i32:
+    let Maybe@(string) name = libc.getlogin()
+    let i32 code = errno()
+    if (name.is_some() or name.is_none()):
+        println("login: read")
+    return code
+
+fn main() i32:
+    let i32 a = read_key("SUSHI_ERRNO_AFTER_ANSWER_NO_SUCH_KEY")
+    let i32 b = login_name()
+    if (a < 0 or b < 0):
+        return 1
+    return 0

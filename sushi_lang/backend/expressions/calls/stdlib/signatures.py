@@ -130,7 +130,9 @@ def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, sy
     (`stdlib_signature`), and `symbol` is the symbol that SLIR lowering derived for it. Each operand borrows. A `cstr`
     parameter crosses as the copy of the one C-string seam (`emit_cstr_arg`), which the
     call frees right after it returns (S23)."""
-    from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg, free_cstr_args
+    from sushi_lang.backend.expressions.calls.utils import (
+        emit_cstr_arg, free_cstr_args, restore_errno, save_errno,
+    )
     from sushi_lang.semantics.stdlib_registry import stdlib_signature
 
     sig = stdlib_signature(module_path, func_name)
@@ -146,7 +148,10 @@ def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, sy
             copies.append(value)
         values.append(value)
     result = emit_row_call(codegen, func_name, symbol, sig, values)
+    saved = save_errno(codegen) if copies else None
     free_cstr_args(codegen, copies)
+    if saved is not None:
+        restore_errno(codegen, saved)
     return result
 
 

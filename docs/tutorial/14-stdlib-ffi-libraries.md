@@ -218,7 +218,8 @@ len = 15
 ```
 
 Two things are doing quiet work here. First, the `string` argument is automatically
-marshalled to a C `char*` for the call and the copy is freed at scope exit — no leak.
+marshalled to a C `char*` for the call and the copy is freed directly after the call — no
+leak.
 Second, and crucially: **externals return raw C values, not `Result`.** An external never
 has an error channel. So `libc.strlen(s)` yields a bare `i64`, and
 we *wrap it ourselves* in the `length` safe wrapper. `strlen` cannot fail, so `length` is

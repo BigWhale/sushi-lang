@@ -198,10 +198,12 @@ A Sushi `string` is a UTF-8 fat pointer with three fields,
 - A `string` **argument** is copied into a fresh null-terminated `char*` directly
   before the call. The call frees the copy with libc `free` directly after the C
   function returns, so the copy lives for the call alone. It is freed exactly once.
-  **No leak.** The frees keep `errno`: an `errno()` after the call reads the errno of
-  the C call, not the errno of a `free`.
+  **No leak.**
 - A `string` **return** is converted from the C `char*` back into a Sushi fat
   pointer.
+- The `errno` of the C call is kept across the frees of the arguments and across the
+  conversion of the answer: an `errno()` directly after the call reads the errno of the
+  C call, not the errno of a `free` or of the `malloc` of the answer.
 
 The copy is per-call. The marshalling is invisible in your source, but the
 freeing is real: inspect the IR with `./sushic --dump-ll` and you will see a
@@ -368,8 +370,8 @@ Three rules apply:
 - **Read it first.** Read `errno()` directly after the failed call and before any
   `close`, `free` or other C call, because those can overwrite it
   (`docs/design/stdlib-syscall-layer.md`, "The order of the calls"). The frees of the
-  marshalled `string` arguments of the call do not count: the call keeps `errno` across
-  them.
+  marshalled `string` arguments and the conversion of a `string` answer do not count: the
+  call keeps `errno` across them.
 - **Only in the danger zone.** `errno()` is callable only in a unit that declares an
   `unsafe external` block ([`CE5014`](error-catalog.md#ce5014)), the confinement of `ptr` ([`CE5009`](error-catalog.md#ce5009)). A unit's own
   `fn errno` is an ordinary declaration and wins over the built-in.
@@ -623,8 +625,8 @@ default-linked C runtime surface.
   See [Linking](#linking-what-can-actually-be-resolved) above.
 - Sushi stays **null-free**: no `null` literal. A pointer that C may answer NULL
   for is a `Maybe@(string)` or a `Maybe@(ptr)` at the boundary.
-- String marshalling is a per-call copy, freed directly after the call. The free
-  keeps `errno`.
+- String marshalling is a per-call copy, freed directly after the call. The frees and
+  the conversion of the answer keep `errno`.
 - No errno/sentinel auto-mapping into `Result`: an extern answers the raw value, and
   a wrapper reads `errno()` and builds the error by hand. The `= "symbol"` suffix
   reserves room for an optional future error-convention annotation.
