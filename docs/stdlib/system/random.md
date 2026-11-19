@@ -25,8 +25,8 @@ Returns a random unsigned 64-bit integer.
 rand() u64
 ```
 
-**Returns:** A random value in the range [0, 2^62-1]. The value comes from two 31-bit
-`random()` calls, so the two high bits are always zero.
+**Returns:** A random value in the range [0, 2^64-1]. All 64 bits are random: the value
+comes from three `random()` calls, each with 31 bits.
 
 **Example:**
 ```sushi
@@ -51,7 +51,11 @@ rand_range(i32 min, i32 max) i32
 - `min` - Inclusive lower bound
 - `max` - Exclusive upper bound
 
-**Returns:** Random value where `min <= result < max`
+**Returns:** Random value where `min <= result < max`. Each value in the range has the same
+probability: the function uses rejection sampling, so it has no modulo bias.
+
+**Stops:** When `min >= max`, the range is empty. The program stops with `RE2026` (an
+`assert` in the module), and the message is `rand_range needs min < max`.
 
 **Example:**
 ```sushi
@@ -77,9 +81,8 @@ Returns a random floating-point value.
 rand_f64() f64
 ```
 
-**Returns:** A value where `0.0 <= result < 0.25`. The function divides the value of
-`rand()` by 2^64, and `rand()` gives only 62 bits, so the result never reaches 0.25. Do
-not scale it to a range on the assumption that it covers `[0.0, 1.0)`.
+**Returns:** A value where `0.0 <= result < 1.0`. The value has 53 random bits: the high
+53 bits of `rand()`, divided by 2^53.
 
 **Example:**
 ```sushi
@@ -127,6 +130,9 @@ fn main() i32:
 
 ## Implementation Notes
 
+The module is Sushi source (`sushi_lang/sushi_stdlib/src_sushi/random.sushi`). It calls
+`random()` and `srandom()` of the C library through an `unsafe external` block.
+
 **Algorithm:**
 - Uses POSIX `random()` and `srandom()` from libc. The algorithm is the one that the C
   library of the platform uses (on macOS and glibc, an additive feedback generator)
@@ -143,8 +149,9 @@ fn main() i32:
 - For multi-threaded use, external synchronization required
 
 **Precision:**
-- `rand()` gives 62 random bits (two 31-bit `random()` calls)
-- `rand_f64()` gives values in `[0.0, 0.25)` (see above)
+- `rand()` gives 64 random bits (three `random()` calls, each with 31 bits)
+- `rand_f64()` gives values in `[0.0, 1.0)`, with 53 random bits
+- `rand_range()` gives each value of `[min, max)` with the same probability
 
 **Portability:**
 - POSIX-compliant systems only (Unix, Linux, macOS, BSD)

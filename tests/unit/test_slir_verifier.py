@@ -1022,7 +1022,7 @@ def test_the_declared_parameters_of_a_stdlib_function_are_the_row_of_its_module(
         == DeclaredParams((GUARANTEED,))
     assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "time")) \
         == DeclaredParams(())
-    assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "random")) is None
+    assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "sys/env")) is None
     assert declared_params(funcs, extensions, st.Direct("sushi_msleep", "msleep")) is None
 
 

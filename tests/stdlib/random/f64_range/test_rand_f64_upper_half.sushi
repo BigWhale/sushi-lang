@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "in_range:true\nupper_half:true\n"
+#
+# `rand_f64()` covers all of [0, 1): no draw is outside it, and some draws are above 0.5.
+use <random>
+
+fn main() i32:
+    let bool in_range = true
+    let bool upper_half = false
+    let i32 i = 0
+    while (i < 1000):
+        let f64 x = rand_f64()
+        if (x < 0.0 or x >= 1.0):
+            in_range := false
+        if (x > 0.5):
+            upper_half := true
+        i := i + 1
+    println("in_range:{in_range}")
+    println("upper_half:{upper_half}")
+    return 0

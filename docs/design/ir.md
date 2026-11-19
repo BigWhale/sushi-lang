@@ -3367,8 +3367,8 @@ calls it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). 
 (`status_result.py`: a negative status is `Result.Err`).
 
 **Every module of `STDLIB_EMITTERS` takes operands.** Each module (`time`,
-`sys/env`, `sys/process`, `math`, `random`, `io/files`, `net/socket`) gets the operand form
-that `<math>` and `<time>` have: the row of the call, the declaration of the generated
+`sys/env`, `sys/process`, `io/files`, `net/socket`) gets the operand form
+that `<time>` has: the row of the call, the declaration of the generated
 function of the symbol from that row, and the call (`emit_stdlib_row`). The
 `<time>`/`<sys/env>` status contract stays one seam (`status_result.py`). `run` lowers
 with the variadic tail of 7.4: its last operand is the temporary `string[]` of the tail (7.4),

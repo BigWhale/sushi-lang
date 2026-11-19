@@ -67,8 +67,8 @@ def test_every_row_is_a_signature(layer, name, sig):
 
 # The registry keys a parameter spec by the last segment of the module's `use` path.
 REGISTRY_KEYS = {
-    "time": "time", "sys/env": "env", "sys/process": "process", "math": "math",
-    "random": "random", "io/files": "files", "net/socket": "socket",
+    "time": "time", "sys/env": "env", "sys/process": "process",
+    "io/files": "files", "net/socket": "socket",
 }
 
 

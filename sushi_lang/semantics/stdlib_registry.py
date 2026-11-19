@@ -69,6 +69,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/tcp": _SRC_SUSHI_ROOT / "net" / "tcp.sushi",
     "net/udp": _SRC_SUSHI_ROOT / "net" / "udp.sushi",
     "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
+    "random": _SRC_SUSHI_ROOT / "random.sushi",
     "text/ascii": _SRC_SUSHI_ROOT / "text" / "ascii.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
@@ -255,7 +256,6 @@ def _get_param_specs():
 def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798)."""
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.random import RANDOM_SIGNATURES
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.env import ENV_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
@@ -267,7 +267,6 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
         "sys/process": PROCESS_SIGNATURES,
         "io/files": FILES_SIGNATURES,
         "net/socket": SOCKET_SIGNATURES,
-        "random": RANDOM_SIGNATURES,
     }
 
 
@@ -313,7 +312,6 @@ class StdlibRegistry:
         "time": "sushi_lang.sushi_stdlib.src.time",
         "sys/env": "sushi_lang.sushi_stdlib.src.sys.env",
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
-        "random": "sushi_lang.sushi_stdlib.src.random",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
         "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",
         # collections/strings is NOT registry-driven and cannot be listed here: it

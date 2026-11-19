@@ -1,0 +1,13 @@
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "before\n"
+# EXPECT_STDERR_CONTAINS: "Runtime Error RE2026: assertion failed at "
+# EXPECT_STDERR_CONTAINS: "rand_range needs min < max"
+#
+# An empty range has no value to give, so `rand_range(5, 5)` stops the program.
+use <random>
+
+fn main() i32:
+    println("before")
+    let i32 x = rand_range(5, 5)
+    println("after {x}")
+    return 0

@@ -116,6 +116,11 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   (`abs`, `min`, `max`, `divmod`), which need no import. `abs`, `min` and `max` are NOT free
   functions: there is no alias. `abs` of the smallest signed value follows `--overflow`
   (RE2032 under `trap`).
+- **`<random>` is Sushi source**: `src_sushi/random.sushi` (a `SOURCE_STDLIB_MODULES` row and
+  a `_virtual_units` row) calls `random()` and `srandom()` of the C library through an
+  `unsafe external` block. `rand()` gives 64 bits, `rand_f64()` gives `[0, 1)` with 53 bits,
+  and `rand_range(min, max)` gives `[min, max)` with no bias (rejection sampling). When
+  `min >= max`, `rand_range` stops with RE2026 (an `assert` in the module).
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,

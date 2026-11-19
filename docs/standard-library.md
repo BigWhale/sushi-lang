@@ -347,12 +347,14 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 
 ### Random (`use <random>`)
 
-- `rand()` - A pseudo-random `u64`
-- `rand_range(i32 min, i32 max)` - A pseudo-random `i32` in `[min, max)`
-- `rand_f64()` - A pseudo-random `f64`
+The module is Sushi source (`src_sushi/random.sushi`).
+
+- `rand()` - A pseudo-random `u64`, with 64 random bits
+- `rand_range(i32 min, i32 max)` - A pseudo-random `i32` in `[min, max)`, with no bias. When
+  `min >= max`, the program stops with `RE2026`
+- `rand_f64()` - A pseudo-random `f64` in `[0, 1)`, with 53 random bits
 - `srand(u64 seed)` - Seed the generator
 - Each function answers a bare value, not a `Result`. See [Random](stdlib/system/random.md)
-  for the ranges that the functions give today
 
 ### Environment (`use <sys/env>`)
 
