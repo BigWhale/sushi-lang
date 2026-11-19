@@ -1,0 +1,7 @@
+# `abs` is a method of the signed integer types and the floats only: a u32 has no `abs`.
+# EXPECT_ERROR_CODE: CE2008
+
+fn main() i32:
+    let u32 a = 7
+    println("{a.abs()}")
+    return 0

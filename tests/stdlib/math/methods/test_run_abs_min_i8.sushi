@@ -1,0 +1,10 @@
+# The smallest i8 has no size that an i8 holds, so `abs` stops the program under the
+# default `--overflow=trap`.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2032"
+
+fn main(string[] args) i32:
+    let i8 m = (args.len() as i8) - 127 - 2
+    println("{m.abs()}")
+    return 0

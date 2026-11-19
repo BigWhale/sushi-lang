@@ -1,0 +1,20 @@
+# `a.min(b)` and `a.max(b)` on f32 and f64. A NaN on one side gives the other value, as
+# the C `fmin` and `fmax` do.
+# EXPECT_STDOUT_EXACT: "f32 1.5 2.5\nf64 -0.5 0.25\nnan 1 1 2 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let f32 a = 2.5
+    let f32 b = 1.5
+    println("f32 {a.min(b)} {a.max(b)}")
+
+    let f64 x = -0.5
+    let f64 y = 0.25
+    println("f64 {x.min(y)} {x.max(y)}")
+
+    let f64 zero = 0.0
+    let f64 nan = zero / zero
+    let f64 one = 1.0
+    let f64 two = 2.0
+    println("nan {nan.min(one)} {one.min(nan)} {nan.max(two)} {two.max(nan)}")
+    return 0

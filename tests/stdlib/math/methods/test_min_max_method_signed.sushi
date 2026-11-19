@@ -1,0 +1,20 @@
+# `a.min(b)` and `a.max(b)` on each signed width compare as signed values. A literal
+# argument takes the type of the receiver.
+# EXPECT_STDOUT_EXACT: "i8 -100 5\ni16 -2 3\ni32 -70000 70000\ni64 -5000000000 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let i8 a8 = -100
+    println("i8 {a8.min(5)} {a8.max(5)}")
+
+    let i16 a16 = 3
+    let i16 b16 = -2
+    println("i16 {a16.min(b16)} {a16.max(b16)}")
+
+    let i32 a32 = 70000
+    let i32 b32 = -70000
+    println("i32 {a32.min(b32)} {b32.max(a32)}")
+
+    let i64 a64 = -5000000000
+    println("i64 {a64.min(7)} {a64.max(7)}")
+    return 0
