@@ -74,7 +74,7 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "opendir": _c("DIR*", "const char*"),
     "readdir": _c("struct dirent*", "DIR*"),
     "closedir": _c("int", "DIR*"),
-    # Environment, process, random, time
+    # Environment, process, time
     "getenv": _c("char*", "const char*"),
     "setenv": _c("int", "const char*", "const char*", "int"),
     "getcwd": _c("char*", "char*", "size_t"),
@@ -88,8 +88,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "posix_spawn_file_actions_adddup2": _c("int", "posix_spawn_file_actions_t*",
                                            "int", "int"),
     "posix_spawn_file_actions_destroy": _c("int", "posix_spawn_file_actions_t*"),
-    "random": _c("long"),
-    "srandom": _c("void", "unsigned"),
     "nanosleep": _c("int", "const struct timespec*", "struct timespec*"),
     "clock_gettime": _c("int", "clockid_t", "struct timespec*"),
     # Sockets

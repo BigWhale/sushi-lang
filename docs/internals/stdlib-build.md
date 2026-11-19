@@ -49,8 +49,6 @@ sushi_lang/sushi_stdlib/
 │   │   ├── env/          # -> sys/env.bc
 │   │   └── process/      # -> sys/process.bc
 │   ├── net/              # -> net/socket.bc
-│   ├── math/              # -> math.bc
-│   ├── random/            # -> random.bc
 │   ├── time/               # -> time.bc
 │   ├── _platform/         # per-OS constants (darwin/, linux/, posix/) used by
 │   │                       # the generators above via common.py
@@ -62,7 +60,7 @@ sushi_lang/sushi_stdlib/
     │   ├── io/files.bc
     │   ├── net/socket.bc
     │   ├── sys/{env,process}.bc
-    │   ├── math.bc, random.bc, time.bc
+    │   ├── time.bc
     │   ├── symbols.json         # the symbols that the .bc files define
     │   └── .build_fingerprint   # marker written by stdlib_builder.py
     └── linux/              # same layout; only produced by building on Linux

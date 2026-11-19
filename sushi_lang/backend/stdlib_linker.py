@@ -122,6 +122,7 @@ class StdlibLinker:
         "net/tcp",
         "net/udp",
         "net/url",
+        "random",
         "sys/platform",
         "text/ascii",
         "toolchain/slib",

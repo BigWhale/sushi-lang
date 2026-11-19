@@ -12,7 +12,7 @@ per-platform bitcode:
 
 ```
 sushi_stdlib/
-  src/            generators: time/, random/, sys/, io/, collections/, _platform/
+  src/            generators: time/, sys/, io/, collections/, _platform/
   src_sushi/      bundled real-Sushi source modules (see section 2)
   dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/time.bc)
                     plus symbols.json: what those .bc files DEFINE
@@ -73,6 +73,9 @@ compiled like user code instead of precompiled to bitcode. Among them:
   one calls an LLVM intrinsic or the C library through an `unsafe external`
   block), the constants `PI`, `E` and `TAU`, and the methods `abs`, `min`, `max`
   and `divmod` on the number types. It has no `.bc`, so it is in `_virtual_units`.
+- `random` (`src_sushi/random.sushi`) — all of `<random>`: `rand`, `rand_f64`,
+  `rand_range` and `srand`, over `random()` and `srandom()` of the C library
+  through an `unsafe external` block. It has no `.bc`, so it is in `_virtual_units`.
 - `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
   unsigned integers in a `u8[]` and back, in either byte order, as extension
   methods on `u8[]`.

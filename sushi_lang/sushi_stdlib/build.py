@@ -63,7 +63,6 @@ STDLIB_BITCODE_UNITS: tuple[StdlibBitcodeUnit, ...] = (
     StdlibBitcodeUnit("time", "sushi_lang.sushi_stdlib.src.time"),
     StdlibBitcodeUnit("sys/env", "sushi_lang.sushi_stdlib.src.sys.env"),
     StdlibBitcodeUnit("sys/process", "sushi_lang.sushi_stdlib.src.sys.process"),
-    StdlibBitcodeUnit("random", "sushi_lang.sushi_stdlib.src.random"),
     StdlibBitcodeUnit("net/socket", "sushi_lang.sushi_stdlib.src.net"),
 )
 

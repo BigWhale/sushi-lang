@@ -1,4 +1,4 @@
-# The rows of <random>: a row that answers `~`, a row with two arguments and rows with
+# The functions of <random>: one that answers `~`, one with two arguments and two with
 # no argument. One seed gives one sequence.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "same:true\nrange:true\nunit:true\n"

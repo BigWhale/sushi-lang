@@ -32,19 +32,17 @@ READERS = {
     STDLIB_EMITTERS / "time.py": set(),
     STDLIB_EMITTERS / "env.py": set(),
     STDLIB_EMITTERS / "process.py": SPECIAL_CASES,
-    STDLIB_EMITTERS / "random.py": set(),
 }
 
 REGISTRY_MODULES = {
     "time": ("sushi_lang.sushi_stdlib.src.time", "time"),
     "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "env"),
     "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "process"),
-    "random": ("sushi_lang.sushi_stdlib.src.random", "random"),
 }
 
 # The modules whose generated functions are named `sushi_<name>`: the emitter declares
 # each one from its row, and the declaration must match what the generator built.
-GENERATED_MODULES = ("time", "sys/env", "sys/process", "random")
+GENERATED_MODULES = ("time", "sys/env", "sys/process")
 
 
 def _every_row_name() -> set[str]:
@@ -113,7 +111,7 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 16
+    assert checked >= 12
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.
@@ -121,7 +119,6 @@ GENERATORS = {
     "time": ("sushi_lang.sushi_stdlib.src.time", "sushi_"),
     "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "sushi_"),
     "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "sushi_"),
-    "random": ("sushi_lang.sushi_stdlib.src.random", "sushi_"),
     "io/files": ("sushi_lang.sushi_stdlib.src.io.files", "sushi_io_files_"),
     "net/socket": ("sushi_lang.sushi_stdlib.src.net", "sushi_net_"),
 }

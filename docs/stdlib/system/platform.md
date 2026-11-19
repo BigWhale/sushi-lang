@@ -112,22 +112,19 @@ sushi_stdlib/src/_platform/
 │   ├── net.py         # the socket calls
 │   ├── process.py     # getcwd/chdir/exit/getpid/getuid/tmpfile/fileno/waitpid/
 │   │                  #   posix_spawnp + file_actions helpers/environ
-│   ├── random.py      # random/srandom
 │   └── time.py        # nanosleep, clock_gettime
 ├── darwin/            # macOS
 │   ├── env.py         # re-exports posix/env.py
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
 │   ├── net.py         # macOS socket constants and structure layouts
 │   ├── process.py     # re-exports posix/process.py
-│   ├── random.py      # re-exports posix/random.py
 │   ├── stdio.py       # the __stderrp handle name
 │   └── time.py        # re-exports posix/time.py, plus the macOS clock ids
-└── linux/             # Linux: the same seven files
+└── linux/             # Linux: the same six files
     ├── env.py
     ├── files.py       # Linux O_CREAT/O_TRUNC bit values
     ├── net.py         # Linux socket constants and structure layouts
     ├── process.py
-    ├── random.py
     ├── stdio.py       # the stderr handle name
     └── time.py        # re-exports posix/time.py, plus the Linux clock ids
 ```
@@ -136,7 +133,7 @@ There is no `windows/` directory.
 
 Each of `darwin/` and `linux/` has one file per platform module. Most of them are thin
 re-export shims over `posix/`, because those calls are identical POSIX libc functions on
-both operating systems: `env.py`, `process.py` and `random.py` re-export `posix/`
+both operating systems: `env.py` and `process.py` re-export `posix/`
 unchanged, and `time.py` adds only the clock ids of the platform. Four modules have real,
 distinct darwin/linux content: `stdio` (the stderr global symbol name),
 `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`), `net` (the socket
@@ -284,9 +281,7 @@ sushi_stdlib/dist/
 │   ├── collections/strings.bc
 │   ├── core/primitives.bc
 │   ├── io/files.bc
-│   ├── math.bc
 │   ├── net/socket.bc
-│   ├── random.bc
 │   ├── sys/env.bc
 │   ├── sys/process.bc
 │   └── time.bc
@@ -356,7 +351,6 @@ error rather than silently picking a wrong platform's bitcode.
   (`darwin/files.py`)
 - Process control: `getcwd`/`chdir`/`exit`/`getpid`/`getuid`/`tmpfile`/`fileno`/
   `waitpid`/`posix_spawnp` (+ file-action helpers)/`environ` (via `posix/process.py`)
-- `random()`/`srandom()` (via `posix/random.py`)
 - the stderr handle named `__stderrp` (macOS's double-underscore libc symbol name,
   distinct from Linux — `darwin/stdio.py`)
 - BSD semantics for system calls
@@ -401,7 +395,7 @@ hold a third platform, but no Windows-specific code path exists.
 ## Adding Platform-Specific Functionality
 
 The following steps describe the actual pattern used by the existing `env`, `time`,
-`files`, `process`, `random`, and `stdio` modules. Only Windows support is out of reach
+`files`, `process`, and `stdio` modules. Only Windows support is out of reach
 today — there is nothing to route to.
 
 ### Step 1: Default to `posix/`, Only Split Out What Actually Differs

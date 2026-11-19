@@ -80,8 +80,8 @@ Output:
 ```
 Rolling three dice for the Total Perspective Vortex...
 roll 1: d6 -> 1
-roll 2: d6 -> 2
-roll 3: d6 -> 5
+roll 2: d6 -> 1
+roll 3: d6 -> 4
 ```
 
 !!! note "Reproducible, not secret"

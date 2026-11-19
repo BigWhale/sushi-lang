@@ -1,0 +1,85 @@
+##:
+random -- the random module.
+
+The functions give pseudo-random numbers from the generator of the C library (`random()`
+and `srandom()`). The numbers are not safe for cryptography. The generator has one state
+for the program, and `srand` sets that state.
+:##
+
+unsafe external "C" as libc because "the generator of the C library":
+    fn random() i64 = "random"
+    fn srandom(u32 seed) ~ = "srandom"
+
+##:
+Gives a random unsigned 64-bit integer. All 64 bits are random: the function joins three
+values of `random()`, each with 31 bits.
+
+- Returns: A value in the range [0, 2^64 - 1].
+- Example:
+  ```sushi
+  let u64 value = rand()
+  println("{value}")
+  ```
+:##
+public fn rand() u64:
+    let u64 a = libc.random() as u64
+    let u64 b = libc.random() as u64
+    let u64 c = libc.random() as u64
+    return (a << 33) | (b << 2) | (c & 3)
+
+##:
+Gives a random f64 in the range [0, 1). The value has 53 random bits: the high 53 bits of
+`rand()`, divided by 2^53.
+
+- Returns: A value that is not less than 0.0 and is less than 1.0.
+- Example:
+  ```sushi
+  let f64 x = rand_f64()
+  println("{x >= 0.0 and x < 1.0}")
+  ```
+  This prints `true`.
+:##
+public fn rand_f64() f64:
+    return ((rand() >> 11) as f64) / 9007199254740992.0
+
+##:
+Gives a random i32 in the range [min, max). Each value in the range has the same
+probability. When `min` is not less than `max`, the range is empty and the program stops
+with RE2026.
+
+- Parameter min: The lowest value that the function can give.
+- Parameter max: The value after the highest value that the function can give.
+- Returns: A value that is not less than `min` and is less than `max`.
+- Example:
+  ```sushi
+  let i32 die = rand_range(1, 7)
+  println("{die >= 1 and die < 7}")
+  ```
+  This prints `true`.
+:##
+public fn rand_range(i32 min, i32 max) i32:
+    assert(min < max, "rand_range needs min < max")
+    let u64 span = ((max as i64) - (min as i64)) as u64
+    let u64 two32 = 4294967296
+    let u64 limit = two32 - (two32 % span)
+    let u64 x = rand() >> 32
+    while (x >= limit):
+        x := rand() >> 32
+    return ((min as i64) + ((x % span) as i64)) as i32
+
+##:
+Sets the state of the generator. The same seed gives the same sequence of values. The
+generator uses only the low 32 bits of `seed`.
+
+- Parameter seed: The seed.
+- Example:
+  ```sushi
+  srand(42)
+  let u64 first = rand()
+  srand(42)
+  println("{first == rand()}")
+  ```
+  This prints `true`.
+:##
+public fn srand(u64 seed) ~:
+    libc.srandom((seed & 4294967295) as u32)

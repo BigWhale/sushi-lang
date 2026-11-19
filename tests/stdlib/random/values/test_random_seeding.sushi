@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_CONTAINS: === Random Seeding Test ===
 # EXPECT_STDOUT_CONTAINS: First sequence (seed=42):
-# EXPECT_STDOUT_CONTAINS:   66, 29, 12, 21, 83
+# EXPECT_STDOUT_CONTAINS:   32, 82, 43, 86, 34
 # EXPECT_STDOUT_CONTAINS: === Seeding Test Complete ===
 # EXPECT_RUNTIME_EXIT: 0
 use <random>

@@ -6,6 +6,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`<random>` is Sushi source, and three of its results are correct.** `rand()` gives 64
+  random bits (before, 62). `rand_f64()` gives a value in `[0, 1)` with 53 random bits
+  (before, the value was always less than 0.25). `rand_range(min, max)` gives each value of
+  `[min, max)` with the same probability (rejection sampling removes the modulo bias). When
+  `min >= max`, `rand_range` stops the program with `RE2026` (before, `min == max` divided by
+  zero). The signatures do not change. One seed gives a different sequence than before.
+  BREAKING.
 - **`<math>` is Sushi source, and `abs`, `min` and `max` are methods.** Write `x.abs()`,
   `a.min(b)` and `a.max(b)`. `abs` is a method of `i8`, `i16`, `i32`, `i64`, `f32` and `f64`.
   `min` and `max` are methods of the eight integer types, `f32` and `f64`. The argument has

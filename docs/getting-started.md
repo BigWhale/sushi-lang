@@ -154,7 +154,7 @@ uv run python sushi_lang/sushi_stdlib/build.py
 
 # This generates LLVM bitcode for:
 # - collections/strings, core/primitives, io/files
-# - time, math, sys/env, sys/process, random, net/socket
+# - time, sys/env, sys/process, net/socket
 ```
 
 ### 6. Verify Installation
