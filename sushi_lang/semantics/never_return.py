@@ -7,7 +7,7 @@ callable ends the path, and asks `returned_value` for the type of what the call 
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, overload
 
 from sushi_lang.semantics.channel import declared_return
 from sushi_lang.semantics.typesys import BuiltinType, Type
@@ -18,6 +18,10 @@ def never_returns(declared: Any) -> bool:
     return declared_return(declared) == BuiltinType.NEVER
 
 
+@overload
+def returned_value(ret: Type) -> Type: ...
+@overload
+def returned_value(ret: Optional[Type]) -> Optional[Type]: ...
 def returned_value(ret: Optional[Type]) -> Optional[Type]:
     """The type of the value that a return slot of `ret` holds: `~` for `!`, because no
     value has the marker."""
