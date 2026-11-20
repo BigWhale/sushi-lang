@@ -295,15 +295,6 @@ def stdlib_symbol(module_path: str, name: str) -> str:
     return f"{_SYMBOL_PREFIXES.get(module_path, 'sushi_')}{name}"
 
 
-#: The registry functions whose call never returns.
-_NEVER_RETURNS = frozenset({("sys/process", "exit")})
-
-
-def stdlib_never_returns(module_path: str, name: str) -> bool:
-    """Whether a call of a registry stdlib function never returns (`exit`, ir.md 8.6)."""
-    return (module_path, name) in _NEVER_RETURNS
-
-
 class StdlibRegistry:
     """Central registry for stdlib functions."""
 

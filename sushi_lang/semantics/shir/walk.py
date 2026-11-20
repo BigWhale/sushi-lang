@@ -15,11 +15,14 @@ block and its index (`block[6].body[0]`).
 from __future__ import annotations
 
 import dataclasses
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 from sushi_lang.semantics.shir.paths import reached_statements
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.typeck import TypeckResults
 
 _PACKAGE = __name__.rpartition(".")[0] + "."
 
@@ -30,10 +33,11 @@ def _holds_nodes(value: object) -> bool:
     return type(value).__module__.startswith(_PACKAGE) and dataclasses.is_dataclass(value)
 
 
-def walk(value: object, path: str, reached_in: Optional[ShirBody] = None
-         ) -> Iterator[tuple[str, object]]:
+def walk(value: object, path: str, reached_in: Optional[ShirBody] = None,
+         calls: Optional[TypeckResults] = None) -> Iterator[tuple[str, object]]:
     """Each value of the SHIR package under `value`, with its path, before its parts. With
-    `reached_in`, the body of `value`, a block gives only the statements that a path reaches (`reached_statements`)."""
+    `reached_in`, the body of `value`, a block gives only the statements that a path
+    reaches (`reached_statements`; `calls` says which call never returns)."""
     stack = [(value, path)] if _holds_nodes(value) else []
     while stack:
         value, path = stack.pop()
@@ -46,7 +50,8 @@ def walk(value: object, path: str, reached_in: Optional[ShirBody] = None
         yield path, value
         if isinstance(value, ShirBlock):
             stack.append((value.statements if reached_in is None else
-                          [stmt for _at, stmt in reached_statements(value, reached_in)], path))
+                          [stmt for _at, stmt in reached_statements(value, reached_in, calls)],
+                          path))
             continue
         for each in reversed(dataclasses.fields(value)):  # type: ignore[arg-type]
             part = getattr(value, each.name)

@@ -1,6 +1,5 @@
 """Platform-specific process control declarations for macOS."""
 from sushi_lang.sushi_stdlib.src._platform.posix.process import (
-    declare_exit,
     declare_tmpfile,
     declare_fileno,
     declare_waitpid,
@@ -12,7 +11,6 @@ from sushi_lang.sushi_stdlib.src._platform.posix.process import (
 )
 
 __all__ = [
-    "declare_exit",
     "declare_tmpfile",
     "declare_fileno",
     "declare_waitpid",

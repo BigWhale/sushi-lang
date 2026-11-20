@@ -202,6 +202,7 @@ continue_stmt: CONTINUE _NEWLINE
           | "bool" -> bool_t
           | "string" -> string_t
           | "~" -> blank_t
+          | BANG -> never_t
           | NAME "." NAME AT "(" type_list ")" -> qualified_generic_type_t
           | NAME AT "(" type_list ")" -> generic_type_t
           | NAME "." NAME -> qualified_name_t
@@ -238,7 +239,7 @@ fn_param_type: NOM? type
 ?mul: unary ((STAR | SLASH | MOD) unary)*
 
 ?unary: "-" unary        -> neg
-      | NOT unary        -> not
+      | (NOT | BANG) unary -> not
       | BITNOT unary     -> bitnot
       | BORROW_MODE unary    -> borrow
       | postfix
@@ -398,7 +399,8 @@ RANGE.3: ".."
 AND.2: /and\b/ | "&&"
 OR.2: /or\b/ | "||"
 XOR.2: /xor\b/ | "^^"
-NOT.2: /not\b/ | "!"
+NOT.2: /not\b/
+BANG.2: "!"
 BITNOT.2: "~"
 IF.2: /if\b/
 ELIF.2: /elif\b/

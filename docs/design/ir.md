@@ -1165,8 +1165,9 @@ FileError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is 
 value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
 callee whose last parameter is a variadic tail (7.4), so its row is typed with the variadic
 tail of 7.4: its callee row holds `Tail(1, string[], Guaranteed)`, and the one argument check takes
-the tail. `exit` is a `Stdlib` callee too; 8.6 gives its lowering. Every call of a registry
-function has its arm.
+the tail. Every call of a registry function has its arm. `exit` is Sushi source
+(`src_sushi/sys/process.sushi`, #1325): its call is a `Free` callee, and the `!` of its
+return marks the callee row (`ResolvedCall.never_returns`, docs/design/never-return.md).
 
 **A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
 that the program writes: an explicit type argument, a written type, and a generic function
@@ -1594,7 +1595,9 @@ function. With `leaves_round`, a `Break` and a `Continue` leave the round of the
 which is the question of a join in a loop body. An `If` ends the path when it has an
 `otherwise` and each of its blocks ends it. A `Loop` can run zero times or break, so it
 never ends the path, and an `Assert`, an `Expand` and every other statement go on to the
-next. A statement after a `Break` or a `Continue` of its block is dead too, and so is a
+next, except an `ExprStmt` that is a call of a `!` function: the callee rows of the body
+(`calls`, the `TypeckResults`) say that it never returns, and it ends the path as a `Return`
+does (docs/design/never-return.md). A statement after a `Break` or a `Continue` of its block is dead too, and so is a
 statement after the error hole of a `break` or a `continue` outside a loop (CE1003, then
 CE0140). Two statements
 of two copies of an unrolled `expand` were not written one after the other, so the one does
@@ -3374,11 +3377,13 @@ which the caller keeps; a bloom into `run` is the place of its source (7.4). The
 borrows it as `Guaranteed`, as each operand of a `Stdlib` callee, and the temporary drops
 at the end of the statement. The `Ok` of `run` is the named struct
 `ProcessOutput`, which crosses at the layout of its generator, as `Datagram` does
-(`llvm_value_type`). `exit` is no intrinsic: it lowers to a `Call` of `Direct(sushi_exit, exit, sys/process)`
-whose block ends in the `Unreachable` terminator (8.8). The registry says which functions
-never return (`stdlib_never_returns`, `semantics/stdlib_registry.py`), and SLIR lowering
-reads it at the call (`never_returns`, `slir/lower_calls.py`). The statements after the
-call lower into a new block that no path reaches, so the drops of the scope do not run. Each module of `STDLIB_EMITTERS` is a one-line forwarder to `emit_stdlib_row`;
+(`llvm_value_type`). A call of a function with a `!` return (`exit`, a user `!` function, an
+extern marked `!`; docs/design/never-return.md) is a `Call` whose block ends in the
+`Unreachable` terminator (8.8). The declared return is the one home of the fact: the
+typecheck row of the call holds it (`ResolvedCall.never_returns`), and SLIR lowering reads
+it at the call (`never_returns`, `slir/lower_calls.py`). The rest of the statement lowers
+into a new block that no path reaches. When the call is the statement, that block ends in
+`Unreachable` too (`Lowering.expr_stmt`), so the drops of the scope do not run. Each module of `STDLIB_EMITTERS` is a one-line forwarder to `emit_stdlib_row`;
 no row has an AST entry.
 
 **A `cstr` parameter of a registry row.** Its operand is a

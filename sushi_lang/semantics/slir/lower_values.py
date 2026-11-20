@@ -28,9 +28,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class CallValue:
-    """A call, before lowering knows the place that takes its value."""
+    """A call, before lowering knows the place that takes its value. A call that never
+    returns ends its block in `Unreachable` (`lower_calls.never_returns`)."""
     callee: st.SlirCallee
     args: tuple[tuple[p.Operand, Convention], ...]
+    never_returns: bool = False
 
 
 @dataclass(frozen=True, slots=True)

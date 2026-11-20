@@ -27,27 +27,6 @@ def get_process_error_type() -> ir.LiteralStructType:
     return get_unit_enum_type()
 
 
-def generate_exit(module: ir.Module) -> None:
-    """Generate exit(i32 code) -> ~"""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    void = ir.VoidType()
-
-    platform_process = get_platform_module('process')
-    libc_exit = platform_process.declare_exit(module)
-
-    func_type = ir.FunctionType(void, [i32])
-    func = ir.Function(module, func_type, name="sushi_exit")
-    code_arg = func.args[0]
-    code_arg.name = "code"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call exit(code) - never returns
-    builder.call(libc_exit, [code_arg])
-    builder.unreachable()  # Mark as unreachable
-
-
 def generate_run(module: ir.Module) -> None:
     """Generate run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>."""
     i8, i8_ptr, i32, i64 = get_basic_types()

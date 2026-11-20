@@ -253,9 +253,10 @@ def _check_completeness(reporter: 'Reporter', doc: 'DocBlock', kind: str, node) 
                          name=param.name, callable=name)
 
     # None means the declaration wrote no return type at all, which is an error of its
-    # own; BLANK means it returns nothing there is anything to say about.
+    # own; BLANK means it returns nothing there is anything to say about, and a `!`
+    # function does not return.
     ret = getattr(node, "ret", None)
-    if ret is not None and ret is not BuiltinType.BLANK and "returns" not in tagged:
+    if ret not in (None, BuiltinType.BLANK, BuiltinType.NEVER) and "returns" not in tagged:
         er.emit_with(reporter, er.ERR.CW7004, where, name=name)
 
     # Only a FuncDef carries an error arm. `getattr` answers None for every other kind,

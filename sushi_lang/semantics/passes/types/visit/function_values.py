@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.never_return import never_returns
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
@@ -130,10 +131,15 @@ def _value(validator: TypeValidator, node: e.GlobalRef, sig: FuncSig, decl: Decl
            type_args: tuple[Type, ...] = ()) -> Optional[Type]:
     """The callee row and the type of the value. A function value of a named function captures
     nothing, so the value owns nothing. A private function of a binary library has its own
-    link symbol. A variadic function has no function type (CE2093, decision E6)."""
+    link symbol. A variadic function has no function type (CE2093, decision E6), and a `!`
+    function has none either (docs/design/never-return.md)."""
     if any(param.is_variadic for param in sig.params):
         er.emit(validator.reporter, er.ERR.CE2093, node.loc, name=validator.decl_name(node.decl),
                 reason="a variadic function has no function type")
+        return None
+    if never_returns(sig):
+        er.emit(validator.reporter, er.ERR.CE2093, node.loc, name=validator.decl_name(node.decl),
+                reason="a `!` function has no function type")
         return None
     function_type = function_type_of_sig(sig)
     if function_type is None:

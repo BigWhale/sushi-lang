@@ -136,16 +136,16 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   It reads `errno()` directly after the C call: `ENOMEM` (from `<sys/platform>`) stops with
   RE2026 (an `assert` in the module), and any other failure gives `EnvError.InvalidValue`.
   `EnvError` stays a predefined enum with its home at `<sys/env>`.
-- **`<sys/process>` has TWO halves**: `run` and `exit` are the `.bc` unit (registry rows in
+- **`<sys/process>` has TWO halves**: `run` is the `.bc` unit (a registry row in
   `PROCESS_SIGNATURES`), and `src_sushi/sys/process.sushi` (a `SOURCE_STDLIB_MODULES` row,
-  NOT in `_virtual_units`) holds `getpid`, `getuid`, `chdir` and `getcwd`, which call the C
-  library through an `unsafe external` block. `chdir` and `getcwd` answer `FileError`, with
+  NOT in `_virtual_units`) holds `exit`, `getpid`, `getuid`, `chdir` and `getcwd`, which call
+  the C library through an `unsafe external` block. `exit` is `public fn exit(i32 code) !`
+  over the extern `fn exit(i32 code) ! = "exit"` (docs/design/never-return.md). `chdir` and `getcwd` answer `FileError`, with
   the variant from `errno()` through `FileError.from_errno` (`<io/error>`, the ONE
   errno-to-`FileError` map in Sushi source; the generators of `<io/files>` keep their own
   table in `src/io/files/errno.py`). `getcwd` uses a buffer of `PATH_MAX` bytes
-  (`<sys/platform>`). `exit` stays a registry row because its never-returns rule
-  (`_NEVER_RETURNS`, `stdlib_registry.py`) is keyed on a registry row. An own `getpid`,
-  `getuid`, `chdir` or `getcwd` beside a flat `use <sys/process>` gets CW3002.
+  (`<sys/platform>`). An own `exit`, `getpid`, `getuid`, `chdir` or `getcwd` beside a flat
+  `use <sys/process>` gets CW3002.
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,

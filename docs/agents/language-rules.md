@@ -68,6 +68,20 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   with `.is_ok()` / `.is_some()`, or take the value with `??`, `.realise(default)` or `match`);
   only an integer gets the `== 0` escape.
 
+## The `!` return marker ([`docs/design/never-return.md`](../design/never-return.md))
+- `!` is a return MARKER, not a type: `fn fail(string msg) !:` and the extern
+  `fn exit(i32 code) ! = "exit"`. Any other position (a parameter, a `let`, a field, a type
+  argument, an element, `fn() -> !`, a lambda, a method, a static, a perk method) is CE0161.
+  `! | E` is CE0162. `main() !` is CE0106. A `!` function as a value is CE2093.
+- A STATEMENT that calls a `!` function ends the path: no CE0107 after it, CE0140 on the
+  next statement, no drop after it. A `!` body that can reach its end is CE0159; a `return`
+  in it is CE0160. A `!` call inside an expression ends its SLIR block but not the path.
+- A call of a `!` function yields `~`. In an expression `!` is still the NOT operator
+  (`!b`, `not b`); the grammar token is `BANG`.
+- The fact lives in the declared return (`BuiltinType.NEVER`). Never add a list of names
+  that never return; the path predicate reads the callee row (`calls`), so a reader of
+  `terminates` / `reached_statements` passes the `TypeckResults` of its body.
+
 ## Ownership and borrows ([`ownership-conventions.md`](../design/ownership-conventions.md), [`borrow-model.md`](../design/borrow-model.md), [`borrowing.md`](../design/borrowing.md))
 - A type MOVES iff `owns_resource(T, drops)` (STRUCTURAL, or DECLARED by `Drop`); a string
   bound directly from a literal copies freely. The compiler inserts NO deep copy: `.clone()` is the only one, and it is REFUSED on a type

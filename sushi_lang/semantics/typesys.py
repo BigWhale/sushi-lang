@@ -30,6 +30,9 @@ class BuiltinType(Enum):
     BOOL = "bool"
     STRING = "string"
     BLANK = "~"
+    # The `!` return marker (docs/design/never-return.md). It stands only in the return
+    # slot of a function or an extern, and no value has it.
+    NEVER = "!"
 
     def __str__(self) -> str:
         return self.value
@@ -436,6 +439,9 @@ Type = Union[
 TYPE_NODE_NAMES = {
     "i8_t", "i16_t", "i32_t", "i64_t", "u8_t", "u16_t", "u32_t", "u64_t",
     "f32_t", "f64_t", "bool_t", "string_t", "blank_t",
+    # The `!` marker: a type node of the grammar, so the return readers find it. Only
+    # `read_return_type` reads it as `!`; every other position refuses it (CE0161).
+    "never_t",
     "array_t", "dynamic_array_t", "reference_t",
     "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)

@@ -581,6 +581,42 @@ after an `if` with an `else` whose every arm returns, after a `match` whose ever
 returns, or after a `break` or a `continue` in the same block. It is reported once per
 block, at the first dead statement, with a note at the statement that ends the path.
 
+### Functions That Never Return (`!`)
+
+`!` in the return position marks a function whose call never returns. It is legal on a free
+function and on an `unsafe external` binding, and nowhere else. The decision record is
+[the never-return design](design/never-return.md).
+
+```sushi
+use <sys/process>
+
+fn fail(string msg) !:
+    println(msg)
+    exit(2)
+
+fn digit(i32 n) i32:
+    if (n >= 0 and n <= 9):
+        return n
+    fail("not a digit")
+
+fn main() i32:
+    return digit(4)
+```
+
+- A call of a `!` function ends the path, as a `return` does: `digit` needs no `return`
+  after `fail(...)`, and a statement after the call is [`CE0140`](error-catalog.md#ce0140).
+  No drop runs after the call.
+- A `!` body must end each path with a call of another `!` function: a body that can reach
+  its end is [`CE0159`](error-catalog.md#ce0159), and a `return` in it is
+  [`CE0160`](error-catalog.md#ce0160).
+- `!` is a marker, not a type. A parameter, a `let`, a field, a type argument, an element,
+  a function type (`fn() -> !`), a lambda and a method refuse it
+  ([`CE0161`](error-catalog.md#ce0161)). `! | E` is [`CE0162`](error-catalog.md#ce0162):
+  an error return is a return.
+- A call of a `!` function yields `~`. A `!` function is not a function value
+  ([`CE2093`](error-catalog.md#ce2093)), and `main` cannot be `!`
+  ([`CE0106`](error-catalog.md#ce0106)).
+
 ### Parameters
 
 A parameter declares one of four **modes**. The mode says who frees the value, and a marked

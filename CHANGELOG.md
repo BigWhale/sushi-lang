@@ -110,6 +110,18 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **`!` marks a function that never returns.** `fn fail(string msg) !:` and the extern
+  `fn exit(i32 code) ! = "exit"`. A statement that calls a `!` function ends the path: the
+  function needs no `return` after it (no CE0107), a statement after it is CE0140, and no
+  drop runs after it. A `!` body that can reach its end is CE0159, and a `return` in it is
+  CE0160. `!` is a return marker and not a type: every other position is CE0161, and
+  `! | E` is CE0162. In an expression, `!` is still the NOT operator. The design record is
+  `docs/design/never-return.md` (#1325).
+- **`exit` of `<sys/process>` is Sushi source**, declared `public fn exit(i32 code) !`. A
+  function that ends with `exit(...)` needs no `return` after it. A statement after
+  `exit(...)` in its block is now CE0140. The compiler keeps no list of the functions that
+  never return. An own `exit` in a unit with a flat `use <sys/process>` now gets CW3002.
+  BREAKING.
 - **`FileError.from_errno(i32 code) FileError`** in `<io/error>`: the one map from an
   errno number to a `FileError` variant in Sushi source, for a wrapper of the C library.
 - **`--overflow=trap|wrap`, and integer overflow traps by default.** At run time, an

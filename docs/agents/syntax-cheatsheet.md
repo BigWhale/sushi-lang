@@ -116,6 +116,16 @@ match make_rows():                       # a temporary: the match owns it
     Result.Ok(nom rows) -> eat(nom rows)
     Result.Err(_) -> println("Failed")
 
+# A function that never returns writes `!` (a return marker, not a type). A call of it
+# ends the path, so no `return` follows it. `exit` of <sys/process> is one.
+fn fail(string msg) !:
+    println(msg)
+    exit(1)
+fn digit(i32 n) i32:
+    if (n >= 0 and n <= 9):
+        return n
+    fail("not a digit")                      # ends the path: no dead `return` after it
+
 # Parameter modes -- marked at BOTH ends or neither
 fn look(string s) i32:                      # borrow (default)
     return s.len()

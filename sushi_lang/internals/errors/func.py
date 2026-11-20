@@ -164,3 +164,20 @@ _add(ErrorMessage("CE0151", Severity.ERROR,
 _add(ErrorMessage("CE0152", Severity.ERROR,
     "{subject} is marked dont_panic, and this build does not allow it",
     Category.FUNC, "The `dont_panic because \"<reason>\"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error RE2020 (docs/design/dont-panic.md). Only three kinds of unit may write it. A bundled stdlib unit needs no flag (ruling D7). A unit of a build that passes `--dont-panic` may write it (ruling D8). A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents (ruling D9). The message then names the library. A CONCRETE marked body of a binary or hybrid library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. The gate is read once per declaration, at the marker, in the collect pass. Pass `--dont-panic`, or remove the marker."))
+
+# The `!` return marker (docs/design/never-return.md, #1325)
+_add(ErrorMessage("CE0159", Severity.ERROR,
+    "{callable} is marked `!`, and its body can reach its end",
+    Category.FUNC, "A function marked `!` never returns, so no path of its body may reach the end of the body. Each path must end in a call of another `!` function, such as `exit` of `<sys/process>` or an extern marked `!`. The path predicate is the one of CE0107 and CE0140 (`semantics/shir/paths.py`): an `if` ends the path only when it has an `else` and each of its blocks ends it, and a loop never ends it. The rule is judged once, on the template, as CE0107 is. Add a call of a `!` function at the end of each path, or give the function a return type."))
+
+_add(ErrorMessage("CE0160", Severity.ERROR,
+    "{callable} is marked `!`, and holds a `return`",
+    Category.FUNC, "A function marked `!` never returns, so its body holds no `return`, with a value or without one. A `return` inside a lambda of the body is the return of the lambda, and is legal. Remove the `return` and end the path with a call of a `!` function, or give the function a return type (docs/design/never-return.md)."))
+
+_add(ErrorMessage("CE0161", Severity.ERROR,
+    "'!' marks the return of a function or of an unsafe external binding, and is not a type",
+    Category.FUNC, "The `!` marker says that a call never returns. It is legal in one position: the whole return of a free function (`fn fail(string msg) !:`) or of an `unsafe external` binding (`fn exit(i32 code) ! = \"exit\"`). It is not a type, so the type of a parameter, a `let`, a field, a variant payload, a type argument, an array element and a cast refuse it, and so does the return of a function type (`fn(i32) -> !`) and of a lambda. The return of an extension method, a static, a perk contract method, a perk implementation method and a conversion refuses it too: the marker is for a function and an extern only. The builder reads the position as `~` and goes on. A later change can make `!` a bottom type (docs/design/never-return.md, section 6). Write `~` for a value with no content, or put the `!` on a function."))
+
+_add(ErrorMessage("CE0162", Severity.ERROR,
+    "a `!` return has no error channel",
+    Category.FUNC, "A function marked `!` never returns, and an error return is a return, so `! | E` is refused. The declaration keeps the `!` and drops the channel. Remove the `| E`, or give the function a return type and keep the channel (docs/design/never-return.md)."))

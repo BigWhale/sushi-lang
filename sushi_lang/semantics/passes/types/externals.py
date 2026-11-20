@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.never_return import returned_value
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.ffi_boundary import (
@@ -298,7 +299,7 @@ def _validate_block_signatures(reporter: Reporter, block: 'ExternalBlock') -> No
             if param.ty is not None and not is_c_abi_param(param.ty):
                 er.emit(reporter, er.ERR.CE5003, param.type_span or decl.loc,
                         type=display_type(param.ty))
-        if decl.ret is not None and not _is_c_abi_type(decl.ret):
+        if decl.ret is not None and not _is_c_abi_type(returned_value(decl.ret)):
             er.emit(reporter, er.ERR.CE5003, decl.ret_span or decl.loc,
                     type=display_type(decl.ret))
     for var in block.variables:

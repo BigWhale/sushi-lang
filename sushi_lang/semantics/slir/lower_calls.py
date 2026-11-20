@@ -40,7 +40,7 @@ from sushi_lang.semantics.slir.lower_control import widen_index
 from sushi_lang.semantics.slir.lower_generics import free_callee_name, unqualified
 from sushi_lang.semantics.slir.lower_symbols import callee_symbol
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
-from sushi_lang.semantics.stdlib_registry import stdlib_never_returns, stdlib_symbol
+from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref_type
 from sushi_lang.semantics.unit_symbols import function_symbol
@@ -69,7 +69,8 @@ def call(low: Lowering, node: e.Call) -> Value:
                                     detail="an Iterator.new with no next() reached SLIR")
         return iters.new_value(low, node, next_row, callee(low, node, next_row))
     target = callee(low, node, resolved)
-    value = CallValue(target, receiver(low, resolved.callee, node) + arguments(low, node, resolved))
+    value = CallValue(target, receiver(low, resolved.callee, node) + arguments(low, node, resolved),
+                      never_returns(resolved))
     if (isinstance(resolved.callee, Builtin) and answers_view(resolved.callee.method)
             and low.owns(low.type_of(node))):
         return views.view_of(value, value.args[0][0])
@@ -165,11 +166,12 @@ def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) 
     return st.Direct(callee_symbol(resolved, in_unit), name)
 
 
-def never_returns(callee: st.SlirCallee) -> bool:
-    """Whether the call of `callee` never returns (`exit`): its block ends in `Unreachable`,
-    and the statements after it lower into a block that no path reaches (ir.md 8.6)."""
-    return (isinstance(callee, st.Direct) and callee.module is not None
-            and stdlib_never_returns(callee.module, callee.name))
+def never_returns(resolved: ResolvedCall) -> bool:
+    """Whether the call never returns: the declared return of its callee is `!`, which the
+    typecheck row of the call holds (docs/design/never-return.md). Its block ends in
+    `Unreachable`, and the statements after it lower into a block that no path reaches
+    (ir.md 8.6)."""
+    return resolved.never_returns
 
 
 def arguments(low: Lowering, node: e.Call,

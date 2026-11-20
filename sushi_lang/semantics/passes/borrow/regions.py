@@ -17,7 +17,7 @@ are read in its arm, and a binder that no statement uses has no last use.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.shir import exprs as e
@@ -30,6 +30,7 @@ from sushi_lang.semantics.shir.walk import walk
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId, ShirId
     from sushi_lang.semantics.shir.ownership import OwnershipResults
+    from sushi_lang.semantics.shir.typeck import TypeckResults
 
     from . import BorrowChecker
     from .state import BorrowState, Owner
@@ -64,11 +65,12 @@ def note_binder(checker: 'BorrowChecker', state: 'BorrowState', body: ShirBlock)
 
 
 def write_regions(views: dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]],
-                  table: OwnershipResults) -> None:
-    """One region row for each view of the body, in `table`."""
+                  table: OwnershipResults, calls: Optional[TypeckResults]) -> None:
+    """One region row for each view of the body, in `table`. `calls` says which call of
+    the body never returns: an arm that ends in one leaves, as an arm with a `return`."""
     for view, (owners, block, index) in views.items():
         until = set(last_uses(block, index, view))
-        leaving = _leaving_ends(block.statements[index + 1:], view) - until
+        leaving = _leaving_ends(block.statements[index + 1:], view, calls) - until
         table.record_region(view, Region(owners, tuple(sorted(until | leaving)), leaving))
 
 
@@ -112,16 +114,17 @@ def _arms(stmt: s.ShirStmt) -> list[ShirBlock]:
     return []
 
 
-def _leaving_ends(statements: Iterable[s.ShirStmt], view: LocalId) -> frozenset[ShirId]:
+def _leaving_ends(statements: Iterable[s.ShirStmt], view: LocalId,
+                  calls: Optional[TypeckResults]) -> frozenset[ShirId]:
     """The leaving ends of `view` in `statements` (ir.md 7.9). The walk does not go into a
     loop, so a `break` and a `continue` that it finds leave a loop that holds the view."""
     found: set[ShirId] = set()
     for stmt in statements:
         for arm in _arms(stmt):
-            if terminates(arm, leaves_round=True):
+            if terminates(arm, leaves_round=True, calls=calls):
                 anchors, used = _scan(arm.statements, view)
                 found |= anchors if used else {arm.shir_id}
-            found |= _leaving_ends(arm.statements, view)
+            found |= _leaving_ends(arm.statements, view, calls)
     return frozenset(found)
 
 

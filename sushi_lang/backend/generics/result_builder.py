@@ -55,10 +55,12 @@ def channel_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
 
 
 def call_value_type(codegen: 'LLVMCodegen', fn) -> Optional[Type]:
-    """What a call of the callable yields: its channel Result, or its bare return."""
+    """What a call of the callable yields: its channel Result, or its bare return (`~` for
+    a `!` return)."""
     from sushi_lang.semantics.channel import declared_return
+    from sushi_lang.semantics.never_return import returned_value
     channel = channel_result_of(codegen, fn)
-    return channel if channel is not None else declared_return(fn)
+    return channel if channel is not None else returned_value(declared_return(fn))
 
 
 def fn_value_result_type(codegen: 'LLVMCodegen', fn_type) -> Optional[Type]:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.channel import channel_result
+from sushi_lang.semantics.never_return import returned_value
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -18,11 +19,13 @@ def call_yield(validator: 'TypeValidator', ret: Optional['Type'],
     perk method -- so `??`, `.realise` and the chain gate (CE2515) read one rule. A
     written wrapper return (`Maybe@(T)`) is interned, as a declared type is. A callee with
     no return type is a declaration that the collect pass refused (CE0103): the call
-    reports nothing, and the body holds that error (`refused_before`).
+    reports nothing, and the body holds that error (`refused_before`). A call of a `!`
+    function yields `~` (docs/design/never-return.md).
     """
     if ret is None:
         validator.refused_before = True
         return None
+    ret = returned_value(ret)
     channel = channel_result(validator.struct_table, validator.enum_table, ret, err_type)
     if channel is not None:
         return channel

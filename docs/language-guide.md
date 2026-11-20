@@ -264,6 +264,35 @@ fn main() i32:
 
 **The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. A bare `~` function needs no `return`. A `~` function with a channel (`~ | E`) ends with `return Result.Ok(~)`.
 
+### Functions That Never Return
+
+A function that never returns writes `!` as its return. `exit` of `<sys/process>` is one. A call of a `!` function ends the path, so the function that calls it needs no `return` after the call:
+
+```sushi
+use <sys/process>
+
+fn fail(string msg) !:
+    println("ERROR: {msg}")
+    exit(1)
+
+fn first_char(string s) string:
+    if (s.is_empty()):
+        fail("empty string")
+    return s.ss(0, 1)
+
+fn checked_len(string s) i64:
+    if (not s.is_empty()):
+        return s.len()
+    fail("no length")
+
+fn main() i32:
+    println(first_char("Mostly Harmless"))
+    println(checked_len("Arthur"))
+    return 0
+```
+
+The body of a `!` function must end each path with another `!` call, such as `exit`, and it holds no `return`. `!` is not a type: it stands only in the return of a function or of an `unsafe external` binding. No drop runs after the call, because the process ends there. The rules are in the [language reference](language-reference.md#functions-that-never-return) and [the design record](design/never-return.md).
+
 ### Multiple Parameters
 
 ```sushi

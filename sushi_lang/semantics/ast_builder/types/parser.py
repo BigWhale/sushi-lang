@@ -10,6 +10,18 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
+def refuse_never(node: Tree, ast_builder: 'ASTBuilder') -> Type:
+    """CE0161: `!` in a position that is not the return of a function or an extern. The
+    position reads as `~`, the type that the help asks for."""
+    from sushi_lang.internals.diagnostics import SyntaxDiagnostic
+    from sushi_lang.internals.report import span_of
+    from sushi_lang.semantics.typesys import BuiltinType
+    return ast_builder.recover(
+        SyntaxDiagnostic("CE0161", span=span_of(node)).help(
+            "write `~` for a value with no content, or mark a function `!`"),
+        BuiltinType.BLANK)
+
+
 class TypeParser:
     """Coordinates type parsing across specialized parsers."""
 
@@ -39,5 +51,7 @@ class TypeParser:
             return tuples.parse_tuple_type(type_node, self.ast_builder)
         elif tag in generics.BOUNDED_ARGUMENT_NODES:
             generics.reject_misplaced_bound(type_node)
+        elif tag == "never_t":
+            return refuse_never(type_node, self.ast_builder)
         else:
             return type_from_rule_name(tag)
