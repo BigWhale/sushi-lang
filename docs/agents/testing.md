@@ -48,6 +48,14 @@ Each step has a runner test under `tests/unit/runner/`.
   skipped. When the variable is unset, nothing changes. A stdlib module is never built
   alone (the home modules of the predefined enums cannot be), so the gate reads the real
   path. A selection that holds no stdlib module prints its skip.
+- **The stdlib Python-line gate** (`stdlib_python_line_gate`, #1318). Every run counts the
+  lines of every `*.py` file under `sushi_lang/sushi_stdlib/src/` (not `__pycache__`), as
+  `find ... -name '*.py' | xargs cat | wc -l` does, and compares the count with the one
+  number in `tests/stdlib_python_lines.baseline`. It compiles nothing, and no flag narrows it.
+  A count above the baseline fails: write the new stdlib function in Sushi. If the Python
+  lines are necessary (for example, a fix in the inline runtime), set the baseline to the
+  new count in the same PR and give the reason in the PR text. A count below the baseline
+  also fails: lower the baseline to the new count in the same PR, so that the gain stays.
 - **The library-reader gate** (`lib_reader_gate`): damaged copies of a hybrid and a binary
   library (truncated, bad magic, oversize length, a manifest with a missing field) go
   through both `--lib-info` halves and a consumer. Every case must print its code.

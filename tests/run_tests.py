@@ -477,6 +477,60 @@ def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
     return result
 
 
+# The stdlib Python-line gate (#1318): the Python generators and their committed line count.
+STDLIB_PYTHON_SRC = Path("sushi_lang/sushi_stdlib/src")
+STDLIB_PYTHON_BASELINE = Path("tests/stdlib_python_lines.baseline")
+
+
+def stdlib_python_line_count(src: Path) -> int:
+    """The lines of every `*.py` file under `src`, `__pycache__` excluded, as `wc -l` counts."""
+    return sum(path.read_bytes().count(b"\n") for path in src.rglob("*.py")
+               if "__pycache__" not in path.relative_to(src).parts)
+
+
+@dataclass
+class PythonLineGateResult:
+    """The count of Python lines in the stdlib against the committed baseline."""
+    count: int
+    baseline: Optional[int]
+    baseline_file: Path
+
+    @property
+    def passed(self) -> bool:
+        return self.count == self.baseline
+
+    def as_json(self) -> dict:
+        return {"count": self.count, "baseline": self.baseline, "passed": self.passed}
+
+    def report(self) -> List[str]:
+        """The lines the text report prints."""
+        title = "Stdlib Python-line gate"
+        where = _spelled_path(self.baseline_file, Path.cwd())
+        if self.baseline is None:
+            return [f"{title} FAILED: {where} is not one number. Write the count "
+                    f"({self.count}) in it."]
+        if self.passed:
+            return [f"{title}: {self.count} line(s), equal to the baseline."]
+        if self.count > self.baseline:
+            return [f"{title} FAILED: {self.count} line(s), the baseline is {self.baseline}.",
+                    "  The Python stdlib must not grow: write the new stdlib function in Sushi.",
+                    f"  If the Python lines are necessary, set {where} to {self.count} in the "
+                    "same PR, and give the reason in the PR text."]
+        return [f"{title} FAILED: {self.count} line(s), the baseline is {self.baseline}.",
+                f"  Lower the baseline in {where} to {self.count} in the same PR, so that "
+                "the gain stays."]
+
+
+def stdlib_python_line_gate(src: Path, baseline_file: Path) -> PythonLineGateResult:
+    """Count the Python lines under `src` and compare them with the number in `baseline_file`."""
+    try:
+        text = baseline_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        text = ""
+    baseline = int(text) if text.isdigit() else None
+    return PythonLineGateResult(stdlib_python_line_count(src), baseline, baseline_file)
+
+
 # The dead-code gate (#959, ruling 5): the two `--warn-unused` codes.
 _DEAD_CODE = re.compile(r"^CW(?:1004|3006)$")
 # A list of program paths, separated by `os.pathsep`, that replaces the programs under
