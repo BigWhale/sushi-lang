@@ -1,0 +1,30 @@
+# The borrow pass treats the path of a `!` call as ended: a value that the branch moves
+# before the call is not moved after the `if`. The path that runs frees every value (#1325).
+# EXPECT_STDOUT_EXACT: "kept: Mostly Harmless\n3\n"
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn fail(string msg) !:
+    println(msg)
+    exit(1)
+
+fn consume(nom string s) ~:
+    println("consumed: {s}")
+
+fn keep(bool bad) i32:
+    let string s = "Mostly ".concat("Harmless")
+    if (bad):
+        consume(nom s)
+        fail("bad")
+    println("kept: {s}")
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    if (bad):
+        fail("still bad")
+    xs.push(3)
+    return xs.len() as i32
+
+fn main() i32:
+    println(keep(false))
+    return 0

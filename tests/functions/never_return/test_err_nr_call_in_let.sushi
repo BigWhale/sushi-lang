@@ -1,0 +1,7 @@
+# A call of a `!` function stands only as a statement: a `let` refuses it (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0164
+use <sys/process>
+
+fn main() i32:
+    let i32 gone = exit(1)
+    return gone

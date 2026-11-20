@@ -11,6 +11,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics.generics.name_mangling import extension_decl_symbol, method_symbol
+from sushi_lang.semantics.never_return import returned_value
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.tables import SymbolTables
@@ -57,7 +58,8 @@ def perk_impl_of(decl: FuncDef, perk_impls: PerkImplementationTable) -> Optional
 
 
 def return_type_of(decl: object, tables: SymbolTables, body: ShirBody) -> Type:
-    """The type of the return slot: the `Result` of a channel, else the declared type."""
+    """The type of the return slot: the `Result` of a channel, else the declared type; `~`
+    for a `!` return, whose slot no path writes."""
     ret = getattr(decl, "ret", None)
     if ret is None:
         er.raise_internal_error("CE0000", span=body.block.loc,
@@ -68,4 +70,4 @@ def return_type_of(decl: object, tables: SymbolTables, body: ShirBody) -> Type:
             er.raise_internal_error("CE0000", span=body.block.loc,
                                     detail="a function with a channel has no Result type")
         return result
-    return resolve_unknown_type(ret, tables.structs.by_name, tables.enums.by_name)
+    return resolve_unknown_type(returned_value(ret), tables.structs.by_name, tables.enums.by_name)

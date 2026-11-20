@@ -1,0 +1,10 @@
+# A `!` call that is the argument of a `!` call is refused; the outer call is a statement,
+# and stays legal (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0164
+use <sys/process>
+
+fn leave(i32 code) !:
+    exit(code)
+
+fn main() i32:
+    leave(exit(1))

@@ -925,6 +925,62 @@ The borrow pass and the lift pass each write their answers into a table of the b
 
 The SLIR lowering makes one SLIR function from each body ([the IR design](design/ir.md)). Before the function goes to the next stage, the SLIR verifier checks it on every compile: each local and each place has a type, no place is read after a move, no value moves out of a unit variable, each block has one terminator and goes to blocks that exist, each drop is of an owning type and its flag is a bool local, each owning value is moved or dropped one time on each path, each argument of a direct call has the convention of its parameter, no binary carries `and` or `or`, and each trap names a runtime code with the values that its text prints. Each statement and each terminator has a location. The message names the function and the rule that the lowering broke. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0159 {#ce0159}
+
+**Error** · function
+
+**Message:** `` {callable} is marked `!`, and its body can reach its end ``
+
+A function marked `!` never returns, so no path of its body may reach the end of the body. Each path must end in a call of another `!` function, such as `exit` of `<sys/process>` or an extern marked `!`. The path rule is the rule of [CE0107](#ce0107) and [CE0140](#ce0140): an `if` ends the path only when it has an `else` and each of its blocks ends it, and a loop never ends it. Add a call of a `!` function at the end of each path, or give the function a return type. See [the never-return design](design/never-return.md).
+
+### CE0160 {#ce0160}
+
+**Error** · function
+
+**Message:** `` {callable} is marked `!`, and holds a `return` ``
+
+A function marked `!` never returns, so its body holds no `return`. A `return` inside a lambda of the body is the return of the lambda, and is legal. Remove the `return` and end the path with a call of a `!` function, or give the function a return type. See [the never-return design](design/never-return.md).
+
+### CE0161 {#ce0161}
+
+**Error** · function
+
+**Message:** `'!' marks the return of a function or of an unsafe external binding, and is not a type`
+
+**Help:**
+
+- `` write `~` for a value with no content, or mark a function `!` ``
+
+The `!` marker says that a call never returns. It is legal in one position: the whole return of a free function (`fn fail(string msg) !:`) or of an `unsafe external` binding (`fn exit(i32 code) ! = "exit"`). It is not a type, so the type of a parameter, a `let`, a field, a variant payload, a type argument, an array element and a cast refuse it, and so does the return of a function type (`fn(i32) -> !`) and of a lambda. The return of an extension method, a static, a perk method and a conversion refuses it too. See [the never-return design](design/never-return.md).
+
+### CE0162 {#ce0162}
+
+**Error** · function
+
+**Message:** `` a `!` return has no error channel ``
+
+**Help:**
+
+- `` an error return is a return: remove the `| E`, or give the function a return type ``
+
+A function marked `!` never returns, and an error return is a return, so `! | E` is refused. Remove the `| E`, or give the function a return type and keep the channel. See [the never-return design](design/never-return.md).
+
+### CE0163 {#ce0163}
+
+**Error** · function
+
+**Message:** `` '{name}' is marked `!`, and a '!' function cannot be a value ``
+
+A function marked `!` never returns. Its value would need the function type `fn(...) -> !`, and `!` is not a type, so the function is not a function value: a `let`, an argument, a field and every other value position refuse its name. Call the function as a statement, or pass a function that returns `~`. See [the never-return design](design/never-return.md).
+
+### CE0164 {#ce0164}
+
+**Error** · function
+
+**Message:** `` '{name}' is marked `!`, so its call stands only as a statement ``
+
+A call of a function marked `!` never gives a value, so the call is legal only as a statement of its own, where it ends the path. Every other position refuses it: an argument (also of another `!` call), a `let` initializer, an operand, a `return` value, the value of a `match` arm, a hole of an interpolation and the body of an expression lambda. The position gives no second diagnostic. Write the call as a statement on its own line. See [the never-return design](design/never-return.md).
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

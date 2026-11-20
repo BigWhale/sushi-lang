@@ -1,0 +1,11 @@
+# A call of `exit` ends the path, so a function that returns a value can end with it and
+# needs no `return` after it (#1325, the reproduction of the issue).
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_RUNTIME_EXIT: 3
+use <sys/process>
+
+fn stop() i32:
+    exit(3)
+
+fn main() i32:
+    return stop()

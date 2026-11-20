@@ -99,10 +99,10 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock,
     checker.block_locals.append(list(declared))
     checker.statement_at.append((block, 0))
     try:
-        for index, statement in reached_statements(block, checker.body):
+        for index, statement in reached_statements(block, checker.body, checker.typeck):
             checker.statement_at[-1] = (block, index)
             arms.check(checker, statement)
-        if not terminates(block, leaves_round=True):
+        if not terminates(block, leaves_round=True, calls=checker.typeck):
             record_exit(checker, len(checker.block_locals) - 1)
     finally:
         checker.block_locals.pop()
@@ -410,7 +410,7 @@ def join_exclusive_paths(
             continue
         declared, frozen = enter(index) if enter is not None else ((), ())
         check_block(checker, block, declared, frozen)
-        if not terminates(block, leaves_round=True):
+        if not terminates(block, leaves_round=True, calls=checker.typeck):
             paths.append(snapshot_flow(checker))
     restore_flow(checker, FlowFacts.join(paths))
 
@@ -681,7 +681,7 @@ def _check_round(checker: 'BorrowChecker', body: ShirBlock,
             outer.continues.extend(path.without(per_round) for path in frame.continues)
         frame = LoopFrame(frame.blocks)
     back = list(frame.continues)
-    if not terminates(body, leaves_round=True):
+    if not terminates(body, leaves_round=True, calls=checker.typeck):
         back.append(snapshot_flow(checker))
     return (FlowFacts.join(back).without(per_round) if back else None,
             FlowFacts.join(frame.breaks).without(per_round) if frame.breaks else None)

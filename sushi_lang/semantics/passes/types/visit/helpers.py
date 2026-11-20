@@ -4,6 +4,7 @@ fn-typed-field call.
 from __future__ import annotations
 from typing import Optional
 
+from sushi_lang.semantics.never_return import returned_value
 from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
@@ -18,7 +19,7 @@ def function_type_of_sig(sig) -> Optional[Type]:
     param_types = tuple(p.ty for p in sig.params)
     if any(pt is None for pt in param_types):
         return None
-    ok_type = sig.ret_type if sig.ret_type is not None else BuiltinType.BLANK
+    ok_type = returned_value(sig.ret_type) if sig.ret_type is not None else BuiltinType.BLANK
     err_type = sig.err_type
     # The declared modes are part of the type, and it stays invariant in them
     # (docs/design/borrow-model.md S7). Without them a `nom` callee compared equal to a

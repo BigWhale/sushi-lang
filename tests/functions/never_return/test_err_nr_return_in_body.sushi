@@ -1,0 +1,7 @@
+# A `!` body holds no `return` (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0160
+fn stop() !:
+    return 0
+
+fn main() i32:
+    stop()

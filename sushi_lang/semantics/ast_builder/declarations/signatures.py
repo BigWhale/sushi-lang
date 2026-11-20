@@ -12,13 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Tuple
 
+from lark import Tree
+
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import Span, span_of
 from sushi_lang.semantics.ast import DontPanicMarker
 from sushi_lang.semantics.ast_builder.utils.string_processing import strip_string_token
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_token, first_tree, ice, is_type_node)
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import BuiltinType, Type
 from sushi_lang.semantics.unchecked_index import stamp_unchecked_indexes
 
 if TYPE_CHECKING:
@@ -42,15 +44,16 @@ class SignatureTypes:
     borrows: bool = False
 
 
-def read_signature_types(children: List[object],
-                         ast_builder: 'ASTBuilder') -> SignatureTypes:
+def read_signature_types(children: List[object], ast_builder: 'ASTBuilder', *,
+                         takes_never: bool = False) -> SignatureTypes:
     """Read the return type and the optional `| E` channel off a signature's children.
 
     The shape is `")" type ["|" type]`. With `maybe_placeholders=False` an omitted
     optional gives no child, so the return type is the FIRST direct type node and the
     channel is the SECOND. The caller hands in the children of the node that holds the
     signature, because an extension's TARGET type stands one level up and is not read
-    here.
+    here. `takes_never` is true for the return of a free function (`read_return_type`).
+    A `!` return takes no channel (CE0162): the channel is dropped.
     """
     from sushi_lang.semantics.param_modes import ReturnMode, split_return_mode
 
@@ -58,7 +61,15 @@ def read_signature_types(children: List[object],
     ret_node = type_nodes[0] if type_nodes else None
     err_node = type_nodes[1] if len(type_nodes) >= 2 else None
     mode, ret = split_return_mode(
-        ast_builder._parse_type(ret_node) if ret_node is not None else None)
+        read_return_type(ret_node, ast_builder, takes_never=takes_never)
+        if ret_node is not None else None)
+    if ret == BuiltinType.NEVER and err_node is not None:
+        ast_builder.recover(
+            SyntaxDiagnostic("CE0162", span=span_of(err_node)).help(
+                "an error return is a return: remove the `| E`, or give the function a "
+                "return type"),
+            None)
+        err_node = None
 
     return SignatureTypes(
         ret=ret,
@@ -68,6 +79,16 @@ def read_signature_types(children: List[object],
         declares_return=ret_node is not None,
         borrows=mode is ReturnMode.PEEK,
     )
+
+
+def read_return_type(node: object, ast_builder: 'ASTBuilder', *,
+                     takes_never: bool) -> Optional[Type]:
+    """The written return type of a declaration: the ONE reader that reads `!` as the
+    marker, when `takes_never` holds (a free function, an extern). Every other position of
+    `!` is CE0161 (`refuse_never`), so the marker never stands inside a type."""
+    if takes_never and isinstance(node, Tree) and node.data == "never_t":
+        return BuiltinType.NEVER
+    return ast_builder._parse_type(node)
 
 
 # The positions that parse a borrowed return only to refuse it (CE2439, #1229).

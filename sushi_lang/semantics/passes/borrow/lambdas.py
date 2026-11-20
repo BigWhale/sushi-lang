@@ -77,7 +77,7 @@ def _walk_body(checker: 'BorrowChecker', node: e.Lambda,
             checker._declare_param(declared, has_receiver=False, located=True)
         checker.block_locals.append([param.local for param in node.params])
         check_block(checker, node.body)
-        if not terminates(node.body):
+        if not terminates(node.body, calls=checker.typeck):
             record_exit(checker)
     finally:
         (checker.borrow_state, checker.active_borrows, checker._scope_binding_borrows,

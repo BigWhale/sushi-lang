@@ -263,6 +263,10 @@ def parse_type_string(
 
     if type_str == "~":
         return BuiltinType.BLANK
+    # The `!` marker of a return (docs/design/never-return.md): a manifest writes it only
+    # as the return of a function.
+    if type_str == "!":
+        return BuiltinType.NEVER
 
     for word, mode in (("peek ", BorrowMode.PEEK), ("poke ", BorrowMode.POKE)):
         if type_str.startswith(word):

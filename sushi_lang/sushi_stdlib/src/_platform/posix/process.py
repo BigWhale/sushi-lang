@@ -1,14 +1,13 @@
 """POSIX process control function declarations."""
 
 from llvmlite import ir
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_exit, declare_libc
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 
 _i8_ptr = ir.IntType(8).as_pointer()
 _i32 = ir.IntType(32)
 _i64 = ir.IntType(64)
 
 __all__ = [
-    "declare_exit",
     "declare_tmpfile", "declare_fileno", "declare_waitpid", "declare_posix_spawnp",
     "declare_posix_spawn_file_actions_init", "declare_posix_spawn_file_actions_adddup2",
     "declare_posix_spawn_file_actions_destroy", "get_environ",

@@ -55,7 +55,8 @@ def check_lambda(validator: TypeValidator, node: e.Lambda,
         else:
             check_block(validator, node.body)
             if not validator.in_template_copy:
-                reject_fall_off(validator, node.body, ok, err is not None, node.loc)
+                reject_fall_off(validator, node.body, ok, err is not None, node.loc,
+                                validator.body_answers())
     _record_captures(validator, node)
     return FunctionType(param_types=types, ok_type=ok, err_type=err, captures=node.captures,
                         param_modes=modes)

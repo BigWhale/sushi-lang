@@ -186,6 +186,10 @@ fn malloc(i64 n) Maybe@(ptr) = "malloc"   # NULL is Maybe.None
 fn free(ptr p) ~        = "free"     # ~ here is genuine C void, NOT Result@(~)
 ```
 
+A C function that never returns writes `!` as its return: `fn exit(i32 code) ! = "exit"`.
+It crosses as C `void`. A call of it ends the path, as a call of a Sushi `!` function
+does, so the code after it needs no `return` ([the never-return design](design/never-return.md)).
+
 Because `libc.strlen(s)` yields a plain `i64`, you **cannot** apply `??` or
 `.realise()` to it - it is not a `Result`. Attempting `libc.strlen(s)??`
 is a clean type error (**[`CE2507`](error-catalog.md#ce2507)**), as it is on the call of any bare function.

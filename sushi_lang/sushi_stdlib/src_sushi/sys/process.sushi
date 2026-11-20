@@ -1,9 +1,9 @@
 ##:
 sys/process -- the Sushi half of the process module.
 
-The module has two halves. `run` and `exit` are compiled into the stdlib bitcode. The
-functions of this file call `getpid()`, `getuid()`, `chdir()` and `getcwd()` of the C
-library through an `unsafe external` block. One `use <sys/process>` gives both halves.
+The module has two halves. `run` is compiled into the stdlib bitcode. The functions of
+this file call `exit()`, `getpid()`, `getuid()`, `chdir()` and `getcwd()` of the C library
+through an `unsafe external` block. One `use <sys/process>` gives both halves.
 
 `chdir` and `getcwd` give `FileError` on a failure, with the variant from `errno()`
 (`FileError.from_errno` of `<io/error>`). This module re-exports `<io/error>`, so
@@ -13,13 +13,32 @@ library through an `unsafe external` block. One `use <sys/process>` gives both h
 public use <io/error>
 use <sys/platform>
 
-unsafe external "C" as libc because "the process id, the user id and the working directory":
+unsafe external "C" as libc because "the exit, the process id, the user id and the working directory":
+    fn exit(i32 code) ! = "exit"
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"
     fn getpid() i32 = "getpid"
     fn getuid() i32 = "getuid"
     fn chdir(string path) i32 = "chdir"
     fn getcwd(ptr buf, i64 size) Maybe@(string) = "getcwd"
+
+##:
+Ends the program with an exit code. The call never returns.
+
+The C library flushes the open streams, so the output that the program printed before the
+call is written. No drop runs after the call: the system takes back the memory of the
+process.
+
+- Parameter code: The exit code of the process. The system keeps the low 8 bits.
+- Example:
+  ```sushi no_run
+  if (getpid() < 0):
+      exit(1)
+  ```
+  A function marked `!` that ends with `exit` needs no `return` after the call.
+:##
+public fn exit(i32 code) !:
+    libc.exit(code)
 
 ##:
 Gives the process id of the program.

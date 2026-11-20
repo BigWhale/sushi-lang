@@ -8,7 +8,8 @@ from sushi_lang.semantics.ast import ExternalBlock, ExternalDecl, ExternalVar
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
-from sushi_lang.semantics.ast_builder.declarations.signatures import refuse_dont_panic
+from sushi_lang.semantics.ast_builder.declarations.signatures import (
+    read_return_type, refuse_dont_panic)
 from sushi_lang.semantics.ast_builder.utils.string_processing import strip_string_token
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_tree, ice, is_type_node)
@@ -134,7 +135,8 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
         if is_type_node(child):
             ret_node = child
             break
-    ret_ty: Optional[Type] = ast_builder._parse_type(ret_node) if ret_node is not None else None
+    ret_ty: Optional[Type] = (read_return_type(ret_node, ast_builder, takes_never=True)
+                              if ret_node is not None else None)
 
     return ExternalDecl(
         name=str(name_tok.value),

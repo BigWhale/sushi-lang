@@ -1,0 +1,11 @@
+# No `!` lambda and no `!` function type (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0161, CE0161
+use <sys/process>
+
+fn apply(fn(i32) -> ! f) i32:
+    return 0
+
+fn main() i32:
+    let g = |i32 code| -> !:
+        exit(code)
+    return 0

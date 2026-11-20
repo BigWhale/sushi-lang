@@ -1,0 +1,10 @@
+# A `!` body that can reach its end is refused (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0159
+use <sys/process>
+
+fn stop(bool now) !:
+    if (now):
+        exit(1)
+
+fn main() i32:
+    stop(true)

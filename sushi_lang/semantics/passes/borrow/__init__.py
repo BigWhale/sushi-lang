@@ -158,7 +158,7 @@ class BorrowChecker:
                 self._declare_param(param, has_receiver=has_receiver, located=located)
             self.block_locals.append([param.local for param in params])
             check_block(self, body.block)
-            if not terminates(body.block):
+            if not terminates(body.block, calls=self.typeck):
                 record_exit(self)
         except AfterAnError:
             return
@@ -169,7 +169,7 @@ class BorrowChecker:
         ownership = self.shir.ownership_table_of(body)
         for local in sorted(self.moved_locals & self.kept_at_an_exit):
             ownership.record_conditional_move(local)
-        write_regions(self.views, ownership)
+        write_regions(self.views, ownership, self.typeck)
         write_heap_decisions(self, ownership)
         check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
                         ownership, self.shir.decls)

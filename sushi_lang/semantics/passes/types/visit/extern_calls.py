@@ -39,6 +39,7 @@ from sushi_lang.semantics.passes.types.arrays import check_index_operand, reject
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Extern, Intrinsic
+from sushi_lang.semantics.never_return import never_returns, returned_value
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, FunctionType, Type
 
@@ -60,10 +61,11 @@ def check_extern_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
     written = validator.decl_name(ref.decl)
     answers = validator.body_answers()
     answers.record_callee(node.shir_id, ResolvedCall(Extern(ref.decl, sig.link_name),
-                                                     unit=sig.unit_name))
+                                                     unit=sig.unit_name,
+                                                     never_returns=never_returns(sig)))
     params = list(sig.param_types)
     modes = tuple(mode_of_type(ty) for ty in params)
-    ret = sig.ret_type or BuiltinType.BLANK
+    ret = returned_value(sig.ret_type) or BuiltinType.BLANK
     visit.answer(validator, ref, FunctionType(param_types=tuple(params), ok_type=ret,
                                               err_type=None, param_modes=modes))
     declared = Parameters(node.shir_id, modes, [f"#{index + 1}" for index in range(len(params))])

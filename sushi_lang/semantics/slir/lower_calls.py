@@ -40,7 +40,7 @@ from sushi_lang.semantics.slir.lower_control import widen_index
 from sushi_lang.semantics.slir.lower_generics import free_callee_name, unqualified
 from sushi_lang.semantics.slir.lower_symbols import callee_symbol
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
-from sushi_lang.semantics.stdlib_registry import stdlib_never_returns, stdlib_symbol
+from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref_type
 from sushi_lang.semantics.unit_symbols import function_symbol
@@ -163,13 +163,6 @@ def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) 
         return method_symbol(owner, method, unit, resolved.type_args)
 
     return st.Direct(callee_symbol(resolved, in_unit), name)
-
-
-def never_returns(callee: st.SlirCallee) -> bool:
-    """Whether the call of `callee` never returns (`exit`): its block ends in `Unreachable`,
-    and the statements after it lower into a block that no path reaches (ir.md 8.6)."""
-    return (isinstance(callee, st.Direct) and callee.module is not None
-            and stdlib_never_returns(callee.module, callee.name))
 
 
 def arguments(low: Lowering, node: e.Call,

@@ -62,7 +62,7 @@ from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import ShirBlock
-from sushi_lang.semantics.shir.paths import reached_statements
+from sushi_lang.semantics.shir.paths import reached_statements, terminates
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
@@ -357,7 +357,7 @@ class Lowering:
 
     def statements_of(self, block: ShirBlock) -> None:
         """Each statement of `block` that a path reaches."""
-        for _index, stmt in reached_statements(block, self.answers.body):
+        for _index, stmt in reached_statements(block, self.answers.body, self.typeck):
             self.statement(stmt)
 
     def statement(self, stmt: s.ShirStmt) -> None:
@@ -408,8 +408,13 @@ class Lowering:
             rebinds.rebind(self, stmt, target)
 
     def expr_stmt(self, stmt: s.ExprStmt) -> None:
-        """A value that nobody reads still writes a destination local (L16)."""
+        """A value that nobody reads still writes a destination local (L16). A statement
+        that is a call of a `!` function (the one position of such a call) ends the path:
+        its block ends in `Unreachable`, so no drop runs after it
+        (docs/design/never-return.md)."""
         self.temporary(self.value(stmt.value), self.type_of(stmt.value), stmt.value.loc)
+        if terminates(stmt, calls=self.typeck):
+            self.block.terminator = tm.Unreachable(stmt.loc)
 
     def ret(self, stmt: s.Return) -> None:
         if stmt.shir_id == self.expression_return:
@@ -444,9 +449,6 @@ class Lowering:
                 self.emit(self.placement.drop_part(part, span))
         if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
-            if calls.never_returns(value.callee):
-                self.block.terminator = tm.Unreachable(span)
-                self.block = self.new_block()
         else:
             self.emit([st.Assign(place, value, span)])
         for root in dict.fromkeys(root_of_move(moved) for moved in moves):

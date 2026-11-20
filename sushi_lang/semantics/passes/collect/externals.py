@@ -12,6 +12,7 @@ from sushi_lang.semantics.ffi_boundary import (
     nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.never_return import returned_value
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl, ExternalVar
@@ -218,7 +219,8 @@ def c_type(ty: Optional[Type]) -> str:
 
 
 def function_shape(params, ret: Optional[Type], variadic: bool) -> tuple:
-    return ("fn", tuple(c_type(p) for p in params), c_type(ret), variadic)
+    """The C shape of a function. A `!` return crosses as `void`."""
+    return ("fn", tuple(c_type(p) for p in params), c_type(returned_value(ret)), variadic)
 
 
 class LinkNames:
@@ -277,7 +279,7 @@ def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
 def _crosses(decl: 'ExternalDecl') -> bool:
     """False for a signature that CE5003 refused: it has no C shape to compare."""
     return (all(is_c_abi_param(p.ty) for p in decl.params)
-            and (decl.ret is None or is_c_abi_type(decl.ret)))
+            and (decl.ret is None or is_c_abi_type(returned_value(decl.ret))))
 
 
 def _collected(record, decl, filename: Optional[str]) -> bool:

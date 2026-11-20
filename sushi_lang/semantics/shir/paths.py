@@ -5,8 +5,11 @@ ONE predicate for two passes: `typecheck` asks it whether a body can reach its e
 `borrow` asks it at a join. `RULES` has a rule for each statement class (gate:
 `tests/unit/test_shir_paths_are_total.py`).
 
-A `return` leaves the function. With `leaves_round`, a `break` and a `continue` end a path
-too: they leave the round of their loop, which is the question of a join in a loop body.
+A `return` leaves the function, and so does a statement that is a call of a `!` function
+(docs/design/never-return.md): `calls`, the typecheck answers of the body, says which call
+never returns. A reader that gives no `calls` knows no such call. With `leaves_round`, a
+`break` and a `continue` end a path too: they leave the round of their loop, which is the
+question of a join in a loop body.
 A `break` or a `continue` outside a loop (an error hole) ends the path for the statements
 after it in its block.
 An `if` ends the path when it has an `else` and each of its blocks ends it. A `match` ends
@@ -18,28 +21,35 @@ Every other statement goes on to the next.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Collection, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Callable, Collection, Iterator, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock
 
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.typeck import TypeckResults
+
 
 @dataclass(frozen=True, slots=True)
 class _Question:
-    """What a rule asks: whether a jump ends a path, and the matches that do not end it."""
+    """What a rule asks: whether a jump ends a path, the matches that do not end it, and
+    which call never returns."""
     leaves_round: bool
     uncovered: Collection[ShirId]
+    calls: Optional[TypeckResults]
 
 
 def terminates(node: s.ShirStmt | ShirBlock, *, leaves_round: bool = False,
-               uncovered: Collection[ShirId] = frozenset()) -> bool:
+               uncovered: Collection[ShirId] = frozenset(),
+               calls: Optional[TypeckResults] = None) -> bool:
     """Whether every path through `node`, a statement or a block, leaves the function, or
     with `leaves_round`, leaves the round of its loop. A match whose `shir_id` is in
-    `uncovered` does not end the path."""
-    return _ends(node, _Question(leaves_round, uncovered))
+    `uncovered` does not end the path. A call that `calls` says never returns ends it."""
+    return _ends(node, _Question(leaves_round, uncovered, calls))
 
 
 def _ends(node: s.ShirStmt | ShirBlock, question: _Question) -> bool:
@@ -53,12 +63,13 @@ def _ends(node: s.ShirStmt | ShirBlock, question: _Question) -> bool:
 
 
 def ends_the_path(statement: s.ShirStmt, *,
-                  uncovered: Collection[ShirId] = frozenset()) -> bool:
+                  uncovered: Collection[ShirId] = frozenset(),
+                  calls: Optional[TypeckResults] = None) -> bool:
     """Whether no statement after `statement` in its block can run: it returns on every
     path, or it is a `break` or a `continue`, inside a loop or not (the error hole of
     CE1003)."""
     return (isinstance(statement, (s.Break, s.Continue)) or _is_a_stray_jump(statement)
-            or terminates(statement, uncovered=uncovered))
+            or terminates(statement, uncovered=uncovered, calls=calls))
 
 
 def _is_a_stray_jump(statement: s.ShirStmt) -> bool:
@@ -66,7 +77,8 @@ def _is_a_stray_jump(statement: s.ShirStmt) -> bool:
 
 
 def first_dead_statement(block: ShirBlock, body: ShirBody, *,
-                         uncovered: Collection[ShirId] = frozenset()
+                         uncovered: Collection[ShirId] = frozenset(),
+                         calls: Optional[TypeckResults] = None
                          ) -> Optional[tuple[s.ShirStmt, s.ShirStmt]]:
     """The statement of `block`, a block of `body`, that ends the path and the first
     statement after it.
@@ -79,19 +91,21 @@ def first_dead_statement(block: ShirBlock, body: ShirBody, *,
     for index, (ender, dead) in enumerate(zip(statements, statements[1:], strict=False)):
         if copies.holding(block.shir_id, index) != copies.holding(block.shir_id, index + 1):
             continue
-        if ends_the_path(ender, uncovered=uncovered):
+        if ends_the_path(ender, uncovered=uncovered, calls=calls):
             return ender, dead
     return None
 
 
-def reached_statements(block: ShirBlock, body: ShirBody) -> Iterator[tuple[int, s.ShirStmt]]:
+def reached_statements(block: ShirBlock, body: ShirBody,
+                       calls: Optional[TypeckResults] = None
+                       ) -> Iterator[tuple[int, s.ShirStmt]]:
     """Each statement of `block`, a block of `body`, that a path reaches, with its index. A statement of a copy
     of an unrolled `expand` that ends every path can stand before more statements of the
     block (ir.md 7.2): no path reaches them, so `borrow` and SLIR lowering do not read them."""
     for index, statement in enumerate(block.statements):
         yield index, statement
         if (body.copies.holding(block.shir_id, index)
-                and terminates(statement, leaves_round=True)):
+                and terminates(statement, leaves_round=True, calls=calls)):
             return
 
 
@@ -113,6 +127,14 @@ def _match(node: s.Match, question: _Question) -> bool:
             and all(_ends(arm.body, question) for arm in node.arms))
 
 
+def _expr_stmt(node: s.ExprStmt, question: _Question) -> bool:
+    """A statement that is a call of a `!` function ends the path."""
+    if question.calls is None or not isinstance(node.value, e.Call):
+        return False
+    row = question.calls.callee_of(node.value.shir_id)
+    return row is not None and row.never_returns
+
+
 def _goes_on(_node: Any, _question: _Question) -> bool:
     return False
 
@@ -126,7 +148,7 @@ RULES: dict[type, Callable[[Any, _Question], bool]] = {
     s.Match: _match,
     s.Assign: _goes_on,
     s.Destructure: _goes_on,
-    s.ExprStmt: _goes_on,
+    s.ExprStmt: _expr_stmt,
     s.Loop: _goes_on,
     s.Assert: _goes_on,
     s.Expand: _goes_on,

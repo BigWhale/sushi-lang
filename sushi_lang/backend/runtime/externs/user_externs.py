@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
+from sushi_lang.semantics.never_return import returned_value
 from sushi_lang.semantics.ffi_boundary import is_byte_buffer, nullable_payload
 from sushi_lang.semantics.typesys import BuiltinType
 
@@ -22,7 +23,8 @@ def _abi_param_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
 
 
 def _abi_return_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
-    """Lower a return type to its C-ABI LLVM type."""
+    """Lower a return type to its C-ABI LLVM type. A `!` return is `void`."""
+    ty = returned_value(ty)
     if ty is None:
         return ir.VoidType()
     if isinstance(ty, BuiltinType) and ty == BuiltinType.BLANK:

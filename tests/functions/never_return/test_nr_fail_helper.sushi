@@ -1,0 +1,26 @@
+# A user function marked `!` ends the path where it is called: in an arm of a `match` and in
+# a branch of an `if`, so no `return` follows the call (#1325).
+# EXPECT_STDOUT_EXACT: "7\n2\nMostly Harmless\nno value\n"
+# EXPECT_RUNTIME_EXIT: 4
+use <sys/process>
+
+fn fail(string msg) !:
+    println(msg)
+    exit(4)
+
+fn halve(i32 n) i32:
+    if (n % 2 == 0):
+        return n / 2
+    else:
+        fail("odd")
+
+fn first(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(v) -> return v
+        Maybe.None -> fail("no value")
+
+fn main() i32:
+    println(first(Maybe.Some(7)))
+    println(halve(4))
+    println("Mostly Harmless")
+    return first(Maybe.None)

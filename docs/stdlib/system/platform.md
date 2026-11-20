@@ -109,7 +109,7 @@ sushi_stdlib/src/_platform/
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
 │   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
 │   ├── net.py         # the socket calls
-│   ├── process.py     # exit/tmpfile/fileno/waitpid/
+│   ├── process.py     # tmpfile/fileno/waitpid/
 │                      #   posix_spawnp + file_actions helpers/environ
 ├── darwin/            # macOS
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
@@ -172,11 +172,11 @@ branch.
 ```python
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-def generate_exit(module: ir.Module) -> None:
-    """Generate exit(i32 code) -> ~"""
-    platform_process = get_platform_module('process')
-    libc_exit = platform_process.declare_exit(module)
-    # ... builds the sushi_exit IR using the platform-specific declaration ...
+def generate_run(module: ir.Module) -> None:
+    """Generate run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>."""
+    plat = get_platform_module('process')
+    spawn = plat.declare_posix_spawnp(module)
+    # ... builds the sushi_run IR using the platform-specific declarations ...
 ```
 
 `sushi_stdlib/src/error_emission.py` follows the identical pattern
@@ -338,7 +338,7 @@ error rather than silently picking a wrong platform's bitcode.
 - File I/O: `stat`/`access`/`unlink`/`rename`/`open`/`read`/`write`/`close`/`mkdir`/
   `rmdir` (via `posix/files.py`), plus macOS-specific `O_CREAT`/`O_TRUNC` bit values
   (`darwin/files.py`)
-- Process control: `exit`/`tmpfile`/`fileno`/
+- Process control: `tmpfile`/`fileno`/
   `waitpid`/`posix_spawnp` (+ file-action helpers)/`environ` (via `posix/process.py`)
 - the stderr handle named `__stderrp` (macOS's double-underscore libc symbol name,
   distinct from Linux — `darwin/stdio.py`)

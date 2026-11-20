@@ -37,7 +37,7 @@ def parse_impl_methods(children: List, ast_builder: 'ASTBuilder') -> List[FuncDe
             pending_static = child
             continue
         if isinstance(child, Tree) and child.data == "function_def":
-            method = parse_funcdef(child, ast_builder)
+            method = parse_funcdef(child, ast_builder, takes_never=False)
             if method.public_span is not None:
                 ast_builder.recover(
                     SyntaxDiagnostic("CE6103", span=method.public_span).help(

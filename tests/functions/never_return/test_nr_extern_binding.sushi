@@ -1,0 +1,13 @@
+# An `unsafe external` binding marked `!` ends the path. The C symbol `exit` is a symbol of
+# the compiler, and `!` crosses as `void`, so the shapes agree (#1325).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 5
+unsafe external "C" as c because "the exit of the process":
+    fn exit(i32 code) ! = "exit"
+
+fn stop(i32 code) i32:
+    println("Mostly Harmless")
+    c.exit(code)
+
+fn main() i32:
+    return stop(5)

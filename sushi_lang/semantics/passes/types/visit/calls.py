@@ -151,6 +151,26 @@ if TYPE_CHECKING:
 
 def check_call(validator: TypeValidator, node: e.Call,
                expected: Optional[Type]) -> Optional[Type]:
+    """A call, and CE0164 for a call of a `!` function that is not a statement of its own
+    (docs/design/never-return.md)."""
+    ty = _check_call(validator, node, expected)
+    row = validator.body_answers().callee_of(node.shir_id)
+    if (row is not None and row.never_returns
+            and node.shir_id not in validator.statement_calls):
+        er.emit(validator.reporter, er.ERR.CE0164, node.loc, name=_callee_name(validator, node))
+        return None
+    return ty
+
+
+def _callee_name(validator: TypeValidator, node: e.Call) -> str:
+    target = node.target
+    if isinstance(target, e.Named) and isinstance(target.ref, e.GlobalRef):
+        return validator.decl_name(target.ref.decl)
+    return "the callee"
+
+
+def _check_call(validator: TypeValidator, node: e.Call,
+                expected: Optional[Type]) -> Optional[Type]:
     target = node.target
     if _rejects_a_pack_bloom(validator, node):
         return None

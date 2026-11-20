@@ -20,9 +20,9 @@ of `chdir` and `getcwd`.
 The process module gives the functions that control and read the state of the process. It
 uses POSIX functions of the C library, so it works on macOS and on Linux.
 
-The module has two halves. `getpid`, `getuid`, `chdir` and `getcwd` are Sushi source
-(`sushi_stdlib/src_sushi/sys/process.sushi`): they call the C library through an
-`unsafe external` block. `exit` and `run` are compiled into the stdlib bitcode. One
+The module has two halves. `exit`, `getpid`, `getuid`, `chdir` and `getcwd` are Sushi
+source (`sushi_stdlib/src_sushi/sys/process.sushi`): they call the C library through an
+`unsafe external` block. `run` is compiled into the stdlib bitcode. One
 `use <sys/process>` gives both halves.
 
 ## Functions
@@ -141,14 +141,20 @@ fn main() i32:
 Terminate the current process with an exit code.
 
 ```text
-exit(i32 code) ~
+exit(i32 code) !
 ```
 
 **Parameters:**
 - `code` - Exit code to return to the parent process (0 for success, non-zero for error)
 
 **Returns:**
-- Never returns (terminates the process immediately)
+- Never returns. The `!` marker says so ([the never-return design](../../design/never-return.md)).
+  A call of `exit` ends the path: a function that returns a value can end with `exit(...)`
+  and needs no `return` after it, and a statement after the call is
+  [CE0140](../../error-catalog.md#ce0140). The call stands only as a statement: in a value
+  position it is [CE0164](../../error-catalog.md#ce0164).
+- The C library flushes the open streams, so the output that the program printed is
+  written. No drop runs after the call: the system takes back the memory of the process.
 
 **Example:**
 
@@ -163,6 +169,27 @@ fn main() i32:
         exit(1)
 
     println("This line is never reached")
+    return 0
+```
+
+**A helper that never returns:** a function marked `!` that ends with `exit` ends the
+path where it is called, as `exit` does.
+
+```sushi
+use <sys/process>
+
+fn fail(string msg) !:
+    println("ERROR: {msg}")
+    exit(1)
+
+fn parse_level(string s) i32:
+    match s:
+        "low" -> return 1
+        "high" -> return 2
+        _ -> fail("unknown level '{s}'")
+
+fn main() i32:
+    println(parse_level("high"))
     return 0
 ```
 
@@ -497,11 +524,10 @@ use <sys/process>
 fn cleanup() ~:
     println("Cleaning up resources...")
 
-fn graceful_exit(i32 code) ~:
+fn graceful_exit(i32 code) !:
     cleanup()
     println("Exiting with code {code}")
     exit(code)
-    return ~  # Never reached
 
 fn main() i32:
     let bool failed = false
@@ -583,9 +609,8 @@ const i32 EXIT_IOERR = 74       # I/O error
 const i32 EXIT_CONFIG = 78      # Configuration error
 
 fn main() i32:
-    # Use appropriate exit codes
+    # Use appropriate exit codes. `exit` ends the path, so no `return` follows it.
     exit(EXIT_CONFIG)
-    return 0  # Never reached
 ```
 
 ## Example: Simple File Processor

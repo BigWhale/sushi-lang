@@ -25,7 +25,7 @@ STDLIB_EMITTERS = ROOT / "backend" / "expressions" / "calls" / "stdlib"
 
 # `exit` never returns and `run` is variadic, so the <sys/process> emitter keeps them
 # as the two named special cases (#827). Every other name comes from a row.
-SPECIAL_CASES = {"exit", "run"}
+SPECIAL_CASES = {"run"}
 
 READERS = {
     ROOT / "semantics" / "generics" / "instantiate" / "expressions.py": set(),
@@ -50,7 +50,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("exit", "run", "copy", "remove", "fd_readln"):
+    for spelled in ("run", "copy", "remove", "fd_readln"):
         assert spelled in names
 
 

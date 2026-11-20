@@ -1,7 +1,7 @@
 """Call emission for the <sys/process> module functions, each from its row (#827).
 
 The last operand of `run` is the `string[]` of its variadic tail, which the caller keeps.
-`exit` answers `~`, and SLIR lowering ends its block in `Unreachable`.
+`exit` is Sushi source (`src_sushi/sys/process.sushi`).
 """
 from __future__ import annotations
 

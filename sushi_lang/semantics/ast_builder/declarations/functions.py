@@ -38,8 +38,11 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
-def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
-    """Parse function_def: [PUBLIC] FN NAME [type_params] "(" [parameters] ")" type [dont_panic] ":" block"""
+def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder', takes_never: bool = True) -> FuncDef:
+    """Parse function_def: [PUBLIC] FN NAME [type_params] "(" [parameters] ")" type [dont_panic] ":" block
+
+    `takes_never` is false for a method of a perk implementation, whose return refuses
+    `!` (CE0161)."""
     name_tok = first_name(t.children)
 
     if name_tok is None:
@@ -67,7 +70,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     # A perk-impl method parses through this rule and may declare a receiver (#327);
     # a plain top-level function may not -- collect rejects it there (CE2425).
     self_mode, self_mode_span, params = strip_self_param(params)
-    signature = read_signature_types(t.children, ast_builder)
+    signature = read_signature_types(t.children, ast_builder, takes_never=takes_never)
     body = ast_builder._block(body_node)
     dont_panic = mark_body(t.children, body)
     borrowed_return = None

@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Collection
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.never_return import returned_value
 from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, Param, PerkDef
 from sushi_lang.semantics.ast_walk import is_template_copy
 from sushi_lang.semantics.typesys import (
@@ -141,9 +142,10 @@ def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozen
     """
     if self.in_template_copy:
         return
-    reject_dead_statements(self, body, uncovered)
+    calls = self.shir.typeck_of(body)
+    reject_dead_statements(self, body, uncovered, calls)
     if node.ret is not None:
-        reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span)
+        reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span, calls)
     reject_borrowed_return_faults(self, node)
 
 
@@ -168,7 +170,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
 
     validate_and_register_parameters(self, func.params)
 
-    validate_type_name(self, func.ret, func.ret_span)
+    validate_type_name(self, returned_value(func.ret), func.ret_span)
 
     self.check_body(func, lambda body, uncovered: _reject_path_faults(
         self, func, body, uncovered), offered=header)
