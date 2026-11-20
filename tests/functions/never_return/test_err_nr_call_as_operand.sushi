@@ -1,0 +1,20 @@
+# A call of a `!` function stands only as a statement: an operand refuses it, and so do a
+# `return` value and a hole of an interpolation (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0164, CE0164, CE0164
+use <sys/process>
+
+fn fail(string msg) !:
+    println(msg)
+    exit(1)
+
+fn sum() i32:
+    return 1 + fail("no sum")
+
+fn nothing() ~:
+    return fail("no value")
+
+fn main() i32:
+    let string why = "no text"
+    println("{fail(why)}")
+    nothing()
+    return sum()

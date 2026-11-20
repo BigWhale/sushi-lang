@@ -72,11 +72,13 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - `!` is a return MARKER, not a type: `fn fail(string msg) !:` and the extern
   `fn exit(i32 code) ! = "exit"`. Any other position (a parameter, a `let`, a field, a type
   argument, an element, `fn() -> !`, a lambda, a method, a static, a perk method) is CE0161.
-  `! | E` is CE0162. `main() !` is CE0106. A `!` function as a value is CE2093.
+  `! | E` is CE0162. `main() !` is CE0106. A `!` function as a value is CE0163.
 - A STATEMENT that calls a `!` function ends the path: no CE0107 after it, CE0140 on the
   next statement, no drop after it. A `!` body that can reach its end is CE0159; a `return`
-  in it is CE0160. A `!` call inside an expression ends its SLIR block but not the path.
-- A call of a `!` function yields `~`. In an expression `!` is still the NOT operator
+  in it is CE0160.
+- A `!` call is legal ONLY as a statement of its own. An argument, a `let`, an operand, a
+  `return` value, a match-arm value, a hole and an expression lambda refuse it (CE0164).
+  So SLIR lowering has one path for it: `Lowering.expr_stmt`. In an expression `!` is still the NOT operator
   (`!b`, `not b`); the grammar token is `BANG`.
 - The fact lives in the declared return (`BuiltinType.NEVER`). Never add a list of names
   that never return; the path predicate reads the callee row (`calls`), so a reader of

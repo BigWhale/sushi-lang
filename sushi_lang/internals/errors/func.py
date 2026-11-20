@@ -181,3 +181,11 @@ _add(ErrorMessage("CE0161", Severity.ERROR,
 _add(ErrorMessage("CE0162", Severity.ERROR,
     "a `!` return has no error channel",
     Category.FUNC, "A function marked `!` never returns, and an error return is a return, so `! | E` is refused. The declaration keeps the `!` and drops the channel. Remove the `| E`, or give the function a return type and keep the channel (docs/design/never-return.md)."))
+
+_add(ErrorMessage("CE0163", Severity.ERROR,
+    "'{name}' is marked `!`, and a '!' function cannot be a value",
+    Category.FUNC, "A function marked `!` never returns. Its value would need the function type `fn(...) -> !`, and `!` is not a type, so the function is not a function value: a `let`, an argument, a field and every other value position refuse its name. Call the function as a statement, or pass a function that returns `~` (docs/design/never-return.md)."))
+
+_add(ErrorMessage("CE0164", Severity.ERROR,
+    "'{name}' is marked `!`, so its call stands only as a statement",
+    Category.FUNC, "A call of a function marked `!` never gives a value, so the call is legal only as a statement of its own, where it ends the path. Every other position refuses it: an argument (also of another `!` call), a `let` initializer, an operand, a `return` value, the value of a `match` arm, a hole of an interpolation and the body of an expression lambda. The call reports nothing more, so the position gives no second diagnostic. Write the call as a statement on its own line (docs/design/never-return.md)."))

@@ -95,6 +95,9 @@ class TypeValidator:
         # The matches of the body whose arms miss a value (CE2040, CE2074): the
         # dead-statement rule does not take one as the end of a path (#886).
         self.uncovered_matches: set['ShirId'] = set()
+        # The calls of the body that are a statement of their own: the one position of a
+        # call of a `!` function (CE0164, docs/design/never-return.md).
+        self.statement_calls: set['ShirId'] = set()
         self.folder: Optional[Folder] = None
         # True when the body holds an error that an earlier pass reported: the collect
         # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
@@ -297,6 +300,7 @@ class TypeValidator:
         self.value_packs = {param.local for param in body.params if param.pack}
         self.refused_locals = set()
         self.uncovered_matches = set()
+        self.statement_calls = set()
         self.folder = Folder(self._constant_value, self.written_type)
         self.refused_before = False
         origin = self.reporter.origin
@@ -317,6 +321,7 @@ class TypeValidator:
             self.value_packs = set()
             self.refused_locals = set()
             self.uncovered_matches = set()
+            self.statement_calls = set()
         if path_faults is not None:
             path_faults(body, uncovered)
         if header_failed:

@@ -1,0 +1,9 @@
+# A call of a `!` function stands only as a statement: an argument refuses it (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0164
+use <sys/process>
+
+fn show(i32 n) i32:
+    return n
+
+fn main() i32:
+    return show(exit(1))

@@ -147,7 +147,10 @@ of each call (`ResolvedCall.never_returns`), and the one path predicate
 such a call ends the path for [`CE0107`](../error-catalog.md#ce0107),
 [`CE0140`](../error-catalog.md#ce0140) and [`CE0159`](../error-catalog.md#ce0159), for the
 joins and the regions of the `borrow` pass, and for SLIR lowering. A `return` in a `!` body
-is [`CE0160`](../error-catalog.md#ce0160). The `effects` pass needs no change: its summary
+is [`CE0160`](../error-catalog.md#ce0160). A `!` call that is not a statement of its own is
+[`CE0164`](../error-catalog.md#ce0164) (`check_call`, over the `statement_calls` that
+`check_expr_stmt` fills), and a `!` function as a value is
+[`CE0163`](../error-catalog.md#ce0163). The `effects` pass needs no change: its summary
 is a union over the statements of a body.
 
 ### Source order decides the holder of a name in one unit

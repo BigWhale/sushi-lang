@@ -132,14 +132,13 @@ def _value(validator: TypeValidator, node: e.GlobalRef, sig: FuncSig, decl: Decl
     """The callee row and the type of the value. A function value of a named function captures
     nothing, so the value owns nothing. A private function of a binary library has its own
     link symbol. A variadic function has no function type (CE2093, decision E6), and a `!`
-    function has none either (docs/design/never-return.md)."""
+    function is no value (CE0163, docs/design/never-return.md)."""
     if any(param.is_variadic for param in sig.params):
         er.emit(validator.reporter, er.ERR.CE2093, node.loc, name=validator.decl_name(node.decl),
                 reason="a variadic function has no function type")
         return None
     if never_returns(sig):
-        er.emit(validator.reporter, er.ERR.CE2093, node.loc, name=validator.decl_name(node.decl),
-                reason="a `!` function has no function type")
+        er.emit(validator.reporter, er.ERR.CE0163, node.loc, name=validator.decl_name(node.decl))
         return None
     function_type = function_type_of_sig(sig)
     if function_type is None:

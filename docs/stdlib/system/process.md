@@ -151,7 +151,8 @@ exit(i32 code) !
 - Never returns. The `!` marker says so ([the never-return design](../../design/never-return.md)).
   A call of `exit` ends the path: a function that returns a value can end with `exit(...)`
   and needs no `return` after it, and a statement after the call is
-  [CE0140](../../error-catalog.md#ce0140).
+  [CE0140](../../error-catalog.md#ce0140). The call stands only as a statement: in a value
+  position it is [CE0164](../../error-catalog.md#ce0164).
 - The C library flushes the open streams, so the output that the program printed is
   written. No drop runs after the call: the system takes back the memory of the process.
 

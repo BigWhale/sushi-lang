@@ -275,7 +275,10 @@ def _reject_literal_size(validator: TypeValidator, value: e.ShirExpr, declared: 
 
 
 def check_expr_stmt(validator: TypeValidator, node: s.ExprStmt) -> None:
-    """A value that the statement drops. A `Result` of a value loses its error: CW2001."""
+    """A value that the statement drops. A `Result` of a value loses its error: CW2001. A
+    call here is the one position of a call of a `!` function (CE0164)."""
+    if isinstance(node.value, e.Call):
+        validator.statement_calls.add(node.value.shir_id)
     ty = visit.check_expr(validator, node.value)
     if not (isinstance(ty, EnumType) and is_instance_of(ty, "Result")):
         return

@@ -1,6 +1,6 @@
 # A `!` function is not a function value: the value would need the type `fn(i32) -> !`
 # (#1325).
-# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_ERROR_CODES_EXACT: CE0163
 use <sys/process>
 
 fn stop(i32 code) !:

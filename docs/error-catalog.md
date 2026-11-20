@@ -965,6 +965,22 @@ The `!` marker says that a call never returns. It is legal in one position: the 
 
 A function marked `!` never returns, and an error return is a return, so `! | E` is refused. Remove the `| E`, or give the function a return type and keep the channel. See [the never-return design](design/never-return.md).
 
+### CE0163 {#ce0163}
+
+**Error** · function
+
+**Message:** `` '{name}' is marked `!`, and a '!' function cannot be a value ``
+
+A function marked `!` never returns. Its value would need the function type `fn(...) -> !`, and `!` is not a type, so the function is not a function value: a `let`, an argument, a field and every other value position refuse its name. Call the function as a statement, or pass a function that returns `~`. See [the never-return design](design/never-return.md).
+
+### CE0164 {#ce0164}
+
+**Error** · function
+
+**Message:** `` '{name}' is marked `!`, so its call stands only as a statement ``
+
+A call of a function marked `!` never gives a value, so the call is legal only as a statement of its own, where it ends the path. Every other position refuses it: an argument (also of another `!` call), a `let` initializer, an operand, a `return` value, the value of a `match` arm, a hole of an interpolation and the body of an expression lambda. The position gives no second diagnostic. Write the call as a statement on its own line. See [the never-return design](design/never-return.md).
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

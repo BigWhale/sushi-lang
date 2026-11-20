@@ -613,8 +613,9 @@ fn main() i32:
   a function type (`fn() -> !`), a lambda and a method refuse it
   ([`CE0161`](error-catalog.md#ce0161)). `! | E` is [`CE0162`](error-catalog.md#ce0162):
   an error return is a return.
-- A call of a `!` function yields `~`. A `!` function is not a function value
-  ([`CE2093`](error-catalog.md#ce2093)), and `main` cannot be `!`
+- A call of a `!` function is legal only as a statement of its own: an argument, a `let`,
+  an operand, a `return` value and a hole refuse it ([`CE0164`](error-catalog.md#ce0164)).
+  A `!` function is not a value ([`CE0163`](error-catalog.md#ce0163)), and `main` cannot be `!`
   ([`CE0106`](error-catalog.md#ce0106)).
 
 ### Parameters

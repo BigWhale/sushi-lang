@@ -3381,9 +3381,9 @@ at the end of the statement. The `Ok` of `run` is the named struct
 extern marked `!`; docs/design/never-return.md) is a `Call` whose block ends in the
 `Unreachable` terminator (8.8). The declared return is the one home of the fact: the
 typecheck row of the call holds it (`ResolvedCall.never_returns`), and SLIR lowering reads
-it at the call (`never_returns`, `slir/lower_calls.py`). The rest of the statement lowers
-into a new block that no path reaches. When the call is the statement, that block ends in
-`Unreachable` too (`Lowering.expr_stmt`), so the drops of the scope do not run. Each module of `STDLIB_EMITTERS` is a one-line forwarder to `emit_stdlib_row`;
+it through the path predicate. Such a call is legal only as a statement (CE0164), so the
+one path is `Lowering.expr_stmt`: the block of the statement ends in `Unreachable` after the
+call, and the drops of the scope do not run. Each module of `STDLIB_EMITTERS` is a one-line forwarder to `emit_stdlib_row`;
 no row has an AST entry.
 
 **A `cstr` parameter of a registry row.** Its operand is a
