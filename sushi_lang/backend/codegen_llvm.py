@@ -151,10 +151,6 @@ class LLVMCodegen:
             self._realloc_func = declare_libc(self.module, "realloc")
         return self._realloc_func
 
-    def create_string_constant(self, name: str, value: str) -> ir.GlobalVariable:
-        """Create a global string constant without requiring a builder context."""
-        return self.string_manager.create_string_constant(name, value)
-
     def _generate_argc_argv_conversion(self, argc: ir.Value, argv: ir.Value) -> ir.Value:
         """Convert C-style argc/argv to Sushi string[] dynamic array."""
         from sushi_lang.backend.runtime.args import generate_argc_argv_conversion
