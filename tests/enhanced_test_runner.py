@@ -32,7 +32,8 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_check_variables, spelling_gate_tripped,
                        DocGateResult, stdlib_doc_gate, stdlib_override_command,
-                       fixtures_only, _spelled_path)
+                       fixtures_only, _spelled_path, PythonLineGateResult,
+                       stdlib_python_line_gate, STDLIB_PYTHON_SRC, STDLIB_PYTHON_BASELINE)
 from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
 from golden_dumps import check_dumps, dump_flags, gate_seed
 
@@ -489,6 +490,8 @@ class TestRunner:
         self._running = threading.local()
         # The stdlib doc-block gate's verdict (#953), set by main before the run.
         self.doc_gate: Optional[DocGateResult] = None
+        # The stdlib Python-line gate's verdict (#1318), set by main before the run.
+        self.python_gate: Optional[PythonLineGateResult] = None
         # The live tqdm bar, or None. Set only while the bar is on screen, so _emit
         # can tell whether output has to be routed around it.
         self._pbar = None
@@ -553,6 +556,12 @@ class TestRunner:
     def doc_gate_failed(self) -> bool:
         return self.doc_gate is not None and not self.doc_gate.passed
 
+    def python_gate_failed(self) -> bool:
+        return self.python_gate is not None and not self.python_gate.passed
+
+    def _python_gate_json(self) -> Optional[dict]:
+        return None if self.python_gate is None else self.python_gate.as_json()
+
     def _doc_gate_json(self) -> Optional[dict]:
         return None if self.doc_gate is None else self.doc_gate.as_json()
 
@@ -562,6 +571,13 @@ class TestRunner:
         colour = (YELLOW if not self.doc_gate.ran
                   else RED if self.doc_gate_failed() else GREEN)
         for line in self.doc_gate.report():
+            print(tint(line, colour))
+
+    def _print_python_gate(self) -> None:
+        if self.python_gate is None:
+            return
+        colour = RED if self.python_gate_failed() else GREEN
+        for line in self.python_gate.report():
             print(tint(line, colour))
 
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
@@ -592,9 +608,11 @@ class TestRunner:
                 "selected_nothing": True,
                 "selection": selection,
                 "stdlib_doc_gate": self._doc_gate_json(),
+                "stdlib_python_gate": self._python_gate_json(),
             })
             if not self.json_output:
                 self._print_doc_gate()
+                self._print_python_gate()
                 print(f"No fixture matched this selection: {selection}.")
                 print("A run that covered nothing is a failure, not a pass.")
             return {}
@@ -1543,6 +1561,7 @@ class TestRunner:
             ],
             "leak_skips_allowed": self.allow_leak_skips,
             "stdlib_doc_gate": self._doc_gate_json(),
+            "stdlib_python_gate": self._python_gate_json(),
             "blessed": [_spelled_path(p, self.project_root) for p in self.blessed_files()],
         }
         self._publish_json(json_output)
@@ -1579,13 +1598,16 @@ class TestRunner:
                 else:
                     print("    " + tint("Excused by --allow-leak-skips.", YELLOW))
             self._print_doc_gate()
+            self._print_python_gate()
             for line in self._bless_report():
                 print(line)
 
             if self.doc_gate_failed():
                 print("\n" + tint("The stdlib doc-block gate failed!", RED, BOLD))
+            if self.python_gate_failed():
+                print("\n" + tint("The stdlib Python-line gate failed!", RED, BOLD))
             if failed_tests == 0 and not unexcused:
-                if not self.doc_gate_failed():
+                if not self.doc_gate_failed() and not self.python_gate_failed():
                     print("\n" + tint("All tests passed! ✓", GREEN, BOLD))
             elif failed_tests == 0:
                 print("\n" + tint(
@@ -1807,6 +1829,9 @@ def main():
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
                                           leaks_only=args.leaks_only,
                                           fixtures_only=fixtures_only(args))
+        # #1318: the Python stdlib can shrink, it cannot grow. No compile.
+        runner.python_gate = stdlib_python_line_gate(project_root / STDLIB_PYTHON_SRC,
+                                                     project_root / STDLIB_PYTHON_BASELINE)
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # After the main run: the golden dumps again, under a second hash seed.
@@ -1821,7 +1846,8 @@ def main():
     # at all is the other (#765), and an empty result dict would otherwise read as
     # "nothing failed".
     failed_count = sum(1 for r in results.values() if not r.total_success)
-    if runner.selected_nothing or runner.doc_gate_failed() or not seed_gate.passed:
+    if (runner.selected_nothing or runner.doc_gate_failed() or runner.python_gate_failed()
+            or not seed_gate.passed):
         return 1
     return 0 if failed_count == 0 and not runner.unexcused_leak_skips() else 1
 
