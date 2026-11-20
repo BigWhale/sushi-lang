@@ -1,0 +1,9 @@
+# A ptr offset is of an integer type: a bool is CE2006, also for `store_ptr` (#1317).
+# EXPECT_ERROR_CODES_EXACT: CE2006
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr p = libc.malloc(16)
+    p.store_ptr(true, p)
+    return 0

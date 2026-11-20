@@ -28,13 +28,15 @@ MAYBE_PTR = "Maybe@(ptr)"
 
 @dataclass(frozen=True)
 class PtrMethod:
-    """One method: its parameters after the receiver, and what it answers."""
+    """One method: its parameters after the receiver, and what it answers. The first
+    parameter is the byte offset: an index position (docs/adr/0001), which takes any
+    integer type and is `i64` after SLIR widens it."""
     params: tuple[Type, ...]
     returns: Type | str
 
 
 def _table() -> Mapping[str, PtrMethod]:
-    offset = BuiltinType.I32
+    offset = BuiltinType.I64
     rows: dict[str, PtrMethod] = {}
     for suffix, ty in FOREIGN_PTR_WIDTHS.items():
         rows[f"load_{suffix}"] = PtrMethod((offset,), ty)

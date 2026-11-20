@@ -6,6 +6,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A `ptr` offset takes any integer type, as an index does.** The byte offset of
+  `load_*`, `store_*`, `load_ptr`, `store_ptr`, `offset` and `to_string` follows the index
+  rule of ADR 0001: any integer type, a literal takes `i64`, and the value becomes an `i64`
+  before the access (sign extension for a signed type, zero extension for an unsigned
+  type). There is no bounds check. Before, the offset was an `i32`, so an offset above
+  2 GiB was not possible (#1317).
+
 - **`chdir` and `getcwd` of `<sys/process>` answer `FileError`, and a failed `chdir` is an
   `Err`.** The signatures are `chdir(string path) i32 | FileError` and
   `getcwd() string | FileError` (before, `ProcessError`). The variant comes from `errno`

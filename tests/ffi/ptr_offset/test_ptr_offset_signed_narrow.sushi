@@ -1,0 +1,17 @@
+# A signed narrow ptr offset is sign-extended: the i16 -8 from the middle is 8 bytes back (#1317).
+# EXPECT_STDOUT_EXACT: "13\n13\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.malloc(32)
+    p.store_i64(8, 13)
+    let ptr middle = p.offset(16)
+    let i16 back = -8
+    println("{middle.load_i64(back)}")
+    println("{p.load_i64(-8 + 16)}")
+    libc.free(p)
+    return 0

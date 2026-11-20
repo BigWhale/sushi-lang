@@ -11,8 +11,9 @@ The reference of the target answers the function type of the declared parameters
 `errno()` is an intrinsic with no argument that answers an `i32`. A unit that declares no
 `unsafe external` block cannot call it (CE5014).
 
-A method of a `ptr` is a `Builtin` callee of the `foreign_ptr` family: each argument at the
-type of its row, and the answer of its row (`load_ptr` answers the interned `Maybe@(ptr)`).
+A method of a `ptr` is a `Builtin` callee of the `foreign_ptr` family: the byte offset is an
+index position (any integer type, docs/adr/0001), each other argument is at the type of its
+row, and the call answers the type of its row (`load_ptr` answers the interned `Maybe@(ptr)`).
 Any other method of a `ptr` is CE5011. An extern variable behind the alias of its block
 (`libc.optind`) answers its declared type, and its global row is its link name. A write of
 one is CE5016.
@@ -32,7 +33,9 @@ from sushi_lang.semantics.method_effects import FOREIGN_PTR_FAMILY
 from sushi_lang.semantics.param_modes import mode_of_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
-    Parameters, check_arguments, marked_type, record_reads, reject_misplaced_spread)
+    Parameters, argument_span, check_arguments, marked_type, record_reads,
+    reject_misplaced_spread)
+from sushi_lang.semantics.passes.types.arrays import check_index_operand, reject_non_index
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Extern, Intrinsic
@@ -107,9 +110,9 @@ def check_errno_call(validator: TypeValidator, node: e.Call, ref: e.GlobalRef) -
 
 def check_foreign_ptr_call(validator: TypeValidator, node: e.Call, target: e.Dotted,
                            receiver: Type) -> Optional[Type]:
-    """`p.m(args)` on a `ptr`: the `Builtin` callee of the family, each argument at the type
-    of its row (CE2009 for a count, CE2006 for a type), and the answer of its row. A method
-    that the family does not hold is CE5011."""
+    """`p.m(args)` on a `ptr`: the `Builtin` callee of the family, the offset as an index
+    position, each other argument at the type of its row (CE2009 for a count, CE2006 for a
+    type), and the answer of its row. A method that the family does not hold is CE5011."""
     row = FOREIGN_PTR_METHODS.get(target.name)
     if row is None:
         er.emit(validator.reporter, er.ERR.CE5011, node.loc, method=target.name)
@@ -121,11 +124,26 @@ def check_foreign_ptr_call(validator: TypeValidator, node: e.Call, target: e.Dot
     declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
     check_arguments(validator, f"{display_type(receiver)}.{target.name}", row.params,
                     node.args, node.loc, mismatch_code=er.ERR.CE2006,
-                    arity_code=er.ERR.CE2009, declared=declared)
+                    arity_code=er.ERR.CE2009, declared=declared,
+                    typed=_offset_typed(validator, node.args, row.params[0]))
     if isinstance(row.returns, str):
         return ensure_maybe_type_in_table(validator.enum_table, ForeignPtrType(),
                                           struct_table=validator.struct_table.by_name)
     return row.returns
+
+
+def _offset_typed(validator: TypeValidator, args: list[e.Arg],
+                  offset: Type) -> dict[int, Optional[Type]]:
+    """The offset, the first argument, through the one rule of an index position. An
+    accepted offset answers the offset type of the row, so the argument check gives it its
+    convention; a refused one answers None, and the refusal is already reported."""
+    if not args or args[0].bloom:
+        return {}
+    arg = args[0]
+    got = marked_type(arg, check_index_operand(validator, arg.value))
+    refused = got is None or reject_non_index(validator, arg.value, got, argument=1,
+                                              span=argument_span(arg))
+    return {0: None if refused else offset}
 
 
 def check_extern_variable(validator: TypeValidator, node: e.GlobalRef,

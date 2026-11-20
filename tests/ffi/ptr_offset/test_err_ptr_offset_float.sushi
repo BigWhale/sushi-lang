@@ -1,0 +1,10 @@
+# A ptr offset is of an integer type: an f64 is CE2006 (#1317).
+# EXPECT_ERROR_CODES_EXACT: CE2006
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr p = libc.malloc(8)
+    let f64 off = 4.0
+    let i32 v = p.load_i32(off)
+    return v

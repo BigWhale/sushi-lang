@@ -469,7 +469,9 @@ unit, which take and return Sushi values.
 C answers through memory: `clock_gettime` fills a `struct timespec`, `stat` fills a
 `struct stat`, `getaddrinfo` builds a list of `addrinfo` records. Inside the unit that
 declares the `unsafe external` block, a `ptr` has a closed set of methods that read and
-write the memory behind it. The offset is a byte offset, an `i32` like every index.
+write the memory behind it. The offset is a byte offset. It is an index position: it takes
+a value of any integer type, and a literal there takes `i64`. The value becomes an `i64`
+before the access (a signed type is sign-extended, an unsigned type is zero-extended).
 
 | Method | Answers | Meaning |
 |---|---|---|
