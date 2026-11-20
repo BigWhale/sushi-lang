@@ -64,6 +64,21 @@ STDLIB_BITCODE_UNITS: tuple[StdlibBitcodeUnit, ...] = (
 )
 
 
+def prune_stale_bitcode(platform_dir: Path, written: set[str]) -> None:
+    """Delete each `.bc` under `platform_dir` that is not in `written`, then each empty directory.
+
+    The linker finds the units on disk, so a `.bc` of a removed row must not stay (#1324).
+    """
+    if not platform_dir.is_dir():
+        return
+    for path in platform_dir.rglob("*.bc"):
+        if path.relative_to(platform_dir).as_posix() not in written:
+            path.unlink()
+    for path in sorted(platform_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
+
+
 def build_all(platform_name: str, quiet: bool = False) -> None:
     """Build every stdlib unit for the given platform into dist/{platform_name}/."""
     init_llvm()
@@ -82,6 +97,7 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
             print(f"Building {row.unit}...")
         module = importlib.import_module(row.generator).generate_module_ir()
         defined.update(compile_module_to_bc(module, platform_dir / row.output, quiet=quiet))
+    prune_stale_bitcode(platform_dir, {row.output for row in STDLIB_BITCODE_UNITS})
 
     # Note: core/results and core/maybe use inline emission only
     # They are not built as stdlib units because monomorphizing for
