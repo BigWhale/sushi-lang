@@ -1,0 +1,15 @@
+# A ptr offset takes an i64, as an index does (docs/adr/0001, #1317).
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.malloc(16)
+    let i64 off = 8
+    p.store_i64(off, 42)
+    println("{p.load_i64(off)}")
+    libc.free(p)
+    return 0

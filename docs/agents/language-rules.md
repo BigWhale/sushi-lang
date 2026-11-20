@@ -250,7 +250,8 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   `i64`. A float is CE2121 (CE2006 as a method argument). The bounds check compares the
   index and the length at 64 bits, so a negative index and an index of 2^32 both trap
   (RE2020). A range bound (`a..b`) is no index position (the range has the type of its
-  bounds), and a `ptr` offset is no index position. `len()`, `size()`, `capacity()`,
+  bounds). A `ptr` offset (`p.load_i64(off)`, `p.offset(n)`) is an index position with no
+  bounds check. `len()`, `size()`, `capacity()`,
   `count`, `tombstone_count()` answer `i64`, and `index_of`, `index_of_from`, `find` and
   `find_last` answer `Maybe@(i64)`; `let i32 n = xs.len()` needs `as i32` (ADR 0001).
 - **A bool prints as `true`/`false`** everywhere: a hole, `print`, `println` and a constant.

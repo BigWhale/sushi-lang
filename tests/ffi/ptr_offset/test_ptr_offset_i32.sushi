@@ -1,0 +1,15 @@
+# A ptr offset still takes an i32 (#1317).
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.malloc(16)
+    let i32 off = 4
+    p.store_i32(off, 7)
+    println("{p.load_i32(off)}")
+    libc.free(p)
+    return 0

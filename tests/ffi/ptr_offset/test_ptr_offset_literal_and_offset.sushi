@@ -1,0 +1,21 @@
+# A literal ptr offset takes i64, and `offset` takes an i64 count (#1317).
+# EXPECT_STDOUT_EXACT: "21\n21\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn strcpy(ptr dst, string src) ptr = "strcpy"
+
+fn main() i32:
+    let ptr p = libc.malloc(64)
+    p.store_i64(24, 21)
+    let i64 n = 24
+    println("{p.offset(n).load_i64(0)}")
+    let ptr far = p.offset(3000000000)
+    println("{far.load_i64(-2999999976)}")
+    let i64 at = 32
+    libc.strcpy(p.offset(at), "Mostly Harmless")
+    println(p.to_string(at))
+    libc.free(p)
+    return 0

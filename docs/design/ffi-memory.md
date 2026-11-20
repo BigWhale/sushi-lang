@@ -59,8 +59,9 @@ at a byte offset, `load_ptr` (a `Maybe@(ptr)`, by the null rule above), `store_p
 method family `foreign_ptr` (`passes/types/method_registry.py`) and the backend handler
 `try_emit_foreign_ptr_method` both read. Every other method on a `ptr` stays [`CE5011`](../error-catalog.md#ce5011).
 
-- **A byte offset, an `i32`.** A C struct is read at the offsets `<sys/platform>` states.
-  The offset is an `i32` position like every index (#870).
+- **A byte offset, an index position.** A C struct is read at the offsets `<sys/platform>`
+  states. The offset takes any integer type and becomes an `i64`, as an index does
+  (docs/adr/0001, #1317). A `ptr` has no length, so there is no bounds check.
 - **`align 1`.** A byte offset says nothing about alignment, so every load and store is
   unaligned-safe.
 - **No gate of its own.** The methods need a `ptr` receiver, and only a unit with a block

@@ -1,0 +1,19 @@
+# An unsigned ptr offset is zero-extended: the u8 200 is the byte offset 200, not -56 (#1317).
+# EXPECT_STDOUT_EXACT: "99\n99\n5\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a buffer for the test":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.malloc(256)
+    let u8 off = 200
+    p.store_u8(off, 99)
+    println("{p.load_u8(off)}")
+    println("{p.load_u8(200)}")
+    let u32 wide = 8
+    p.store_i32(wide, 5)
+    println("{p.load_i32(wide)}")
+    libc.free(p)
+    return 0
