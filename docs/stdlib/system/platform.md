@@ -109,26 +109,20 @@ sushi_stdlib/src/_platform/
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
 │   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
 │   ├── net.py         # the socket calls
-│   ├── process.py     # tmpfile/fileno/waitpid/
-│                      #   posix_spawnp + file_actions helpers/environ
 ├── darwin/            # macOS
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
 │   ├── net.py         # macOS socket constants and structure layouts
-│   ├── process.py     # re-exports posix/process.py
 │   └── stdio.py       # the __stderrp handle name
-└── linux/             # Linux: the same four files
+└── linux/             # Linux: the same three files
     ├── files.py       # Linux O_CREAT/O_TRUNC bit values
     ├── net.py         # Linux socket constants and structure layouts
-    ├── process.py
     └── stdio.py       # the stderr handle name
 ```
 
 There is no `windows/` directory.
 
-Each of `darwin/` and `linux/` has one file per platform module. Most of them are thin
-re-export shims over `posix/`, because those calls are identical POSIX libc functions on
-both operating systems: `process.py` re-exports `posix/`
-unchanged. Three modules have real, distinct darwin/linux content: `stdio` (the stderr
+Each of `darwin/` and `linux/` has one file per platform module. Three modules have real,
+distinct darwin/linux content: `stdio` (the stderr
 global symbol name), `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`) and
 `net` (the socket constants and structure layouts). The clock ids of `<time>` are in
 `<sys/platform>`, below.
@@ -167,16 +161,15 @@ branch.
 
 ### Usage in Standard Library Modules
 
-**Example:** `sushi_stdlib/src/sys/process/functions.py` (backs the `sys/process` unit)
+**Example:** `sushi_stdlib/src/net/dns.py` (backs the `net/socket` unit)
 
 ```python
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-def generate_run(module: ir.Module) -> None:
-    """Generate run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>."""
-    plat = get_platform_module('process')
-    spawn = plat.declare_posix_spawnp(module)
-    # ... builds the sushi_run IR using the platform-specific declarations ...
+def generate_resolve(module: ir.Module) -> None:
+    platform_net = get_platform_module('net')
+    getaddrinfo_fn = platform_net.declare_getaddrinfo(module)
+    # ... builds the IR with the platform-specific declarations ...
 ```
 
 `sushi_stdlib/src/error_emission.py` follows the identical pattern
@@ -214,8 +207,9 @@ same names of the same types in the same order:
 - the socket constants: families, types, levels, options, the `addrinfo` and `sockaddr`
   offsets, and the SIGPIPE pair (`SO_NOSIGPIPE`, `MSG_NOSIGNAL`, 0 where a platform has
   none);
-- the errno numbers the standard library maps to an error variant, and `ENOMEM`, which
-  makes `setenv` of `<sys/env>` stop the program.
+- the errno numbers the standard library maps to an error variant, `ENOMEM`, which
+  makes `setenv` of `<sys/env>` stop the program, and `EINTR`, which makes `run` of
+  `<sys/process>` wait again for the child.
 
 ```sushi
 use <sys/platform>
@@ -274,8 +268,7 @@ sushi_stdlib/dist/
 ├── darwin/                    # macOS builds
 │   ├── collections/strings.bc
 │   ├── io/files.bc
-│   ├── net/socket.bc
-│   └── sys/process.bc
+│   └── net/socket.bc
 └── linux/                     # Linux builds — same unit layout as darwin/, built
     └── ...                    #   separately on a Linux host (see Cross-Compilation below)
 ```
@@ -338,8 +331,6 @@ error rather than silently picking a wrong platform's bitcode.
 - File I/O: `stat`/`access`/`unlink`/`rename`/`open`/`read`/`write`/`close`/`mkdir`/
   `rmdir` (via `posix/files.py`), plus macOS-specific `O_CREAT`/`O_TRUNC` bit values
   (`darwin/files.py`)
-- Process control: `tmpfile`/`fileno`/
-  `waitpid`/`posix_spawnp` (+ file-action helpers)/`environ` (via `posix/process.py`)
 - the stderr handle named `__stderrp` (macOS's double-underscore libc symbol name,
   distinct from Linux — `darwin/stdio.py`)
 - BSD semantics for system calls
@@ -355,7 +346,7 @@ error rather than silently picking a wrong platform's bitcode.
 `sushi_stdlib/src/_platform/posix/` for everything that is not Linux-specific.
 
 **Features:**
-- File I/O and process control — same
+- File I/O — same
   `posix/` implementations macOS uses (identical libc surface on both)
 - Linux-specific `O_CREAT`/`O_TRUNC` bit values (`linux/files.py` — the numeric flag
   values differ from macOS's even though the function signatures match)
@@ -384,7 +375,7 @@ hold a third platform, but no Windows-specific code path exists.
 ## Adding Platform-Specific Functionality
 
 The following steps describe the actual pattern used by the existing
-`files`, `process`, and `stdio` modules. Only Windows support is out of reach
+`files`, `net`, and `stdio` modules. Only Windows support is out of reach
 today — there is nothing to route to.
 
 ### Step 1: Default to `posix/`, Only Split Out What Actually Differs

@@ -109,8 +109,8 @@ generic form (`error DecodeError@(T)`), the derived `Eq`, `Ord`, `Display`, `has
 `clone`, extension methods, perk implementations, `Drop`, visibility, namespaces,
 libraries, the `docs` pass and the `unused` lint.
 
-The `collect` pass gives the flag to six of the eight predefined enums: `StdError`,
-`IoError`, `FileError`, `NetError`, `ProcessError` and `EnvError`.
+The `collect` pass gives the flag to five of the seven predefined enums: `StdError`,
+`IoError`, `FileError`, `NetError` and `EnvError`.
 `FileMode` and `SeekFrom` are not errors and stay plain enums.
 
 ### 2.3 An error type is data
@@ -513,7 +513,7 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
   the keyword. There is no second node class.
 - **`collect`.** The flag goes on the `EnumType`, and on a generic template so that each
   instance carries it. The table of predefined enums (`semantics/predefined_types.py`)
-  sets it on the seven predefined error types.
+  sets it on the five predefined error types.
 - **E3.** One predicate, "is an error type". It is called from `validate_error_channel`
   (`passes/types/signatures.py`), where [CE2084](../error-catalog.md#ce2084) and CE2086 were emitted before this work, from the
   written-type walk (`validate_type_name`, `passes/types/utils.py`), and from the

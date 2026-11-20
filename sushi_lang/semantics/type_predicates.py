@@ -74,7 +74,7 @@ def is_instance_of(ty: object, *bases: str) -> bool:
 def is_error_type(ty: object) -> bool:
     """May `ty` be the `E` of a `Result`? Only an enum declared with `error` may (E3).
 
-    The seven predefined error enums carry the same flag, and an instance of a generic
+    The five predefined error enums carry the same flag, and an instance of a generic
     error type carries it from its template. The caller resolves a name first and does
     not ask about a type parameter, which is judged at each instance
     (docs/design/error-conversion.md sections 2.4 and 2.5; `semantics/error_types.py`).

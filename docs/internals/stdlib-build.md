@@ -45,8 +45,6 @@ sushi_lang/sushi_stdlib/
 │   │                            # (is_empty()/strcmp/strlen intrinsics needed pre-`use`)
 │   ├── io/
 │   │   └── files/        # -> io/files.bc
-│   ├── sys/
-│   │   └── process/      # -> sys/process.bc (run, exit; the rest is src_sushi/sys/process.sushi)
 │   ├── net/              # -> net/socket.bc
 │   ├── _platform/         # per-OS constants (darwin/, linux/, posix/) used by
 │   │                       # the generators above via common.py
@@ -56,7 +54,6 @@ sushi_lang/sushi_stdlib/
     │   ├── collections/strings.bc
     │   ├── io/files.bc
     │   ├── net/socket.bc
-    │   ├── sys/process.bc
     │   ├── symbols.json         # the symbols that the .bc files define
     │   └── .build_fingerprint   # marker written by stdlib_builder.py
     └── linux/              # same layout; only produced by building on Linux

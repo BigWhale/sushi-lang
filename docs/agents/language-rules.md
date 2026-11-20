@@ -54,7 +54,7 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - `??` takes a `Result` ONLY (CE2507); a `Maybe` writes `m.or_err(nom e)??`. Two error types
   need a declared conversion `extend A as B:` (CE2511 when there is none; a chain is never
   followed). The `E` of every Result is an error type (CE2084): an `error` enum or one of the
-  seven predefined error types.
+  five predefined error types.
 - Conversion faults: only the unit that declares the TARGET may declare it (CE2519, so none
   into `StdError`), two non-generic error types (CE2520), no identity (CE2521), two of one pair
   (CE0101). `e as B`, `r.map_err(f)` and `??` on a borrow of an owning error are CE2411 (help
@@ -194,7 +194,7 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - **Libraries** ([`docs/libraries.md`](../libraries.md)): LOADING is transitive and
   VISIBILITY is per unit; two versions of one library in one build are CE3519.
 - **Variadics** ([`variadics.md`](../design/variadics.md)): bloom `arr...` forwards a bare
-  array variable and LENDS it, for every `...T` (a Sushi function and `run` alike): the caller
+  array variable and LENDS it, for every `...T` (`run` of `<sys/process>` is one): the caller
   keeps the source and can read it after the call. So a parameter with no `nom` and `main`'s
   `args` can be bloomed. A consuming use of the `...T` parameter in the callee is CE2411.
 - **Tuples** ([`tuples.md`](../design/tuples.md)): no tuple `const`/`var` (by design), no

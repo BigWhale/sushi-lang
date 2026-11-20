@@ -47,13 +47,7 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     # stdio
     "fprintf": _c("int", "FILE*", "const char*", var_arg=True),
     "fwrite": _c("size_t", "const void*", "size_t", "size_t", "FILE*"),
-    "fread": _c("size_t", "void*", "size_t", "size_t", "FILE*"),
-    "fclose": _c("int", "FILE*"),
-    "fseek": _c("int", "FILE*", "long", "int"),
-    "ftell": _c("long", "FILE*"),
     "setvbuf": _c("int", "FILE*", "char*", "int", "size_t"),
-    "tmpfile": _c("FILE*"),
-    "fileno": _c("int", "FILE*"),
     # Files and descriptors
     "stat": _c("int", "const char*", "struct stat*"),
     "lstat": _c("int", "const char*", "struct stat*"),
@@ -74,14 +68,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "opendir": _c("DIR*", "const char*"),
     "readdir": _c("struct dirent*", "DIR*"),
     "closedir": _c("int", "DIR*"),
-    # Process
-    "waitpid": _c("pid_t", "pid_t", "int*", "int"),
-    "posix_spawnp": _c("int", "pid_t*", "const char*", "const posix_spawn_file_actions_t*",
-                       "const posix_spawnattr_t*", "char**", "char**"),
-    "posix_spawn_file_actions_init": _c("int", "posix_spawn_file_actions_t*"),
-    "posix_spawn_file_actions_adddup2": _c("int", "posix_spawn_file_actions_t*",
-                                           "int", "int"),
-    "posix_spawn_file_actions_destroy": _c("int", "posix_spawn_file_actions_t*"),
     # Sockets
     "socket": _c("int", "int", "int", "int"),
     "connect": _c("int", "int", "const struct sockaddr*", "socklen_t"),

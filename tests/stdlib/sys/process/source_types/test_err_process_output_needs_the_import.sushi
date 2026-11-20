@@ -1,0 +1,8 @@
+# `ProcessOutput` is a declaration of `<sys/process>`, so a unit with no import cannot
+# name it.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+fn code(ProcessOutput out) i32:
+    return out.exit_code
+
+fn main() i32:
+    return 0

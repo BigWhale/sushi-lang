@@ -17,8 +17,7 @@ or field 1:
 - a GEP `[0, 0]` or `[0, 1]` with the same names.
 
 The scan reads names, so it cannot see a site that names nothing; `KNOWN_OTHER` lists the
-sites that read field 0 or 1 of a struct that is NOT a descriptor. `test_run_generator_layouts.py`
-checks the `run()` generator directly.
+sites that read field 0 or 1 of a struct that is NOT a descriptor.
 """
 from __future__ import annotations
 

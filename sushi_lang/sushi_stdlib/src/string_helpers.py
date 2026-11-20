@@ -1,8 +1,7 @@
 """String Helper Functions"""
 
 import llvmlite.ir as ir
-from sushi_lang.backend.string_layout import string_size, string_value
-from .libc_declarations import declare_malloc
+from sushi_lang.backend.string_layout import string_value
 
 
 ALLOC_FAIL_BLOCK = "alloc_fail"
@@ -53,35 +52,3 @@ def cstr_to_fat_pointer_with_len(
 ) -> ir.Value:
     """Convert C string to fat pointer struct using pre-computed length."""
     return string_value(builder, c_str, length, owned, name="str_complete")
-
-
-def fat_pointer_to_cstr(
-    module: ir.Module,
-    builder: ir.IRBuilder,
-    fat_ptr: ir.Value
-) -> ir.Value:
-    """Convert a string value to a null-terminated C string."""
-    from .libc_declarations import declare_memcpy
-
-    i8 = ir.IntType(8)
-    i32 = ir.IntType(32)
-    i64 = ir.IntType(64)
-
-    malloc_fn = declare_malloc(module)
-    memcpy_fn = declare_memcpy(module)
-
-    data = builder.extract_value(fat_ptr, 0, name="data")
-    size = string_size(builder, fat_ptr, name="size")
-
-    one = ir.Constant(i32, 1)
-    cstr_size = builder.add(size, one, name="cstr_size")
-    cstr_size_i64 = builder.zext(cstr_size, i64, name="cstr_size_i64")
-    cstr = emit_checked_malloc(builder, malloc_fn, cstr_size_i64, name="cstr")
-
-    is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [cstr, data, builder.zext(size, ir.IntType(64)), is_volatile])
-
-    null_pos = builder.gep(cstr, [size], name="null_pos")
-    builder.store(ir.Constant(i8, 0), null_pos)
-
-    return cstr

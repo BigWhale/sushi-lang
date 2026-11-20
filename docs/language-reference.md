@@ -2222,8 +2222,8 @@ exhaustiveness, payloads, the generic form (`error DecodeError@(T)`), the derive
 libraries. An error type is ordinary data in every position: a field, a payload, a
 parameter, a `let`, an array element and a generic argument.
 
-The six predefined error types are `StdError`, `IoError`, `FileError`, `NetError`,
-`ProcessError` and `EnvError`. `FileMode` and `SeekFrom` are plain enums.
+The five predefined error types are `StdError`, `IoError`, `FileError`, `NetError` and
+`EnvError`. `FileMode` and `SeekFrom` are plain enums.
 
 **The `E` of every `Result@(T, E)` is an error type**, in both spellings (`T | E` is
 `Result@(T, E)`) and in every position: a signature of a function, a method, a perk, a

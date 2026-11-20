@@ -59,7 +59,6 @@ class StdlibBitcodeUnit:
 STDLIB_BITCODE_UNITS: tuple[StdlibBitcodeUnit, ...] = (
     StdlibBitcodeUnit("collections/strings", "sushi_lang.sushi_stdlib.src.collections.strings"),
     StdlibBitcodeUnit("io/files", "sushi_lang.sushi_stdlib.src.io.files"),
-    StdlibBitcodeUnit("sys/process", "sushi_lang.sushi_stdlib.src.sys.process"),
     StdlibBitcodeUnit("net/socket", "sushi_lang.sushi_stdlib.src.net"),
 )
 

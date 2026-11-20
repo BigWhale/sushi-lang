@@ -1,26 +1,67 @@
 ##:
-sys/process -- the Sushi half of the process module.
+sys/process -- the process module.
 
-The module has two halves. `run` is compiled into the stdlib bitcode. The functions of
-this file call `exit()`, `getpid()`, `getuid()`, `chdir()` and `getcwd()` of the C library
-through an `unsafe external` block. One `use <sys/process>` gives both halves.
+The functions of this file call the C library through an `unsafe external` block: `exit()`,
+`getpid()`, `getuid()`, `chdir()` and `getcwd()`, and for `run` the functions
+`posix_spawnp()` and `waitpid()` and two `tmpfile()` streams.
 
 `chdir` and `getcwd` give `FileError` on a failure, with the variant from `errno()`
 (`FileError.from_errno` of `<io/error>`). This module re-exports `<io/error>`, so
-`use <sys/process>` alone can name `FileError`.
+`use <sys/process>` alone can name `FileError`. `run` gives `ProcessError` when the
+program does not start or a signal stops it.
 :##
 
 public use <io/error>
 use <sys/platform>
 
-unsafe external "C" as libc because "the exit, the process id, the user id and the working directory":
+unsafe external "C" as libc because "the exit, the ids, the working directory and the child processes of the C library":
     fn exit(i32 code) ! = "exit"
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"
+    fn strdup(string s) ptr = "strdup"
     fn getpid() i32 = "getpid"
     fn getuid() i32 = "getuid"
     fn chdir(string path) i32 = "chdir"
     fn getcwd(ptr buf, i64 size) Maybe@(string) = "getcwd"
+    fn tmpfile() Maybe@(ptr) = "tmpfile"
+    fn fileno(ptr stream) i32 = "fileno"
+    fn fclose(ptr stream) i32 = "fclose"
+    fn fseek(ptr stream, i64 offset, i32 whence) i32 = "fseek"
+    fn ftell(ptr stream) i64 = "ftell"
+    fn fread(poke u8[] buf, i64 size, i64 count, ptr stream) i64 = "fread"
+    fn posix_spawn_file_actions_init(ptr actions) i32 = "posix_spawn_file_actions_init"
+    fn posix_spawn_file_actions_adddup2(ptr actions, i32 fd, i32 newfd) i32 = "posix_spawn_file_actions_adddup2"
+    fn posix_spawn_file_actions_destroy(ptr actions) i32 = "posix_spawn_file_actions_destroy"
+    fn posix_spawnp(ptr pid, string file, ptr actions, Maybe@(ptr) attrs, ptr argv, Maybe@(ptr) envp) i32 = "posix_spawnp"
+    fn waitpid(i32 pid, ptr status, i32 options) i32 = "waitpid"
+    ##: The environment of this process, the `envp` of `posix_spawnp`. :##
+    var Maybe@(ptr) environ = "environ"
+
+##:
+Why `run` did not give the output of a program.
+
+A program that exits with a code that is not 0 is no error: the code is in
+`ProcessOutput.exit_code`.
+:##
+public error ProcessError:
+    ##: The program did not start: the command is not on `PATH`, or no capture stream opened. :##
+    SpawnFailed
+    ##: A signal stopped the program. :##
+    SignalReceived
+
+##:
+What a program that `run` started gave back when it exited.
+:##
+public struct ProcessOutput:
+    ##: The exit code of the program, from 0 to 255. :##
+    i32 exit_code
+    ##: All the bytes that the program wrote to its standard output. :##
+    string stdout_text
+    ##: All the bytes that the program wrote to its standard error. :##
+    string stderr_text
+
+##: The bytes of the opaque `posix_spawn_file_actions_t`, more than each platform needs. :##
+const i64 FILE_ACTIONS_BYTES = 128
 
 ##:
 Ends the program with an exit code. The call never returns.
@@ -115,3 +156,128 @@ public fn getcwd() string | FileError:
     match nom path:
         Maybe.Some(nom p) -> return Result.Ok(p)
         Maybe.None -> return Result.Err(FileError.from_errno(code))
+
+##:
+Reads all the bytes of a capture stream, from the start.
+
+A `tmpfile()` stream can always seek, so a failure of `fseek`, `ftell` or `fread` stops
+the program with RE2026.
+
+- Parameter stream: The capture stream.
+- Returns: The bytes of the stream, as a string.
+:##
+fn read_capture(ptr stream) string:
+    let i32 at_end = libc.fseek(stream, 0, SEEK_END)
+    let i64 size = libc.ftell(stream)
+    let i32 at_start = libc.fseek(stream, 0, SEEK_SET)
+    assert(at_end == 0 and at_start == 0, "fseek of a capture stream failed")
+    assert(size >= 0, "ftell of a capture stream failed")
+    let u8[] buf = from([0; size])
+    let i64 got = libc.fread(poke buf, 1, size, stream)
+    assert(got == size, "fread of a capture stream failed")
+    return string.from_bytes(nom buf)
+
+##:
+Makes the C argument vector: the command, each argument, and a NULL at the end.
+
+- Parameter cmd: The command, element 0.
+- Parameter args: The arguments.
+- Returns: A C array of `args.len() + 2` pointers. Free it with `free_argv`.
+:##
+fn make_argv(string cmd, string[] args) ptr:
+    let i64 count = args.len() + 1
+    let ptr argv = libc.malloc((count + 1) * 8)
+    argv.store_ptr(0, libc.strdup(cmd))
+    foreach(i in 0..args.len()):
+        argv.store_ptr((i + 1) * 8, libc.strdup(args[i]))
+    argv.store_i64(count * 8, 0)
+    return argv
+
+##:
+Frees a C argument vector that `make_argv` made.
+
+- Parameter argv: The argument vector.
+- Parameter count: The count of the strings in it, without the NULL.
+:##
+fn free_argv(ptr argv, i64 count) ~:
+    foreach(i in 0..count):
+        match argv.load_ptr(i * 8):
+            Maybe.Some(p) -> libc.free(p)
+            Maybe.None -> ~
+    libc.free(argv)
+
+##:
+Waits for a child process. A wait that a signal stops is done again.
+
+- Parameter pid: The process id of the child.
+- Returns: The wait status of the child.
+:##
+fn wait_child(i32 pid) i32:
+    let ptr status = libc.malloc(4)
+    let i32 rc = libc.waitpid(pid, status, 0)
+    let i32 code = errno()
+    while (rc == -1 and code == EINTR):
+        rc := libc.waitpid(pid, status, 0)
+        code := errno()
+    let i32 value = status.load_i32(0)
+    libc.free(status)
+    assert(rc == pid, "waitpid failed")
+    return value
+
+##:
+Starts a program and gives its exit code, its standard output and its standard error.
+
+The function searches `PATH` for `cmd` (`posix_spawnp`) and gives `cmd` and `args` to the
+program as its argument vector, with no shell. The program gets the environment of this
+process. Two `tmpfile()` streams hold the standard output and the standard error, so a
+program with much output cannot block. A non-zero exit code is no error.
+
+- Parameter cmd: The program, found on `PATH`.
+- Parameter args: The arguments, after `cmd`. A bloom `run(cmd, argv...)` lends an array.
+- Returns: The `ProcessOutput` of the program.
+- Errors: `ProcessError.SpawnFailed` when the program does not start, or when a capture
+  stream does not open. `ProcessError.SignalReceived` when a signal stops the program.
+- Example:
+  ```sushi
+  match run("echo", "Mostly Harmless"):
+      Result.Ok(out) -> println("{out.exit_code} {out.stdout_text}")
+      Result.Err(_) -> println("no output")
+  ```
+  This prints `0 Mostly Harmless` and a new line.
+:##
+public fn run(string cmd, ...string args) ProcessOutput | ProcessError:
+    let ptr out = libc.tmpfile().or_err(nom ProcessError.SpawnFailed)??
+    let Maybe@(ptr) err_stream = libc.tmpfile()
+    match err_stream:
+        Maybe.None ->
+            libc.fclose(out)
+            return Result.Err(ProcessError.SpawnFailed)
+        Maybe.Some(err) ->
+            let i64 count = args.len() + 1
+            let ptr argv = make_argv(cmd, args)
+            let ptr actions = libc.malloc(FILE_ACTIONS_BYTES)
+            let ptr pid = libc.malloc(4)
+            libc.posix_spawn_file_actions_init(actions)
+            libc.posix_spawn_file_actions_adddup2(actions, libc.fileno(out), 1)
+            libc.posix_spawn_file_actions_adddup2(actions, libc.fileno(err), 2)
+            let i32 rc = libc.posix_spawnp(pid, cmd, actions, Maybe.None, argv, libc.environ)
+            libc.posix_spawn_file_actions_destroy(actions)
+            libc.free(actions)
+            free_argv(argv, count)
+            let i32 child = pid.load_i32(0)
+            libc.free(pid)
+            if (rc != 0):
+                libc.fclose(out)
+                libc.fclose(err)
+                return Result.Err(ProcessError.SpawnFailed)
+            let i32 status = wait_child(child)
+            let i32 sig = status & 127
+            if (sig != 0 and sig != 127):
+                libc.fclose(out)
+                libc.fclose(err)
+                return Result.Err(ProcessError.SignalReceived)
+            let string stdout_text = read_capture(out)
+            let string stderr_text = read_capture(err)
+            libc.fclose(out)
+            libc.fclose(err)
+            return Result.Ok(ProcessOutput((status >> 8) & 255, stdout_text, stderr_text))

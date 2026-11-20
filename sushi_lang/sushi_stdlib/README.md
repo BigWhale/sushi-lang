@@ -6,15 +6,15 @@ know which one your change belongs to before you start.
 ## 1. Compiled IR generators (`src/`)
 
 Most of the stdlib is Python code under `src/` that builds LLVM IR directly with
-`llvmlite.ir` (see e.g. `src/sys/process/functions.py`). These are
+`llvmlite.ir` (see e.g. `src/io/files/copy.py`). These are
 NOT interpreted at compile time per-program — `build.py` runs them once to produce
 per-platform bitcode:
 
 ```
 sushi_stdlib/
-  src/            generators: sys/, io/, net/, collections/, _platform/
+  src/            generators: io/, net/, collections/, _platform/
   src_sushi/      bundled real-Sushi source modules (see section 2)
-  dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/sys/process.bc)
+  dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/io/files.bc)
                     plus symbols.json: what those .bc files DEFINE
   build.py        drives src/ -> dist/<platform>/*.bc
 ```
@@ -85,13 +85,13 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `setenv`, over `getenv()` and `setenv()` of the C library through an
   `unsafe external` block. It reads `ENOMEM` from `<sys/platform>`. It has no
   `.bc`, so it is in `_virtual_units`.
-- `sys/process` (`src_sushi/sys/process.sushi`) — the Sushi half of
-  `<sys/process>`, a module with TWO halves: `getpid`, `getuid`, `chdir` and
-  `getcwd` call the C library through an `unsafe external` block, and `run` and
-  `exit` are the `.bc` unit of the same name. `chdir` and `getcwd` answer
-  `FileError` through `FileError.from_errno` of `io/error`, and `getcwd` reads
-  `PATH_MAX` from `<sys/platform>`. It is not in `_virtual_units`, because it
-  has a `.bc`.
+- `sys/process` (`src_sushi/sys/process.sushi`) — all of `<sys/process>`:
+  `run`, `exit`, `getpid`, `getuid`, `chdir` and `getcwd` call the C library
+  through an `unsafe external` block, and the module declares `ProcessError`
+  and `ProcessOutput`. `chdir` and `getcwd` answer `FileError` through
+  `FileError.from_errno` of `io/error`. `getcwd` reads `PATH_MAX`, and `run`
+  reads `EINTR` and the `fseek` whences, from `<sys/platform>`. It has no
+  `.bc`, so it is in `_virtual_units`.
 - `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
   unsigned integers in a `u8[]` and back, in either byte order, as extension
   methods on `u8[]`.
@@ -122,7 +122,7 @@ does for free) or that is simply better written in Sushi than in llvmlite calls.
 `use <module_path>` becomes importable in one of two ways:
 
 - **Compiled module**: add an entry to `StdlibRegistry.KNOWN_MODULES` mapping the
-  Sushi module path (`"sys/process"`) to its Python import path, and add the
+  Sushi module path (`"io/files"`) to its Python import path, and add the
   module's signature table to `signature_tables()` in
   `semantics/stdlib_registry.py`. Discovery (`_discover_functions`) registers
   one function per row of that table (and per family in `family_tables()`), and

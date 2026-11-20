@@ -1,0 +1,11 @@
+# `ProcessError` has two variants, `SpawnFailed` and `SignalReceived`. A non-zero exit is
+# data in `Ok`, so the variant `ExitFailure` does not exist.
+# EXPECT_ERROR_CODES_EXACT: CE2045
+use <sys/process>
+
+fn main() i32:
+    let ProcessError e = ProcessError.ExitFailure
+    match e:
+        ProcessError.SpawnFailed -> println("spawn failed")
+        _ -> println("other")
+    return 0

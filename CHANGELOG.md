@@ -6,6 +6,22 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`ProcessError.ExitFailure` is deleted.** `run` never gave it: a non-zero exit is data in
+  `Ok`, in `ProcessOutput.exit_code`. `ProcessError` has two variants, `SpawnFailed` and
+  `SignalReceived`, so a match on the two is complete, and a `_` arm after them is now
+  CE2118. A program that names `ExitFailure` gets CE2045. BREAKING.
+- **`run` of `<sys/process>` is Sushi source, and `<sys/process>` has no Python generator.**
+  `run(string cmd, ...string args) ProcessOutput | ProcessError` is in
+  `src_sushi/sys/process.sushi`, over `posix_spawnp`, `waitpid` and two `tmpfile()` streams
+  of the C library. `ProcessError` (an `error` enum) and `ProcessOutput` (a
+  `public struct`) are declarations of the module; before, they were a predefined enum and a
+  predefined struct. So a unit with no `use <sys/process>` cannot name `ProcessOutput`
+  (CE2001), and it can declare its own type of that name. Two fixes come with the move:
+  `waitpid` waits again when a signal stops it (`EINTR`), and a failure of `fseek`, `ftell`
+  or `fread` on a capture stream stops the program with RE2026 (before, an `ftell` of -1
+  wrote before the buffer). A failure of `tmpfile()` stays `SpawnFailed`. The `.bc` unit
+  `sys/process`, the stdlib variadic row (`_VARIADIC_STDLIB`) and the platform files
+  `_platform/*/process.py` are deleted.
 - **A bloom lends its source.** For every `...T` parameter, of a Sushi function and of a
   stdlib function alike, `f(xs...)` lends `xs` to the callee. The caller keeps the array, can
   read it after the call, and drops it at its scope exit. The call makes no copy of the

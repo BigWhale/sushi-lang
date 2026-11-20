@@ -1,0 +1,10 @@
+# A unit with no `use <sys/process>` can declare its own `ProcessOutput`.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+struct ProcessOutput:
+    string text
+
+fn main() i32:
+    let ProcessOutput out = ProcessOutput("Mostly Harmless")
+    println(out.text)
+    return 0

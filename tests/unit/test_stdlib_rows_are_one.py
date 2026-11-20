@@ -21,19 +21,12 @@ from sushi_lang.semantics.stdlib_registry import (
 )
 
 ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
-STDLIB_EMITTERS = ROOT / "backend" / "expressions" / "calls" / "stdlib"
-
-# `exit` never returns and `run` is variadic, so the <sys/process> emitter keeps them
-# as the two named special cases (#827). Every other name comes from a row.
-SPECIAL_CASES = {"run"}
 
 READERS = {
     ROOT / "semantics" / "generics" / "instantiate" / "expressions.py": set(),
-    STDLIB_EMITTERS / "process.py": SPECIAL_CASES,
 }
 
 REGISTRY_MODULES = {
-    "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "process"),
     "io/files": ("sushi_lang.sushi_stdlib.src.io.files_funcs", "files"),
 }
 
@@ -50,7 +43,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("run", "copy", "remove", "fd_readln"):
+    for spelled in ("copy", "remove", "fd_readln"):
         assert spelled in names
 
 
@@ -81,8 +74,7 @@ def _generated_rows():
 
     for module_path in GENERATORS:
         for name, sig in signature_tables()[module_path].items():
-            if name not in SPECIAL_CASES:
-                yield module_path, stdlib_symbol(module_path, name), sig
+            yield module_path, stdlib_symbol(module_path, name), sig
 
 
 def test_every_row_declares_the_function_its_generator_built():
@@ -109,7 +101,6 @@ def test_every_row_declares_the_function_its_generator_built():
 
 # Every registry module's generator, and the prefix its generated symbols carry.
 GENERATORS = {
-    "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "sushi_"),
     "io/files": ("sushi_lang.sushi_stdlib.src.io.files", "sushi_io_files_"),
     "net/socket": ("sushi_lang.sushi_stdlib.src.net", "sushi_net_"),
 }
@@ -147,11 +138,12 @@ def test_a_generated_function_with_no_row_is_found():
 
     from llvmlite import ir
 
-    module = importlib.import_module(GENERATORS["sys/process"][0]).generate_module_ir()
-    orphan = ir.Function(module, ir.FunctionType(ir.VoidType(), []), "sushi_mostly_harmless")
+    module = importlib.import_module(GENERATORS["io/files"][0]).generate_module_ir()
+    orphan = ir.Function(module, ir.FunctionType(ir.VoidType(), []),
+                         "sushi_io_files_mostly_harmless")
     orphan.append_basic_block().name = "entry"
     ir.IRBuilder(orphan.blocks[0]).ret_void()
-    assert _rowless("sys/process", module) == ["sushi_mostly_harmless"]
+    assert _rowless("io/files", module) == ["sushi_io_files_mostly_harmless"]
 
 
 def _scanner(generic_funcs=None, func_table=None):

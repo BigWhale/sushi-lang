@@ -22,10 +22,11 @@ An import brings a module's NAMES; a method of a built-in type needs NO import (
 
 **A predefined enum has a HOME, and the import gates the bare name (#574, Ruling 3)**:
 `FileMode` -> `<io/fs>`; `IoError`, `FileError` -> `<io/error>`; `SeekFrom` ->
-`<io/contracts>`; `NetError` -> `<net/error>`; `ProcessError` -> `<sys/process>`;
-`EnvError` -> `<sys/env>`. `StdError` stays global. The alias
+`<io/contracts>`; `NetError` -> `<net/error>`; `EnvError` -> `<sys/env>`. `StdError`
+stays global. The alias
 holds it (`fs.FileMode.Read()`); the bare name with no import is an unknown-type error with the import
-in the help, the `HashMap` rule. The eight stay synthesized in `passes/collect/enums.py`,
+in the help, the `HashMap` rule. `ProcessError` is no predefined enum: it is an `error`
+declaration of `src_sushi/sys/process.sushi`. The seven stay synthesized in `passes/collect/enums.py`,
 each stamped (`EnumType.home_module`), and the `namespaces` pass reads the stamp. **The
 home is reached through a `public use` (#586)**: `<io/contracts>` re-exports `<io/error>`;
 `<io/fs>` and `<io/buf>` re-export `<io/contracts>`; `<net/tcp>` re-exports `<net/error>`,
@@ -136,22 +137,28 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   It reads `errno()` directly after the C call: `ENOMEM` (from `<sys/platform>`) stops with
   RE2026 (an `assert` in the module), and any other failure gives `EnvError.InvalidValue`.
   `EnvError` stays a predefined enum with its home at `<sys/env>`.
-- **`<sys/process>` has TWO halves**: `run` is the `.bc` unit (a registry row in
-  `PROCESS_SIGNATURES`), and `src_sushi/sys/process.sushi` (a `SOURCE_STDLIB_MODULES` row,
-  NOT in `_virtual_units`) holds `exit`, `getpid`, `getuid`, `chdir` and `getcwd`, which call
-  the C library through an `unsafe external` block. `exit` is `public fn exit(i32 code) !`
+- **`<sys/process>` is Sushi source**: `src_sushi/sys/process.sushi` (a
+  `SOURCE_STDLIB_MODULES` row and a `_virtual_units` row) holds `run`, `exit`, `getpid`,
+  `getuid`, `chdir` and `getcwd`, and declares `ProcessError` (an `error` enum with
+  `SpawnFailed` and `SignalReceived`) and `ProcessOutput` (a `public struct`). The functions
+  call the C library through an `unsafe external` block. `exit` is `public fn exit(i32 code) !`
   over the extern `fn exit(i32 code) ! = "exit"` (docs/design/never-return.md). `chdir` and `getcwd` answer `FileError`, with
   the variant from `errno()` through `FileError.from_errno` (`<io/error>`, the ONE
   errno-to-`FileError` map in Sushi source; the generators of `<io/files>` keep their own
   table in `src/io/files/errno.py`). `getcwd` uses a buffer of `PATH_MAX` bytes
-  (`<sys/platform>`). An own `exit`, `getpid`, `getuid`, `chdir` or `getcwd` beside a flat
-  `use <sys/process>` gets CW3002.
+  (`<sys/platform>`). `run(string cmd, ...string args) ProcessOutput | ProcessError` is a
+  native `...T` (a bloom lends its source). It spawns with `posix_spawnp` and the extern
+  variable `environ`, captures stdout and stderr in two `tmpfile()` streams, and retries
+  `waitpid` on `EINTR`. A non-zero exit is data in `Ok`. A `tmpfile()` failure gives
+  `SpawnFailed`; a failure of `fseek`, `ftell` or `fread` on a capture stream stops with
+  RE2026 (an `assert` in the module). An own `exit`, `getpid`, `getuid`, `chdir` or
+  `getcwd` beside a flat `use <sys/process>` gets CW3002.
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,
   `split_whitespace`, `chars`, the `trim_*_matches` pair, `StringBuilder`). A new string method
   goes in the Sushi half; `TWO_HALF_MODULES` in `tests/unit/test_stdlib_build_is_one_table.py`
-  names it and `<sys/process>`. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
+  names it. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
 - Sushi-source modules go in `src_sushi/` + one `SOURCE_STDLIB_MODULES` entry + one
   `_virtual_units` entry; they are injected as ordinary units and need `public fn` on
   concrete exports and `public extend` on API methods. A module that declares methods on a

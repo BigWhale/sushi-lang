@@ -48,7 +48,7 @@ fn main() i32:
 - **Zero trailing arguments** is valid; the native callee receives an empty `T[]`.
 - **Native ownership.** The call site synthesizes a `T[]` in a temporary of the call. Each
   trailing argument moves into it, the callee borrows it, and the caller destroys it at the end of
-  the statement, for a Sushi `...T` body and a STDLIB variadic (`run`) alike. A bloom `arr...`
+  the statement, for every `...T` function (`run` of `<sys/process>` is one). A bloom `arr...`
   lends its source and makes no array (see "Spread / forwarding (bloom)"). In the callee the
   variadic parameter is a borrow, as any parameter with no mode: a consuming use of it is
   CE2411. The LLVM function itself stays non-variadic — the variadic parameter lowers to one extra
@@ -103,7 +103,7 @@ fn main() i32:
 Semantics:
 
 - **A borrow, not a move.** A bloom lends the source array to the callee, for every `...T`
-  parameter: a Sushi function and a stdlib function (`run`) alike. The call makes no array and
+  parameter (`run` of `<sys/process>` is one). The call makes no array and
   copies nothing. The caller keeps the source, can read it after the call, and drops it at its
   scope exit. A `...T` parameter has no mode, so it is a borrow, and a consuming use of it in
   the callee is [`CE2411`](../error-catalog.md#ce2411). So a parameter with no `nom` and the

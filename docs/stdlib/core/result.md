@@ -95,8 +95,8 @@ mixes them and is [CE2085](../../error-catalog.md#ce2085).
 
 ## Standard Error Types
 
-Sushi provides built-in enums. Six of them are error types: `StdError`,
-`FileError`, `IoError`, `NetError`, `ProcessError` and `EnvError`. `FileMode` and
+Sushi provides built-in enums. Five of them are error types: `StdError`,
+`FileError`, `IoError`, `NetError` and `EnvError`. `FileMode` and
 `SeekFrom` are plain enums, so they cannot be the `E` of a `Result`. Each one but `StdError` has a HOME module, and the import
 of that module brings the bare name into a unit (see
 [Unit namespaces](../../design/unit-namespaces.md)). A module whose calls answer an enum
@@ -110,7 +110,6 @@ one that brings the name:
 | `IoError`, `FileError` | `use <io/error>` | `<io/contracts>`, `<io/fs>`, `<io/buf>`, `<io/files>`, `<net/tcp>` |
 | `SeekFrom` | `use <io/contracts>` | `<io/fs>`, `<io/buf>`, `<net/tcp>` |
 | `NetError` | `use <net/error>` | `<net/tcp>`, `<net/udp>`, `<net/dns>`, `<net/ip>` |
-| `ProcessError` | `use <sys/process>` | |
 | `EnvError` | `use <sys/env>` | |
 
 ### StdError
@@ -182,11 +181,13 @@ The origin argument of `seek()`. It is not an error type.
 
 ### ProcessError
 
-Process management errors.
+The error type of `run` (`use <sys/process>`). It is an `error` declaration of the module,
+not a built-in enum.
 
-- `ProcessError.SpawnFailed` - Failed to spawn process
-- `ProcessError.ExitFailure` - Process exited with error
-- `ProcessError.SignalReceived` - Process terminated by signal
+- `ProcessError.SpawnFailed` - The program did not start
+- `ProcessError.SignalReceived` - A signal stopped the program
+
+A non-zero exit is no error: the exit code is in `ProcessOutput.exit_code`.
 
 ### EnvError
 

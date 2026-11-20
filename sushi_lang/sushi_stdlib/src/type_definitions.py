@@ -39,31 +39,6 @@ def get_byte_array_type() -> ir.LiteralStructType:
     return get_dynamic_array_type(i8)
 
 
-def get_process_output_type() -> ir.LiteralStructType:
-    """Get the ProcessOutput struct VALUE type: { i32 exit_code, string, string }."""
-    i32 = ir.IntType(32)
-    string_type = get_string_type()
-    return ir.LiteralStructType([i32, string_type, string_type])
-
-
-def _process_output_size_bytes() -> int:
-    """Aligned size of ProcessOutput, mirroring backend sizing.py `_calculate_struct_size`."""
-    string_size = STRING_BYTES
-    fields = [(4, 4), (string_size, 8), (string_size, 8)]
-    offset = 0
-    max_align = 1
-    for size, align in fields:
-        max_align = max(max_align, align)
-        if offset % align:
-            offset += align - (offset % align)
-        if size % align:
-            size += align - (size % align)
-        offset += size
-    if offset % max_align:
-        offset += max_align - (offset % max_align)
-    return offset
-
-
 def get_datagram_type() -> ir.LiteralStructType:
     """The Datagram struct VALUE type: { u8[] data, string peer_ip, i32 peer_port }.
 
@@ -99,13 +74,6 @@ def get_datagram_result_type() -> ir.LiteralStructType:
     data_bytes = max(_datagram_size_bytes(), 1)
     return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(64),
                                                    _payload_word_count(data_bytes))])
-
-
-def get_process_output_result_type() -> ir.LiteralStructType:
-    """Result<ProcessOutput, ProcessError> LLVM layout: { i32 tag, [5 x i64] data }."""
-    i32 = ir.IntType(32)
-    data_bytes = max(_process_output_size_bytes(), 1)
-    return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(64), _payload_word_count(data_bytes))])
 
 
 def _payload_word_count(byte_size: int) -> int:

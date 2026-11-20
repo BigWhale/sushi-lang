@@ -10,8 +10,9 @@ System process control and information functions.
 use <sys/process>
 ```
 
-The import brings `ProcessError`, the error type of `run`: the bare name needs it, and
-`use <sys/process> as proc` puts it behind the dot (`proc.ProcessError.SpawnFailed`).
+The import brings `ProcessError`, the error type of `run`, and `ProcessOutput`, the answer
+of `run`: the bare names need it, and `use <sys/process> as proc` puts them behind the dot
+(`proc.ProcessError.SpawnFailed`).
 The module also re-exports `<io/error>`, so the import brings `FileError`, the error type
 of `chdir` and `getcwd`.
 
@@ -20,10 +21,8 @@ of `chdir` and `getcwd`.
 The process module gives the functions that control and read the state of the process. It
 uses POSIX functions of the C library, so it works on macOS and on Linux.
 
-The module has two halves. `exit`, `getpid`, `getuid`, `chdir` and `getcwd` are Sushi
-source (`sushi_stdlib/src_sushi/sys/process.sushi`): they call the C library through an
-`unsafe external` block. `run` is compiled into the stdlib bitcode. One
-`use <sys/process>` gives both halves.
+The module is Sushi source (`sushi_stdlib/src_sushi/sys/process.sushi`). Its functions
+call the C library through an `unsafe external` block.
 
 ## Functions
 
@@ -309,7 +308,7 @@ Spawn an external program by argv vector (PATH-searched, **no shell**), capturin
 standard output and standard error and returning its exit code.
 
 ```text
-run(string cmd, ...string args) Result@(ProcessOutput, ProcessError)
+run(string cmd, ...string args) ProcessOutput | ProcessError
 ```
 
 `args` is variadic: pass individual arguments directly (`run("echo", "hello")`), or forward an
@@ -329,8 +328,18 @@ call, and the caller keeps it.
   - `stdout_text` (`string`) - everything the program wrote to standard output
   - `stderr_text` (`string`) - everything the program wrote to standard error
 - `Result.Err(ProcessError.SpawnFailed)` if the program could not be started (e.g. command
-  not found)
+  not found), or if a `tmpfile()` capture stream could not be opened
 - `Result.Err(ProcessError.SignalReceived)` if the program was killed by a signal
+
+`ProcessError` has these two variants and no other. A non-zero exit is not an error, so
+there is no variant for it.
+
+**How it works:** `run` starts the program with `posix_spawnp` and gives it the environment
+of the current process. Two `tmpfile()` streams hold the standard output and the standard
+error of the child, so a program with much output cannot block. `waitpid` waits for the
+child; a wait that a signal stops (`EINTR`) is done again. Then `run` reads each stream
+from the start. A `tmpfile()` stream can always seek, so a failure of `fseek`, `ftell` or
+`fread` stops the program with [`RE2026`](../../error-catalog.md#re2026).
 
 Because arguments are passed as a real argv vector rather than through a shell, there is no
 shell-quoting or injection surface. Field names are `stdout_text` / `stderr_text` (not
@@ -439,19 +448,18 @@ fn main() i32:
 
 ## Platform-Specific Behavior
 
-The Sushi half calls the POSIX functions `getcwd()`, `chdir()`, `getpid()` and
-`getuid()` on each platform. `PATH_MAX` and the errno numbers come from
-`<sys/platform>`, one file for each platform.
+The module calls the same POSIX functions on each platform: `getcwd()`, `chdir()`,
+`getpid()`, `getuid()`, `exit()`, and for `run` the functions `posix_spawnp()`,
+`waitpid()` and the `tmpfile()` streams. `PATH_MAX`, `EINTR`, the `fseek` whences and the
+errno numbers come from `<sys/platform>`, one file for each platform.
 
 ### macOS (darwin)
 
 - `PATH_MAX` is 1024 bytes
-- `run` and `exit` use `sushi_stdlib/src/_platform/darwin/process.py`
 
 ### Linux
 
 - `PATH_MAX` is 4096 bytes
-- `run` and `exit` use `sushi_stdlib/src/_platform/linux/process.py`
 
 ### Windows (not supported)
 
