@@ -36,7 +36,8 @@ the registry module `<io/files>` re-exports `<io/error>` (`REEXPORTS` in
 `files_funcs.py`). So `use <io/fs>` alone writes `| IoError`, `IoError.NotFound`,
 `SeekFrom.Start` and `FileError.NotFound`, `fs.IoError` holds behind the alias, and
 `use <net/tcp>` alone matches `IoError` from a read. `<sys/env>` and `<sys/process>` stay
-their own homes. The conversions `FileError as IoError` and `NetError as
+their own homes. `<sys/process>` re-exports `<io/error>` (`public use` in its Sushi half),
+because `chdir` and `getcwd` answer `FileError`. The conversions `FileError as IoError` and `NetError as
 IoError` live in `io/error.sushi`, which imports `<net/error>` with a plain `use`: `use <io/fs>`
 loads the `<net/error>` unit and does not bring the name `NetError`.
 `close_socket` (the one guarded `sock_close`) lives in `<net/handle>`, not in `<net/error>`.
@@ -135,12 +136,22 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   It reads `errno()` directly after the C call: `ENOMEM` (from `<sys/platform>`) stops with
   RE2026 (an `assert` in the module), and any other failure gives `EnvError.InvalidValue`.
   `EnvError` stays a predefined enum with its home at `<sys/env>`.
+- **`<sys/process>` has TWO halves**: `run` and `exit` are the `.bc` unit (registry rows in
+  `PROCESS_SIGNATURES`), and `src_sushi/sys/process.sushi` (a `SOURCE_STDLIB_MODULES` row,
+  NOT in `_virtual_units`) holds `getpid`, `getuid`, `chdir` and `getcwd`, which call the C
+  library through an `unsafe external` block. `chdir` and `getcwd` answer `FileError`, with
+  the variant from `errno()` through `FileError.from_errno` (`<io/error>`, the ONE
+  errno-to-`FileError` map in Sushi source; the generators of `<io/files>` keep their own
+  table in `src/io/files/errno.py`). `getcwd` uses a buffer of `PATH_MAX` bytes
+  (`<sys/platform>`). `exit` stays a registry row because its never-returns rule
+  (`_NEVER_RETURNS`, `stdlib_registry.py`) is keyed on a registry row. An own `getpid`,
+  `getuid`, `chdir` or `getcwd` beside a flat `use <sys/process>` gets CW3002.
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,
   `split_whitespace`, `chars`, the `trim_*_matches` pair, `StringBuilder`). A new string method
   goes in the Sushi half; `TWO_HALF_MODULES` in `tests/unit/test_stdlib_build_is_one_table.py`
-  names it. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
+  names it and `<sys/process>`. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
 - Sushi-source modules go in `src_sushi/` + one `SOURCE_STDLIB_MODULES` entry + one
   `_virtual_units` entry; they are injected as ordinary units and need `public fn` on
   concrete exports and `public extend` on API methods. A module that declares methods on a

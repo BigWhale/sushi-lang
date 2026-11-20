@@ -6,12 +6,12 @@
 
 use <sys/process>
 
-fn read_cwd() string | ProcessError:
+fn read_cwd() string | FileError:
     let string cwd = getcwd()??
     return Result.Ok(cwd)
 
 fn main() i32:
-    let Result@(string, ProcessError) r = read_cwd()
+    let Result@(string, FileError) r = read_cwd()
     match r:
         Result.Ok(p) -> println("cwd = {p}")
         Result.Err(_) -> println("err")

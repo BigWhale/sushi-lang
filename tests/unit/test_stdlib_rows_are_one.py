@@ -37,11 +37,6 @@ REGISTRY_MODULES = {
     "io/files": ("sushi_lang.sushi_stdlib.src.io.files_funcs", "files"),
 }
 
-# The modules whose generated functions are named `sushi_<name>`: the emitter declares
-# each one from its row, and the declaration must match what the generator built.
-GENERATED_MODULES = ("sys/process",)
-
-
 def _every_row_name() -> set[str]:
     return {name for table in signature_tables().values() for name in table}
 
@@ -55,7 +50,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("chdir", "getcwd", "run", "copy", "remove", "fd_readln"):
+    for spelled in ("exit", "run", "copy", "remove", "fd_readln"):
         assert spelled in names
 
 
@@ -82,14 +77,17 @@ def test_a_registry_module_reads_its_own_table(module_path):
 
 
 def _generated_rows():
-    for module_path in GENERATED_MODULES:
+    from sushi_lang.semantics.stdlib_registry import stdlib_symbol
+
+    for module_path in GENERATORS:
         for name, sig in signature_tables()[module_path].items():
             if name not in SPECIAL_CASES:
-                yield module_path, f"sushi_{name}", sig
+                yield module_path, stdlib_symbol(module_path, name), sig
 
 
 def test_every_row_declares_the_function_its_generator_built():
-    """The emitter's declaration, built from the row, byte-matches the generated one."""
+    """The emitter declares each generated function from its row, and the declaration
+    byte-matches what the generator built."""
     import importlib
 
     from sushi_lang.backend.expressions.calls.stdlib.signatures import (
@@ -97,8 +95,7 @@ def test_every_row_declares_the_function_its_generator_built():
     )
 
     generated = {}
-    for module_path in GENERATED_MODULES:
-        python_path = REGISTRY_MODULES[module_path][0]
+    for python_path, _prefix in GENERATORS.values():
         module = importlib.import_module(python_path).generate_module_ir()
         generated.update({f.name: f.function_type for f in module.functions})
 
@@ -107,7 +104,7 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 4
+    assert checked >= 40
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.

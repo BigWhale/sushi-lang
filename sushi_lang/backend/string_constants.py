@@ -85,10 +85,6 @@ class StringConstantManager:
         """Get existing or create new string constant WITHOUT null terminator."""
         return self.get_or_create(value, null_terminated=False)
 
-    def create_string_constant(self, name: str, value: str) -> ir.GlobalVariable:
-        """Create a named string constant (uses deduplication)."""
-        return self.get_or_create(value, null_terminated=True)
-
     def clear(self):
         """Clear the string cache."""
         self._cache.clear()

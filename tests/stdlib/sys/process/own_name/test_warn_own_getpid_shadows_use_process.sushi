@@ -1,0 +1,13 @@
+# An own `getpid` in a unit with a flat `use <sys/process>` shadows the export of the Sushi
+# half (CW3002), and the call reaches the own function.
+# EXPECT_ERROR_CODES_EXACT: CW3002
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/process>
+
+fn getpid() i32:
+    return 7
+
+fn main() i32:
+    println(getpid())
+    return 0

@@ -82,6 +82,9 @@ public const string READDIR_SYMBOL = "readdir"
 ##: The byte offset of `d_name` in `struct dirent`. :##
 public const i32 DIRENT_NAME_OFFSET = 19
 
+##: The size in bytes of the longest path, with its NUL byte. :##
+public const i32 PATH_MAX = 4096
+
 # Clocks
 
 ##: `clock_gettime` clock: the wall clock. :##

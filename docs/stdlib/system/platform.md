@@ -109,7 +109,7 @@ sushi_stdlib/src/_platform/
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
 │   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
 │   ├── net.py         # the socket calls
-│   ├── process.py     # getcwd/chdir/exit/getpid/getuid/tmpfile/fileno/waitpid/
+│   ├── process.py     # exit/tmpfile/fileno/waitpid/
 │                      #   posix_spawnp + file_actions helpers/environ
 ├── darwin/            # macOS
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
@@ -172,11 +172,11 @@ branch.
 ```python
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-def generate_getcwd(module: ir.Module) -> None:
-    """Generate getcwd() -> Result<string, ProcessError>"""
+def generate_exit(module: ir.Module) -> None:
+    """Generate exit(i32 code) -> ~"""
     platform_process = get_platform_module('process')
-    libc_getcwd = platform_process.declare_getcwd(module)
-    # ... builds the sushi_getcwd IR using the platform-specific declaration ...
+    libc_exit = platform_process.declare_exit(module)
+    # ... builds the sushi_exit IR using the platform-specific declaration ...
 ```
 
 `sushi_stdlib/src/error_emission.py` follows the identical pattern
@@ -206,6 +206,8 @@ same names of the same types in the same order:
 - the `open` flags (`O_RDONLY` ... `O_APPEND`) and the `lseek` whences;
 - the `struct stat` size, the offsets and widths of `st_mode`, `st_size`, the times, the
   file type bits (`S_IFMT`, `S_IFREG`, ...), and `dirent.d_name`;
+- `PATH_MAX`, the size of the buffer of `getcwd` in `<sys/process>` (1024 on
+  darwin_arm64, 4096 on linux_x86_64);
 - the link names of `stat`, `lstat` and `readdir` (the same on both files today; a
   platform with another name, such as `stat$INODE64` on macOS x86_64, gets its own);
 - the clock ids, and the `timespec` and `timeval` layouts;
@@ -271,7 +273,6 @@ Standard library bytecode is organized by platform:
 sushi_stdlib/dist/
 ├── darwin/                    # macOS builds
 │   ├── collections/strings.bc
-│   ├── core/primitives.bc
 │   ├── io/files.bc
 │   ├── net/socket.bc
 │   └── sys/process.bc
@@ -337,7 +338,7 @@ error rather than silently picking a wrong platform's bitcode.
 - File I/O: `stat`/`access`/`unlink`/`rename`/`open`/`read`/`write`/`close`/`mkdir`/
   `rmdir` (via `posix/files.py`), plus macOS-specific `O_CREAT`/`O_TRUNC` bit values
   (`darwin/files.py`)
-- Process control: `getcwd`/`chdir`/`exit`/`getpid`/`getuid`/`tmpfile`/`fileno`/
+- Process control: `exit`/`tmpfile`/`fileno`/
   `waitpid`/`posix_spawnp` (+ file-action helpers)/`environ` (via `posix/process.py`)
 - the stderr handle named `__stderrp` (macOS's double-underscore libc symbol name,
   distinct from Linux — `darwin/stdio.py`)

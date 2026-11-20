@@ -414,8 +414,14 @@ The module is Sushi source (`src_sushi/sys/env.sushi`).
 
 ### Process (`use <sys/process>`)
 
-- `getcwd()` - Get current working directory
-- `chdir()` - Change working directory
+The module has two halves: `getpid`, `getuid`, `chdir` and `getcwd` are Sushi source
+(`src_sushi/sys/process.sushi`), and `run` and `exit` are generated bitcode. The module
+re-exports `<io/error>`, so the import brings `FileError`.
+
+- `getcwd()` - Get current working directory. A failure gives `FileError`, with the
+  variant from `errno`
+- `chdir()` - Change working directory. A failure gives `FileError`, with the variant
+  from `errno` (`FileError.NotFound` for a path that does not exist)
 - `exit()` - Terminate the process with an exit code
 - `getpid()` - Get the process ID
 - `getuid()` - Get the user ID

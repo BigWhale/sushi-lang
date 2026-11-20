@@ -1,0 +1,26 @@
+# `getcwd` gives the directory that `chdir` went to. `/` has one spelling on every host.
+# On macOS `/tmp` is a link to `/private/tmp`, so the second check reads the end of the
+# path only.
+# EXPECT_STDOUT_EXACT: "root: /\ntmp: ends with /tmp\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn here() string | FileError:
+    let string path = getcwd()??
+    return Result.Ok(path)
+
+fn main() i32:
+    chdir("/").realise(-1)
+    match here():
+        Result.Ok(path) -> println("root: {path}")
+        Result.Err(_) -> println("root: Err")
+    chdir("/tmp").realise(-1)
+    match here():
+        Result.Ok(path) ->
+            if (path.ends_with("/tmp")):
+                println("tmp: ends with /tmp")
+            else:
+                println("tmp: {path}")
+        Result.Err(_) -> println("tmp: Err")
+    return 0

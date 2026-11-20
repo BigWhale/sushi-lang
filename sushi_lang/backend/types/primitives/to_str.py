@@ -2,17 +2,11 @@
 bool).
 """
 
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
-from sushi_lang.backend.string_layout import string_size
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
-from sushi_lang.sushi_stdlib.src import conversions, ir_common
-from sushi_lang.backend.constants import INT8_BIT_WIDTH
-from sushi_lang.sushi_stdlib.src.type_definitions import get_string_type
-from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len, fat_pointer_to_cstr
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.internals.diagnostics import InternalCompilerError
 
 
 _TYPE_CONVERSION_SPECS = {
@@ -79,44 +73,3 @@ for prim_type in primitive_types:
         )
     )
 
-
-def generate_module_ir() -> ir.Module:
-    """Generate the `sushi_<T>_to_str` functions, one for each row of `_TYPE_CONVERSION_SPECS`."""
-    module = ir_common.create_stdlib_module("core.primitives")
-    string_type = get_string_type()
-
-    for prim_type, (kind, flag, width) in _TYPE_CONVERSION_SPECS.items():
-        param_type, emit_body = _to_str_parts(kind, flag, width, string_type)
-        func = ir.Function(module, ir.FunctionType(string_type, [param_type]),
-                           name=f"sushi_{prim_type}_to_str")
-        builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-        builder.ret(emit_body(module, builder, func.args[0]))
-
-    return module
-
-
-def _emit_string_copy(module: ir.Module, builder: ir.IRBuilder, value: ir.Value) -> ir.Value:
-    """A fresh owned copy of a string: `to_str()` answers a second value, never its receiver."""
-    copy = fat_pointer_to_cstr(module, builder, value)
-    size = string_size(builder, value, name="copy_size")
-    return cstr_to_fat_pointer_with_len(builder, copy, size, owned=1)
-
-
-_BodyEmitter = Callable[[ir.Module, ir.IRBuilder, ir.Value], ir.Value]
-
-
-def _to_str_parts(kind: str, flag: Optional[bool], width: Optional[int],
-                  string_type: ir.LiteralStructType) -> tuple[ir.Type, _BodyEmitter]:
-    """The parameter type and the body emitter of one `to_str` function, from its kind."""
-    if kind == 'integer' and width is not None:
-        signed, bits = bool(flag), width
-        return ir.IntType(bits), lambda m, b, v: conversions.emit_integer_to_string(m, b, v, signed, bits)
-    if kind == 'float':
-        is_double = bool(flag)
-        param = ir.DoubleType() if is_double else ir.FloatType()
-        return param, lambda m, b, v: conversions.emit_float_to_string(m, b, v, is_double)
-    if kind == 'bool':
-        return ir.IntType(INT8_BIT_WIDTH), conversions.emit_bool_to_string
-    if kind == 'string':
-        return string_type, _emit_string_copy
-    raise InternalCompilerError("CE0075", kind=kind)

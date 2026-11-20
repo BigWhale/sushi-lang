@@ -75,10 +75,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "readdir": _c("struct dirent*", "DIR*"),
     "closedir": _c("int", "DIR*"),
     # Process
-    "getcwd": _c("char*", "char*", "size_t"),
-    "chdir": _c("int", "const char*"),
-    "getpid": _c("pid_t"),
-    "getuid": _c("uid_t"),
     "waitpid": _c("pid_t", "pid_t", "int*", "int"),
     "posix_spawnp": _c("int", "pid_t*", "const char*", "const posix_spawn_file_actions_t*",
                        "const posix_spawnattr_t*", "char**", "char**"),

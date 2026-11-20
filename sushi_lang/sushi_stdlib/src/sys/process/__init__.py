@@ -5,40 +5,27 @@ from typing import Dict
 from llvmlite import ir
 
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, UnknownType
-from sushi_lang.sushi_stdlib.src.signatures import Signature, cstr, params_of
+from sushi_lang.sushi_stdlib.src.signatures import Signature, params_of
 from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
-from sushi_lang.sushi_stdlib.src.sys.process.functions import (
-    generate_getcwd,
-    generate_chdir,
-    generate_exit,
-    generate_getpid,
-    generate_getuid,
-    generate_run,
-)
+from sushi_lang.sushi_stdlib.src.sys.process.functions import generate_exit, generate_run
 
 
-# The ONE spelling of what each `<sys/process>` function takes and answers (#550,
-# #798). `run` takes its command as a string VALUE, not as a C string.
+# The ONE spelling of what each generated `<sys/process>` function takes and answers
+# (#550, #798). The other functions of the module are Sushi source
+# (`src_sushi/sys/process.sushi`). `run` takes its command as a string VALUE, not as a
+# C string.
 PROCESS_SIGNATURES: Dict[str, Signature] = {
-    "getcwd": Signature(ok=BuiltinType.STRING, error="ProcessError"),
-    "chdir":  Signature(params_of(cstr()), ok=BuiltinType.I32, error="ProcessError"),
     "exit":   Signature(params_of(BuiltinType.I32), bare=BuiltinType.BLANK),
-    "getpid": Signature(bare=BuiltinType.I32),
-    "getuid": Signature(bare=BuiltinType.I32),
     "run":    Signature(params_of(BuiltinType.STRING, DynamicArrayType(BuiltinType.STRING)),
                         ok=UnknownType("ProcessOutput"), error="ProcessError"),
 }
 
 
 def generate_module_ir() -> ir.Module:
-    """Generate LLVM IR module for process control functions."""
+    """Generate LLVM IR module for the generated half of the process module."""
     module = create_stdlib_module("sys.process")
 
-    generate_getcwd(module)
-    generate_chdir(module)
     generate_exit(module)
-    generate_getpid(module)
-    generate_getuid(module)
     generate_run(module)
 
     return module

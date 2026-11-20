@@ -2,7 +2,7 @@
 
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import (
-    get_basic_types, get_string_type, get_result_type, get_unit_enum_type,
+    get_basic_types, get_string_type, get_unit_enum_type,
     get_process_output_type, get_process_output_result_type, get_dynamic_array_type,
 )
 from sushi_lang.sushi_stdlib.src.results import result_tag
@@ -10,8 +10,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import (
     cstr_to_fat_pointer_with_len, emit_checked_malloc, fat_pointer_to_cstr,
 )
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
-    declare_malloc, declare_free, declare_strlen,
-    declare_fread, declare_fseek, declare_ftell, declare_fclose,
+    declare_malloc, declare_free, declare_fread, declare_fseek, declare_ftell, declare_fclose,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -26,101 +25,6 @@ _PE_SIGNAL_RECEIVED = 2
 def get_process_error_type() -> ir.LiteralStructType:
     """Get the ProcessError enum LLVM type."""
     return get_unit_enum_type()
-
-
-def generate_getcwd(module: ir.Module) -> None:
-    """Generate getcwd() -> Result<string, ProcessError>"""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
-    process_error_type = get_process_error_type()
-    result_type = get_result_type(string_type, process_error_type)
-
-    platform_process = get_platform_module('process')
-    libc_getcwd = platform_process.declare_getcwd(module)
-
-    malloc_fn = declare_malloc(module)
-    free_fn = declare_free(module)
-    strlen_fn = declare_strlen(module)
-
-    func_type = ir.FunctionType(result_type, [])
-    func = ir.Function(module, func_type, name="sushi_getcwd")
-
-    entry = func.append_basic_block("entry")
-    success_block = func.append_basic_block("success")
-    error_block = func.append_basic_block("error")
-
-    builder = ir.IRBuilder(entry)
-
-    path_max = ir.Constant(i64, 4096)
-    buffer = emit_checked_malloc(builder, malloc_fn, path_max)
-
-    result_ptr = builder.call(libc_getcwd, [buffer, path_max])
-
-    null_ptr = ir.Constant(i8_ptr, None)
-    is_error = builder.icmp_unsigned('==', result_ptr, null_ptr)
-    builder.cbranch(is_error, error_block, success_block)
-
-    builder.position_at_end(success_block)
-    str_len = builder.call(strlen_fn, [result_ptr])
-    str_len_i32 = builder.trunc(str_len, i32)
-    # owned=1: the buffer is a live malloc and the fat pointer is its sole owner, so RAII
-    # must free it at scope exit. It was owned=0 (the "literal / borrow, never free" bit),
-    # which leaked all 4096 bytes on every call (#177). Do NOT free it here -- the string
-    # owns it now.
-    sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32, owned=1)
-
-    result_ok = entry_alloca(builder, result_type)
-    tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
-    builder.store(ir.Constant(i32, result_tag("Ok")), tag_ptr)
-
-    data_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 1)])
-    data_ptr_cast = builder.bitcast(data_ptr, string_type.as_pointer())
-    builder.store(sushi_string, data_ptr_cast)
-
-    result_val = builder.load(result_ok)
-    builder.ret(result_val)
-
-    builder.position_at_end(error_block)
-    builder.call(free_fn, [buffer])
-
-    result_err = entry_alloca(builder, result_type)
-    tag_ptr_err = builder.gep(result_err, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
-    builder.store(ir.Constant(i32, result_tag("Err")), tag_ptr_err)
-
-    result_val_err = builder.load(result_err)
-    builder.ret(result_val_err)
-
-
-def generate_chdir(module: ir.Module) -> None:
-    """Generate chdir(string path) -> Result<i32, ProcessError>"""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    process_error_type = get_process_error_type()
-    result_type = get_result_type(i32, process_error_type)
-
-    platform_process = get_platform_module('process')
-    libc_chdir = platform_process.declare_chdir(module)
-
-    # The path arrives already marshalled, and the CALLER frees it (#292).
-    func_type = ir.FunctionType(result_type, [i8_ptr])
-    func = ir.Function(module, func_type, name="sushi_chdir")
-    c_path = func.args[0]
-    c_path.name = "path"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    chdir_result = builder.call(libc_chdir, [c_path])
-
-    result_ok = entry_alloca(builder, result_type)
-    tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
-    builder.store(ir.Constant(i32, result_tag("Ok")), tag_ptr)
-
-    data_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 1)])
-    data_ptr_cast = builder.bitcast(data_ptr, i32.as_pointer())
-    builder.store(chdir_result, data_ptr_cast)
-
-    result_val = builder.load(result_ok)
-    builder.ret(result_val)
 
 
 def generate_exit(module: ir.Module) -> None:
@@ -142,40 +46,6 @@ def generate_exit(module: ir.Module) -> None:
     # Call exit(code) - never returns
     builder.call(libc_exit, [code_arg])
     builder.unreachable()  # Mark as unreachable
-
-
-def generate_getpid(module: ir.Module) -> None:
-    """Generate getpid() -> i32"""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-
-    platform_process = get_platform_module('process')
-    libc_getpid = platform_process.declare_getpid(module)
-
-    func_type = ir.FunctionType(i32, [])
-    func = ir.Function(module, func_type, name="sushi_getpid")
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(libc_getpid, [])
-    builder.ret(result)
-
-
-def generate_getuid(module: ir.Module) -> None:
-    """Generate getuid() -> i32"""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-
-    platform_process = get_platform_module('process')
-    libc_getuid = platform_process.declare_getuid(module)
-
-    func_type = ir.FunctionType(i32, [])
-    func = ir.Function(module, func_type, name="sushi_getuid")
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(libc_getuid, [])
-    builder.ret(result)
 
 
 def generate_run(module: ir.Module) -> None:

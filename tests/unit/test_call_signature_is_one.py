@@ -61,8 +61,6 @@ ALLOWED = {
     ("runtime/strings.py", "_declare_and_define_utf8_char_count"): "takes a pointer",
     ("types/arrays/methods/utf8_validate.py", "get_or_emit_utf8_validate"): "takes a pointer "
                                                                            "and a length",
-    ("types/primitives/to_str.py", "generate_module_ir"): "a primitive is never above the "
-                                                          "bound",
 }
 
 # (module, function) that must call `call_signature`.

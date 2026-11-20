@@ -1160,8 +1160,8 @@ row as its channel.
 
 **Every registry module is typed by its rows.** There is no set of typed modules:
 each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_signature`, the one reader).
-The call answers the type of the row. An answer that owns (`getcwd` answers `string |
-ProcessError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
+The call answers the type of the row. An answer that owns (`fd_read` answers `u8[] |
+FileError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
 value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
 callee whose last parameter is a variadic tail (7.4), so its row is typed with the variadic
 tail of 7.4: its callee row holds `Tail(1, string[], Guaranteed)`, and the one argument check takes

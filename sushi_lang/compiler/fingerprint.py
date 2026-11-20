@@ -159,7 +159,6 @@ def _stdlib_generator_sources() -> list:
     """The generator sources the stdlib fingerprint hashes, sorted by path."""
     sushi_lang_dir = _sushi_lang_dir()
     sources = list((sushi_lang_dir / "sushi_stdlib" / "src").rglob("*.py"))
-    sources.extend((sushi_lang_dir / "backend" / "types" / "primitives").rglob("*.py"))
     sources.append(sushi_lang_dir / "sushi_stdlib" / "build.py")
     # The ABI files: the enum layout lives in mapping.py/sizing.py, and the stdlib .bc
     # must byte-match it. Before these were hashed, a backend-only layout change linked

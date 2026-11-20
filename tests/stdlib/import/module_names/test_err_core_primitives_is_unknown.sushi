@@ -1,0 +1,8 @@
+# `<core/primitives>` is not a stdlib module. `to_str()` of a primitive needs no import:
+# the compiler emits it at the call.
+# EXPECT_ERROR_CODE: CE3006
+use <core/primitives>
+
+fn main() i32:
+    println(42.to_str())
+    return 0

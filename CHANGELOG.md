@@ -6,6 +6,21 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`chdir` and `getcwd` of `<sys/process>` answer `FileError`, and a failed `chdir` is an
+  `Err`.** The signatures are `chdir(string path) i32 | FileError` and
+  `getcwd() string | FileError` (before, `ProcessError`). The variant comes from `errno`
+  through `FileError.from_errno` of `<io/error>`: `FileError.NotFound` for a path that does
+  not exist, `FileError.InvalidPath` for a path through a file. Before, a failed `chdir`
+  gave `Result.Ok(-1)`; now it gives `Result.Err`, and `Result.Ok` is always 0.
+  `<sys/process>` re-exports `<io/error>`, so `use <sys/process>` alone names `FileError`.
+  `ProcessError` keeps its variants for `run`. BREAKING.
+- **`getpid`, `getuid`, `chdir` and `getcwd` of `<sys/process>` are Sushi source.** The
+  module has two halves, as `<collections/strings>` has: `src_sushi/sys/process.sushi`
+  calls the C library through an `unsafe external` block, and `run` and `exit` stay in the
+  generated bitcode. `getcwd` uses a buffer of `PATH_MAX` bytes, a new constant of
+  `<sys/platform>` (1024 on darwin_arm64, 4096 on linux_x86_64; before, 4096 on both). An
+  own `getpid`, `getuid`, `chdir` or `getcwd` in a unit with a flat `use <sys/process>` now
+  gets `CW3002`, as for every Sushi source module.
 - **`<sys/env>` is Sushi source, and an out-of-memory `setenv` stops the program.** The
   module calls `getenv()` and `setenv()` of the C library through an `unsafe external`
   block. When `setenv()` fails with `ENOMEM`, the program stops with `RE2026` (before, it
@@ -65,6 +80,12 @@ All notable changes to Sushi Lang will be documented in this file.
   prints the 64-bit index. A range bound is still `i32`, and `len()` still answers `i32`
   (docs/adr/0001-index-width-i64.md, #1298).
 
+### Removed
+
+- **The `core/primitives` bitcode unit.** No call reached its `to_str` functions: the
+  backend emits `to_str()` of a primitive at the call, with no import. `use
+  <core/primitives>` is now `CE3006`, an unknown stdlib module. BREAKING.
+
 ### Fixed
 
 - **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is
@@ -82,6 +103,8 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **`FileError.from_errno(i32 code) FileError`** in `<io/error>`: the one map from an
+  errno number to a `FileError` variant in Sushi source, for a wrapper of the C library.
 - **`--overflow=trap|wrap`, and integer overflow traps by default.** At run time, an
   integer `+`, `-`, `*` or unary minus whose result the type cannot hold stops the program
   with `RE2032`, which names the operator and the type (`integer overflow: '+' on i32`).

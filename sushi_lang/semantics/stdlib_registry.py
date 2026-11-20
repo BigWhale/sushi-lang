@@ -71,6 +71,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
     "random": _SRC_SUSHI_ROOT / "random.sushi",
     "sys/env": _SRC_SUSHI_ROOT / "sys" / "env.sushi",
+    "sys/process": _SRC_SUSHI_ROOT / "sys" / "process.sushi",
     "text/ascii": _SRC_SUSHI_ROOT / "text" / "ascii.sushi",
     "time": _SRC_SUSHI_ROOT / "time.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",

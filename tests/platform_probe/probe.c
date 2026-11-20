@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stddef.h>
@@ -90,6 +91,7 @@ int main(void) {
     sym("LSTAT_SYMBOL", "lstat", "The link name of `lstat` with the 64-bit inode layout.");
     sym("READDIR_SYMBOL", "readdir", "The link name of `readdir` with the 64-bit inode layout.");
     num("DIRENT_NAME_OFFSET", offsetof(struct dirent, d_name), "The byte offset of `d_name` in `struct dirent`.");
+    num("PATH_MAX", PATH_MAX, "The size in bytes of the longest path, with its NUL byte.");
 
     section("Clocks");
     num("CLOCK_REALTIME", CLOCK_REALTIME, "`clock_gettime` clock: the wall clock.");
