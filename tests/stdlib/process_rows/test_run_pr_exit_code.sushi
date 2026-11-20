@@ -6,8 +6,6 @@ use <sys/process>
 fn leave(i32 code) i32:
     println("before")
     exit(code)
-    println("after")
-    return 0
 
 fn main() i32:
     let i32 n = leave(3)
