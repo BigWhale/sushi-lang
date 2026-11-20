@@ -1162,12 +1162,11 @@ row as its channel.
 each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_signature`, the one reader).
 The call answers the type of the row. An answer that owns (`fd_read` answers `u8[] |
 FileError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
-value, an `ADOPT` answer as the answer of any call that owns (7.9). `run` is a `Stdlib`
-callee whose last parameter is a variadic tail (7.4), so its row is typed with the variadic
-tail of 7.4: its callee row holds `Tail(1, string[], Guaranteed)`, and the one argument check takes
-the tail. Every call of a registry function has its arm. `exit` is Sushi source
-(`src_sushi/sys/process.sushi`, #1325): its call is a `Free` callee, and the `!` of its
-return marks the callee row (`ResolvedCall.never_returns`, docs/design/never-return.md).
+value, an `ADOPT` answer as the answer of any call that owns (7.9). No row is variadic.
+Every call of a registry function has its arm. `<sys/process>` is Sushi source
+(`src_sushi/sys/process.sushi`): a call of `exit` or `run` is a `Free` callee, the `!` of
+`exit` marks the callee row (`ResolvedCall.never_returns`, docs/design/never-return.md),
+and `run` has the variadic tail of 7.4.
 
 **A late instance.** The `instantiate` and `monomorphize` passes collect only the instances
 that the program writes: an explicit type argument, a written type, and a generic function
@@ -1502,8 +1501,7 @@ the tail parameter, and `convention` is the convention of the tail parameter. Th
 parameter has no `nom` (a consuming variadic `nom ...T` is not designed,
 `borrow-model.md` section 11), so it is `Guaranteed`, as every other parameter with no
 mode: in the callee the tail is a borrow, and a consuming use of it is CE2411. So the CALLER owns the temporary array: each value of the tail moves into it, the
-call borrows it, and it drops at the end of the statement. One arm serves the tail of `run`,
-whose row borrows each operand too. `typecheck` writes the row, and SLIR lowering reads it.
+call borrows it, and it drops at the end of the statement. `typecheck` writes the row, and SLIR lowering reads it.
 A call with no tail row has one operand for each argument. A bloom is the one value of the
 tail: a bloom after a value of the tail is CE0120, and so is a bloom of a value that is no
 name.
@@ -1524,9 +1522,8 @@ parameter `T[]`. `borrow` reads the `Owned` row of each value as a consuming use
 field of a struct is CE2411 there. SLIR lowering makes the temporary in
 `slir/lower_variadic.py`. The callee drops nothing of its tail.
 
-**A bloom lends its source.** A bloom `arr...` BORROWS its source, for every tail: a
-function of a unit and the `Stdlib` callee of `run` (`_stdlib_tail`,
-`passes/types/calls/user_defined.py`) alike. The one argument check gives the bloom the
+**A bloom lends its source.** A bloom `arr...` BORROWS its source, for every tail. The one
+argument check gives the bloom the
 `Guaranteed` convention (`_check_tail`, `passes/types/arguments.py`), `borrow` reads it as
 a shared borrow and no consuming use, and SLIR lowering passes the place of the source
 itself as the tail operand, with no temporary (`tail_argument`, `slir/lower_variadic.py`).
@@ -3366,15 +3363,10 @@ calls it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). 
 generated function answers the type of its row: a `Result`, or a bare value.
 
 **Every module of `STDLIB_EMITTERS` takes operands.** Each module
-(`sys/process`, `io/files`, `net/socket`) gets the same operand form: the row of the
+(`io/files`, `net/socket`) gets the same operand form: the row of the
 call, the declaration of the generated function of the symbol from that row, and the
-call (`emit_stdlib_row`). `run` lowers
-with the variadic tail of 7.4: its last operand is the temporary `string[]` of the tail (7.4),
-which the caller keeps; a bloom into `run` is the place of its source (7.4). The row
-borrows it as `Guaranteed`, as each operand of a `Stdlib` callee, and the temporary drops
-at the end of the statement. The `Ok` of `run` is the named struct
-`ProcessOutput`, which crosses at the layout of its generator, as `Datagram` does
-(`llvm_value_type`). A call of a function with a `!` return (`exit`, a user `!` function, an
+call (`emit_stdlib_row`). The named struct `Datagram` crosses at the layout of its
+generator (`llvm_value_type`). A call of a function with a `!` return (`exit`, a user `!` function, an
 extern marked `!`; docs/design/never-return.md) is a `Call` whose block ends in the
 `Unreachable` terminator (8.8). The declared return is the one home of the fact: the
 typecheck row of the call holds it (`ResolvedCall.never_returns`), and SLIR lowering reads

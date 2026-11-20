@@ -96,7 +96,7 @@ Key properties:
 
 - **A borrow, not a move.** The callee borrows the source array, and the caller keeps it: you
   can read the array after the call, and it drops at its scope exit. The call copies nothing.
-  The rule is the same for every `...T` function, `run` of `<sys/process>` included, so a
+  The rule is the same for every `...T` function (`run` of `<sys/process>` is one), so a
   parameter with no `nom` and the `args` of `main` can be bloomed. In the callee, a consuming
   use of the variadic parameter is **[CE2411](error-catalog.md#ce2411)**, as for any parameter
   with no mode.

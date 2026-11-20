@@ -414,9 +414,9 @@ The module is Sushi source (`src_sushi/sys/env.sushi`).
 
 ### Process (`use <sys/process>`)
 
-The module has two halves: `getpid`, `getuid`, `chdir` and `getcwd` are Sushi source
-(`src_sushi/sys/process.sushi`), and `run` and `exit` are generated bitcode. The module
-re-exports `<io/error>`, so the import brings `FileError`.
+The module is Sushi source (`src_sushi/sys/process.sushi`). The import brings
+`ProcessError` and `ProcessOutput`. The module re-exports `<io/error>`, so the import
+brings `FileError` too.
 
 - `getcwd()` - Get current working directory. A failure gives `FileError`, with the
   variant from `errno`
@@ -425,7 +425,9 @@ re-exports `<io/error>`, so the import brings `FileError`.
 - `exit()` - Terminate the process with an exit code
 - `getpid()` - Get the process ID
 - `getuid()` - Get the user ID
-- `run()` - Spawn a program by argv (no shell), capturing stdout/stderr and exit code
+- `run()` - Spawn a program by argv (no shell), capturing stdout/stderr and exit code. A
+  non-zero exit is `Ok`; the error is `ProcessError.SpawnFailed` or
+  `ProcessError.SignalReceived`
 
 ## Design Principles
 

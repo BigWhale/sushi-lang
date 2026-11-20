@@ -182,7 +182,7 @@ that re-exports the home module brings the name too: `use <io/fs>` brings `IoErr
 - **FileError** (`<io/error>`, also through `<io/fs>`) - Path and descriptor errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`, `TooManyOpen`, `InvalidPath`, `IOError`, `Other`)
 - **IoError** (`<io/error>`, also through `<io/contracts>`, `<io/fs>` and `<io/buf>`) - What every read, write, seek, `open()` and `close()` answers (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `ConnectionReset`, `TimedOut`, `Closed`, `Interrupted`, `WouldBlock`, `DiskFull`, `TooManyOpen`, `InvalidInput`, `Os(i32)`, `Other`)
 - **NetError** (`<net/error>`) - Connect, bind and resolve errors (`ConnectionRefused`, `TimedOut`, `ResolveFailed`, ...)
-- **ProcessError** (`<sys/process>`) - Process management (`SpawnFailed`, `ExitFailure`, `SignalReceived`)
+- **ProcessError** (`<sys/process>`) - What `run` answers (`SpawnFailed`, `SignalReceived`); a non-zero exit is data in `Ok`
 - **EnvError** (`<sys/env>`) - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
 
 See [Result@(T, E) API Reference](stdlib/core/result.md) for complete details.

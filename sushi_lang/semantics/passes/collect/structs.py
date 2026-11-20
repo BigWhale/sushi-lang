@@ -110,20 +110,6 @@ class StructCollector:
         """Register stdlib-provided structs that are built into the language."""
         from sushi_lang.semantics.typesys import BuiltinType
 
-        # Note: fields are named *_text (not stdout/stderr) because `stdin`/`stdout`/
-        # `stderr` are reserved stream tokens in the grammar and cannot be member names.
-        process_output = StructType(
-            name="ProcessOutput",
-            fields=(
-                ("exit_code", BuiltinType.I32),
-                ("stdout_text", BuiltinType.STRING),
-                ("stderr_text", BuiltinType.STRING),
-            ),
-        )
-        if "ProcessOutput" not in self.structs.by_name:
-            self.structs.order.append("ProcessOutput")
-            self.structs.by_name["ProcessOutput"] = process_output
-
         # Datagram - what one recv_from() answers with. It is a predefined
         # struct rather than a <net/udp> one because the .bc layer builds it,
         # and a .bc module cannot name a Sushi-source type. An unconnected

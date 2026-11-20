@@ -216,7 +216,6 @@ class StdlibFunction:
     module_path: str
     get_return_type: Optional[Callable] = None
     params: Optional[List] = None  # None=polymorphic, []=no args, [Type,...]=typed args
-    is_variadic: bool = False  # True if the last param is a native '...T' collecting variadic
 
 
 @dataclass
@@ -229,11 +228,6 @@ class StdlibModule:
     # them in a `REEXPORTS` tuple and every importer gets their names beside this one's.
     reexports: Tuple[str, ...] = ()
 
-
-# Stdlib functions whose last parameter is a native '...T' collecting variadic. Their
-# param spec's last entry is the collected DynamicArrayType(T); trailing call arguments
-# are collected (or a single `arr...` bloomed) into it, exactly like a user variadic.
-_VARIADIC_STDLIB = {("process", "run")}
 
 _param_specs_cache = None
 
@@ -260,10 +254,8 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798)."""
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
 
     return {
-        "sys/process": PROCESS_SIGNATURES,
         "io/files": FILES_SIGNATURES,
         "net/socket": SOCKET_SIGNATURES,
     }
@@ -299,7 +291,6 @@ class StdlibRegistry:
     """Central registry for stdlib functions."""
 
     KNOWN_MODULES = {
-        "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
         "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",
         # collections/strings is NOT registry-driven and cannot be listed here: it
@@ -366,7 +357,6 @@ class StdlibRegistry:
                 module_path=module.path,
                 get_return_type=get_ret_type,
                 params=_get_param_specs().get((module_name, name)),
-                is_variadic=(module_name, name) in _VARIADIC_STDLIB
             )
             module.functions[name] = func
             self._function_lookup[(module.path, name)] = func

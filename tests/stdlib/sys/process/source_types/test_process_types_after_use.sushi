@@ -1,0 +1,18 @@
+# `ProcessError` and `ProcessOutput` are declarations of `<sys/process>`: the flat import
+# names both, and a match on the two variants of `ProcessError` is complete.
+# EXPECT_STDOUT_EXACT: "3 a b\nspawn\nsignal\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+
+fn describe(ProcessError e) string:
+    match e:
+        ProcessError.SpawnFailed -> return "spawn"
+        ProcessError.SignalReceived -> return "signal"
+
+fn main() i32:
+    let ProcessOutput out = ProcessOutput(3, "a", "b")
+    println("{out.exit_code} {out.stdout_text} {out.stderr_text}")
+    println(describe(ProcessError.SpawnFailed))
+    println(describe(ProcessError.SignalReceived))
+    return 0

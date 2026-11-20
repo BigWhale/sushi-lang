@@ -153,7 +153,7 @@ uv sync --extra dev
 uv run python sushi_lang/sushi_stdlib/build.py
 
 # This generates LLVM bitcode for:
-# - collections/strings, io/files, sys/process, net/socket
+# - collections/strings, io/files, net/socket
 ```
 
 ### 6. Verify Installation

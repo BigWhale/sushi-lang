@@ -1,0 +1,14 @@
+# A non-zero exit is data: `run` answers `Ok`, and the exit code is in `ProcessOutput`.
+# EXPECT_STDOUT_EXACT: "ok 7 out err\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/process>
+use <collections/strings>
+
+fn main() i32:
+    match run("sh", "-c", "echo out; echo err 1>&2; exit 7"):
+        Result.Ok(out) ->
+            println("ok {out.exit_code} {out.stdout_text.trim()} {out.stderr_text.trim()}")
+        Result.Err(ProcessError.SpawnFailed) -> println("spawn failed")
+        Result.Err(ProcessError.SignalReceived) -> println("signal")
+    return 0

@@ -8,9 +8,9 @@ from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Stdlib
-from sushi_lang.semantics.shir.typeck import ResolvedCall, Tail
+from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.stdlib_registry import StdlibFunction, stdlib_signature
-from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, FunctionType, Type
+from sushi_lang.semantics.typesys import EnumType, FunctionType, Type
 from ..arguments import (
     Parameters, check_arguments)
 from ..utils import intern_declared_wrapper
@@ -39,37 +39,24 @@ def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef
 
     The arguments go through the one argument check at the types of its row. Each argument
     borrows. The call yields the return type of its row, also after an error of an
-    argument, and the reference of the target answers the function type of the row. A
-    function whose last parameter is variadic (`run`) has the tail of S22, and a bloom into
-    it borrows its source (ir.md 7.4).
+    argument, and the reference of the target answers the function type of the row. No
+    row is variadic.
     """
     module, name = func.module_path, func.name
-    tail = _stdlib_tail(func)
     validator.body_answers().record_callee(node.shir_id,
-                                           ResolvedCall(Stdlib(ref.decl, module), tail=tail))
-    fixed = list(func.params) if tail is None else list(func.params)[:tail.position]
+                                           ResolvedCall(Stdlib(ref.decl, module)))
+    fixed = list(func.params)
     declared = Parameters(node.shir_id, (ParamMode.BORROW,) * len(fixed),
                           [_row_parameter_name(ty) for ty in fixed])
     check_arguments(validator, name, fixed, node.args, ref.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                    declared=declared, tail=None if tail is None else tail.ty)
+                    declared=declared)
     row = stdlib_signature(module, name)
     if row is None:
         return None
     yielded = stdlib_call_type(validator, row)
     visit.answer(validator, ref, _function_type_of_row(row, yielded))
     return yielded
-
-
-def _stdlib_tail(func: StdlibFunction) -> Optional[Tail]:
-    """The tail of a stdlib function whose last parameter is `...T`: its row holds `T[]`,
-    and the tail borrows as each parameter of a row does."""
-    if not func.is_variadic or not func.params:
-        return None
-    ty = func.params[-1]
-    if not isinstance(ty, DynamicArrayType):
-        er.raise_internal_error("CE0000", detail="a variadic stdlib row whose tail is no T[]")
-    return Tail(len(func.params) - 1, ty, ParamMode.BORROW.convention)
 
 
 def _row_parameter_name(ty: Type) -> str:

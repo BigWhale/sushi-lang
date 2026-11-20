@@ -1,4 +1,4 @@
-"""The types the compiler synthesizes: the eight predefined enums and the five generics.
+"""The types the compiler synthesizes: the seven predefined enums and the five generics.
 
 DATA, and one factory per kind. No unit declares any of these, so there is no AST to
 collect them from -- the collect pass registers what this module hands it, in the order
@@ -127,11 +127,6 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
         "Os",                # the raw errno
         "Other",             # anything else
     ), payloads={"Os": (BuiltinType.I32,)}, is_error=True),
-    PredefinedEnum("ProcessError", "sys/process", (
-        "SpawnFailed",     # Failed to spawn process
-        "ExitFailure",     # Process exited with error
-        "SignalReceived",  # Process received signal
-    ), is_error=True),
     PredefinedEnum("EnvError", "sys/env", (
         "NotFound",          # Environment variable not found
         "InvalidValue",      # Invalid value
@@ -141,7 +136,7 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
 
 
 def predefined_enums() -> tuple[EnumType, ...]:
-    """The eight synthesized enums, each stamped with its home module."""
+    """The seven synthesized enums, each stamped with its home module."""
     return tuple(
         EnumType(
             name=predefined.name,

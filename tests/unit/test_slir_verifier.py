@@ -1021,9 +1021,8 @@ def test_the_declared_parameters_of_a_stdlib_function_are_the_row_of_its_module(
     assert declared_params(funcs, extensions,
                            st.Direct("sushi_io_files_exists", "exists", "io/files")) \
         == DeclaredParams((GUARANTEED,))
-    assert declared_params(funcs, extensions, st.Direct("sushi_run", "run", "sys/process")) \
-        == DeclaredParams((GUARANTEED, GUARANTEED))
-    assert declared_params(funcs, extensions, st.Direct("sushi_run", "run", "io/files")) is None
+    assert declared_params(funcs, extensions,
+                           st.Direct("sushi_io_files_exists", "exists", "net/socket")) is None
     assert declared_params(funcs, extensions, st.Direct("sushi_io_files_exists", "exists")) is None
 
 

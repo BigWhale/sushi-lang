@@ -44,10 +44,8 @@ _SCALARS = {
 
 
 def _named_structs() -> dict[str, Callable[[], ir.Type]]:
-    from sushi_lang.sushi_stdlib.src.type_definitions import (
-        get_datagram_type, get_process_output_type,
-    )
-    return {"Datagram": get_datagram_type, "ProcessOutput": get_process_output_type}
+    from sushi_lang.sushi_stdlib.src.type_definitions import get_datagram_type
+    return {"Datagram": get_datagram_type}
 
 
 def llvm_value_type(ty) -> Optional[ir.Type]:

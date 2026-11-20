@@ -6,7 +6,7 @@ The call-site declarations in the backend use the same get_result_type
 helper, which is what keeps the .bc and the program byte-matched.
 
 The error payload is written as a bare i32 tag, so these two work for any
-unit-variant error enum -- FileError, NetError, ProcessError -- and the
+unit-variant error enum -- FileError, NetError -- and the
 generator picks the table that turns an errno into that tag.
 """
 from functools import lru_cache

@@ -35,8 +35,7 @@ _INT64 = ("long", "long long", "size_t", "ssize_t", "off_t")
 _BYTE_POINTERS = (
     "char*", "const char*", "void*", "const void*", "FILE*", "DIR*", "struct dirent*",
     "struct stat*", "struct sockaddr*", "const struct sockaddr*", "struct addrinfo*",
-    "const struct addrinfo*", "posix_spawn_file_actions_t*",
-    "const posix_spawn_file_actions_t*", "const posix_spawnattr_t*",
+    "const struct addrinfo*",
 )
 
 #: How each C type of the table lowers to LLVM.
@@ -138,22 +137,6 @@ def declare_strtod(module: ir.Module) -> Any:
 
 def declare_fprintf(module: ir.Module) -> Any:
     return declare_libc(module, "fprintf")
-
-
-def declare_fread(module: ir.Module) -> Any:
-    return declare_libc(module, "fread")
-
-
-def declare_fclose(module: ir.Module) -> Any:
-    return declare_libc(module, "fclose")
-
-
-def declare_fseek(module: ir.Module) -> Any:
-    return declare_libc(module, "fseek")
-
-
-def declare_ftell(module: ir.Module) -> Any:
-    return declare_libc(module, "ftell")
 
 
 def declare_exit(module: ir.Module) -> Any:

@@ -143,9 +143,8 @@ enum EnvError:
     InvalidValue
     PermissionDenied
 
-enum ProcessError:
+error ProcessError:
     SpawnFailed
-    ExitFailure
     SignalReceived
 ```
 

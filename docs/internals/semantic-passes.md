@@ -87,7 +87,7 @@ Collect global definitions before analyzing function bodies.
 2. **Function Signatures**: Collect return types and parameters
 3. **Generic Types**: Register struct and enum definitions. An `error` declaration is an
    enum with `is_error` set, on the `EnumType` and on a generic template, so each instance
-   carries it; the seven predefined error types carry it too, and `FileMode` and
+   carries it; the five predefined error types carry it too, and `FileMode` and
    `SeekFrom` do not (`docs/design/error-conversion.md` section 2)
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`

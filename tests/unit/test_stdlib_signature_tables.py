@@ -66,9 +66,7 @@ def test_every_row_is_a_signature(layer, name, sig):
 # -- the readers ---------------------------------------------------------------
 
 # The registry keys a parameter spec by the last segment of the module's `use` path.
-REGISTRY_KEYS = {
-    "sys/process": "process", "io/files": "files", "net/socket": "socket",
-}
+REGISTRY_KEYS = {"io/files": "files", "net/socket": "socket"}
 
 
 def _every_table_row():
