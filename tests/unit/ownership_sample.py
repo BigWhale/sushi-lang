@@ -2,8 +2,8 @@
 
 The completeness checks of the two tables and their printer read this one sample. It is
 data: no source text, no AST, no lowering and no pass. The body holds each consuming
-position, a position of each kind that is not consuming, a bloom that moves, a bloom that
-borrows and a bloom with no convention (it moves), an iterator producer and a lazy
+position, a position of each kind that is not consuming, a bloom with an `Owned` row, a bloom
+that borrows and a bloom with no convention (no consuming use), an iterator producer and a lazy
 adapter, the loops that need a walk-in-place answer and a loop that needs none, and a
 lambda. The `TypeckResults` holds only the rows that the ownership check reads: the
 conventions of the arguments, the callees of the iterator calls and the loop kinds.
@@ -65,7 +65,7 @@ CONSUMED: dict[str, int] = {
     "s_ref": 2, "keep_call": 3, "t_arg": 3, "xs_bloom": 3, "pair": 4, "t_part": 4,
     "two": 4, "array": 5, "eight": 5, "some": 6, "nine": 6, "b_ref": 7,
     "conversion": 8, "fail_call": 8, "k_ref": 9, "map_call": 12, "double_ref": 12, "lambda": 15,
-    "sum": 15, "drain_bloom": 17, "ok": 18, "blank": 18,
+    "sum": 15, "ok": 18, "blank": 18,
 }
 
 #: The lambda captures `k`.

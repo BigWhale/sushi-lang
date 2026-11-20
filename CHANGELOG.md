@@ -6,6 +6,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A bloom lends its source.** For every `...T` parameter, of a Sushi function and of a
+  stdlib function alike, `f(xs...)` lends `xs` to the callee. The caller keeps the array, can
+  read it after the call, and drops it at its scope exit. The call makes no copy of the
+  array. So a parameter with no `nom` and the `args` of `main` can be bloomed. Before, a
+  bloom into a Sushi `...T` moved the source: a later use was CE2405, a bloom of a borrowed
+  parameter was CE2411, and a bloom of `args` was CE2410. A consuming use of the `...T`
+  parameter in the callee stays CE2411. This is the rule of Go (`f(s...)` passes the slice,
+  and the caller keeps it).
 - **A `ptr` offset takes any integer type, as an index does.** The byte offset of
   `load_*`, `store_*`, `load_ptr`, `store_ptr`, `offset` and `to_string` follows the index
   rule of ADR 0001: any integer type, a literal takes `i64`, and the value becomes an `i64`

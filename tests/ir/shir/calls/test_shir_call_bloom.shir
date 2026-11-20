@@ -10,7 +10,7 @@ ShirBody forward
   params : [(_0 "xs": i32[], Owned)]
   locals : []
   block  :
-    Return(adopt Call(Free(@sum), [(move LocalRef(_0)..., Owned)]))
+    Return(adopt Call(Free(@sum), [(LocalRef(_0)..., Guaranteed)]))
 
 ShirBody direct
   params : []

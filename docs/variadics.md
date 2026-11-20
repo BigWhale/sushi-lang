@@ -87,17 +87,19 @@ fn sum(...i32 nums) i32:
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])
-    let i32 s = sum(xs...)   # bloom: xs is MOVED into the variadic slot
-    println("sum = {s}")                # sum = 6
+    let i32 s = sum(xs...)   # bloom: sum borrows xs, and main keeps it
+    println("sum = {s} of {xs.len()}")  # sum = 6 of 3
     return 0
 ```
 
 Key properties:
 
-- **Move, not copy.** The source array is consumed — moved into the callee's synthesized `T[]`.
-  (A STDLIB variadic is the exception: `run` frees nothing, so the caller keeps the collected
-  array and the bloomed source stays readable. See `docs/design/borrow-model.md` S7.)
-  Do not use the source array after a bloom call.
+- **A borrow, not a move.** The callee borrows the source array, and the caller keeps it: you
+  can read the array after the call, and it drops at its scope exit. The call copies nothing.
+  The rule is the same for every `...T` function, `run` of `<sys/process>` included, so a
+  parameter with no `nom` and the `args` of `main` can be bloomed. In the callee, a consuming
+  use of the variadic parameter is **[CE2411](error-catalog.md#ce2411)**, as for any parameter
+  with no mode.
 - **Source must be a bare variable** (a `Name`) of array type. You cannot bloom any other
   expression (a call result, a field access, an inline array literal).
 - **Sole, last trailing argument.** A bloom must be the only trailing argument at the call site —

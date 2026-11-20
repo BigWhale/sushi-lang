@@ -1,0 +1,17 @@
+# A bloom lends its source, so a parameter with no `nom` can be bloomed: the callee gets
+# a borrow of the borrow.
+# EXPECT_STDOUT_EXACT: "3\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn total(...i32 xs) i32:
+    return xs.len() as i32
+
+fn forward(i32[] xs) i32:
+    return total(xs...)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(forward(xs))
+    println(xs.len())
+    return 0

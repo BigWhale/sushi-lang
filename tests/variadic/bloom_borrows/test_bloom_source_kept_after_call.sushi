@@ -1,0 +1,15 @@
+# A bloom `arr...` lends its source to the callee. The caller keeps the array, reads it
+# after the call and drops it one time, at its scope exit.
+# EXPECT_STDOUT_EXACT: "count = 2\nargv[0] after bloom = mostly\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn count(...string args) i32:
+    return args.len() as i32
+
+fn main() i32:
+    let string[] argv = from(["mostly", "{'harmless'}"])
+    let i32 n = count(argv...)
+    println("count = {n}")
+    println("argv[0] after bloom = {argv[0]}")
+    return 0

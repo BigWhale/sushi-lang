@@ -1,0 +1,18 @@
+# A bloom of an array of arrays lends the outer array: no inner array moves. The same
+# source can be bloomed again, in a loop, and the caller drops it one time.
+# EXPECT_STDOUT_EXACT: "2 5\n2 5\n2 5\nrows 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn shape(...i32[] rows) string:
+    let i64 cells = 0
+    foreach(row in rows.iter()):
+        cells := cells + row.len()
+    return "{rows.len()} {cells}"
+
+fn main() i32:
+    let i32[][] rows = from([from([1, 2]), from([3, 4, 5])])
+    foreach(_ in 0..3):
+        println(shape(rows...))
+    println("rows {rows.len()}")
+    return 0
