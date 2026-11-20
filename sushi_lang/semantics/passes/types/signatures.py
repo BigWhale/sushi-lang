@@ -136,12 +136,14 @@ def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozen
     whose arms miss a value.
 
     Neither path rule reads a type, so a template takes both once, as written, and a copy
-    of it takes neither (#1070).
+    of it takes neither (#1070). A declaration with no return type is refused (CE0103),
+    so it takes no CE0107.
     """
     if self.in_template_copy:
         return
     reject_dead_statements(self, body, uncovered)
-    reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span)
+    if node.ret is not None:
+        reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span)
     reject_borrowed_return_faults(self, node)
 
 

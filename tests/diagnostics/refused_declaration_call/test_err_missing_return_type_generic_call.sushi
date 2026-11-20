@@ -1,0 +1,9 @@
+# A generic function with no return type is refused with CE0103. A call of that function
+# gives no further diagnostic, and never an internal error.
+# EXPECT_ERROR_CODES_EXACT: CE0103
+fn show@(T: Display)(T x):
+    println("{x}")
+
+fn main() i32:
+    show(1)
+    return 0

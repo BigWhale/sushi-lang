@@ -16,9 +16,12 @@ def call_yield(validator: 'TypeValidator', ret: Optional['Type'],
 
     ONE answer for every callee kind -- a function, a function value, an extension or
     perk method -- so `??`, `.realise` and the chain gate (CE2515) read one rule. A
-    written wrapper return (`Maybe@(T)`) is interned, as a declared type is.
+    written wrapper return (`Maybe@(T)`) is interned, as a declared type is. A callee with
+    no return type is a declaration that the collect pass refused (CE0103): the call
+    reports nothing, and the body holds that error (`refused_before`).
     """
     if ret is None:
+        validator.refused_before = True
         return None
     channel = channel_result(validator.struct_table, validator.enum_table, ret, err_type)
     if channel is not None:
