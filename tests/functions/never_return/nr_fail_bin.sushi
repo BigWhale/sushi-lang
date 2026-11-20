@@ -1,0 +1,5 @@
+use <sys/process>
+
+public fn fail(string msg) !:
+    println(msg)
+    exit(6)

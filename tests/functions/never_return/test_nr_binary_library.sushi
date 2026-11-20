@@ -1,0 +1,15 @@
+# The `!` of a public function of a binary library goes through the manifest: a call of it
+# ends the path in the consumer (#1325).
+# BUILD_LIB_BINARY: nr_fail_bin.sushi
+# EXPECT_STDOUT_EXACT: "2\nnone\n"
+# EXPECT_RUNTIME_EXIT: 6
+use <lib/nr_fail_bin>
+
+fn pick(i32 n) i32:
+    if (n > 0):
+        return n
+    fail("none")
+
+fn main() i32:
+    println(pick(2))
+    return pick(0)

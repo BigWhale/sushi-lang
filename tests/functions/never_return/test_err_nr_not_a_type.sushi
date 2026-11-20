@@ -1,0 +1,17 @@
+# `!` marks the return of a function or of an extern. It is not a type: a parameter, a
+# `let`, a field, a type argument, an element and the return of a method refuse it (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0161, CE0161, CE0161, CE0161, CE0161, CE0161
+struct Holder:
+    ! nothing
+
+fn take(! x) i32:
+    return 0
+
+extend i32 stop() !:
+    return 0
+
+fn main() i32:
+    let ! y = 1
+    let List@(!) xs = List.new()
+    let ![] zs = from([])
+    return 0

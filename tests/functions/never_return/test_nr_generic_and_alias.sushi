@@ -1,0 +1,19 @@
+# A generic `!` function and a `!` function behind a `use ... as` alias both end the path
+# (#1325).
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_RUNTIME_EXIT: 9
+use <sys/process> as process
+
+fn die@(T: Display)(T value) !:
+    println(value)
+    process.exit(9)
+
+fn leave() i32:
+    process.exit(8)
+
+fn answer() i32:
+    die(42)
+
+fn main() i32:
+    let i32 a = answer()
+    return leave() + a

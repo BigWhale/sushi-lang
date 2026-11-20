@@ -1,0 +1,6 @@
+# `main` returns a bare integer, so it cannot be `!` (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0106
+use <sys/process>
+
+fn main() !:
+    exit(0)

@@ -1,0 +1,13 @@
+# The `!` of a public function of a source library ends the path in the consumer (#1325).
+# BUILD_LIB: nr_fail_src.sushi
+# EXPECT_STDOUT_EXACT: "none\n"
+# EXPECT_RUNTIME_EXIT: 7
+use <lib/nr_fail_src>
+
+fn pick(i32 n) i32:
+    if (n > 0):
+        return n
+    fail("none")
+
+fn main() i32:
+    return pick(0)

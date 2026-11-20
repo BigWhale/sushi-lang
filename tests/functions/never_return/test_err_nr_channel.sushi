@@ -1,0 +1,9 @@
+# A `!` return has no error channel: an error return is a return (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0162
+use <sys/process>
+
+fn stop() ! | StdError:
+    exit(1)
+
+fn main() i32:
+    stop()

@@ -1,0 +1,11 @@
+# A statement after a call of a `!` function never runs, as a statement after a `return`
+# (#1325).
+# EXPECT_ERROR_CODES_EXACT: CE0140
+use <sys/process>
+
+fn leave(i32 code) i32:
+    exit(code)
+    println("after")
+
+fn main() i32:
+    return leave(3)
