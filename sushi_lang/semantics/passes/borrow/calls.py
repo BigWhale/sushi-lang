@@ -313,7 +313,8 @@ def _convention_of(checker: 'BorrowChecker', node: e.Call,
                    position: int) -> Optional[Convention]:
     """The convention of an argument. In a body with an error of typecheck, an argument with
     no convention is unknown (None): it borrows as its marker is written, and it takes no
-    convention (docs/design/ir.md 7.9). A bloom that typecheck did not refuse is `Owned`."""
+    convention (docs/design/ir.md 7.9). A bloom that typecheck did not refuse is
+    `Guaranteed`."""
     convention = checker.answers().convention_of(node.shir_id, position)
     if convention is None and not checker.typecheck_failed:
         er.raise_internal_error(

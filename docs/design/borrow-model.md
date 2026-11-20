@@ -203,9 +203,11 @@ deriving it in several.
   rather than comparing the string. A `nom self` receiver is an ordinary owned local
   inside the body: it may be written, it may be handed to `poke`, and it drops at the
   end of the method.
-- **A variadic `...T` keeps the callee as the owner** of the collected array. The array is
-  synthesized by the caller and has no other owner, so it adopts. A consuming variadic
-  spelling is deferred and rejected.
+- **A variadic `...T` is a borrow.** The caller owns the array of the call: it makes the
+  array from the trailing values, the callee borrows it, and the caller drops it at the end of
+  the statement. A bloom `arr...` lends the source array itself: the caller keeps it, and no
+  array is made (Go `f(s...)` passes the slice and the caller keeps it; Rust lends a `&[T]`).
+  A consuming variadic spelling is deferred and rejected.
 
 ## 8. `.clone()`
 

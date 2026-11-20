@@ -1,0 +1,13 @@
+# The process arguments of `main` are a borrowed view. A bloom lends its source, so
+# `args...` into a Sushi `...T` is legal, and `args` stays readable.
+# EXPECT_STDOUT_EXACT: "1\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn count(...string parts) i32:
+    return parts.len() as i32
+
+fn main(string[] args) i32:
+    println(count(args...))
+    println(args.len())
+    return 0

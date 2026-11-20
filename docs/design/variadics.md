@@ -48,7 +48,8 @@ fn main() i32:
 - **Zero trailing arguments** is valid; the native callee receives an empty `T[]`.
 - **Native ownership.** The call site synthesizes a `T[]` in a temporary of the call. Each
   trailing argument moves into it, the callee borrows it, and the caller destroys it at the end of
-  the statement, for a Sushi `...T` body and a STDLIB variadic (`run`) alike. In the callee the
+  the statement, for a Sushi `...T` body and a STDLIB variadic (`run`) alike. A bloom `arr...`
+  lends its source and makes no array (see "Spread / forwarding (bloom)"). In the callee the
   variadic parameter is a borrow, as any parameter with no mode: a consuming use of it is
   CE2411. The LLVM function itself stays non-variadic — the variadic parameter lowers to one extra
   `T[]` struct parameter (`docs/design/ir.md` 7.4). A consuming variadic spelling (`nom ...T`) is
@@ -94,17 +95,20 @@ fn sum(...i32 nums) i32:
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])
-    let i32 s = sum(xs...)   # bloom: xs is MOVED into the variadic slot
-    println("sum = {s}")                # sum = 6
+    let i32 s = sum(xs...)   # bloom: sum borrows xs, and main keeps it
+    println("sum = {s} of {xs.len()}")  # sum = 6 of 3
     return 0
 ```
 
 Semantics:
 
-- **Move, not copy.** The bloomed array is moved into the synthesized `T[]` of the call — the
-  same ownership transfer as a native variadic's own array construction, just skipping the copy.
-  The caller must not use the source array after the call (CE2405). At a STDLIB variadic the array stays the
-  caller's instead (see "Native ownership" above), so `run("cmd", argv...)` leaves `argv` readable.
+- **A borrow, not a move.** A bloom lends the source array to the callee, for every `...T`
+  parameter: a Sushi function and a stdlib function (`run`) alike. The call makes no array and
+  copies nothing. The caller keeps the source, can read it after the call, and drops it at its
+  scope exit. A `...T` parameter has no mode, so it is a borrow, and a consuming use of it in
+  the callee is [`CE2411`](../error-catalog.md#ce2411). So a parameter with no `nom` and the
+  `args` of `main` (a borrowed view) can be bloomed. Precedent: Go `f(s...)` passes the slice and
+  the caller keeps it; Rust lends a `&[T]`.
 - **Source must be a bare variable.** `arr...` requires `arr` to be a `Name` referring to an
   array-typed local/parameter; blooming an arbitrary expression (a call result, a field access, a
   literal array) is not supported.
@@ -117,9 +121,9 @@ Semantics:
   spread.
 
 `...T[]` combined with bloom is an ordinary case: an `i32[][]` variable `rows` blooms into a
-`...i32[]` parameter (`total(rows...)`), and the outer array moves in whole, its inner arrays
-with it. The individual-argument form (`total(a, b)`) moves each array in per element (see
-Semantics above).
+`...i32[]` parameter (`total(rows...)`), and the callee borrows the outer array; no inner
+array moves. The individual-argument form (`total(a, b)`) moves each array into the array of
+the call (see Semantics above).
 
 ## Deferred (additive)
 

@@ -52,8 +52,7 @@ def check_stdlib_call(validator: 'TypeValidator', node: e.Call, ref: e.GlobalRef
                           [_row_parameter_name(ty) for ty in fixed])
     check_arguments(validator, name, fixed, node.args, ref.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                    declared=declared, tail=None if tail is None else tail.ty,
-                    bloom_borrows=True)
+                    declared=declared, tail=None if tail is None else tail.ty)
     row = stdlib_signature(module, name)
     if row is None:
         return None

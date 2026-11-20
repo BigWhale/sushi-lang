@@ -44,8 +44,8 @@ Output:
 sum = 10
 ```
 
-A bloom is a **move**, not a copy: `xs` is consumed by the call to `sum`, so don't read or pass it
-again afterward. It also has to be a bare variable — you can't bloom a call result, a struct
+A bloom is a **borrow**: `sum` borrows `xs` for the call, and `main` keeps it, so you can read
+or pass `xs` again afterward. It also has to be a bare variable — you can't bloom a call result, a struct
 field, or an inline array literal (`sum(from([1, 2])...)` doesn't work; bind it to a `let` first).
 And a bloom must be the *only* trailing argument: you can't mix it with individual trailing
 arguments in the same call. Anything else (blooming into a non-variadic parameter, blooming

@@ -314,8 +314,8 @@ run(string cmd, ...string args) Result@(ProcessOutput, ProcessError)
 
 `args` is variadic: pass individual arguments directly (`run("echo", "hello")`), or forward an
 already-built `string[]` with a [bloom](../../variadics.md#spread-forwarding-bloom) (`run("sh",
-argv...)`) when the argument list is computed at runtime. A bloom moves the source array into the
-call, so don't reuse it afterward.
+argv...)`) when the argument list is computed at runtime. A bloom lends the source array to the
+call, and the caller keeps it.
 
 **Parameters:**
 - `cmd` - The program to run (searched on `PATH`, e.g. `"clang"`, `"echo"`)
@@ -364,7 +364,7 @@ use <io/fs>
 fn compile_ir(string path) i32 | ProcessError:
     # An array element consumes its value, and `path` is a borrow: clone it (CE2411)
     let string[] argv = from([path.clone(), "-o", "out"])
-    let ProcessOutput out = run("clang", argv...)??   # bloom: argv is moved into the call
+    let ProcessOutput out = run("clang", argv...)??   # bloom: run borrows argv
     if (out.exit_code != 0):
         println("{out.stderr_text}")
     return Result.Ok(out.exit_code)

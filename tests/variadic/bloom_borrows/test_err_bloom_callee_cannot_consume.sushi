@@ -1,0 +1,14 @@
+# The callee borrows the array of a bloom, as any parameter with no mode. A consuming use
+# of it in the body is the consuming use of a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn keep(nom string[] parts) i32:
+    return parts.len() as i32
+
+fn count(...string parts) i32:
+    return keep(nom parts)
+
+fn main() i32:
+    let string[] words = from(["Mostly", "Harmless"])
+    println(count(words...))
+    return 0

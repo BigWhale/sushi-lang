@@ -1,5 +1,5 @@
-# Bloom (spread/forwarding): move an existing i32[] into a variadic ...i32 slot
-# with the postfix `arr...` form. The array is consumed (moved) into the callee.
+# Bloom (spread/forwarding): lend an existing i32[] to a variadic ...i32 slot
+# with the postfix `arr...` form. The caller keeps the array.
 # EXPECT_STDOUT_EXACT: "sum = 6\n"
 fn sum(...i32 nums) i32:
     let i32 total = 0

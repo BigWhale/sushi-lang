@@ -3451,12 +3451,13 @@ fn show_all@(...Ts: Hashable)(...Ts xs) ~:
 fn main() i32:
     println(sum(1, 2, 3))                # 6
     let i32[] rest = from([4, 5])
-    println(sum(rest...))                # 9: `rest...` moves the array in
+    println(sum(rest...))                # 9: `rest...` lends the array
     show_all(1, true)
     return 0
 ```
 
-The native parameter comes last. `arr...` forwards a bare array variable and moves it. A
+The native parameter comes last. `arr...` forwards a bare array variable and lends it: the
+caller keeps the array. A
 variadic parameter in a perk method or an extension method is [`CE0115`](error-catalog.md#ce0115). A pack cannot be
 forwarded or indexed. The body of an `expand` is checked once, where it is written: the
 binder has what the constraints of the pack promise. An `expand` may run zero times, so a

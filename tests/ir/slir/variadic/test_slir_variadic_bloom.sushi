@@ -3,8 +3,8 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_DUMP_SLIR: test_slir_variadic_bloom.slir
 #
-# A bloom `xs...` moves the array itself into the temporary of the tail. The temporary is
-# the `Guaranteed` argument of the call, and it drops at the end of the statement (ir.md
+# A bloom `xs...` lends its source: the place of the source is the `Guaranteed` argument
+# of the call, with no temporary, and the caller drops the source at its scope exit (ir.md
 # 7.4, 8.9).
 
 fn count(...string xs) i32:

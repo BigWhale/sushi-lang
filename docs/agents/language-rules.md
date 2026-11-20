@@ -112,7 +112,8 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - `nom s.out` is the one field read that is not a borrow (S10c): one step off a local that
   the function owns, it spends the WHOLE receiver, and `drop()` does NOT run. `??` over a
   NAMED owning wrapper spends it (S10d). A `peek T` return with no source is CE2438 (S10h).
-- `main`'s `string[] args` is a borrowed argv view; a move of it is an error.
+- `main`'s `string[] args` is a borrowed argv view; a move of it is an error (a bloom
+  `args...` is a borrow, so it is legal).
 - Representation traps: a string is `{i8* data, i64 size, i8 owned}`; read and write the size
   only through `backend/string_layout.py`, and use the `i64` size as a `mem*` length
   ([`string-representation.md`](../design/string-representation.md)); a `T[]` is its
@@ -193,7 +194,9 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 - **Libraries** ([`docs/libraries.md`](../libraries.md)): LOADING is transitive and
   VISIBILITY is per unit; two versions of one library in one build are CE3519.
 - **Variadics** ([`variadics.md`](../design/variadics.md)): bloom `arr...` forwards a bare
-  array variable with MOVE semantics.
+  array variable and LENDS it, for every `...T` (a Sushi function and `run` alike): the caller
+  keeps the source and can read it after the call. So a parameter with no `nom` and `main`'s
+  `args` can be bloomed. A consuming use of the `...T` parameter in the callee is CE2411.
 - **Tuples** ([`tuples.md`](../design/tuples.md)): no tuple `const`/`var` (by design), no
   extension on a tuple type. The one pattern-matrix checker serves every match: a missing
   pattern is CE2040, an unreachable arm is the ERROR CE2118.
