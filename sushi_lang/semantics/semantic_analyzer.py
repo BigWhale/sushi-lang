@@ -265,7 +265,7 @@ class SemanticAnalyzer:
         to `lift` and `borrow` too, for the diagnostics of `borrow`, and never to the SLIR
         stage, which lowers nothing while the program has an error (docs/design/ir.md 7.9).
         `effects` runs on the AST before the loop, because `borrow` reads its summary. A
-        bundled stdlib unit that `unit_reuse.py` reuses skips the loop: it replays its
+        bundled stdlib unit or a source library unit that `unit_reuse.py` reuses skips the loop: it replays its
         record, and it runs its body passes after all when the copy fixpoint gives it a
         copy or changes its key (docs/internals/semantic-passes.md). The
         backend emits the `SlirFunction` of each body (docs/design/ir.md 8.2). `_check_copies` repeats
@@ -919,7 +919,7 @@ class SemanticAnalyzer:
         """Run the body passes of each reused unit of `units` after all. True when one ran.
 
         A reused unit that gets a template copy, or whose key changed after the per-unit
-        loop, cannot keep the object of the per-user cache. Its body passes run before the
+        loop, cannot keep its cached object. Its body passes run before the
         copy goes into its AST and before `_check_copies` checks the copy.
         """
         if self.reuse is None:

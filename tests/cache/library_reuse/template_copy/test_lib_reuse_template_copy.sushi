@@ -1,0 +1,16 @@
+# The program makes the unit of a source library hold a copy of its template same. The
+# object of that unit depends on the program, so the second build checks the unit again.
+# The stdlib units that the library imports are reused, so the build prints the line.
+# BUILD_LIB: kit.sushi
+# FIXTURE_SUSHI_HOME: home
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "7\n"
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_CACHED: lib/kit/kit, test_lib_reuse_template_copy, sys/process, io/error
+# EXPECT_CACHED: net/error, sys/platform
+# EXPECT_COMPILER_STDOUT_CONTAINS: " stdlib units reused, 0 library units reused, 0 checked again"
+use <lib/kit>
+
+fn main() i32:
+    if (alive()):
+        println("{same(nom 7)}")
+    return 0

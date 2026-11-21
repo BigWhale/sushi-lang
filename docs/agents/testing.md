@@ -106,6 +106,8 @@ Each step has a runner test under `tests/unit/runner/`.
   (a per-user home of the fixture's own, for every compile of it); `SECOND_BUILD_IN: rel`
   (a second compile from another directory of the copy); `EXPECT_PATH_EXISTS` /
   `EXPECT_PATH_ABSENT` / `EXPECT_PATH_EXISTS_BEFORE_CLEAN`; `THEN_CLEAN_CACHE: bare|source`;
+  `EXPECT_COMPILER_STDOUT_CONTAINS` (a text of the stdout of the last compilation, for
+  example the `Front end:` line);
   `OUTPUT_PATH: rel` (the `-o` path inside the copy; the one way a fixture spells `--lib`).
 - A success test that prints MUST carry an `EXPECT_STDOUT_*` (ratchet:
   `tests/unit/test_stdout_coverage.py`).

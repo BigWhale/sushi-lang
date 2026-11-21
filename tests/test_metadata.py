@@ -71,6 +71,9 @@ class TestMetadata:
     expect_rebuilt: Optional[List[str]] = None
     expect_cached: Optional[List[str]] = None
     expect_stdout_exact_before_rebuild: Optional[str] = None
+    # A text that the stdout of the fixture's last compilation must hold: the report that
+    # EXPECT_REBUILT and EXPECT_CACHED read (for example the `Front end:` line).
+    expect_compiler_stdout_contains: Optional[List[str]] = None
     # Extra flags for the SECOND compilation of a rebuild fixture alone.
     rebuild_flags: Optional[List[str]] = None
 
@@ -132,6 +135,8 @@ class TestMetadata:
             self.expect_stderr_contains = []
         if self.expect_stderr_lacks is None:
             self.expect_stderr_lacks = []
+        if self.expect_compiler_stdout_contains is None:
+            self.expect_compiler_stdout_contains = []
         if self.expect_error_code is None:
             self.expect_error_code = []
         if self.test_env is None:
@@ -590,6 +595,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_REBUILT': _extend('expect_rebuilt', lambda v: _split(_unquote(v))),
     'EXPECT_CACHED': _extend('expect_cached', lambda v: _split(_unquote(v))),
     'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
+    'EXPECT_COMPILER_STDOUT_CONTAINS': _extend('expect_compiler_stdout_contains', _text),
     'REBUILD_FLAGS': _rebuild_flags,
     'BUILD_LIB': _library_build('build_libs', 'source'),
     'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),

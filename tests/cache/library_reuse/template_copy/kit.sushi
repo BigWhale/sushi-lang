@@ -1,0 +1,7 @@
+use <sys/process>
+
+public fn same@(T)(nom T x) T:
+    return x
+
+public fn alive() bool:
+    return getpid() > 0

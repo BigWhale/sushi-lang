@@ -6,6 +6,18 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A unit of a source library is checked one time, not on each build.** When the project
+  cache holds the object of a source library unit (`lib/<name>/<unit>`) and the unit holds
+  no template copy, a later build skips its body passes (scope, typecheck, lift, borrow,
+  the SLIR stage), as for a bundled stdlib module. The object and the record of the unit
+  are in `__sushi_cache__/reuse/<global_key>/`. The key of a library unit now holds the
+  digest of its `.slib` and the label `<lib/<name>/<unit>>`, not the path of the
+  materialized file, so a build from another directory reuses the unit, and a new version
+  of the library checks it again. An `assert` in library code prints that label
+  (`<lib/geo/geo>:9:5`). The build line is now `Front end: N stdlib units reused, L library
+  units reused, M checked again`. `--lib` builds do not reuse. The test runner has a new
+  directive, `EXPECT_COMPILER_STDOUT_CONTAINS`.
+
 - **A binary `.slib` is bound to the exact compiler that built it.** A binary library
   records a compiler stamp: the exact compiler version (`compiler_version`) and the
   compiler-source digest (the new manifest field `compiler_digest`, the digest of the object

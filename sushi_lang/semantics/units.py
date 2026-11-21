@@ -56,6 +56,8 @@ class Unit:
     # the caller already holds it, read once on first ask otherwise: four per-unit pass
     # loops each want a Reporter, and each used to re-read the file (#599).
     source: Optional[str] = None
+    # The digest of the `.slib` file of a source library unit, which its object key holds.
+    library_digest: Optional[str] = None
 
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""

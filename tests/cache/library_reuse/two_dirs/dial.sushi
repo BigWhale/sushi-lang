@@ -1,0 +1,2 @@
+public fn dial() i32:
+    return 42
