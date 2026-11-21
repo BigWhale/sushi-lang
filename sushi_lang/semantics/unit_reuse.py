@@ -1,11 +1,12 @@
 """The one answer to "is this unit reused": a bundled stdlib unit whose object is in the
-per-user cache skips its body passes.
+per-user cache, or a source library unit whose object is in the project cache, skips its
+body passes.
 
 The pipeline makes one `UnitReuse` for an incremental build and gives it to the analyzer
 before the analysis. The analyzer decides with it before the per-unit loop, skips each
 reused unit, replays the record of the unit, and falls back to the body passes when the
 unit gets a template copy or its key changes. The pipeline reads the same predicate to take
-the object from the per-user cache. `docs/internals/semantic-passes.md` holds the rules.
+the object from the cache. `docs/internals/semantic-passes.md` holds the rules.
 """
 from __future__ import annotations
 
@@ -25,17 +26,31 @@ RECORD_FORMAT = 1
 # The key of a unit: (unit, template copies of the program, the `Drop` set) -> digest.
 KeyOf = Callable[["Unit", list, frozenset], str]
 
+# The materialized file of each source library unit of this process -> its label.
+_LIBRARY_FILES: dict[Path, str] = {}
+
+
+def label_library_file(path: Path, unit_name: str) -> None:
+    """The materialized file `path` of the source library unit `unit_name` prints as
+    `lib/<name>/<unit>.sushi`, its path inside the library. A diagnostic prints a file of
+    the program as `./<path>` or as a bare file name, so no file of the program has this
+    label."""
+    _LIBRARY_FILES[path.resolve()] = f"{unit_name}.sushi"
+
 
 def object_label(filename: str) -> str:
     """The file name that the object of a unit prints in an `assert` or a trap, and that
-    its key holds. A bundled stdlib module is `<sys/process>`, the same from each working
-    directory; any other file is the name a diagnostic prints."""
+    its key holds. A bundled stdlib module is `<sys/process>` and a source library unit is
+    `lib/<name>/<unit>.sushi`, the same from each working directory; any other file is the name a
+    diagnostic prints."""
     if not (filename.startswith("<") and filename.endswith(">")):
         from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
         try:
             resolved = Path(filename).resolve()
         except OSError:
             resolved = None
+        if resolved in _LIBRARY_FILES:
+            return _LIBRARY_FILES[resolved]
         for name, path in SOURCE_STDLIB_MODULES.items():
             if resolved is not None and Path(path).resolve() == resolved:
                 return f"<{name}>"
@@ -75,8 +90,10 @@ def _meets_an_extension(unit: "Unit", tables: "SymbolTables") -> bool:
 
 
 def _candidate(unit: "Unit", copies: list, tables: "SymbolTables") -> bool:
-    """A unit that the skip can be safe for, before the per-unit loop."""
-    return (unit.is_bundled_stdlib and unit.ast is not None
+    """A unit that the skip can be safe for, before the per-unit loop: a bundled stdlib
+    unit, or a source library unit (a warning in its code is dropped, and an error stops
+    the build, so its cached object has no diagnostic to show)."""
+    return ((unit.is_bundled_stdlib or unit.from_library) and unit.ast is not None
             and not holds_template_copies(unit) and not held_extension_copies(unit, copies)
             and all(_plain_type(const.ty) for const in unit.ast.constants)
             and not _meets_an_extension(unit, tables))
@@ -166,6 +183,7 @@ class _Decision:
     """The decision for one candidate unit."""
     base_key: str
     reused: bool
+    library: bool
     replay: list = field(default_factory=list)
     record: Optional[BodyRecord] = None
 
@@ -173,36 +191,44 @@ class _Decision:
 class UnitReuse:
     """The reuse decisions of one build."""
 
-    def __init__(self, directory: Path, key_of: KeyOf) -> None:
-        # `~/.sushi/cache/compiler/stdlib/<global key>/`.
-        self.directory = directory
+    def __init__(self, stdlib_directory: Optional[Path], library_directory: Path,
+                 key_of: KeyOf) -> None:
+        # `~/.sushi/cache/compiler/stdlib/<global key>/`, or None when the per-user cache
+        # is not the user's alone: no stdlib unit is reused then.
+        self.stdlib_directory = stdlib_directory
+        # `__sushi_cache__/reuse/<global key>/`: the source library units.
+        self.library_directory = library_directory
         self.key_of = key_of
         self._decisions: dict[str, _Decision] = {}
         self.fell_back: list[str] = []
 
-    def object_path(self, unit_name: str, key: str) -> Path:
-        return self.directory / f"{unit_name}.{key[:12]}.o"
+    def _directory(self, unit: "Unit") -> Optional[Path]:
+        return self.library_directory if unit.from_library else self.stdlib_directory
 
-    def record_path(self, unit_name: str, key: str) -> Path:
-        return self.directory / f"{unit_name}.{key[:12]}.json"
+    def object_path(self, unit: "Unit", key: str) -> Path:
+        return self._directory(unit) / f"{unit.name}.{key[:12]}.o"
+
+    def record_path(self, unit: "Unit", key: str) -> Path:
+        return self._directory(unit) / f"{unit.name}.{key[:12]}.json"
 
     def decide(self, units: Iterable["Unit"], tables: "SymbolTables", copies: list,
                drops: frozenset) -> None:
-        """Before the per-unit loop: each candidate unit is reused when the per-user cache
-        holds its object and its record, and else it records its body."""
+        """Before the per-unit loop: each candidate unit is reused when its cache holds its
+        object and its record, and else it records its body."""
         for unit in units:
-            if not _candidate(unit, copies, tables):
+            if self._directory(unit) is None or not _candidate(unit, copies, tables):
                 continue
             key = self.key_of(unit, copies, drops)
-            replay = self._read_record(unit.name, key)
-            if replay is not None and self.object_path(unit.name, key).is_file():
-                self._decisions[unit.name] = _Decision(key, True, replay)
+            replay = self._read_record(unit, key)
+            if replay is not None and self.object_path(unit, key).is_file():
+                self._decisions[unit.name] = _Decision(key, True, unit.from_library, replay)
             else:
-                self._decisions[unit.name] = _Decision(key, False, record=BodyRecord())
+                self._decisions[unit.name] = _Decision(key, False, unit.from_library,
+                                                       record=BodyRecord())
 
-    def _read_record(self, unit_name: str, key: str) -> Optional[list]:
+    def _read_record(self, unit: "Unit", key: str) -> Optional[list]:
         try:
-            data = json.loads(self.record_path(unit_name, key).read_text(encoding="utf-8"))
+            data = json.loads(self.record_path(unit, key).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
         if not isinstance(data, dict) or data.get("format") != RECORD_FORMAT:
@@ -212,7 +238,7 @@ class UnitReuse:
 
     def is_reused(self, unit: "Unit") -> bool:
         """THE predicate: the unit skips its body passes, and its object comes from the
-        per-user cache."""
+        cache."""
         decision = self._decisions.get(unit.name)
         return decision is not None and decision.reused
 
@@ -248,8 +274,8 @@ class UnitReuse:
                 and self.key_of(unit, copies, drops) != self._decisions[unit.name].base_key]
 
     def stored_key(self, unit: "Unit", final_key: str) -> Optional[str]:
-        """The key of the unit in the per-user cache, or None when its object depends on
-        the program (it holds a copy) and stays in the project cache."""
+        """The key of the unit in the reuse cache, or None when its object depends on the
+        program (it holds a copy) and goes with the objects of the program units."""
         decision = self._decisions.get(unit.name)
         if decision is None or decision.base_key != final_key:
             return None
@@ -265,5 +291,7 @@ class UnitReuse:
         return json.dumps({"format": RECORD_FORMAT, "unit": unit.name,
                            "instances": record.instances}, indent=1) + "\n"
 
-    def reused_count(self) -> int:
-        return sum(1 for decision in self._decisions.values() if decision.reused)
+    def reused_count(self, library: bool) -> int:
+        """The reused stdlib units, or with `library` the reused source library units."""
+        return sum(1 for decision in self._decisions.values()
+                   if decision.reused and decision.library == library)

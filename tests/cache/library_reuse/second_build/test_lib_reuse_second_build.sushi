@@ -1,0 +1,13 @@
+# The second build reuses the unit of a source library: its body passes do not run, and
+# its object comes from the project cache. The reused unit still gives the library of its
+# link clause to the link. v2/ holds a byte-equal copy of the library source.
+# BUILD_LIB: ring.sushi
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3413997946\n"
+# EXPECT_STDOUT_EXACT: "3413997946\n"
+# EXPECT_CACHED: lib/ring/ring, test_lib_reuse_second_build
+# EXPECT_COMPILER_STDOUT_CONTAINS: "Front end: 0 stdlib units reused, 1 library units reused, 0 checked again"
+use <lib/ring>
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0

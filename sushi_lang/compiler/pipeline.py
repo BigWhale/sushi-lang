@@ -573,8 +573,11 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     """
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.backend.library_format import LibraryFormat
+    from sushi_lang.compiler.fingerprint import compute_lib_fingerprint
+    from sushi_lang.semantics.unit_reuse import label_library_file
 
     _metadata, sources = LibraryFormat.read_source_only(slib_path)
+    digest = compute_lib_fingerprint(slib_path)
     lib_name = metadata.get("library_name") or slib_path.stem
     version = metadata.get("library_version") or "unknown"
     provenance = (f"'{lib_name}' {version} is a source library, "
@@ -602,7 +605,8 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
         unit = Unit(name=f"lib/{lib_name}/{unit_name}", file_path=file_path,
                     ast=module_ast, dependencies=[], public_symbols={},
                     from_library=True, source=text,
-                    provenance=provenance)
+                    provenance=provenance, library_digest=digest)
+        label_library_file(file_path, unit.name)
         unit.dependencies = [f"lib/{lib_name}/{d}" for d in unit.dependencies if d in own]
         unit_manager.units[unit.name] = unit
         injected.append(unit)
@@ -759,18 +763,18 @@ def _unit_reuse(options: BuildOptions, cache: CacheManager, incremental: bool,
     A build that dumps SHIR or SLIR prints each body, and a build that is not incremental
     (`--lib`, `--no-incremental`, `--dump-ll`, a program of one unit) emits each body in
     one module, so each needs the body passes of every unit. A per-user cache that is not
-    the user's alone is not read.
+    the user's alone is not read: then only the source library units, whose objects are in
+    the project cache, are reused.
     """
     from sushi_lang.compiler.fingerprint import compute_unit_fingerprint
-    if (not incremental or options.dump_shir is not None or options.dump_slir is not None
-            or cache.user_stdlib_path is None):
+    if not incremental or options.dump_shir is not None or options.dump_slir is not None:
         return None
 
     def key_of(unit: Unit, copies: list, drops: frozenset) -> str:
         return compute_unit_fingerprint(unit, unit_manager, copies,
                                         library_fingerprints=library_fingerprints,
                                         drop_types=drops)
-    return UnitReuse(cache.user_stdlib_path, key_of)
+    return UnitReuse(cache.user_stdlib_path, cache.library_reuse_path, key_of)
 
 
 def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_linker,
@@ -1052,7 +1056,9 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
 
     A bundled stdlib unit whose object depends on nothing of the program (it holds no
     template copy) keeps its object in the per-user cache, with the record of its body
-    beside it; `analyzer.reuse` says which. Every other object is in the project cache.
+    beside it, and a source library unit of that kind keeps them in the reuse directory of
+    the project cache; `analyzer.reuse` says which. Every other object is in the project
+    cache.
     """
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
@@ -1092,7 +1098,7 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     def object_path(unit: Unit) -> Path:
         key = stored.get(unit.name)
         if key is not None:
-            return reuse.object_path(unit.name, key)
+            return reuse.object_path(unit, key)
         return cache.unit_object_path(unit.name, fingerprints[unit.name])
 
     def is_cached(unit: Unit) -> bool:
@@ -1105,7 +1111,7 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
             from sushi_lang.internals import errors as er
             er.raise_internal_error(
                 "CE0000", detail=f"the object of the reused unit '{unit.name}' left the "
-                                 f"per-user cache during the build: {object_path(unit)}")
+                                 f"cache during the build: {object_path(unit)}")
     modules = {unit.name: cg.build_module_single_unit(unit, compilation_order)
                for unit in compilation_order if not is_cached(unit)}
 
@@ -1131,8 +1137,8 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
         obj_paths.append(obj_path)
         key = stored.get(unit.name)
         record = reuse.record_text(unit) if key is not None else None
-        if record is not None and not reuse.record_path(unit.name, key).is_file():
-            publish_atomically(reuse.record_path(unit.name, key), record.encode("utf-8"))
+        if record is not None and not reuse.record_path(unit, key).is_file():
+            publish_atomically(reuse.record_path(unit, key), record.encode("utf-8"))
 
     for stdlib_unit in sorted(stdlib_units):
         bc_paths = cg.stdlib._resolve_stdlib_unit(stdlib_unit)
@@ -1171,8 +1177,10 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     total_units = len(compilation_order)
     stdlib_count = len(stdlib_units)
     lib_count = len(library_imports)
-    if reuse is not None and (reuse.reused_count() or reuse.fell_back):
-        print(f"\nFront end: {reuse.reused_count()} stdlib units reused, "
+    if reuse is not None and (reuse.reused_count(False) or reuse.reused_count(True)
+                              or reuse.fell_back):
+        print(f"\nFront end: {reuse.reused_count(False)} stdlib units reused, "
+              f"{reuse.reused_count(True)} library units reused, "
               f"{len(reuse.fell_back)} checked again")
     print(f"\nCodegen: {total_units} units ({len(cached)} cached, {len(rebuilt)} rebuilt) in {codegen_time:.2f}s")
     link_desc = f"{total_units} units"

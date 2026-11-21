@@ -1103,6 +1103,17 @@ class TestRunner:
                            + "\n  ".join(problems))
         return True, "✓ Compilation: the rebuild report matched"
 
+    @staticmethod
+    def _check_compiler_stdout(stdout: str, metadata: TestMetadata,
+                               message: str) -> Tuple[bool, str]:
+        """EXPECT_COMPILER_STDOUT_CONTAINS against the stdout of the last compilation."""
+        missing = [repr(text) for text in metadata.expect_compiler_stdout_contains
+                   if text not in stdout]
+        if missing:
+            return False, ("✗ Compilation: the compiler stdout lacks "
+                           + ", ".join(missing) + f"\nSTDOUT: {stdout.strip()}")
+        return True, message
+
     def _scratch_dir(self, test_file: Path) -> Path:
         """The empty directory one fixture's binary runs in, inside the run's temp dir."""
         return Path(self.temp_dir) / "scratch" / fixture_binary_name(test_file, self.tests_dir)
@@ -1185,6 +1196,9 @@ class TestRunner:
             if success and (metadata.expect_rebuilt is not None
                             or metadata.expect_cached is not None):
                 success, message = self._check_unit_report(report, metadata)
+
+            if success and metadata.expect_compiler_stdout_contains:
+                success, message = self._check_compiler_stdout(report, metadata, message)
 
             if success and workspace is not None:
                 success, message = self._check_copy_paths(workspace, metadata, message)

@@ -26,6 +26,7 @@ LIBSRC_DIR = "libsrc"
 UNITS_DIR = "units"
 STDLIB_DIR = "stdlib"
 LIBS_DIR = "libs"
+REUSE_DIR = "reuse"
 
 _KEY_LEN = 12
 
@@ -85,6 +86,12 @@ class CacheManager:
         is not the user's alone."""
         root = compiler_cache_dir(STDLIB_DIR)
         return None if root is None else root / self.global_key
+
+    @property
+    def library_reuse_path(self) -> Path:
+        """`__sushi_cache__/reuse/<global key>/`: the object and the record of each reused
+        source library unit."""
+        return self.cache_path / REUSE_DIR / self.global_key
 
     @property
     def stdlib_path(self) -> Path:

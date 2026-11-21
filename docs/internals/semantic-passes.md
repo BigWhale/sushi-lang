@@ -1064,7 +1064,7 @@ the summary to decide whether a call invalidates the caller's value.
 Computed ONCE over EVERY unit, because `borrow` runs per unit: a per-unit summary would
 make a cross-unit callee invisible.
 
-## Reuse of a bundled stdlib unit: the skip, the replay, the fall-back
+## Reuse of a bundled stdlib unit or a source library unit: the skip, the replay, the fall-back
 
 **File:** `semantics/unit_reuse.py` (the one predicate, `UnitReuse.is_reused`); the analyzer
 reads it in `_check_units` and `_check_array_extensions`, and the pipeline reads it in
@@ -1075,22 +1075,34 @@ The body passes of a bundled stdlib unit (`scope`, lowering, `typecheck`, `lift`
 unit holds a template copy. So the object goes to the per-user cache
 (`~/.sushi/cache/compiler/stdlib/<global_key>/`), and the next build skips those passes for
 the unit. The unit still gives its interface: it is parsed, and every pass up to `effects`
-reads it.
+reads it. So the `externs` pass still reads its `link` clauses.
+
+A unit of a source library (`lib/<name>/<unit>`) is reused in the same way. Its object and
+its record are in the project cache, in `__sushi_cache__/reuse/<global_key>/`
+(`CacheManager.library_reuse_path`), not in the per-user cache. The warnings of the body
+passes are not a problem for such a unit: the consumer drops each warning in code that it
+did not write (`Reporter._record`), and an error stops the build, so a cached object has no
+diagnostic to show.
 
 - **Where the build allows it.** The pipeline makes the `UnitReuse` before the analysis,
   for an incremental build only. A build with `--dump-shir` or `--dump-slir`, a build that
-  is not incremental (`--lib`, `--no-incremental`, `--dump-ll`, a program of one unit), or a
-  per-user cache that is not the user's alone gives none, and every unit runs.
+  is not incremental (`--lib`, `--no-incremental`, `--dump-ll`, a program of one unit) gives
+  none, and every unit runs. A per-user cache that is not the user's alone stops the reuse
+  of the stdlib units only.
 - **The decision**, after `effects` and before the per-unit loop (`UnitReuse.decide`). A
-  candidate is a bundled stdlib unit that holds no template copy after `monomorphize`,
+  candidate is a bundled stdlib unit or a source library unit that holds no template copy
+  after `monomorphize`,
   whose unit-level constants have no type that `typecheck` must intern (a generic wrapper
   type), and none of whose perk implementations meets an extension method of the name of
   one of its methods (that is CE4007, which the `typecheck` pass of the unit reports). Its
   BASE key is `compute_unit_fingerprint` (`compiler/fingerprint.py`) with the copies and the
   `Drop` set of this point: for a unit with no copy it is the full key. The label in the key
-  is `object_label`: `<sys/process>` for a bundled module. A candidate is REUSED when the
-  per-user cache holds its object and its record for that key; else its body passes run
-  and fill a record.
+  is `object_label`: `<sys/process>` for a bundled module, `lib/<name>/<unit>.sushi` for a source
+  library unit (`label_library_file` registers the materialized file), so the key does not
+  depend on the working directory. The key of a source library unit also holds the digest
+  of its `.slib` (`Unit.library_digest`), so a new version or another manifest gives a new
+  key. A candidate is REUSED when its cache holds its object and its record for that key;
+  else its body passes run and fill a record.
 - **The record** (`BodyRecord`, beside the object as `<unit>.<key>.json`). The `typecheck`
   pass writes each generic function instance that a call in the body names, whether it
   was cut early or late (`declared_or_late_instance`). A question that only a template copy
@@ -1108,10 +1120,12 @@ reads it.
   late function copy. When the fixpoint has nothing more, a reused unit whose key is not
   its base key any more (for example the `Drop` set grew) runs its body passes, and the
   fixpoint goes on. A unit that fell back builds its object in the project cache.
-- **The pipeline** takes the object of a reused unit from the per-user cache and builds no
-  module for it. A unit whose final key is its base key keeps its object in the per-user
-  cache, and the pipeline writes its record when the record is complete. Every other
-  object is in the project cache.
+- **The pipeline** takes the object of a reused unit from its cache and builds no module
+  for it. A unit whose final key is its base key keeps its object in that cache, and the
+  pipeline writes its record when the record is complete. Every other object is in the
+  project cache. The build prints
+  `Front end: N stdlib units reused, L library units reused, M checked again` when one of
+  the three counts is not zero.
 
 ## The `scope` pass: scope and variable analysis
 

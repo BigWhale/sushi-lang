@@ -289,8 +289,8 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
 
 **How it works:**
 - Semantic analysis always runs whole-program (fast, pure Python). A bundled stdlib
-  module whose object is in the per-user cache skips its body passes (see "The stdlib
-  objects" below)
+  module whose object is in the per-user cache, and a source library unit whose object
+  is in the project cache, skip their body passes (see "The stdlib objects" below)
 - After analysis, a content-based fingerprint is computed per unit
 - A unit's fingerprint covers its own source and declarations, and the **interface** of
   every unit in its dependency closure: each declaration's shape (a struct's field order
@@ -302,7 +302,8 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
   working directory of the build, because an `assert` prints that name at run time. The
   same source built from another directory with one `--cache-dir` is another object. A
   bundled stdlib module has the name `<sys/process>` in its key and in its `assert`
-  text, the same from each directory
+  text, and a source library unit has the name `lib/<name>/<unit>.sushi`, the same from each
+  directory
 - Each cached object is content-addressed: its filename is
   `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
   version, target triple, opt level, overflow mode, **and** a content digest of the compiler's own
@@ -368,10 +369,15 @@ instances that the body of the module calls.
 When both files are there, the next build does not check the bodies of that module again:
 it reads only its declarations, and it asks again for each instance in the record. The
 code-generation report shows the module as `[cached]`, and a line
-`Front end: N stdlib units reused, M checked again` follows it. A module that gets a
-template copy during the build is checked again (`M`), and its object goes to the project
-cache. A build with `--dump-shir`, `--dump-slir`, `--lib`, `--no-incremental` or
-`--dump-ll` checks every module.
+`Front end: N stdlib units reused, L library units reused, M checked again` follows it. A
+module that gets a template copy during the build is checked again (`M`), and its object
+goes to the project cache. A build with `--dump-shir`, `--dump-slir`, `--lib`,
+`--no-incremental` or `--dump-ll` checks every module.
+
+A unit of a source library (`lib/<name>/<unit>`) is reused in the same way (`L`), but its
+object and its record stay in the project cache, in
+`__sushi_cache__/reuse/<global_key>/`. Its key holds the digest of the `.slib`, so a new
+version of the library is checked again.
 
 The objects of the stdlib modules that the compiler generates in Python (`.bc`) are in the
 same directory.

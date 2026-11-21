@@ -1,0 +1,13 @@
+# A source library changes the value of a constant in one unit. The source of the other
+# unit, which reads the constant, does not change, but its key changes. So the second
+# build does not reuse the old object, and the program prints the new value.
+# BUILD_LIB: shelf.sushi
+# FIXTURE_SUSHI_HOME: home
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "1\n"
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_REBUILT: lib/shelf/base, lib/shelf/shelf, test_lib_reuse_changed
+use <lib/shelf>
+
+fn main() i32:
+    println(shown())
+    return 0

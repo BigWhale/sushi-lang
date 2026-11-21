@@ -617,6 +617,20 @@ fixture file itself, because the one set of directives describes both steps.
 - It does not go with `v2/`, `THEN_CLEAN_CACHE` or `FIXTURE_CACHE_DIR`. An empty path, an
   absolute path, or a path with a `..` part fails the fixture.
 
+#### EXPECT_COMPILER_STDOUT_CONTAINS
+
+```sushi
+# EXPECT_COMPILER_STDOUT_CONTAINS: "Front end: 0 stdlib units reused, 1 library units reused"
+```
+
+- A text that the stdout of the fixture's LAST compilation must hold: the compilation
+  whose report `EXPECT_REBUILT` / `EXPECT_CACHED` read (the second one of a `v2/` fixture,
+  of `SECOND_BUILD_IN` and of `THEN_CLEAN_CACHE: source`). The directive may be repeated.
+- Use it for a line of the build report that the unit report does not show, for example
+  the `Front end:` line. A unit that is reused and a unit whose body passes ran both
+  report `[cached]` when their objects are in the project cache; only that line tells
+  them apart.
+
 #### BUILD_LIB
 
 ```sushi

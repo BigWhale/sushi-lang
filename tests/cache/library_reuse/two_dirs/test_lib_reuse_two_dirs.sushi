@@ -1,0 +1,16 @@
+# The key of a source library unit does not depend on the working directory of the build.
+# The first build starts in the fixture directory, and the second build starts in another
+# directory. The program unit has a label that is relative to the working directory, so it
+# is built again; the library unit is reused.
+# BUILD_LIB: dial.sushi
+# RUN_IN_FIXTURE_DIR
+# SECOND_BUILD_IN: elsewhere/deeper
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_REBUILT: test_lib_reuse_two_dirs
+# EXPECT_CACHED: lib/dial/dial
+# EXPECT_COMPILER_STDOUT_CONTAINS: "Front end: 0 stdlib units reused, 1 library units reused, 0 checked again"
+use <lib/dial>
+
+fn main() i32:
+    println(dial())
+    return 0

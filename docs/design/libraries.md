@@ -239,8 +239,13 @@ A `.slib` is reproducible: two builds of one source give one file, byte for byte
 manifest holds no field that changes from build to build (no timestamp). So a library
 that is built again with no change rebuilds nothing at the consumer.
 
-- On the source path, the key of a library unit is the key of any other unit. A change of
-  the library rebuilds what a change of an own unit rebuilds.
+- On the source path, the key of a library unit is the key of any other unit, plus the
+  digest of the bytes of its `.slib` and the label `lib/<name>/<unit>.sushi` (not the path of
+  the materialized file). A change of the library rebuilds the units of the library and
+  what depends on their interfaces. A library unit that holds no template copy is also
+  REUSED: a later build skips its body passes and takes its object and the record of its
+  body from `__sushi_cache__/reuse/` (`semantics/unit_reuse.py`, as for a bundled stdlib
+  unit). `--lib` builds do not reuse.
 - On the binary path, `compute_lib_fingerprint` (`compiler/fingerprint.py`) is the digest
   of the bytes of each binary `.slib`, and it goes into the key of EVERY unit of the
   consumer (the `LIB_TEMPLATES:` fold), the stdlib units included. A change of the library,

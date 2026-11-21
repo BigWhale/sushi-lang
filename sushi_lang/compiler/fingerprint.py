@@ -28,8 +28,8 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
 
     # The name an `assert` prints for this file is in the object. For a unit of the
     # program it is relative to the working directory of the build, so the same source
-    # built from another directory is another object; a bundled stdlib module prints its
-    # module name, the same from each directory.
+    # built from another directory is another object; a bundled stdlib module and a
+    # source library unit print their unit name, the same from each directory.
     hasher.update(b"LABEL:")
     hasher.update(object_label(str(unit.file_path)).encode("utf-8"))
 
@@ -88,6 +88,13 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         hasher.update(b"LIB_TEMPLATES:")
         for lib_path in sorted(library_fingerprints):
             hasher.update(f"{lib_path}:{library_fingerprints[lib_path]}".encode())
+
+    # A source library unit: the digest of its `.slib`, so a new version or another
+    # manifest of the library gives a new key.
+    library_digest = getattr(unit, "library_digest", None)
+    if library_digest is not None:
+        hasher.update(b"LIBRARY:")
+        hasher.update(library_digest.encode())
 
     # 7. Which types implement `Drop`, whole-program (HANDLES.md ruling R2). Nothing
     # else here covers it: a perk implementation carries no visibility marker, so it is
