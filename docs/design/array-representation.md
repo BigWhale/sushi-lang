@@ -184,7 +184,7 @@ and the gate `tests/unit/test_call_signature_is_one.py` refuses a second rule:
 - The last position keeps the environment of a function value first:
   `(env, <params>, <answer slot>)`. So the type of a function value, its lifted lambda and
   the thunk of a named function agree, and a thunk forwards its parameters unchanged.
-- A binary or a hybrid `.slib` declares the functions of its manifest through the same
+- A binary `.slib` declares the functions of its manifest through the same
   function, so the library and the consumer agree.
 - An indirect call outside SLIR (an iterator adapter, `map_err`) that has a value for a
   by-address position puts the value into a slot first, and reads an answer that moves by

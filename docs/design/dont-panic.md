@@ -67,7 +67,7 @@ two do not depend on each other. Rust has both.
 | **D6** | The marker does not propagate. A callee is checked. An instance of a marked template is marked, because it is the same body | 5.3 |
 | **D7** | The marker is legal in a bundled stdlib unit without a flag | 6.1 |
 | **D8** | The marker is legal in any unit of a build that passes `--dont-panic`. Without the flag, a user unit that writes it gets an error | 6.2 |
-| **D9** | A source library that writes the marker needs the consumer's `--dont-panic`. The error names the library and the flag. A concrete marked body of a binary or a hybrid library needs no consent. A marked generic template of any library kind needs it | 6.3 |
+| **D9** | A source library that writes the marker needs the consumer's `--dont-panic`. The error names the library and the flag. A concrete marked body of a binary library needs no consent. A marked generic template of any library kind needs it | 6.3 |
 | **D10** | Every `.slib` kind records its marked functions with their reasons. `--lib-info` lists them | 7 |
 | **D11** | A build with `--dont-panic` prints no list of what it accepted | 7 |
 | **D12** | A marked function that holds no index to uncheck is a warning, always on | 8.1 |
@@ -163,7 +163,7 @@ the consent of the consumer, because the consumer compiles the unchecked code. T
 names the library, so the consumer knows which code asks for the flag. A library author
 who uses the marker must state this in the documentation of the library.
 
-A binary library and a hybrid library have this case only for a marked generic template:
+A binary library has this case only for a marked generic template:
 
 - A CONCRETE marked body is in the bitcode that the library ships. The consumer links
   that bitcode, as it links a C library. The consumer does not need to consent.
@@ -177,7 +177,7 @@ statement was wrong for a template.
 ## 7. The manifest and `--lib-info` (D10, D11)
 
 Every `.slib` kind records its marked functions, each with its `because`: a source library
-as text, a binary or hybrid library as a manifest record beside `reexports` and
+as text, a binary library as a manifest record beside `reexports` and
 `conversions` (`compiler/library_manifest.py`). `--lib-info` lists them in both halves, the
 Python fallback (`compiler/lib_info.py`) and the `slib-info` tool (`toolchain/src/`). A
 reviewer sees the unchecked code and its proof before the first build.
@@ -290,7 +290,7 @@ the `sushi-omakase-api` and `sushi-omakase-front` repositories.
   grammar accepts the marker in the three refused positions. It does this only so that
   the AST builder can name the position.
 - **The consent.** The marker of a source library needs the `--dont-panic` of the
-  consumer. A concrete marked body of a binary or hybrid library does not need it. A
+  consumer. A concrete marked body of a binary library does not need it. A
   marked generic template of each library kind needs it (section 6.3). The library
   author also builds the library with `--dont-panic`. For a test, the fixture directive
   `LIB_FLAGS` states this.

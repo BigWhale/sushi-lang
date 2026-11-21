@@ -29,7 +29,7 @@ when you add or change a flag, change the driver, compare IR, or build a library
 
 - `--lib` builds a `.slib`. `--lib-version X.Y.Z` is required unless a `nori.toml` states
   one; else it is an error.
-- `--lib-kind {source,binary,hybrid}`; source is the DEFAULT.
+- `--lib-kind {source,binary}`; source is the DEFAULT.
 - `--lib-info FILE` prints the signatures; `--docs` adds every doc block.
 - `--ignore-compiler-version` overrides the compiler-version check.
 

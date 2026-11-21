@@ -6,6 +6,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **The hybrid library kind is removed.** A `.slib` is `source` (the default) or `binary`.
+  A hybrid library carried the source and the bitcode, but the consumer read only the
+  bitcode, and a foreign host refused it. `--lib-kind hybrid` is refused (an invalid
+  choice), and a `.slib` whose manifest states `hybrid` is refused by the consumer and by
+  `--lib-info` (CE3512, `unknown library kind 'hybrid'`): build it again as `source` or
+  `binary`. A manifest with no `kind` is a source library. The test runner has no
+  `BUILD_LIB_HYBRID` directive now.
+
 - **A `.slib` is reproducible.** The manifest has no `compiled_at` field now, so two builds
   of one source give a byte-equal file (checked with two `PYTHONHASHSEED` values). A
   binary library that is built again with no change now rebuilds nothing at the consumer,

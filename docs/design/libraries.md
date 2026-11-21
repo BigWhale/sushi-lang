@@ -31,6 +31,17 @@ the per-declaration behaviour: concrete bodies as bitcode, generics as
 source slices. §5 specifies it. A binary `.slib` is platform-bound and is rejected on
 a foreign OS or a foreign architecture ([CE3504](../error-catalog.md#ce3504)); a source `.slib` is not.
 
+**There are two kinds, `source` and `binary`.** A third kind, `hybrid`, carried the whole
+source AND the bitcode. It came from #428 as the third value of `KIND`, and it was never
+given a purpose. The consumer read it through the binary path, so the source section was
+never read. A foreign platform refused it ([CE3504](../error-catalog.md#ce3504)), although it carried all of its
+source, and it could not hide the source. Its one possible value was a faster build on a
+matching host, and the per-user stdlib front-end cache gives that value to every source
+library. Each change to the binary path also had to be checked for the hybrid. So the
+kind is removed: `--lib-kind hybrid` is an argparse error, the header value 3 is retired,
+and a manifest that states `hybrid` (from an older compiler) is refused with
+[CE3512](../error-catalog.md#ce3512). Build such a library again as `source` or `binary`.
+
 Note that a binary `.slib` does **not** hide a library's generics. Their
 source text is in the manifest, because that is the only way a generic can cross a
 boundary at all.
@@ -55,7 +66,7 @@ no function is called with the wrong ABI:
 MAGIC (16B) 🍣SUSHILIB🍣
 VERSION       (u32 LE) = 5
 FLAGS         (u32 LE)   bit 0 = source section compressed
-KIND          (u32 LE)   1 = source, 2 = binary, 3 = hybrid
+KIND          (u32 LE)   1 = source, 2 = binary (3, the hybrid kind, is retired)
 SPARE_3       (u64 LE)   zero
 SPARE_4       (u64 LE)   zero
 METADATA_LENGTH (u64 LE) | METADATA_BLOB (msgpack dict)
@@ -64,7 +75,7 @@ BITCODE_LENGTH  (u64 LE) | BITCODE_BLOB  (LLVM bitcode)
 ```
 
 `SOURCE_LENGTH` is zero when `KIND = binary`. `BITCODE_LENGTH` is zero when
-`KIND = source`. A hybrid carries both.
+`KIND = source`. The header `KIND` mirrors the manifest `kind`; no reader reads it.
 
 Entry points: `write()`, `read()`, `read_metadata_only()`, `read_source_only()` so the
 consumer can take the index and the source without touching the bitcode, and
@@ -126,13 +137,14 @@ authority, and the index is a cache of it.
 | `library_name` | from the output filename |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
-| `kind` | `"source" / `"binary"` / `"hybrid"`, matching the `KIND` header field |
+| `kind` | `"source"` or `"binary"`, matching the `KIND` header field. Optional: a manifest with no `kind` is a source library. Any other value is [CE3512](../error-catalog.md#ce3512) in every reader; `library_kind` (`backend/library_format.py`) and its Sushi twin (`toolchain/slib.sushi`) are the one answer |
 | `units` | ordered unit names present in the source section |
 | `compiler_version` | informational: exactly which compiler built the file |
 | `platform` | the host key `<os>_<arch>` (`darwin_arm64`), from `host_key()`, the key of the `<sys/platform>` file; meaningful only when `kind != "source"` |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `not_exported` | what the library declares and keeps: a name, its kind and the unit that keeps it, one record for each (unit, name), and nothing else (#1112). The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
+| `conversions` | one record per public conversion `extend A as B:` (`source`, `target`, `link_symbol`, `unit`). The consumer's `??` and `e as B` call the conversion through its `link_symbol`. Absent when the library declares no conversion |
 | `reexports` | one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports |
 | `dependencies` | one record per stdlib module the build uses (`kind: "stdlib"`) and per `use <lib/...>` of the library's own units, plain or public (`kind: "library"`, with the `library_name` and the `library_version` that the build found). The consumer's build loads every library of the graph from these records, and `--lib-info` lists them (§5.8, #1120). Each record names in `units` the library's own units that write the `use`: at the consumer, the namespace table of a unit of the library reads only the records that name it, so a template copy sees the imports of its own unit and not the imports of another unit (#1123) |
 
@@ -334,7 +346,7 @@ genuinely portable FFI-heavy libraries. It is out of scope here.
 
 ## 5. The binary path (opt-in)
 
-This section applies when `kind` is `binary` or `hybrid`.
+This section applies when `kind` is `binary`.
 
 A binary `.slib` is **bitcode plus a manifest**. Concrete symbols (plain functions,
 concrete structs/enums, concrete perk-impl method bodies) are already machine code in
@@ -391,7 +403,7 @@ and the link line takes it (`reexported_libraries`). A library that is not on th
 [CE3502](../error-catalog.md#ce3502) with a note that names the `public use`.
 
 The `templates` section carries its own `"version"` (`TEMPLATES_SCHEMA_VERSION`,
-`8`, in `backend/library_format.py`), which is independent of the container version.
+`11`, in `backend/library_format.py`), which is independent of the container version.
 The section holds:
 
 - generic function templates (source slices)
@@ -413,7 +425,7 @@ The section holds:
 - the signature and the receiver mode of every perk method record.
 - `has_channel` (required) on every function, helper and method record. A signature
    without `| E` is bare, and there is no default error type, so the flag states the
-   channel. A binary or hybrid library with a different schema version is refused
+   channel. A binary library with a different schema version is refused
    ([CE3512](../error-catalog.md#ce3512)); a source library recompiles from its units and reads none of this.
 
 ### 5.1 Concrete functions
@@ -433,7 +445,8 @@ record, both raising and aborting the `.slib` write (no partial artifact):
   library format. (A type-pack `...Ts` function is unaffected — it carries
   `type_params` and is filtered into `generic_functions` before this check is reached;
   the discriminator is `is_pack` vs `is_variadic`, not the shared `...` spelling.)
-  This check does not apply on the source path, where the declaration ships whole.
+  This check fires on the source path too, because the producer builds the index for
+  every kind (§9).
 - **[CE5002](../error-catalog.md#ce5002)** — a public function whose signature (param or return, recursively
   including inside `Result`/`Maybe`) exposes a foreign `ptr` cannot appear in a public
   API at all. FFI is a private unit detail (`contains_foreign_ptr`, shared with the
@@ -752,7 +765,7 @@ as the consumer's own units are.
 
 ### 5.9 Extension methods
 
-A binary or hybrid library exports its extension methods, instance and static. Two
+A binary library exports its extension methods, instance and static. Two
 records carry them, both in `templates`, and every kind writes both.
 
 - **`extensions`** — one record for each CONCRETE extension method: the target `type`,
@@ -855,7 +868,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 
 | Situation | Rule | Why |
 |---|---|---|
-| Consumer FUNCTION name == public library function | local wins, and **[CW3002](../error-catalog.md#cw3002)** says so, for every library kind | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way. A binary or hybrid library warns from its manifest, in the `libraries` step, for a public function and a public template alike (#1103). `docs/design/visibility.md` §9.1 |
+| Consumer FUNCTION name == public library function | local wins, and **[CW3002](../error-catalog.md#cw3002)** says so, for every library kind | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way. A binary library warns from its manifest, in the `libraries` step, for a public function and a public template alike (#1103). `docs/design/visibility.md` §9.1 |
 | Consumer TYPE name == public library type (**source**) | **[CE0004](../error-catalog.md#ce0004)** / **[CE2046](../error-catalog.md#ce2046)**, hard error | type identity is nominal, so one name is one shape; the consumer cannot have its own. The library's units are compilation units here, so the collect pass answers at the declaration and a note points at the library's |
 | Consumer TYPE name == public library type (**binary**) | **[CE3011](../error-catalog.md#ce3011)**, hard error | the same rule, and the same answer a source library's PRIVATE type gets, for the same reason: the consumer cannot SEE the declaration that holds the name, so the head line names the library instead of pointing a note at a file the consumer does not have. The `libraries` step refuses it, where the manifest meets the collected tables. The consumer keeps its own type in its tables |
 | Consumer TYPE name == library-PRIVATE type or private generic template (**source** and **binary**) | **[CE3011](../error-catalog.md#ce3011)**, hard error, and the analysis stops after it | type identity is nominal, so one name is one shape even where the consumer cannot see the library's declaration. Renaming is the only move, and `docs/design/type-identity.md` phase 2 is what would lift it |

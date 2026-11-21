@@ -865,7 +865,7 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
    importers get Y -- and never along a plain `use`. A cycle of `public use` is legal and
    terminates on a visited set.
 3. Every kind of `.slib` carries a re-export. A source `.slib` needs nothing -- the consumer re-parses the
-   statement. A binary or hybrid one ships a `reexports` list in the manifest, one record
+   statement. A binary one ships a `reexports` list in the manifest, one record
    per statement: the target, the unit that wrote it, and which of the three producers the
    target is, so the consumer reaches the same provider builder the written statement
    would have. `docs/design/libraries.md` section 5 carries the two consequences: the
