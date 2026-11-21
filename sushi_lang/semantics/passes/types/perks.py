@@ -287,15 +287,28 @@ def reject_extensions_beside_shipped_impl(impl: ExtendWithDef, tables: 'SymbolTa
     type can never be called, and the error stands at it. A `template` is judged as a
     written template is, against every extension on its base.
     """
-    if template:
-        existing = _template_extensions_beside(impl, tables)
-    else:
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        target = resolve_unknown_type(impl.target_type, tables.structs.by_name,
-                                      tables.enums.by_name)
-        existing = None if target is None else _extensions_beside(target, impl, tables)
+    existing = _existing_beside(impl, tables, template)
     if existing is not None:
         _reject_name_conflicts(impl, existing, reporter, shipped=True)
+
+
+def _existing_beside(impl: ExtendWithDef, tables: 'SymbolTables',
+                     template: bool) -> Optional[dict]:
+    """The extension methods that the perk methods of `impl` meet, by name."""
+    if template:
+        return _template_extensions_beside(impl, tables)
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    target = resolve_unknown_type(impl.target_type, tables.structs.by_name,
+                                  tables.enums.by_name)
+    return None if target is None else _extensions_beside(target, impl, tables)
+
+
+def meets_an_extension(impl: ExtendWithDef, tables: 'SymbolTables', template: bool) -> bool:
+    """Does an extension method of the program have the name of a perk method of `impl` on
+    its target? The typecheck pass of the unit of `impl` then reports CE4007, so the answer
+    depends on the other units of the program."""
+    existing = _existing_beside(impl, tables, template) or {}
+    return bool({method.name for method in impl.methods} & set(existing))
 
 
 def _extensions_beside(target, perk_impl: ExtendWithDef, tables: 'SymbolTables') -> dict:

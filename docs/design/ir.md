@@ -2782,7 +2782,10 @@ declarations of a module come from the declaration table (6.3). Each body comes 
 `SlirFunction` of the analysis, keyed by the `DeclId` of the body that its record holds:
 `codegen_for` hands the SLIR of the program to the backend (`SlirBodies`), and a body that
 has no `SlirFunction` there is an internal error. There is no fallback to the AST body
-emitter. The emitter defines the LLVM function that the declaration round made for the
+emitter. A REUSED bundled stdlib unit (`semantics/unit_reuse.py`) has no SHIR body and no
+`SlirFunction`: its body passes did not run. The pipeline builds no module for it and links
+its object from the per-user cache; the declaration table still holds its declarations, so
+the other modules declare its symbols. The emitter defines the LLVM function that the declaration round made for the
 symbol. One function derives the symbol of a body (`function_symbol`,
 `semantics/unit_symbols.py`): the definition, the callee of a `Direct` call, the declaration
 round and the verifier all read it. The body of an extension method or of a static has its

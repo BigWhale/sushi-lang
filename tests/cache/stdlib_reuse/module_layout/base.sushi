@@ -1,0 +1,3 @@
+public struct Pair:
+    i32 left
+    i32 right

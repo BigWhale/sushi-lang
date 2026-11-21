@@ -5,7 +5,8 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
-from sushi_lang.internals.report import display_filename
+from sushi_lang.semantics.unit_reuse import (
+    held_extension_copies, holds_template_copies, object_label)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit, UnitManager
@@ -25,11 +26,12 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
     hasher.update(b"SOURCE:")
     hasher.update(source.encode("utf-8"))
 
-    # The name an `assert` prints for this file is in the object, and it is relative to
-    # the working directory of the build, so the same source built from another
-    # directory is another object.
+    # The name an `assert` prints for this file is in the object. For a unit of the
+    # program it is relative to the working directory of the build, so the same source
+    # built from another directory is another object; a bundled stdlib module prints its
+    # module name, the same from each directory.
     hasher.update(b"LABEL:")
-    hasher.update(display_filename(str(unit.file_path)).encode("utf-8"))
+    hasher.update(object_label(str(unit.file_path)).encode("utf-8"))
 
     hasher.update(b"OWN_SYMBOLS:")
     for name in sorted(unit.public_symbols.keys()):
@@ -67,12 +69,12 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
     # copy's signature and body, and the INTERFACE of every unit of the program: a
     # layout change of a type argument in a unit this one does not import changes the
     # code of the copy. A body-only edit elsewhere changes no interface.
-    held = _held_extension_copies(unit, monomorphized_extensions)
+    held = held_extension_copies(unit, monomorphized_extensions)
     if held:
         hasher.update(b"HELD_EXTENSIONS:")
         for sig in sorted(_extension_copy_signature(ext) for ext in held):
             hasher.update(sig.encode())
-    if unit_manager is not None and (held or _holds_template_copies(unit)):
+    if unit_manager is not None and (held or holds_template_copies(unit)):
         hasher.update(b"PROGRAM_INTERFACES:")
         for name in sorted(unit_manager.units):
             hasher.update(f"UNIT:{name}:".encode())
@@ -99,20 +101,6 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         hasher.update(name.encode())
 
     return hasher.hexdigest()
-
-
-def _held_extension_copies(unit: Unit, monomorphized_extensions: list | None) -> list:
-    """The generic-target extension copies whose home is `unit`."""
-    return [ext for ext in monomorphized_extensions or ()
-            if getattr(ext, "home_unit", None) == unit.name]
-
-
-def _holds_template_copies(unit: Unit) -> bool:
-    """Whether the unit's AST holds a generic function instance or a perk-impl copy."""
-    if unit.ast is None:
-        return False
-    return (any(getattr(fn, "home_unit", None) == unit.name for fn in unit.ast.functions)
-            or any(getattr(impl, "is_synthesized", False) for impl in unit.ast.perk_impls))
 
 
 def _extension_copy_signature(ext) -> str:
@@ -451,7 +439,7 @@ def _hash_declaration_shapes(hasher: hashlib._Hash, ast: Program) -> None:
     # declaring unit's list before this runs, so a new instantiation anywhere in the
     # program changes that unit's signature list and flips its key. The body comes from
     # the template, whose source is in the declaring unit's own source hash; the types
-    # the body reads are covered by the held-copies rule (`_holds_template_copies`).
+    # the body reads are covered by the held-copies rule (`unit_reuse.holds_template_copies`).
     hasher.update(b"PERK_IMPLS:")
     all_impls = list(ast.perk_impls) + list(ast.generic_perk_impls or ())
     impl_sigs = [s for impl in all_impls for s in _perk_impl_signatures(impl)]

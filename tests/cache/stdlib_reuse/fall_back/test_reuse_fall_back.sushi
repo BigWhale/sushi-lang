@@ -1,0 +1,14 @@
+# The first build stores the object of collections/sort in the per-user cache, because no
+# unit sorts an array. In the second build the compiler reuses that object before the
+# per-unit passes, and then a call in helper gives collections/sort a copy of sort. The
+# compiler checks collections/sort again and builds its object.
+# FIXTURE_SUSHI_HOME: home
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3\n"
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_REBUILT: helper, collections/sort
+# EXPECT_CACHED: test_reuse_fall_back
+use "helper"
+
+fn main() i32:
+    println("{first()}")
+    return 0

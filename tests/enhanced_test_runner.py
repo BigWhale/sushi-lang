@@ -36,6 +36,7 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        stdlib_python_line_gate, STDLIB_PYTHON_SRC, STDLIB_PYTHON_BASELINE)
 from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
 from golden_dumps import check_dumps, dump_flags, gate_seed
+from sushi_lang.internals.user_cache import SUSHI_HOME_ENV
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -499,6 +500,9 @@ class TestRunner:
     def __enter__(self):
         """Create temporary directory for test binaries."""
         self.temp_dir = tempfile.mkdtemp(prefix="sushi_tests_")
+        # The per-user cache of the compiler (`~/.sushi/cache/compiler/`) is the run's own,
+        # so a run never writes the user's home and never reads an object of an older run.
+        self.env_overrides.setdefault(SUSHI_HOME_ENV, str(Path(self.temp_dir) / "sushi_home"))
         if not self.fresh_processes:
             self._server = ForkServer(self.project_root, Path(self.temp_dir) / "fork-server",
                                       env={**os.environ, **self.env_overrides})
@@ -778,8 +782,15 @@ class TestRunner:
         rebuild = is_rebuild_fixture(test_file)
         # A clean build (THEN_CLEAN_CACHE: source) is the second compilation whose unit
         # report EXPECT_REBUILT / EXPECT_CACHED read; nothing else stands in for `v2/`.
-        second_build = (metadata.then_clean_cache == "source"
+        second_build = ((metadata.then_clean_cache == "source"
+                         or metadata.second_build_in is not None)
                         and metadata.expect_stdout_exact_before_rebuild is None)
+        if metadata.second_build_in is not None and (
+                rebuild or metadata.then_clean_cache is not None
+                or metadata.fixture_cache_dir is not None):
+            return None, ("✗ Compilation: SECOND_BUILD_IN is a second compilation of its "
+                          f"own; it does not go with {REBUILD_DIR}/, THEN_CLEAN_CACHE or "
+                          "FIXTURE_CACHE_DIR")
         if metadata.declares_a_rebuild and not rebuild and not second_build:
             return None, (f"✗ Compilation: the fixture declares a rebuild and its directory "
                           f"holds no {REBUILD_DIR}/")
@@ -831,6 +842,8 @@ class TestRunner:
         named = [path for pair in metadata.build_libs_at for path in pair]
         named += metadata.expect_paths_exist + metadata.expect_paths_absent
         named += metadata.expect_paths_exist_before_clean
+        named += [path for path in (metadata.fixture_sushi_home, metadata.second_build_in)
+                  if path is not None]
         if metadata.fixture_cache_dir is not None:
             named.append(metadata.fixture_cache_dir)
         outside = [path for path in named
@@ -868,7 +881,7 @@ class TestRunner:
                   for kind, source, slib, version, warns in metadata.library_builds]
         builds += [("BUILD_LIB_AT", "source", source, workspace.root / target, None, None)
                    for source, target in metadata.build_libs_at]
-        env = {**os.environ, **self.env_overrides, "NO_COLOR": "1"}
+        env = self._compile_env(metadata, workspace)
         env["SUSHI_LIB_PATH"] = os.pathsep.join(
             [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
         for directive, kind, source, target, written, warns in builds:
@@ -905,9 +918,19 @@ class TestRunner:
             return workspace.root / metadata.output_path
         return Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
+    def _compile_env(self, metadata: TestMetadata,
+                     workspace: Optional["Workspace"]) -> Dict[str, str]:
+        """The environment of one compile of a fixture. FIXTURE_SUSHI_HOME gives every
+        compile of the fixture a per-user home of its own, in its copy."""
+        env = {**os.environ, **self.env_overrides, "NO_COLOR": "1"}
+        if workspace is not None and metadata.fixture_sushi_home is not None:
+            env[SUSHI_HOME_ENV] = str(workspace.root / metadata.fixture_sushi_home)
+        return env
+
     def _invoke_compiler(self, test_file: Path, metadata: TestMetadata,
                          binary_path: Path, clean: Optional[str] = None,
-                         before_rebuild: bool = False) -> subprocess.CompletedProcess:
+                         before_rebuild: bool = False,
+                         second_build: bool = False) -> subprocess.CompletedProcess:
         """Start `sushic` for one compilation of a fixture, the way the fixture asks.
 
         `clean` is a THEN_CLEAN_CACHE form: "bare" starts `sushic --clean-cache` with the
@@ -918,7 +941,7 @@ class TestRunner:
         keeping substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS) robust.
         """
         workspace = self._workspace(test_file)
-        env = {**os.environ, **self.env_overrides, "NO_COLOR": "1"}
+        env = self._compile_env(metadata, workspace)
         cwd = self.project_root
         source = str(test_file)
         # A fixture with no copy of its own shares the run's cache: the compiler's
@@ -934,6 +957,10 @@ class TestRunner:
                     output = os.path.relpath(binary_path, workspace.root)
             if workspace.cache is not None:
                 cache_flags = ["--cache-dir", str(workspace.cache)]
+            if second_build:
+                cwd = workspace.root / metadata.second_build_in
+                cwd.mkdir(parents=True, exist_ok=True)
+                source, output = str(workspace.source), str(binary_path)
             if metadata.libs_on_the_path:
                 env["SUSHI_LIB_PATH"] = os.pathsep.join(
                     [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
@@ -971,7 +998,8 @@ class TestRunner:
         """
         return bool(metadata.stdlib_modules or is_rebuild_fixture(test_file)
                     or metadata.declares_a_rebuild
-                    or metadata.then_clean_cache is not None)
+                    or metadata.then_clean_cache is not None
+                    or metadata.second_build_in is not None)
 
     def _sushic(self, args: List[str], cwd, env: Dict[str, str], timeout: float,
                 fresh: bool = False) -> subprocess.CompletedProcess:
@@ -1130,6 +1158,10 @@ class TestRunner:
                 success, message, report = self._clean_cache(
                     test_file, metadata, binary_path, expected_exit_code, message, report)
 
+            if success and metadata.second_build_in is not None:
+                success, message, report = self._second_build(
+                    test_file, metadata, binary_path, expected_exit_code, message)
+
             if success and (metadata.expect_rebuilt is not None
                             or metadata.expect_cached is not None):
                 success, message = self._check_unit_report(report, metadata)
@@ -1192,6 +1224,21 @@ class TestRunner:
                            f"{expected}, got {done.returncode}\nSTDERR: {done.stderr.strip()}"
                            f"\nSTDOUT: {done.stdout.strip()}"), done.stdout
         return True, message, done.stdout if form == "source" else report
+
+    def _second_build(self, test_file: Path, metadata: TestMetadata, binary_path: Path,
+                      expected_exit_code: int, message: str) -> Tuple[bool, str, str]:
+        """SECOND_BUILD_IN: compile again, from another directory of the copy.
+
+        The same source, output, cache and environment; only the working directory
+        changes. Returns the verdict, its message and the stdout whose unit report
+        EXPECT_REBUILT / EXPECT_CACHED read.
+        """
+        done = self._invoke_compiler(test_file, metadata, binary_path, second_build=True)
+        if done.returncode != expected_exit_code or spelling_gate_tripped(done.stderr):
+            return False, (f"✗ Compilation: SECOND_BUILD_IN expected exit "
+                           f"{expected_exit_code}, got {done.returncode}\nSTDERR: "
+                           f"{done.stderr.strip()}\nSTDOUT: {done.stdout.strip()}"), done.stdout
+        return True, message, done.stdout
 
     @staticmethod
     def _check_copy_paths(workspace: "Workspace", metadata: TestMetadata,

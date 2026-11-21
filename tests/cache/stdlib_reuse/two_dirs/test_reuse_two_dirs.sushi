@@ -1,0 +1,12 @@
+# The key of a bundled stdlib unit does not depend on the working directory of the
+# build. The second build starts in another directory and takes the same objects.
+# FIXTURE_SUSHI_HOME: home
+# SECOND_BUILD_IN: elsewhere/deeper
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_CACHED: test_reuse_two_dirs, sys/process, io/error, net/error, sys/platform
+use <sys/process>
+
+fn main() i32:
+    if (getuid() >= 0):
+        println("Mostly Harmless")
+    return 0

@@ -1,0 +1,16 @@
+# The per-user cache keeps the object of a bundled stdlib unit. After the project cache
+# is cleaned, the second build takes the object of each stdlib unit from the per-user
+# cache, and the program prints the same output.
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_SUSHI_HOME: home
+# THEN_CLEAN_CACHE: source
+# EXPECT_PATH_EXISTS: home/cache/compiler/stdlib
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_REBUILT: test_reuse_process
+# EXPECT_CACHED: sys/process, io/error, net/error, sys/platform
+use <sys/process>
+
+fn main() i32:
+    if (getpid() > 0):
+        println("Mostly Harmless")
+    return 0

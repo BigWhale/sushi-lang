@@ -203,6 +203,8 @@ def _queue_extension_instantiation(validator: 'TypeValidator', template, target_
     key = (_resolved(validator, target_type), template.name,
            tuple(_resolved(validator, a) for a in method_type_args), template.unit_name)
     tables = validator.tables
+    if validator.body_record is not None:
+        validator.body_record.refuse(f"a call asks for a copy of the template {template.name}")
     if key in tables.queued_extension_keys:
         return
     tables.queued_extension_keys.add(key)
@@ -244,6 +246,10 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     """
     records = validator.extension_table.declarations(receiver_type, method_name)
     templates = _uncut_templates(validator, receiver_type, method_name, records)
+    if (validator.body_record is not None and not validator.in_template_check
+            and _target_templates(validator, receiver_type, method_name)):
+        validator.body_record.refuse(
+            f"a template can answer the call of {method_name} on {receiver_type}")
     method = None
     if records or templates:
         matching = [record for record in [*records, *templates]
@@ -286,17 +292,22 @@ def _uncut_templates(validator: 'TypeValidator', receiver_type, method_name: str
     call has cut. A unit with no copy yet is still a candidate of the call (C5). An
     instance over an opaque parameter has no copy; the last rung answers it.
     """
+    cut = {record.unit_name for record in records}
+    return [t for t in _target_templates(validator, receiver_type, method_name)
+            if t.unit_name not in cut]
+
+
+def _target_templates(validator: 'TypeValidator', receiver_type, method_name: str) -> list:
+    """Every `T[]` template, or every generic-target template of the receiver's base,
+    that gives this method name, whether a call cut its copy or not."""
     from sushi_lang.semantics.generics.extensions import target_templates_of
     from sushi_lang.semantics.generics.opaque import holds_opaque
     if isinstance(receiver_type, DynamicArrayType):
-        templates = _array_templates(validator, method_name)
-    elif isinstance(receiver_type, (StructType, EnumType)) and not holds_opaque(receiver_type):
-        templates = target_templates_of(validator.generic_extension_table, receiver_type,
-                                        method_name)
-    else:
-        return []
-    cut = {record.unit_name for record in records}
-    return [t for t in templates if t.unit_name not in cut]
+        return _array_templates(validator, method_name)
+    if isinstance(receiver_type, (StructType, EnumType)) and not holds_opaque(receiver_type):
+        return target_templates_of(validator.generic_extension_table, receiver_type,
+                                   method_name)
+    return []
 
 
 def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,

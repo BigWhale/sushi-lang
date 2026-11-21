@@ -1059,6 +1059,55 @@ the summary to decide whether a call invalidates the caller's value.
 Computed ONCE over EVERY unit, because `borrow` runs per unit: a per-unit summary would
 make a cross-unit callee invisible.
 
+## Reuse of a bundled stdlib unit: the skip, the replay, the fall-back
+
+**File:** `semantics/unit_reuse.py` (the one predicate, `UnitReuse.is_reused`); the analyzer
+reads it in `_check_units` and `_check_array_extensions`, and the pipeline reads it in
+`_compile_incremental`.
+
+The body passes of a bundled stdlib unit (`scope`, lowering, `typecheck`, `lift`,
+`borrow`, the SLIR stage) make an object that does not depend on the program, unless the
+unit holds a template copy. So the object goes to the per-user cache
+(`~/.sushi/cache/compiler/stdlib/<global_key>/`), and the next build skips those passes for
+the unit. The unit still gives its interface: it is parsed, and every pass up to `effects`
+reads it.
+
+- **Where the build allows it.** The pipeline makes the `UnitReuse` before the analysis,
+  for an incremental build only. A build with `--dump-shir` or `--dump-slir`, a build that
+  is not incremental (`--lib`, `--no-incremental`, `--dump-ll`, a program of one unit), or a
+  per-user cache that is not the user's alone gives none, and every unit runs.
+- **The decision**, after `effects` and before the per-unit loop (`UnitReuse.decide`). A
+  candidate is a bundled stdlib unit that holds no template copy after `monomorphize`,
+  whose unit-level constants have no type that `typecheck` must intern (a generic wrapper
+  type), and none of whose perk implementations meets an extension method of the name of
+  one of its methods (that is CE4007, which the `typecheck` pass of the unit reports). Its
+  BASE key is `compute_unit_fingerprint` (`compiler/fingerprint.py`) with the copies and the
+  `Drop` set of this point: for a unit with no copy it is the full key. The label in the key
+  is `object_label`: `<sys/process>` for a bundled module. A candidate is REUSED when the
+  per-user cache holds its object and its record for that key; else its body passes run
+  and fill a record.
+- **The record** (`BodyRecord`, beside the object as `<unit>.<key>.json`). The `typecheck`
+  pass writes each generic function instance that a call in the body names, whether it
+  was cut early or late (`declared_or_late_instance`). A question that only a template copy
+  can answer gives no record, so the unit is never reused: a call that an extension
+  template can answer (`resolve_extension_method`, `_queue_extension_instantiation`), and a
+  lookup of the perk-implementation table that a perk template can answer (`on_question`).
+- **The replay.** In the place of the body passes of a reused unit, the analyzer asks
+  again for each instance of the record (`_replay`, through `_request_function_instance`).
+  So the home unit of an instance gets the same copy as in a full build: the body of
+  `io/fs` gives `io/contracts` the copy `read_all__File`. A type of the record that is not in
+  the tables of the build cancels the reuse, and the body passes run.
+- **The fall-back.** In each round of the copy fixpoint, before a copy goes into its home
+  unit and before `_check_copies`, a reused home unit runs its body passes (`_fall_back`):
+  an extension copy, a perk copy, a dropped implementation that a late cut reached, and a
+  late function copy. When the fixpoint has nothing more, a reused unit whose key is not
+  its base key any more (for example the `Drop` set grew) runs its body passes, and the
+  fixpoint goes on. A unit that fell back builds its object in the project cache.
+- **The pipeline** takes the object of a reused unit from the per-user cache and builds no
+  module for it. A unit whose final key is its base key keeps its object in the per-user
+  cache, and the pipeline writes its record when the record is complete. Every other
+  object is in the project cache.
+
 ## The `scope` pass: scope and variable analysis
 
 **File:** `semantics/passes/scope.py`

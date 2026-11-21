@@ -77,6 +77,9 @@ unnecessary for correctness (see the Backend line in `CLAUDE.md`, Architecture).
   per-user cache of the compiler gets its directory from this helper and from nothing
   else.
 - The grammar tables are in `grammar/` (`internals/parser.py:grammar_cache_dir`).
+- The stdlib objects are in `stdlib/<global_key>/` (`CacheManager.user_stdlib_path`):
+  the object and the record of each reused bundled stdlib unit (`semantics/unit_reuse.py`),
+  and the objects of the stdlib generators. The user units stay in `__sushi_cache__/`.
   `SUSHI_GRAMMAR_CACHE_DIR` still overrides that one directory, and `off` turns it off.
 - `SUSHI_HOME` moves the tree for a test or CI. The fork server compares it, with `HOME`,
   before it reuses a warm child (`tests/fork_server.py:IMPORT_TIME_ENV`).

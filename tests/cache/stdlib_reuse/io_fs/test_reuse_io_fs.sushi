@@ -1,0 +1,16 @@
+# The body of io/fs asks io/contracts for a copy of the template read_all, so io/contracts
+# holds the copy in each program that loads io/fs. When io/fs is reused, the compiler
+# makes that request again, and io/contracts gets the copy as in a full build.
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_SUSHI_HOME: home
+# THEN_CLEAN_CACHE: source
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_REBUILT: test_reuse_io_fs, io/contracts
+# EXPECT_CACHED: io/fs, io/error, io/path, net/error, sys/platform, text/ascii
+# EXPECT_CACHED: collections/strings
+use <io/fs>
+
+fn main() i32:
+    match stdout.write("Mostly Harmless\n"):
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 4

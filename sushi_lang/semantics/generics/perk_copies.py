@@ -20,6 +20,23 @@ from typing import Any, List, Optional, Set, Tuple
 from sushi_lang.semantics.typesys import DynamicArrayType, Type
 
 
+def template_base(target: Type) -> Tuple[Optional[str], tuple]:
+    """The key of the templates that can cover `target`, and its type arguments."""
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    if isinstance(target, DynamicArrayType):
+        return ARRAY_BASE_KEY, (target.base_type,)
+    return (getattr(target, "generic_base", None),
+            tuple(getattr(target, "generic_args", None) or ()))
+
+
+def answering_templates(templates: Any, base: str, *, perk: Optional[str] = None,
+                        method: Optional[str] = None) -> List[Any]:
+    """The templates of `base` that give `perk`, or that give `method`."""
+    return [template for template in templates.templates(base)
+            if (perk is None or template.impl.perk_name == perk)
+            and (method is None or any(m.name == method for m in template.impl.methods))]
+
+
 class PerkCopies:
     """The `on_perk_miss` hook: cut the templates that answer one question."""
 
@@ -39,7 +56,6 @@ class PerkCopies:
         a stdlib body asks about `len`, and no template's body is checked for a type no
         question needed.
         """
-        from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
         from sushi_lang.semantics.generics.extensions import (
             bounds_hold_for, monomorphize_perk_impl)
         from sushi_lang.semantics.passes.collect.perks import perk_type_name
@@ -47,22 +63,15 @@ class PerkCopies:
         type_name = perk_type_name(target)
         if type_name is None:
             return False
-        if isinstance(target, DynamicArrayType):
-            base, type_args = ARRAY_BASE_KEY, (target.base_type,)
-        else:
-            base = getattr(target, "generic_base", None)
-            type_args = tuple(getattr(target, "generic_args", None) or ())
+        base, type_args = template_base(target)
         if base is None:
             return False
 
         perk_impls = self.tables.perk_impls
         cut = False
-        for template in self.tables.generic_perk_impls.templates(base):
+        for template in answering_templates(self.tables.generic_perk_impls, base,
+                                            perk=perk, method=method):
             perk_name = template.impl.perk_name
-            if perk is not None and perk_name != perk:
-                continue
-            if method is not None and all(m.name != method for m in template.impl.methods):
-                continue
             if (type_name, perk_name) in self._asked:
                 continue
             self._asked.add((type_name, perk_name))

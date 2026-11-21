@@ -1,0 +1,4 @@
+use <fixture/base>
+
+public fn shown() string:
+    return "{answer()}"

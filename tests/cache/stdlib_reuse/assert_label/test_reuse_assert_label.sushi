@@ -1,0 +1,19 @@
+# An assert in a bundled stdlib module names the module, not a path that depends on the
+# working directory. The second build reuses the object of the module, so the binary that
+# runs holds the reused code.
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_SUSHI_HOME: home
+# THEN_CLEAN_CACHE: source
+# EXPECT_REBUILT: test_reuse_assert_label
+# EXPECT_CACHED: random
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_STDERR_CONTAINS: "assertion failed at <random>:61:5"
+# EXPECT_STDERR_CONTAINS: "rand_range needs min < max"
+use <random>
+
+fn main() i32:
+    println("Mostly Harmless")
+    let i32 x = rand_range(5, 1)
+    println("{x}")
+    return 0

@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.report import Span, display_filename
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
@@ -89,6 +89,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import DropPlacement, FlowState
+from sushi_lang.semantics.unit_reuse import object_label
 from sushi_lang.semantics.slir.function import (
     STAGE, SlirBlock, SlirFunction, SlirLocal, SlirProgram,
 )
@@ -137,7 +138,7 @@ class SlirStage:
         drops = drop_type_names(tables.perk_impls)
         function = lower_function(decl, self.shir.tables_of(body), decls=self.shir.decls,
                                   name=name, unit=self.unit, tables=tables, drops=drops,
-                                  label=display_filename(filename or "<input>"),
+                                  label=object_label(filename or "<input>"),
                                   overflow=self.overflow)
         for each in (function, *function.lifted):
             self.verifier.verify(each, tables=tables, drops=drops, filename=filename)

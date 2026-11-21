@@ -34,6 +34,8 @@ from sushi_lang.semantics.slir.function import SlirProgram
 from sushi_lang.semantics.slir.lower import SlirStage
 from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.units import UnitManager, Unit
+from sushi_lang.semantics.unit_reuse import UnitReuse
+from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
 from sushi_lang.semantics.library_registration import (
@@ -150,8 +152,12 @@ class SemanticAnalyzer:
     def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, lints: Optional[Lints] = None,
                  generated_symbols: frozenset[str] = frozenset(),
                  is_library: bool = False, dont_panic: bool = False,
-                 overflow: OverflowMode = OverflowMode.TRAP) -> None:
+                 overflow: OverflowMode = OverflowMode.TRAP,
+                 reuse: Optional[UnitReuse] = None) -> None:
         self.reporter = reporter
+        # The reuse decisions of an incremental build (`unit_reuse.py`), or None: every
+        # unit runs its body passes.
+        self.reuse = reuse
         self.filename = filename
         self.unit_manager = unit_manager
         # A backend LibraryResolver, held through a Protocol: semantics must not
@@ -254,7 +260,10 @@ class SemanticAnalyzer:
         gives it to the SLIR stage. A body whose walk in `typecheck` reported an error goes
         to `lift` and `borrow` too, for the diagnostics of `borrow`, and never to the SLIR
         stage, which lowers nothing while the program has an error (docs/design/ir.md 7.9).
-        `effects` runs on the AST before the loop, because `borrow` reads its summary. The
+        `effects` runs on the AST before the loop, because `borrow` reads its summary. A
+        bundled stdlib unit that `unit_reuse.py` reuses skips the loop: it replays its
+        record, and it runs its body passes after all when the copy fixpoint gives it a
+        copy or changes its key (docs/internals/semantic-passes.md). The
         backend emits the `SlirFunction` of each body (docs/design/ir.md 8.2). `_check_copies` repeats
         the per-unit stages for each copy cut after the loop started: an extension copy of
         a generic or an array target, a perk copy cut on a miss, and a function instance
@@ -371,6 +380,9 @@ class SemanticAnalyzer:
 
         self._start_late_requests(monomorphizer, compilation_order)
         self.destroy_effects = self._compute_effects(compilation_order)
+        if self.reuse is not None:
+            self.reuse.decide(compilation_order, self.tables, self.monomorphized_extensions,
+                              drop_type_names(self.tables.perk_impls))
         self._check_units(compilation_order, monomorphizer, libraries)
         self._check_array_extensions(compilation_order, monomorphizer, libraries)
         self._reject_opaque_in_program_tables()
@@ -855,16 +867,76 @@ class SemanticAnalyzer:
         for unit in compilation_order:
             if unit.ast is None:
                 continue
+            if self.reuse is not None and self.reuse.is_reused(unit):
+                if self._replay(unit, monomorphizer, compilation_order):
+                    continue
+                self.reuse.fall_back(unit)
+            self._check_unit(unit, monomorphizer, libraries)
 
+    def _check_unit(self, unit: Unit, monomorphizer, libraries: LibraryRegistration) -> None:
+        """The body passes of one unit. A unit that records (`unit_reuse.py`) fills its
+        record while they run."""
+        record = self.reuse.recording(unit) if self.reuse is not None else None
+        self.tables.perk_impls.on_question = (
+            record.perk_question if record is not None else None)
+        try:
             unit_reporter = self._unit_reporter(unit)
             passes = self._unit_passes(unit, unit_reporter, monomorphizer, libraries)
+            passes.typecheck.body_record = record
             passes.scope.run(unit.ast)
             lower_unit(self.shir, unit, passes.scope.bindings,
                        DeclLookup.of(self.tables, unit.name),
                        scope_failed=unit_reporter.has_offered_errors)
             passes.typecheck.run(unit.ast)
-
             self._merge_unit(unit_reporter)
+        finally:
+            self.tables.perk_impls.on_question = None
+
+    def _replay(self, unit: Unit, monomorphizer, compilation_order: list[Unit]) -> bool:
+        """Ask again for each instance that the record of a reused unit names, in place of
+        its body passes. False when a type of the record is not in this build: the unit
+        then runs its body passes."""
+        keys = self.reuse.replay(unit, self.tables)
+        if keys is None:
+            return False
+        reporter = self._unit_reporter(unit)
+        for key in keys:
+            if key not in monomorphizer.func_cache:
+                self._request_function_instance(monomorphizer, compilation_order, key,
+                                                (None, None), None, reporter)
+        self._merge_unit(reporter)
+        return True
+
+    def _fall_back(self, units: list[Unit], monomorphizer,
+                   libraries: LibraryRegistration) -> bool:
+        """Run the body passes of each reused unit of `units` after all. True when one ran.
+
+        A reused unit that gets a template copy, or whose key changed after the per-unit
+        loop, cannot keep the object of the per-user cache. Its body passes run before the
+        copy goes into its AST and before `_check_copies` checks the copy.
+        """
+        if self.reuse is None:
+            return False
+        fallen = list({unit.name: unit for unit in units
+                       if unit is not None and self.reuse.is_reused(unit)}.values())
+        for unit in fallen:
+            self.reuse.fall_back(unit)
+            self._check_unit(unit, monomorphizer, libraries)
+        return bool(fallen)
+
+    def _pending_homes(self, compilation_order: list[Unit], monomorphizer,
+                       batch: list) -> list[Unit]:
+        """The home unit of each copy that the next round of the fixpoint places."""
+        units = {u.name: u for u in compilation_order if u.ast is not None}
+        homes = [units.get(ext.home_unit or "") for ext in batch]
+        if self.perk_copies is not None:
+            homes += [self._home_unit(template.unit_name, compilation_order)
+                      for template, _copy in self.perk_copies.pending]
+        homes += [unit for unit, impl in self._unreached_perk_impls
+                  if not self._names_no_instance(impl)]
+        homes += [unit for ast, _fn in (monomorphizer.late_bodies or ())
+                  for unit in compilation_order if unit.ast is ast]
+        return homes
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration) -> _UnitPasses:
@@ -969,12 +1041,21 @@ class SemanticAnalyzer:
         while True:
             marks = table_marks(self.tables.structs, self.tables.enums)
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
+            homes = self._pending_homes(compilation_order, monomorphizer,
+                                        self.monomorphized_extensions[checked:])
+            if self._fall_back(homes, monomorphizer, libraries):
+                continue
             perk_copies = self._place_perk_copies(monomorphizer, compilation_order)
             perk_copies += self._place_reached_perk_impls()
             batch = self.monomorphized_extensions[checked:]
             functions = self._place_late_functions(monomorphizer, compilation_order)
             self._check_late_instance_clash(compilation_order, functions)
             if not batch and not functions and not perk_copies:
+                if self.reuse is not None and self._fall_back(
+                        self.reuse.drifted(compilation_order, self.monomorphized_extensions,
+                                           drop_type_names(self.tables.perk_impls)),
+                        monomorphizer, libraries):
+                    continue
                 break
             checked = len(self.monomorphized_extensions)
             units = {u.name: u for u in compilation_order if u.ast is not None}

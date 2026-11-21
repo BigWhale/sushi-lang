@@ -207,6 +207,9 @@ def declared_or_late_instance(validator: TypeValidator, ref: e.GlobalRef,
     params = template.type_params
     pack_arity = (len(type_args) - (len(params) - 1) if params[-1].is_pack else None)
     mangled = mangle_function_name(template.name, type_args, pack_arity=pack_arity)
+    record = validator.body_record
+    if record is not None and not validator.in_template_check:
+        record.instance((template.unit_name, template.name, type_args))
     sig = _declared_instance(validator, template, mangled)
     if sig is None:
         request = validator.tables.request_function_instance

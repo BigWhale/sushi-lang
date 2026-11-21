@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.unit_reuse import BodyRecord
     from sushi_lang.semantics.namespaces import NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.conversions import Conversion
@@ -59,6 +60,9 @@ class TypeValidator:
     in_template_check = False
     # The element type of each `expand`, over the check of a pack template only.
     pack_elements: Optional['PackElements'] = None
+    # The record of the body of a bundled stdlib unit (`unit_reuse.BodyRecord`): the
+    # instances its calls name, and a question that only a template copy answers.
+    body_record: Optional['BodyRecord'] = None
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
