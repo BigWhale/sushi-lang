@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from sushi_lang.internals.errors import raise_internal_error
@@ -263,13 +262,12 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.5",
+            "sushi_lib_version": "2.6",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
             "units": [unit.name for unit in own_units(units)],
             "requires_compiler": _requires_compiler(VERSION),
-            "compiled_at": datetime.now(timezone.utc).isoformat(),
             "platform": host_key(),
             "compiler_version": VERSION,
             "public_functions": public_functions,

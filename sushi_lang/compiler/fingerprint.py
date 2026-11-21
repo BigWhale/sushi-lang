@@ -160,7 +160,13 @@ def _stdlib_generator_sources() -> list:
 
 
 def compute_lib_fingerprint(slib_path) -> str:
-    """Compute a fingerprint for a library .slib file."""
+    """The digest of the bytes of a `.slib` file.
+
+    A `.slib` is reproducible: two builds of one source give one file. So the digest of
+    the bytes is the digest of the content. A field that changes from build to build (a
+    timestamp, a path of the build machine) must never go into a `.slib`: it changes this
+    digest, and with it the key of every unit of each consumer.
+    """
     from pathlib import Path
     hasher = hashlib.sha256()
     hasher.update(b"LIB:")

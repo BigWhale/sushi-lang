@@ -6,6 +6,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A `.slib` is reproducible.** The manifest has no `compiled_at` field now, so two builds
+  of one source give a byte-equal file (checked with two `PYTHONHASHSEED` values). A
+  binary library that is built again with no change now rebuilds nothing at the consumer,
+  and the stdlib objects of the per-user cache are reused. Before, each rebuild of a binary
+  library rebuilt every unit of each consumer and added a new set of stdlib objects to the
+  per-user cache. `--lib-info` prints no `Compiled:` line. The manifest protocol is `2.6`.
+
 - **A binary `.slib` records the architecture of its host.** The `platform` field of a
   binary or hybrid library is now the host key `<os>_<arch>` (`darwin_arm64`,
   `linux_x86_64`), the same key that selects the `<sys/platform>` file. One function,

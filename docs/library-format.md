@@ -143,7 +143,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.5",        # Protocol version
+    "sushi_lib_version": "2.6",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
@@ -158,7 +158,6 @@ is the authority, and the index is a cache of it.
                                        #   build must load, not what this library
                                        #   declares.
     "requires_compiler": str,          # Compiler constraint, e.g. "~0.11" ("" if unknown)
-    "compiled_at": str,                # ISO 8601 timestamp
     "platform": str,                   # The host key <os>_<arch> of the machine that
                                        #   built the file: "darwin_arm64",
                                        #   "linux_x86_64". The same key selects the
@@ -681,8 +680,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Compiled: 2026-09-28T19:18:00+00:00
-Protocol: 2.5
+Protocol: 2.6
 
 Units (1):
   mylib

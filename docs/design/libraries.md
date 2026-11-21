@@ -122,7 +122,7 @@ authority, and the index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.5"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"2.6"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
 | `library_name` | from the output filename |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
@@ -130,7 +130,6 @@ authority, and the index is a cache of it.
 | `units` | ordered unit names present in the source section |
 | `compiler_version` | informational: exactly which compiler built the file |
 | `platform` | the host key `<os>_<arch>` (`darwin_arm64`), from `host_key()`, the key of the `<sys/platform>` file; meaningful only when `kind != "source"` |
-| `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `not_exported` | what the library declares and keeps: a name, its kind and the unit that keeps it, one record for each (unit, name), and nothing else (#1112). The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
@@ -221,9 +220,17 @@ condition is the whole cross-platform fix.
 Library units are ordinary units, so `__sushi_cache__` caches one `.o` for each of
 them, keyed as any other unit is. The first build pays; later builds do not.
 
-`compute_lib_fingerprint` (`compiler/fingerprint.py`) invalidates every
-consumer unit when a `.slib` changes. That is correct, and it rebuilds more than it
-must: a consumer unit that does not use the library is rebuilt too.
+A `.slib` is reproducible: two builds of one source give one file, byte for byte. The
+manifest holds no field that changes from build to build (no timestamp). So a library
+that is built again with no change rebuilds nothing at the consumer.
+
+- On the source path, the key of a library unit is the key of any other unit. A change of
+  the library rebuilds what a change of an own unit rebuilds.
+- On the binary path, `compute_lib_fingerprint` (`compiler/fingerprint.py`) is the digest
+  of the bytes of each binary `.slib`, and it goes into the key of EVERY unit of the
+  consumer (the `LIB_TEMPLATES:` fold), the stdlib units included. A change of the library,
+  in its interface or in a body, rebuilds every unit, also a unit that does not use the
+  library. A separate interface digest and body digest are left for the binary redesign.
 
 ### 4.4 Diagnostics from source the consumer did not write
 
