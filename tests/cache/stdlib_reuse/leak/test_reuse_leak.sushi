@@ -1,0 +1,16 @@
+# A reused stdlib object frees what it allocates, as a fresh one does.
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_SUSHI_HOME: home
+# THEN_CLEAN_CACHE: source
+# EXPECT_NO_LEAKS
+# TEST_ENV: SUSHI_REUSE_PROBE=Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_REBUILT: test_reuse_leak
+# EXPECT_CACHED: sys/env, sys/platform
+use <sys/env>
+
+fn main() i32:
+    match getenv("SUSHI_REUSE_PROBE"):
+        Maybe.Some(value) -> println(value)
+        Maybe.None -> println("none")
+    return 0

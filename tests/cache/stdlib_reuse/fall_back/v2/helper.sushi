@@ -1,0 +1,6 @@
+use <collections/sort>
+
+public fn first() i32:
+    let i32[] xs = from([3, 1, 2])
+    xs.sort()
+    return xs[0]

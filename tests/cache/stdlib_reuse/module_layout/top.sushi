@@ -1,0 +1,4 @@
+use <fixture/base>
+
+public fn make() Pair:
+    return Pair(left: 1, right: 2)

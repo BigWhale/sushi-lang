@@ -285,7 +285,9 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
 ```
 
 **How it works:**
-- Semantic analysis always runs whole-program (fast, pure Python)
+- Semantic analysis always runs whole-program (fast, pure Python). A bundled stdlib
+  module whose object is in the per-user cache skips its body passes (see "The stdlib
+  objects" below)
 - After analysis, a content-based fingerprint is computed per unit
 - A unit's fingerprint covers its own source and declarations, and the **interface** of
   every unit in its dependency closure: each declaration's shape (a struct's field order
@@ -295,7 +297,9 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
   `public use` counts, and it includes a source library's injected units
 - It also covers the name of the unit's file as a diagnostic prints it, relative to the
   working directory of the build, because an `assert` prints that name at run time. The
-  same source built from another directory with one `--cache-dir` is another object
+  same source built from another directory with one `--cache-dir` is another object. A
+  bundled stdlib module has the name `<sys/process>` in its key and in its `assert`
+  text, the same from each directory
 - Each cached object is content-addressed: its filename is
   `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
   version, target triple, opt level, overflow mode, **and** a content digest of the compiler's own
@@ -304,7 +308,8 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
   with these settings" — there is no separate staleness check to get wrong; a
   compiler upgrade, a compiler source edit, or a settings change simply names a
   different file and is a cache miss by construction
-- Stdlib and library imports are cached as `.o` files the same way
+- Library imports are cached as `.o` files the same way; the stdlib objects are in the
+  per-user cache
 - Publishing an object is atomic (write to a temp file, then `os.replace`), so a
   concurrent build sharing the same cache directory never links a truncated object
 - All `.o` files are linked together at the end
@@ -338,14 +343,35 @@ The compiler keeps two caches:
 
 | Cache | Location | Holds |
 |---|---|---|
-| Project cache | `__sushi_cache__/` in the working directory, or `--cache-dir PATH` | The object file of each unit of an incremental build |
-| Per-user cache | `~/.sushi/cache/compiler/` | The grammar tables (`grammar/`) |
+| Project cache | `__sushi_cache__/` in the working directory, or `--cache-dir PATH` | The object file of each unit of the program, and of each stdlib module that holds a template copy for the program |
+| Per-user cache | `~/.sushi/cache/compiler/` | The grammar tables (`grammar/`), and the stdlib objects (`stdlib/`) |
 
 The per-user cache is in the same `~/.sushi` tree as the Nori packages. Set
 `SUSHI_HOME=DIR` (an absolute path) to move the full tree, for example in a test or in
 CI. The compiler uses a directory of the per-user cache only when the directory is yours
 and no other user can write it. It makes a missing directory with mode `0700`. No cache
 goes into a system-wide directory or into an operating-system cache directory.
+
+### The stdlib objects
+
+The object of a bundled stdlib module (written in Sushi) depends only on the compiler, the
+settings and the stdlib, unless the program makes the module hold a template copy (for
+example `xs.sort()` makes `collections/sort` hold a copy of `sort`). So the compiler keeps
+it in the per-user cache, at
+`~/.sushi/cache/compiler/stdlib/<global_key>/<module>.<key>.o`, and each project and each
+checkout uses it. Beside the object is `<module>.<key>.json`: the generic function
+instances that the body of the module calls.
+
+When both files are there, the next build does not check the bodies of that module again:
+it reads only its declarations, and it asks again for each instance in the record. The
+code-generation report shows the module as `[cached]`, and a line
+`Front end: N stdlib units reused, M checked again` follows it. A module that gets a
+template copy during the build is checked again (`M`), and its object goes to the project
+cache. A build with `--dump-shir`, `--dump-slir`, `--lib`, `--no-incremental` or
+`--dump-ll` checks every module.
+
+The objects of the stdlib modules that the compiler generates in Python (`.bc`) are in the
+same directory.
 
 `--clean-cache` removes the project cache only. To clear the per-user cache, delete the
 directory:

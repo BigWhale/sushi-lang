@@ -18,6 +18,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
+from sushi_lang.semantics.unit_reuse import UnitReuse
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -713,15 +714,49 @@ def _generated_symbols(compilation_order: list[Unit]):
     return generated_symbols
 
 
+def _library_fingerprints(library_linker, library_imports) -> dict[str, str]:
+    """The digest of each imported `.slib`. It goes into the key of every unit (a
+    library template that a consumer monomorphizes) and into the key of the library's
+    own object."""
+    from sushi_lang.compiler.fingerprint import compute_lib_fingerprint
+    if library_linker is None:
+        return {}
+    return {lib_path: compute_lib_fingerprint(library_linker.resolve_library(lib_path))
+            for lib_path in sorted(library_imports)}
+
+
+def _unit_reuse(options: BuildOptions, cache: CacheManager, incremental: bool,
+                unit_manager: UnitManager,
+                library_fingerprints: dict[str, str]) -> Optional[UnitReuse]:
+    """The reuse decisions of this build, or None when no unit may skip its body passes.
+
+    A build that dumps SHIR or SLIR prints each body, and a build that is not incremental
+    (`--lib`, `--no-incremental`, `--dump-ll`, a program of one unit) emits each body in
+    one module, so each needs the body passes of every unit. A per-user cache that is not
+    the user's alone is not read.
+    """
+    from sushi_lang.compiler.fingerprint import compute_unit_fingerprint
+    if (not incremental or options.dump_shir is not None or options.dump_slir is not None
+            or cache.user_stdlib_path is None):
+        return None
+
+    def key_of(unit: Unit, copies: list, drops: frozenset) -> str:
+        return compute_unit_fingerprint(unit, unit_manager, copies,
+                                        library_fingerprints=library_fingerprints,
+                                        drop_types=drops)
+    return UnitReuse(cache.user_stdlib_path, key_of)
+
+
 def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_linker,
-             reporter: Reporter, entry_name: str, options: BuildOptions) -> SemanticAnalyzer:
+             reporter: Reporter, entry_name: str, options: BuildOptions,
+             reuse: Optional[UnitReuse] = None) -> SemanticAnalyzer:
     """Every semantic pass over the whole program."""
     analyzer = SemanticAnalyzer(
         reporter, filename=entry_name, unit_manager=unit_manager,
         library_linker=library_linker,
         lints=options.lints,
         generated_symbols=_generated_symbols(compilation_order), is_library=options.lib,
-        dont_panic=options.dont_panic, overflow=options.overflow)
+        dont_panic=options.dont_panic, overflow=options.overflow, reuse=reuse)
     analyzer.check()
     if options.dont_panic and not analyzer.marked and not reporter.has_errors:
         from sushi_lang.compiler.cli import COMMAND_LINE
@@ -809,8 +844,12 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if stdlib_units is None:
         return 2
 
+    use_incremental = (len(compilation_order) > 1 and not options.lib
+                       and not options.no_incremental and not options.dump_ll)
+    library_fingerprints = _library_fingerprints(library_linker, library_imports)
+    reuse = _unit_reuse(options, cache, use_incremental, unit_manager, library_fingerprints)
     analyzer = _analyse(unit_manager, compilation_order, library_linker, reporter,
-                        src_path.stem, options)
+                        src_path.stem, options, reuse)
     if options.dump_shir is not None:
         _write_shir_dump(analyzer, options.dump_shir, reporter)
     if options.dump_slir is not None:
@@ -819,12 +858,11 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         return 2
     analyzer.check_error_holes()
     out_path = _resolve_out_path(options, src_path)
-    use_incremental = (len(compilation_order) > 1 and not options.lib
-                       and not options.no_incremental and not options.dump_ll)
     if use_incremental:
         return _compile_incremental(
             compilation_order, analyzer, out_path, reporter, options,
             stdlib_units, library_imports, library_linker, unit_manager, cache,
+            library_fingerprints,
         )
     return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
                                options, library_linker)
@@ -964,11 +1002,16 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
 
 def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: Reporter,
                          options: BuildOptions, stdlib_units, library_imports,
-                         library_linker, unit_manager, cache: CacheManager) -> int:
+                         library_linker, unit_manager, cache: CacheManager,
+                         library_fingerprints: dict[str, str]) -> int:
     """Incremental compilation path: per-unit .o caching.
 
     The module of every unit that the cache does not hold is built before the first
     object is written, so an internal error of the emitter leaves no output behind.
+
+    A bundled stdlib unit whose object depends on nothing of the program (it holds no
+    template copy) keeps its object in the per-user cache, with the record of its body
+    beside it; `analyzer.reuse` says which. Every other object is in the project cache.
     """
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
@@ -989,16 +1032,6 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
 
     t0 = time.monotonic()
 
-    # Digest every imported `.slib` once. These feed both the consumer unit
-    # fingerprints (so a library template change invalidates consumers that
-    # monomorphize it -- cross-library generics) and the library `.o`
-    # cache below.
-    library_fingerprints: dict[str, str] = {}
-    if library_linker is not None:
-        for lib_path in sorted(library_imports):
-            slib_path = library_linker.resolve_library(lib_path)
-            library_fingerprints[lib_path] = compute_lib_fingerprint(slib_path)
-
     # Whole-program, so it is computed once and folded into every unit.
     from sushi_lang.backend.ownership import drops_of
     drop_types = drops_of(cg)
@@ -1011,28 +1044,54 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
         )
         for unit in compilation_order
     }
+    reuse = analyzer.reuse
+    stored = {unit.name: reuse.stored_key(unit, fingerprints[unit.name])
+              for unit in compilation_order if reuse is not None}
+
+    def object_path(unit: Unit) -> Path:
+        key = stored.get(unit.name)
+        if key is not None:
+            return reuse.object_path(unit.name, key)
+        return cache.unit_object_path(unit.name, fingerprints[unit.name])
+
+    def is_cached(unit: Unit) -> bool:
+        if stored.get(unit.name) is not None:
+            return object_path(unit).is_file()
+        return cache.has_cached_unit(unit.name, fingerprints[unit.name])
+
+    for unit in compilation_order:
+        if reuse is not None and reuse.is_reused(unit) and not is_cached(unit):
+            from sushi_lang.internals import errors as er
+            er.raise_internal_error(
+                "CE0000", detail=f"the object of the reused unit '{unit.name}' left the "
+                                 f"per-user cache during the build: {object_path(unit)}")
     modules = {unit.name: cg.build_module_single_unit(unit, compilation_order)
-               for unit in compilation_order
-               if not cache.has_cached_unit(unit.name, fingerprints[unit.name])}
+               for unit in compilation_order if not is_cached(unit)}
 
     cache.prepare()
     print("Code generation:")
     for unit in compilation_order:
-        fp = fingerprints[unit.name]
+        obj_path = object_path(unit)
         module = modules.get(unit.name)
         if module is None:
-            obj_path = cache.unit_object_path(unit.name, fp)
-            obj_paths.append(obj_path)
             cached.append(unit.name)
             print(f"  {unit.name:<30s} [cached]")
         else:
             obj_bytes = driver.compile_single_unit_to_object(
                 module, unit.name, opt=options.opt, verify=not options.no_verify,
             )
-            obj_path = cache.store_unit_object(unit.name, obj_bytes, fp)
-            obj_paths.append(obj_path)
+            if stored.get(unit.name) is not None:
+                publish_atomically(obj_path, obj_bytes)
+            else:
+                obj_path = cache.store_unit_object(unit.name, obj_bytes,
+                                                   fingerprints[unit.name])
             rebuilt.append(unit.name)
             print(f"  {unit.name:<30s} [rebuilt]")
+        obj_paths.append(obj_path)
+        key = stored.get(unit.name)
+        record = reuse.record_text(unit) if key is not None else None
+        if record is not None and not reuse.record_path(unit.name, key).is_file():
+            publish_atomically(reuse.record_path(unit.name, key), record.encode("utf-8"))
 
     for stdlib_unit in sorted(stdlib_units):
         bc_paths = cg.stdlib._resolve_stdlib_unit(stdlib_unit)
@@ -1070,6 +1129,9 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     total_units = len(compilation_order)
     stdlib_count = len(stdlib_units)
     lib_count = len(library_imports)
+    if reuse is not None and (reuse.reused_count() or reuse.fell_back):
+        print(f"\nFront end: {reuse.reused_count()} stdlib units reused, "
+              f"{len(reuse.fell_back)} checked again")
     print(f"\nCodegen: {total_units} units ({len(cached)} cached, {len(rebuilt)} rebuilt) in {codegen_time:.2f}s")
     link_desc = f"{total_units} units"
     if stdlib_count:

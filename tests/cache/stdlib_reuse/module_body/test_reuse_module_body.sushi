@@ -1,0 +1,14 @@
+# A change of a function body in a stdlib module changes the source of that module and
+# no interface. Only that module is built again; the module that calls it is reused.
+# STDLIB_MODULE: fixture/base=base.sushi
+# STDLIB_MODULE: fixture/top=top.sushi
+# FIXTURE_SUSHI_HOME: home
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "41\n"
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_REBUILT: fixture/base
+# EXPECT_CACHED: fixture/top, test_reuse_module_body
+use <fixture/top>
+
+fn main() i32:
+    println(shown())
+    return 0

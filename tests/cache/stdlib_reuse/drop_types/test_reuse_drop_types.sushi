@@ -1,0 +1,16 @@
+# A Drop implementation changes the ownership class of a type for the whole program. The
+# key of a reused stdlib unit holds the set of the types that implement Drop, so each
+# stdlib unit is built again.
+# FIXTURE_SUSHI_HOME: home
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "7\n"
+# EXPECT_STDOUT_EXACT: "7\ndrop 7\n"
+# EXPECT_REBUILT: helper, test_reuse_drop_types, sys/process, io/error, net/error,
+# EXPECT_REBUILT: sys/platform
+use "helper"
+use <sys/process>
+
+fn main() i32:
+    let Token t = Token(id: 7)
+    if (getpid() > 0):
+        println("{t.id}")
+    return 0

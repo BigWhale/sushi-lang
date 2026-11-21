@@ -202,6 +202,10 @@ class PerkImplementationTable:
     # copy was registered.
     on_perk_miss: Optional[Callable[..., bool]] = field(
         default=None, repr=False, compare=False)
+    # Told of each lookup by type while the body passes of a bundled stdlib unit record
+    # (`unit_reuse.BodyRecord.perk_question`). None otherwise.
+    on_question: Optional[Callable[..., None]] = field(
+        default=None, repr=False, compare=False)
 
     # The program's perks, set by `SymbolTables`: an opaque type parameter answers the
     # methods its constraints declare (#1070), and those are read from the perk.
@@ -236,10 +240,16 @@ class PerkImplementationTable:
         type_name = perk_type_name(ty)
         if type_name is None:
             return False
+        self._asked(ty, perk=perk_name)
         if self.implements(type_name, perk_name):
             return True
         return (self._cut_on_miss(ty, perk=perk_name)
                 and self.implements(type_name, perk_name))
+
+    def _asked(self, ty: 'Type', *, perk: Optional[str] = None,
+               method: Optional[str] = None) -> None:
+        if self.on_question is not None:
+            self.on_question(self, ty, perk, method)
 
     def _cut_on_miss(self, ty: 'Type', *, perk: Optional[str] = None,
                      method: Optional[str] = None) -> bool:
@@ -264,6 +274,7 @@ class PerkImplementationTable:
         type_name = perk_type_name(target_type)
         if type_name is None:
             return None
+        self._asked(target_type, method=method_name)
         found = self._method(type_name, method_name)
         if found is None and self._cut_on_miss(target_type, method=method_name):
             found = self._method(type_name, method_name)
@@ -285,6 +296,7 @@ class PerkImplementationTable:
         type_name = perk_type_name(target_type)
         if type_name is None:
             return None
+        self._asked(target_type, method=method_name)
         for perk_name in self.by_type.get(type_name, set()):
             impl = self.implementations.get((type_name, perk_name))
             if impl and any(m.name == method_name for m in impl.methods):

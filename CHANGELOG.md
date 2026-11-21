@@ -6,6 +6,20 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A bundled stdlib module is checked one time, not on each build.** The object of a
+  Sushi-source stdlib module that holds no template copy goes to the per-user cache,
+  `~/.sushi/cache/compiler/stdlib/<global_key>/<module>.<key>.o`, with a record of the
+  generic instances that its body calls. A later build, from any project or directory, skips
+  the body passes of that module (scope, typecheck, lift, borrow, the SLIR stage) and asks
+  again for the instances of the record. A module that gets a template copy during the
+  build is checked as before, and its object stays in the project cache. The
+  code-generation report shows a reused module as `[cached]`. The objects of the Python
+  stdlib generators move to the same directory. An `assert` or a trap in a stdlib module
+  names the module (`<random>:61:5`), not a path relative to the working directory.
+  `--clean-cache` removes the project cache only; delete `~/.sushi/cache/compiler/` to clear
+  the per-user cache. The test runner gives each run a `SUSHI_HOME` of its own, and two
+  directives come with it: `FIXTURE_SUSHI_HOME` and `SECOND_BUILD_IN`.
+
 - **The per-user cache of the compiler is `~/.sushi/cache/compiler/`.** The grammar tables
   move from the operating-system cache directory (`~/Library/Caches/sushi`,
   `$XDG_CACHE_HOME/sushi` or `~/.cache/sushi`) to `~/.sushi/cache/compiler/grammar/`. One

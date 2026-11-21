@@ -5,12 +5,14 @@ import hashlib
 import os
 import shutil
 import threading
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.backend.platform_detect import default_triple
 
 from sushi_lang import __version__ as compiler_version
+from sushi_lang.internals.user_cache import compiler_cache_dir
 from sushi_lang.semantics.overflow_mode import OverflowMode
 
 if TYPE_CHECKING:
@@ -54,7 +56,6 @@ class CacheManager:
         self.overflow = overflow
         self.cache_path = cache_dir or (project_root / CACHE_DIR_NAME)
         self.units_path = self.cache_path / UNITS_DIR
-        self.stdlib_path = self.cache_path / STDLIB_DIR
         self.libs_path = self.cache_path / LIBS_DIR
         self.libsrc_path = self.cache_path / LIBSRC_DIR
         self._target_triple = default_triple()
@@ -77,6 +78,20 @@ class CacheManager:
         )
         return hashlib.sha1(material.encode("utf-8")).hexdigest()[:_KEY_LEN]
 
+    @cached_property
+    def user_stdlib_path(self) -> Optional[Path]:
+        """`~/.sushi/cache/compiler/stdlib/<global key>/`: the objects that depend only on
+        the compiler and the settings, shared by each project. None when the per-user root
+        is not the user's alone."""
+        root = compiler_cache_dir(STDLIB_DIR)
+        return None if root is None else root / self.global_key
+
+    @property
+    def stdlib_path(self) -> Path:
+        """Where the objects of the stdlib generators are: the per-user cache, else the
+        project cache."""
+        return self.user_stdlib_path or self.cache_path / STDLIB_DIR
+
     def prepare(self) -> None:
         """Ready the cache directory for a compile."""
         self.ensure_dirs()
@@ -85,8 +100,7 @@ class CacheManager:
         """Create the cache directory structure if it doesn't exist."""
         from sushi_lang.backend.driver import writing_output
 
-        for path in (self.units_path, self.stdlib_path, self.libs_path,
-                     self.libsrc_path):
+        for path in (self.units_path, self.libs_path, self.libsrc_path):
             with writing_output(path):
                 path.mkdir(parents=True, exist_ok=True)
 
@@ -99,8 +113,11 @@ class CacheManager:
         return self._object_path(self.units_path, unit_name, fingerprint)
 
     def stdlib_object_path(self, stdlib_unit: str, fingerprint: str) -> Path:
-        """Cached .o path for a stdlib unit (``io/stdio`` -> ``stdlib/io_stdio.*.o``)."""
-        return self._object_path(self.stdlib_path, stdlib_unit.replace("/", "_"), fingerprint)
+        """Cached .o path for a generated stdlib unit (``io/stdio`` -> ``io_stdio.*.o``)."""
+        name = stdlib_unit.replace("/", "_")
+        if self.user_stdlib_path is None:
+            return self._object_path(self.stdlib_path, name, fingerprint)
+        return self.user_stdlib_path / f"{name}.{fingerprint[:_KEY_LEN]}.o"
 
     def lib_object_path(self, lib_name: str, fingerprint: str) -> Path:
         """Cached .o path for a library."""
