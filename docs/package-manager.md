@@ -453,6 +453,10 @@ fn main() i32:
     return 0
 ```
 
+The name in the `use` path is the name of the file, and it must be the library name that
+the build stamped into the file (the stem of its output file). A `.slib` that is copied or
+renamed to another name is refused ([CE3521](error-catalog.md#ce3521)).
+
 ## Package Directory Structure
 
 Nori uses two storage locations: a global store under `~/.sushi/` and a project-local `.sushi_bento/` directory.

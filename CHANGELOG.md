@@ -6,6 +6,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A `.slib` loads only under its own name.** The consumer refuses a library whose
+  `library_name` (the stem of the output file of its build) is not the name of the `use`
+  that loaded it (the last part of the `use` path), with the new code CE3521. A copied or
+  renamed `.slib` loaded under the name of the `use`, its units had the stamped name, and
+  a copy beside its original met the one-version rule (CE3519) with confusing text. The
+  check covers both kinds and each load of the graph: the consumer's `use`, the `use` and
+  `public use` of a source library, and the dependency records of a binary library. The
+  message names the two names and the file. Build the library again with the name of the
+  `use`, or write the `use` with the library's own name.
+
 - **A binary `.slib` records the data layout of its target.** A binary library records
   the LLVM data layout string of the target that built it (the new manifest field
   `data_layout`, from the target machine of codegen). The consumer refuses a binary library

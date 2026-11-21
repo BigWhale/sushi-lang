@@ -1,0 +1,12 @@
+# A source library uses a library that is then replaced by a copy under another name. The consumer loads the copy as a dependency of the library, and refuses it (CE3521).
+# BUILD_LIB: name_probe.sushi -> name_other.slib
+# BUILD_LIB: name_mid.sushi
+# LIB_MANIFEST_SET: name_other library_name=name_probe
+# EXPECT_ERROR_CODE: CE3521
+# EXPECT_STDERR_CONTAINS: "`use <lib/name_other>` loads the library 'name_other', but the file '"
+use <lib/name_mid>
+
+fn main() i32:
+    println("{name_mid_area()}")
+    return 0
+

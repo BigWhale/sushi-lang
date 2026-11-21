@@ -193,6 +193,28 @@ program. A unit that imports both and calls the method gets [CE3023](error-catal
 a note for each library, for every kind: there is no qualified method call, so move the
 code that needs each method into a unit of its own.
 
+### The library name is the name of the `use`
+
+A build stamps the name of the library into its `.slib`: the `library_name` is the stem of
+the output file, so `-o mylib.slib` makes the library `mylib`. A `use` names a library with
+the last part of its path: `use <lib/mylib>` and `use <lib/vendor/mylib>` both name
+`mylib`. The consumer refuses a file whose stamped name is not the name of the `use` that
+loaded it, with [CE3521](error-catalog.md#ce3521). This applies to both kinds, and to each load of the graph:
+the consumer's own `use`, a `use` or a `public use` in a source library, and a dependency
+record of a binary library.
+
+So do not copy or rename a `.slib` file to load it under another name. Such a file hides
+which library a build uses, and two files with one stamped name meet as two versions of
+one library. The message names the two names and the file:
+
+```
+CE3521: `use <lib/other>` loads the library 'other', but the file 'libs/other.slib' is the library 'mylib'
+```
+
+Build the library again with the name of the `use` (`-o other.slib`), or write the `use`
+with the library's own name (`use <lib/mylib>`). `--lib-info` reads a file with no `use`,
+so it does not check the name.
+
 ### Public Declarations
 
 Only declarations marked `public` are accessible from other compilation units. Seven kinds

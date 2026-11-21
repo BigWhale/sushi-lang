@@ -2965,6 +2965,14 @@ A library records every `use <lib/...>` that its units write, with the version o
 
 A binary library holds bitcode, and the bitcode is bound to the compiler that made it. Before 1.0 the bitcode ABI (value layouts, calling conventions, mangling) changes often, also in a patch release. A binary library also carries its own copy of each stdlib module that it imports, as `weak_odr`, and LLVM takes all copies as equal: a library from another compiler can run an old stdlib with no message. So a binary library records a stamp, the exact compiler version and the compiler-source digest (the digest that the object cache uses), and the consumer accepts it only when both are equal to its own. The message names the part that is not equal, the version first. The fix is to build the library again with this compiler. `--ignore-compiler-version` does not stop this check; it is for `requires_compiler` ([CE3503](#ce3503)). A source library has no stamp: the consumer compiles its text.
 
+### CE3521 {#ce3521}
+
+**Error** · library
+
+**Message:** `` `use <{use_path}>` loads the library '{lib}', but the file '{path}' is the library '{built}' ``
+
+A build stamps the name of a library into its `.slib`: the `library_name` is the stem of the output file (`-o <name>.slib`). A `use <lib/...>` names a library with the last part of its path, and the search finds the file of that name. So the two names are equal, unless a file was copied or renamed after its build. Such a file must not load under another name. It hides which library a build uses: its units have the name of the stamped library, not the name of the `use`. It also confuses the one-version rule: two files with one stamped name meet as two versions of one library ([CE3519](#ce3519)), and the text names a library that no `use` names. The consumer thus refuses every library of the graph whose stamped name is not the name of the `use` that loaded it: the consumer's own `use`, a `use` or a `public use` of a source library, and a `dependencies` or `reexports` record of a binary library. Both kinds are checked. The fix is to build the library again with the name of the `use`, or to write the `use` with the library's own name. `--lib-info` reads a file with no `use`, so it does not check this.
+
 ## CE4xxx: Perk errors {#ce4xxx}
 
 These errors are about perks, perk implementations and perk constraints.

@@ -1,0 +1,4 @@
+public use <lib/name_other>
+
+public fn name_reex_area() i32:
+    return name_area(1, 9)

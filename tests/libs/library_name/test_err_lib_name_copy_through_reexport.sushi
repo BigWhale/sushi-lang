@@ -1,0 +1,12 @@
+# A binary library re-exports a library that is then replaced by a copy under another name. The consumer loads the copy through the manifest record of the re-export, and refuses it (CE3521).
+# BUILD_LIB: name_probe.sushi -> name_other.slib
+# BUILD_LIB_BINARY: name_reex.sushi
+# LIB_MANIFEST_SET: name_other library_name=name_probe
+# EXPECT_ERROR_CODE: CE3521
+# EXPECT_STDERR_CONTAINS: "`use <lib/name_other>` loads the library 'name_other', but the file '"
+use <lib/name_reex>
+
+fn main() i32:
+    println("{name_reex_area()}")
+    return 0
+

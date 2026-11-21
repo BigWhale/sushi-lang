@@ -1,0 +1,9 @@
+# The library name in the manifest is the name in the `use` path, so the consumer loads the library.
+# BUILD_LIB: name_probe.sushi
+# EXPECT_STDOUT_EXACT: "6\n"
+use <lib/name_probe>
+
+fn main() i32:
+    println("{name_area(2, 3)}")
+    return 0
+
