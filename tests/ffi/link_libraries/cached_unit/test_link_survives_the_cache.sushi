@@ -1,0 +1,10 @@
+# A unit that comes from the object cache still gives the libraries of its clauses to
+# the link.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3413997946\n"
+# EXPECT_STDOUT_EXACT: "3413997946\n"
+# EXPECT_CACHED: zwrap, test_link_survives_the_cache
+use "zwrap"
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0

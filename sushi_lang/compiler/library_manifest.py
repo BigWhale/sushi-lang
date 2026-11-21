@@ -262,7 +262,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.7",
+            "sushi_lib_version": "2.8",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -282,6 +282,14 @@ class LibraryManifestGenerator:
         if kind == "binary":
             from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
             manifest["compiler_digest"] = compute_compiler_source_fingerprint()
+            # The C libraries of the library's own `link` clauses, which the consumer
+            # links. A dependency's come from its own manifest. Absent when there is none.
+            from sushi_lang.semantics.link_libraries import library_names
+            own = {unit.name for unit in own_units(units)}
+            link_libraries = library_names(
+                r for r in self.analyzer.link_requests if r.unit in own)
+            if link_libraries:
+                manifest["link_libraries"] = link_libraries
 
         # What the library declares and does not export (#469). Absent when there is
         # nothing to keep, so a library of nothing but public functions grows by nothing.

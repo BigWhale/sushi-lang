@@ -29,6 +29,7 @@ unsafe external "C" as libc because "bootstrap: call libc for the backend":
 |---|---|
 | `unsafe external` | A contextual keyword pair, valid only as a top-level declaration. |
 | `"C"` | The ABI. Only `"C"` is accepted; the slot reserves room for others. |
+| `link "z", "m"` | **Optional.** The C libraries that the block needs. The linker gets `-lz -lm` ([Linking an external library](#linking-an-external-library)). |
 | `as libc` | The **namespace binding**, chosen by you. It binds only in the unit that declares the block. Foreign names never enter Sushi's global scope. Two units may each declare a block with the same alias and the same functions (a stdlib module included); each unit reads its own block. One link name still has one signature in the program ([`CE5001`](error-catalog.md#ce5001)). |
 | `because "<reason>"` | **Optional.** The acknowledgment that silences the [`CW5001`](error-catalog.md#cw5001) warning (see below). |
 | `fn name(params) ret = "symbol"` | One foreign declaration. No body. The Sushi-visible `name` and the C link `symbol` are separated. |
@@ -587,48 +588,79 @@ NULL is declared `Maybe@(ptr)` ([Null at the boundary](#null-at-the-boundary)).
 | [`CE5015`](error-catalog.md#ce5015) | error | A link name written as a constant is not a string constant. |
 | [`CE5016`](error-catalog.md#ce5016) | error | A write to an external variable. It is read-only from Sushi. |
 | [`CE5014`](error-catalog.md#ce5014) | error | `errno()` is called in a unit that declares no `unsafe external` block. |
+| [`CE5017`](error-catalog.md#ce5017) | error | A name in a `link` clause is empty, holds a `/` or white space, or starts with `-`. |
+| [`CE5018`](error-catalog.md#ce5018) | error | A name in a `link` clause is a file name (`libz`, `z.so`). The help gives the library name. |
+| [`CE5019`](error-catalog.md#ce5019) | error | One `link` clause names a library two times. |
 | [`CE5013`](error-catalog.md#ce5013) | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, one a linked library brought in, or one the standard library generates. FFI names foreign symbols only. The note says where the symbol is defined. |
 
 ## Linking: what can actually be resolved
 
 The `= "symbol"` string is the **link name**. It becomes an undefined external
-symbol reference in the generated object file; the linker must satisfy it. What
-satisfies it is the important part.
+symbol reference in the generated object file; the linker must satisfy it.
 
-Sushi links binaries with the C compiler driver: `cc prog.o -o prog` (plus
-`-lm` on Linux). There is **no explicit `-lc`** and **no way to pass
-`-l<lib>` or `-L<path>`**. libc is linked anyway, for two reasons:
+Sushi links binaries with the C compiler driver: `cc <objects> -o prog`, then
+`-L<dir>` for each `-L` directory, then `-l<name>` for each library of the
+program, then the libraries of the C runtime. The C compiler driver links the C
+runtime into every executable (libc or libSystem, and the startup objects), and
+every Sushi binary calls libc (`malloc`, `free`, `printf`, `fopen` and others).
 
-1. **The C compiler driver links the C runtime into every executable** by default
-   (libc/libSystem plus the startup objects). This happens for any program,
-   FFI or not.
-2. **Every Sushi binary already depends on libc.** The core runtime and stdlib
-   emit direct calls to `malloc`, `free`, `realloc`, `printf`, `fopen`, `fread`,
-   `fwrite`, `fclose`, `exit`, and friends. libc is a structural dependency of
-   the output, not an optional add-on.
-
-So an FFI declaration resolves at link time **if and only if its symbol already
-lives in an always-linked library** - libc/libSystem, plus libm on Linux. That
-is exactly why the bootstrapping leaf targets (`strlen`, `fopen`, `malloc`) were
-chosen: they cost nothing to link because the binary already pulls libc in.
+On Linux, libm is part of the C runtime of Sushi, and every program links it
+(`-lm`): LLVM lowers a float `%` to a call of `fmod`, and glibc keeps `fmod` in
+libm. On macOS, libSystem holds libm.
 
 The namespace in `as libc` is a **pure Sushi-side label** and drives nothing at
-link time. It emits no `-l` directive and names no library file - `as banana`
-would link identically. It only controls how call sites read.
+link time. It names no library: `as banana` links identically. The `link`
+clause names the libraries.
 
-**Consequence.** A symbol that is *not* in an always-linked library (a
-third-party `libfoo`, or anything needing `-l`/`-L`) will **compile but fail to
-link** with an `undefined symbol` error. There is currently no mechanism to tell
-the linker about additional libraries. Thus FFI is limited to the
-default-linked C runtime surface.
+A symbol that is not in the C runtime and not in a library of a `link` clause
+compiles, but the link fails with [`CE3008`](error-catalog.md#ce3008).
+
+## Linking an external library
+
+A `link` clause on the block names the C libraries that its declarations need.
+The block that needs the symbols names the library:
+
+```sushi
+unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+fn checksum(string s) u64:
+    return zlib.crc32(0, s, s.len() as u32)
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0
+```
+
+- **A name is the name for `-l`.** `link "z"` gives `-lz`, and the linker finds
+  `libz.so`, `libz.dylib` or `libz.a`. A name is not empty, holds no `/` and no
+  white space, and does not start with `-` ([`CE5017`](error-catalog.md#ce5017)). A
+  name has no `lib` prefix and no `.so`, `.dylib` or `.a` suffix
+  ([`CE5018`](error-catalog.md#ce5018)): write `link "z"`, not `link "libz.so"`.
+- **One clause names a library one time** ([`CE5019`](error-catalog.md#ce5019)). Two
+  blocks can name the same library. The compiler collects the libraries of every
+  block of the program, and gives each one to the linker one time, in the order
+  of its first appearance. The order matters to GNU ld for a static library.
+- **`sushic -L <dir>`** adds a directory where the linker looks for a library. The
+  flag is repeatable. A relative directory is relative to the directory where you
+  run `sushic`.
+- **A library that the linker cannot find** is [`CE3008`](error-catalog.md#ce3008).
+  The output of `cc` is a note, and each library of the program gets a note at the
+  `link` clause that asked for it. A note also gives the `-L` directories.
+- **A library (`.slib`).** A binary library records the libraries of its own
+  clauses in its manifest (`link_libraries`), and its consumer links them.
+  `--lib-info` prints them as `Links: z`. The consumer of a source library
+  compiles its blocks, so it collects their clauses as the clauses of its own
+  units.
+
+pkg-config, a C struct by value, a C callback and rpath are not available yet.
 
 ## Scope and limitations
 
 - Only the `"C"` ABI is accepted.
-- **Only symbols in always-linked libraries** (libc/libSystem, plus libm on
-  Linux) can be resolved. There is no way to link an external library - no
-  `-l`/`-L` mechanism - so a non-libc symbol compiles but fails at link time.
-  See [Linking](#linking-what-can-actually-be-resolved) above.
+- A symbol resolves when it is in the C runtime (libc/libSystem, plus libm on
+  Linux) or in a library of a `link` clause. See
+  [Linking an external library](#linking-an-external-library) above.
 - Sushi stays **null-free**: no `null` literal. A pointer that C may answer NULL
   for is a `Maybe@(string)` or a `Maybe@(ptr)` at the boundary.
 - String marshalling is a per-call copy, freed directly after the call. The frees and
@@ -643,29 +675,6 @@ default-linked C runtime surface.
   function from two units, declare it in each unit, or export a Sushi wrapper.
 - A user type named `ptr` is shadowed by the reserved `ptr` type in type
   position; avoid `ptr` as a user type name.
-
-## Future work: external (non-libc) libraries
-
-Support for linking arbitrary external libraries (a `-l`/`-L` mechanism) is
-**deliberately deferred**, not forgotten. The reasoning:
-
-- The near-term goal is **self-hosting**, and the chosen route is to emit LLVM IR
-  as text and shell out to the C toolchain (`clang`/`llc`). That needs only
-  process-spawning and file I/O - both libc - so it links today. For example,
-  `fn system(string cmd) i32 = "system"` is already callable and is enough to
-  invoke the toolchain. The self-host route does **not** require external-library
-  linking.
-- A real external-library feature is not just a flag. It pulls in library
-  resolution and portability (install paths, pkg-config, versioning, rpath),
-  **ABI struct-by-value marshalling** (real libraries pass structs, which [`CE5003`](error-catalog.md#ce5003)
-  currently forbids), and distribution (a binary needing `libfoo` is no longer
-  self-contained). It also reopens the package-boundary that [`CE5002`](error-catalog.md#ce5002) and the
-  Nori/Omakase model intentionally close.
-
-When Sushi turns toward general-purpose use, this will be planned as a
-first-class concern (linking + struct marshalling + resolution together), not
-bolted on as a `-l` passthrough. Until a concrete non-libc need appears, FFI
-stays scoped to the always-linked C runtime.
 
 ## Worked example
 

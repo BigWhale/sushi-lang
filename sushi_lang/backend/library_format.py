@@ -220,6 +220,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "conversions", "[]conversion", "no"),
     ("manifest", "dont_panic", "[]dont_panic", "no"),
     ("manifest", "dependencies", "[]dependency", "no"),
+    ("manifest", "link_libraries", "strs", "no"),
     ("templates", "generic_functions", "[]function", "no"),
     ("templates", "generic_structs", "[]generic_type", "no"),
     ("templates", "generic_enums", "[]generic_type", "no"),

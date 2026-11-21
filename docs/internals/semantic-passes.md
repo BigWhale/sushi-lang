@@ -17,7 +17,7 @@ each named for the stage it runs.
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
 | `docs` | check each doc block against its declaration ([CE7001](../error-catalog.md#ce7001)-[CE7008](../error-catalog.md#ce7008), [CW7001](../error-catalog.md#cw7001)), and its completeness under `--warn-missing-docs` ([CW7002](../error-catalog.md#cw7002)-[CW7006](../error-catalog.md#cw7006)) | `semantics/passes/docs.py` |
 | `unused` | under `--warn-unused`: a private declaration nothing in its unit reaches ([CW1004](../error-catalog.md#cw1004)), an import whose unit names nothing it brings ([CW3006](../error-catalog.md#cw3006)) | `semantics/unused.py` |
-| `externs` | extern signatures ([CE5003](../error-catalog.md#ce5003)), [`CW5001`](../error-catalog.md#cw5001), the `ptr` unit gate ([CE5009](../error-catalog.md#ce5009)) | `semantics/passes/types/externals.py` |
+| `externs` | extern signatures ([CE5003](../error-catalog.md#ce5003)), [`CW5001`](../error-catalog.md#cw5001), the `ptr` unit gate ([CE5009](../error-catalog.md#ce5009)), the `link` clauses ([CE5017](../error-catalog.md#ce5017)-[CE5019](../error-catalog.md#ce5019)) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds ([CE3013](../error-catalog.md#ce3013), [CE3014](../error-catalog.md#ce3014), [CE3016](../error-catalog.md#ce3016), [CW3004](../error-catalog.md#cw3004), [CW3005](../error-catalog.md#cw3005)) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | fold each link name written as a string constant ([CE5015](../error-catalog.md#ce5015)), then reject an `unsafe external` that names a symbol this build defines ([CE5013](../error-catalog.md#ce5013)). Its instance half runs directly after `monomorphize` (see below) | `semantics/passes/types/externals.py` |
@@ -415,6 +415,11 @@ C ABI cannot carry.
   declaration reads garbage on Apple arm64.
 - `validate_ptr_unit_gate()` — `ptr` is opaque and quarantined to a unit that declares
   the extern block it came from ([`CE5009`](../error-catalog.md#ce5009)).
+- `link_requests()` — the name rules of a `link` clause
+  ([`CE5017`](../error-catalog.md#ce5017)-[`CE5019`](../error-catalog.md#ce5019)), and one
+  `LinkRequest` for each name into `SemanticAnalyzer.link_requests`. The pass reads every
+  unit with an AST, a unit whose object comes from the cache included, so the link plan
+  of the backend has every clause of the program.
 
 See `docs/ffi.md`.
 

@@ -1,0 +1,12 @@
+# The linker cannot find the library. CE3008 names the clause that asked for it, and the
+# directories of `-L`.
+# COMPILER_FLAGS: -L no_such_dir_42
+# EXPECT_ERROR_CODES_EXACT: CE3008
+# EXPECT_STDERR_CONTAINS: "the library 'sushi_no_such_lib_42' is asked for here"
+# EXPECT_STDERR_CONTAINS: "test_err_link_missing_library.sushi:8:"
+# EXPECT_STDERR_CONTAINS: "no_such_dir_42"
+unsafe external "C" link "sushi_no_such_lib_42" as nope because "a library that is not there":
+    fn nothing() i32 = "sushi_no_such_function_42"
+
+fn main() i32:
+    return 0

@@ -1,0 +1,14 @@
+# `link` is a keyword only in the header of an external block. Everywhere else it is a
+# name.
+# EXPECT_STDOUT_EXACT: "3\n"
+struct Chain:
+    i32 link
+
+fn link(i32 n) i32:
+    return n + 1
+
+fn main() i32:
+    let i32 link = 1
+    let Chain c = Chain(link: link(link))
+    println(c.link + 1)
+    return 0

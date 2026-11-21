@@ -1,13 +1,13 @@
 """The compile and link driver: it takes the IR a codegen builds to an object and a binary."""
 from __future__ import annotations
 
-import subprocess
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator, List, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from llvmlite import ir, binding as llvm
 
+from sushi_lang.backend.link_plan import NO_LINK_INPUTS, LinkInputs, LinkPlan, run_link
 from sushi_lang.semantics.units import Unit
 
 if TYPE_CHECKING:
@@ -26,41 +26,6 @@ def writing_output(path: Path) -> Iterator[None]:
         from sushi_lang.internals.diagnostics import SushiError
         raise SushiError("CE3020", filename=COMMAND_LINE, path=exc.filename or path,
                          reason=exc.strerror or str(exc)) from exc
-
-
-def _run_linker(cmd: List[str], cc: str) -> None:
-    """Run the link step, and report a failure as a diagnostic rather than a crash.
-
-    Both linking paths come here. `check=True` alone let `CalledProcessError` reach the
-    top-level guard, which renders any uncaught exception as a CE0000 "this is a bug in
-    the Sushi compiler" -- and printed the raw `cc` stderr ahead of it, unfiltered (#251).
-    """
-    from sushi_lang.internals.diagnostics import SushiError
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        return
-
-    error = SushiError("CE3008", cc=cc, status=result.returncode)
-    for stream in (result.stderr, result.stdout):
-        for line in (stream or "").splitlines():
-            if line.strip():
-                error.note(line.rstrip())
-    raise error
-
-
-def _link_command(cc: str, inputs: List[Path], out: Path, debug: bool) -> List[str]:
-    """The `cc` command line that links `inputs` into the executable `out`."""
-    cmd = [cc] + [str(p) for p in inputs]
-    cmd.extend(["-o", str(out)])
-
-    from sushi_lang.backend.platform_detect import get_current_platform
-    if get_current_platform().is_linux:
-        cmd.append("-lm")
-
-    if debug:
-        cmd.insert(1, "-g")
-    return cmd
 
 
 def _print_numbered(title: str, module: ir.Module) -> None:
@@ -111,6 +76,7 @@ class LLVMDriver:
         verify: bool = True,
         keep_object: bool = False,
         main_expects_args: bool = False,
+        link: LinkInputs = NO_LINK_INPUTS,
     ) -> Path:
         """Compile every unit into one module, and link it to a native executable.
 
@@ -177,7 +143,8 @@ class LLVMDriver:
         cg.module = llvm.parse_assembly(str(llmod))
 
         out_path = out or Path("a.out")
-        return self.link_executable(llmod, out_path, cc, debug, tm=tm, keep_object=keep_object)
+        return self.link_executable(llmod, out_path, cc, debug, tm=tm, keep_object=keep_object,
+                                    link=link)
 
     def compile_to_bitcode(
         self,
@@ -243,6 +210,7 @@ class LLVMDriver:
         debug: bool,
         tm: Optional[llvm.TargetMachine] = None,
         keep_object: bool = False,
+        link: LinkInputs = NO_LINK_INPUTS,
     ) -> Path:
         """Emit object file and link to native executable."""
         optimizer = self.codegen.optimizer
@@ -257,7 +225,7 @@ class LLVMDriver:
             obj_path.write_bytes(obj_bytes)
 
         try:
-            _run_linker(_link_command(cc, [obj_path], out, debug), cc)
+            run_link(cc, LinkPlan.of([obj_path], out, debug, link))
         finally:
             # The object file is an intermediate either way. Leaving it behind on the
             # failure path was half of #251: a failed compile wrote a stale `.o` next
@@ -310,7 +278,7 @@ class LLVMDriver:
         return tm.emit_object(llmod)
 
     def link_object_files(self, obj_paths: list[Path], out: Path, cc: str = "cc",
-                          debug: bool = False) -> Path:
+                          debug: bool = False, link: LinkInputs = NO_LINK_INPUTS) -> Path:
         """Link multiple .o files into a native executable."""
-        _run_linker(_link_command(cc, obj_paths, out, debug), cc)
+        run_link(cc, LinkPlan.of(obj_paths, out, debug, link))
         return out

@@ -30,7 +30,7 @@ runs:
       shell: bash
       run: |
         apt-get update
-        apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
+        apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq zlib1g-dev
 
     - name: Install LLVM 20 (Linux)
       if: runner.os == 'Linux'

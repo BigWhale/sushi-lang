@@ -40,7 +40,7 @@ _add(ErrorMessage("CE3007", Severity.ERROR,
 
 _add(ErrorMessage("CE3008", Severity.ERROR,
     "linking failed: '{cc}' exited with status {status}",
-    Category.UNIT, "The C compiler used as the linker rejected the object file. Its own output is attached as a note. This is an environment condition, not a compiler bug."))
+    Category.UNIT, "The C compiler used as the linker rejected the object file. Its own output is attached as a note. Each library of a `link` clause gets a note at the clause that asked for it, a library of a binary `.slib` a note that names the library, and the `-L` directories a note. This is an environment condition, not a compiler bug: a library that the linker cannot find is not installed, or its directory needs `-L`."))
 
 _add(ErrorMessage("CE3009", Severity.ERROR,
     "public {kind} '{name}' names private type '{type}'",

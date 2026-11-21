@@ -393,7 +393,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.7
+Protocol: 2.8
 
 Units (1):
   mylib
