@@ -520,6 +520,9 @@ class ExternalBlock(Node):
     namespace_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
     variables: List[ExternalVar] = field(default_factory=list)
+    # The C libraries of the `link` clause, in source order, and the span of each name.
+    libraries: List[str] = field(default_factory=list)
+    library_spans: List[Optional[Span]] = field(default_factory=list)
 
 @dataclass(slots=True)
 class Block(Node):

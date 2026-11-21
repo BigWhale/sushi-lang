@@ -24,6 +24,7 @@ from sushi_lang.semantics.unit_reuse import UnitReuse
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.backend.library_paths import LibraryResolver
+    from sushi_lang.backend.link_plan import LinkInputs
     from sushi_lang.compiler.options import BuildOptions
 
 
@@ -935,6 +936,21 @@ def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit],
     return cg
 
 
+def _link_inputs(analyzer: SemanticAnalyzer, library_linker,
+                 options: BuildOptions) -> 'LinkInputs':
+    """What the link of the program is asked for: the `link` clause of each unit with an
+    AST (a unit from the cache included: the analysis reads every AST), then the
+    libraries that the manifest of each binary library records."""
+    from sushi_lang.backend.link_plan import LinkInputs
+    from sushi_lang.semantics.link_libraries import manifest_requests
+
+    requests = list(analyzer.link_requests)
+    loaded = library_linker.loaded_libraries if library_linker is not None else {}
+    for name, metadata in sorted(loaded.items()):
+        requests.extend(manifest_requests(name, metadata))
+    return LinkInputs(requests=tuple(requests), search_dirs=options.link_dirs)
+
+
 def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
     from sushi_lang.internals import errors as er
 
@@ -1014,7 +1030,8 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                                   debug=options.dump_ll, opt=options.opt,
                                   verify=not options.no_verify,
                                   keep_object=options.keep_object,
-                                  main_expects_args=analyzer.main_expects_args)
+                                  main_expects_args=analyzer.main_expects_args,
+                                  link=_link_inputs(analyzer, library_linker, options))
         written = "native binary"
 
     if options.write_ll:
@@ -1147,7 +1164,8 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     codegen_time = time.monotonic() - t0
 
     t1 = time.monotonic()
-    driver.link_object_files(obj_paths, out_path, cc="cc", debug=options.dump_ll)
+    driver.link_object_files(obj_paths, out_path, cc="cc", debug=options.dump_ll,
+                             link=_link_inputs(analyzer, library_linker, options))
     link_time = time.monotonic() - t1
 
     total_units = len(compilation_order)

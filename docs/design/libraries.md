@@ -748,6 +748,27 @@ did not change. This applies to both paths.
 **A source library uses neither mechanism.** Its units are compiled and linked exactly
 as the consumer's own units are.
 
+**The C libraries of the link.** Both paths end in one `cc` command, and one link plan
+makes it (`backend/link_plan.py`, `LinkPlan` and `link_command`; the decision record is
+`docs/adr/0003-one-executable-link-plan.md`). The plan holds the objects, the `-L`
+directories, the libraries and the output. The libraries are, in this order, each one
+time at its first appearance:
+
+1. The `link` clause of each unit that has an AST, in the compilation order: the
+   consumer's units, the bundled stdlib units and the units of a source library. The
+   `externs` pass reads each clause. The analysis reads every AST on every build, so a
+   unit whose object comes from the cache still gives its clauses.
+2. The `link_libraries` field of the manifest of each binary library. A binary library
+   records the clauses of its OWN units only; a dependency records its own.
+3. The libraries of the C runtime: `m` on Linux, none on macOS. LLVM lowers a float `%`
+   (`frem`) to a call of `fmod`, and glibc keeps `fmod` in libm, so a program that never
+   imports `<math>` still needs libm on Linux. On macOS, libSystem holds libm. `math.sushi`
+   also writes `link "m"`, and the plan keeps the name one time.
+
+The libraries are not in the key of an object: the object does not change, and the link
+runs on each build. `--lib-info` prints the field of a binary library as `Links: z`. A
+source library prints no `Links:` line: its consumer reads the clauses in its source.
+
 ### 5.8 What does NOT cross a binary boundary
 
 - **Generic-target perk impls** (`extend Box@(T) with SomePerk:`) do not ship as

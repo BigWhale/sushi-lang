@@ -13,6 +13,7 @@ from sushi_lang.semantics.ast_builder.declarations.signatures import (
 from sushi_lang.semantics.ast_builder.utils.string_processing import strip_string_token
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_tree, ice, is_type_node)
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
-    """Parse: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" ... extern_decl+"""
+    """Parse: UNSAFE EXTERNAL STRING [external_link] AS NAME [BECAUSE STRING] ":" ..."""
     abi: Optional[str] = None
     abi_span = None
     namespace: Optional[str] = None
@@ -59,6 +60,7 @@ def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
             variables.append(parse_extern_var(child, ast_builder))
 
     attach_docs(t.children, [*decls, *variables], ast_builder)
+    libraries, library_spans = _link_clause(first_tree(t.children, "external_link"))
 
     return ExternalBlock(
         abi=abi if abi is not None else "",
@@ -68,8 +70,26 @@ def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
         variables=variables,
         abi_span=abi_span,
         namespace_span=namespace_span,
+        libraries=libraries,
+        library_spans=library_spans,
         loc=span_of(t),
     )
+
+
+def _link_clause(node: Optional[Tree]) -> tuple[list, list]:
+    """`link "z", "m"`: the names and their spans. The word is a NAME in the grammar, so
+    that `link` stays an identifier; any other word is refused as the parser refuses a
+    token (CE6001)."""
+    if node is None:
+        return [], []
+    word = node.children[0]
+    if not isinstance(word, Token) or word.type != "NAME":
+        ice(node, "an external_link with no leading NAME")
+    if word.value != "link":
+        raise SyntaxDiagnostic("CE6001", span=span_of(word), token=str(word.value)).help(
+            'write `link "<library>"` between the ABI and `as`')
+    strings = [tok for tok in node.children[1:] if isinstance(tok, Token)]
+    return [strip_string_token(tok) for tok in strings], [span_of(tok) for tok in strings]
 
 
 def parse_extern_var(t: Tree, ast_builder: 'ASTBuilder') -> ExternalVar:

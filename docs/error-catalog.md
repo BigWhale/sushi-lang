@@ -2679,7 +2679,7 @@ A program compiled without --lib is linked into an executable, and the linker ne
 
 **Message:** `linking failed: '{cc}' exited with status {status}`
 
-The C compiler used as the linker rejected the object file. Its own output is attached as a note. This is an environment condition, not a compiler bug.
+The C compiler used as the linker rejected the object file. Its own output is attached as a note. Each library of a `link` clause gets a note at the clause that asked for it, a library of a binary `.slib` gets a note that names the library, and the `-L` directories get a note. This is an environment condition, not a compiler bug: a library that the linker cannot find is not installed, or its directory needs `-L` ([FFI](ffi.md#linking-an-external-library)).
 
 ### CE3009 {#ce3009}
 
@@ -3254,6 +3254,32 @@ The link name after `=` in an `unsafe external` declaration is a string literal 
 **Message:** `external variable '{name}' is read-only`
 
 A `var` in an `unsafe external` block declares a C global variable, and Sushi reads it: each read loads the global at that moment. A write to a C global (`libc.optind := 1`) is refused, because nothing says who else reads the global or when. Call a C function that sets the global, or keep the value in a Sushi variable.
+
+### CE5017 {#ce5017}
+
+**Error** · ffi
+
+**Message:** `the library name '{name}' is not valid: {reason}`
+
+A name in the `link` clause of an `unsafe external` block goes to the linker as `-l<name>`. So the name is not empty, it holds no `/` and no white space, and it does not start with `-`: a `-` would make the name a second linker flag. A path to a library is not a name. Give the directory of the library with `sushic -L <dir>`, and write the name alone.
+
+### CE5018 {#ce5018}
+
+**Error** · ffi
+
+**Message:** `the library name '{name}' is a file name, not a library name`
+
+**Help:** `write link "{library}"`
+
+The linker makes the file name from the library name: `-lz` finds `libz.so`, `libz.dylib` or `libz.a`. So a name in the `link` clause has no `lib` prefix and no `.so`, `.dylib` or `.a` suffix. The help gives the name to write: `{library}` is the name without the prefix and the suffix (`z` for `libz.so`).
+
+### CE5019 {#ce5019}
+
+**Error** · ffi
+
+**Message:** `` the library '{name}' is named two times in one `link` clause ``
+
+One `link` clause names each library one time. The note points at the first name. Two blocks can name the same library: the link plan keeps each library one time, in the order of its first appearance.
 
 ## CE6xxx: Syntax errors {#ce6xxx}
 
