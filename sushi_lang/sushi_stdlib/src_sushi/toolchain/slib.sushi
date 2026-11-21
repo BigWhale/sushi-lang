@@ -320,12 +320,11 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[150] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[149] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
     SchemaRow('manifest', 'compiler_version', 'str', Presence.Required()),
-    SchemaRow('manifest', 'compiled_at', 'str', Presence.Required()),
     SchemaRow('manifest', 'sushi_lib_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'kind', 'str', Presence.Optional()),
     SchemaRow('manifest', 'requires_compiler', 'str', Presence.Optional()),

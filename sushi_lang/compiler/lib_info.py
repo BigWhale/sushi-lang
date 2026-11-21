@@ -580,7 +580,6 @@ def print_library_info(library_path: Path, show_docs: bool = False,
     print(f"Compiler: {metadata['compiler_version']}")
     if requires:
         print(f"Requires compiler: {requires}")
-    print(f"Compiled: {metadata['compiled_at']}")
     print(f"Protocol: {metadata['sushi_lib_version']}")
     print()
 

@@ -161,7 +161,7 @@ WHOLE_MODULE_READERS = (REGISTRATION, REGISTRY)
 # `toolchain/src/slib_info.sushi`, by hand: the keys it reads, per record kind.
 SUSHI_READER: dict[str, set[str]] = {
     "manifest": {"library_name", "library_version", "kind", "requires_compiler",
-                 "platform", "compiler_version", "compiled_at", "sushi_lib_version",
+                 "platform", "compiler_version", "sushi_lib_version",
                  "units", "unit_docs", "reexports", "public_functions",
                  "public_constants", "public_variables", "structs", "enums",
                  "templates", "conversions", "dont_panic",

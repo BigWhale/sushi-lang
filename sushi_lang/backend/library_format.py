@@ -188,7 +188,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "library_version", "str", "yes"),
     ("manifest", "platform", "str", "yes"),
     ("manifest", "compiler_version", "str", "yes"),
-    ("manifest", "compiled_at", "str", "yes"),
     ("manifest", "sushi_lib_version", "str", "yes"),
     ("manifest", "kind", "str", "no"),
     ("manifest", "requires_compiler", "str", "no"),

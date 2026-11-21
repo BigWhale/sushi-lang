@@ -1,0 +1,18 @@
+# The control of test_lib_rebuild_same_binary: a source library built again from the
+# same source. The second build of the consumer reuses every unit, the units of the
+# library included. v2/ holds a byte-equal copy of the library source.
+# FIXTURE_SUSHI_HOME: home
+# BUILD_LIB: probelib.sushi
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "Mostly Harmless\n"
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_CACHED: test_lib_rebuild_same_source, probe_util, io/fs, io/contracts, io/error
+# EXPECT_CACHED: io/path, net/error, sys/platform, text/ascii, collections/strings
+# EXPECT_CACHED: lib/probelib/probelib
+use <lib/probelib>
+use <io/fs>
+use "probe_util"
+
+fn main() i32:
+    if (probe_twice(2) != 4):
+        return 3
+    return probe_say("Mostly Harmless\n")

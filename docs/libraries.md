@@ -394,8 +394,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Compiled: 2026-09-28T19:18:00+00:00
-Protocol: 2.4
+Protocol: 2.6
 
 Units (1):
   mylib
