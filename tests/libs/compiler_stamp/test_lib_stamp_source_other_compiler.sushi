@@ -1,0 +1,10 @@
+# A source library is text, and the consumer compiles it. Its compiler version is not checked, so another version does not stop the consumer.
+# BUILD_LIB: stamp_lib.sushi
+# LIB_MANIFEST_SET: stamp_lib compiler_version=0.0.1
+# EXPECT_STDOUT_EXACT: "6\n"
+use <lib/stamp_lib>
+
+fn main() i32:
+    println("{stamp_area(2, 3)}")
+    return 0
+

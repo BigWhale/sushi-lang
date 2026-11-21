@@ -2957,6 +2957,14 @@ A --lib build reads the nori.toml in the current directory for the library versi
 
 A library records every `use <lib/...>` that its units write, with the version of the library that its build found, and the consumer's build loads the whole graph. A library is identified by the `library_name` stamped into its `.slib`, so the graph holds ONE copy of each library: a body compiled against one version and linked against another is a wrong program with no diagnostic. When two paths of the graph reach two versions of one library -- a library was built against 0.1.0 and the consumer's search finds 0.2.0, or two imports find two files -- the build stops here. Each note names a version and the path that reached it: the consumer's `use`, or the library that recorded it. The escape is to rebuild the library that recorded the old version against the one that the search finds, or to put the version that it was built against first on SUSHI\_LIB\_PATH.
 
+### CE3520 {#ce3520}
+
+**Error** · library
+
+**Message:** `library '{lib}' was built by another compiler: its compiler {part} is '{built}', this compiler has '{current}'; build the library again with this compiler`
+
+A binary library holds bitcode, and the bitcode is bound to the compiler that made it. Before 1.0 the bitcode ABI (value layouts, calling conventions, mangling) changes often, also in a patch release. A binary library also carries its own copy of each stdlib module that it imports, as `weak_odr`, and LLVM takes all copies as equal: a library from another compiler can run an old stdlib with no message. So a binary library records a stamp, the exact compiler version and the compiler-source digest (the digest that the object cache uses), and the consumer accepts it only when both are equal to its own. The message names the part that is not equal, the version first. The fix is to build the library again with this compiler. `--ignore-compiler-version` does not stop this check; it is for `requires_compiler` ([CE3503](#ce3503)). A source library has no stamp: the consumer compiles its text.
+
 ## CE4xxx: Perk errors {#ce4xxx}
 
 These errors are about perks, perk implementations and perk constraints.

@@ -262,7 +262,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.6",
+            "sushi_lib_version": "2.7",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -278,6 +278,10 @@ class LibraryManifestGenerator:
             "templates": templates_section,
             "dependencies": self._extract_dependencies(units),
         }
+
+        if kind == "binary":
+            from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
+            manifest["compiler_digest"] = compute_compiler_source_fingerprint()
 
         # What the library declares and does not export (#469). Absent when there is
         # nothing to keep, so a library of nothing but public functions grows by nothing.

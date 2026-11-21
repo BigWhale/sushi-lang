@@ -30,6 +30,8 @@ puts them in the unit table as ordinary units. Source libraries use the same mec
 the per-declaration behaviour: concrete bodies as bitcode, generics as
 source slices. §5 specifies it. A binary `.slib` is platform-bound and is rejected on
 a foreign OS or a foreign architecture ([CE3504](../error-catalog.md#ce3504)); a source `.slib` is not.
+A binary `.slib` is also bound to the exact compiler that built it
+([CE3520](../error-catalog.md#ce3520), §6.4).
 
 **There are two kinds, `source` and `binary`.** A third kind, `hybrid`, carried the whole
 source AND the bitcode. It came from #428 as the third value of `KIND`, and it was never
@@ -133,13 +135,14 @@ authority, and the index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.6"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"2.7"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
 | `library_name` | from the output filename |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
 | `kind` | `"source"` or `"binary"`, matching the `KIND` header field. Optional: a manifest with no `kind` is a source library. Any other value is [CE3512](../error-catalog.md#ce3512) in every reader; `library_kind` (`backend/library_format.py`) and its Sushi twin (`toolchain/slib.sushi`) are the one answer |
 | `units` | ordered unit names present in the source section |
-| `compiler_version` | informational: exactly which compiler built the file |
+| `compiler_version` | exactly which compiler built the file. For a binary library it is half of the compiler stamp (§6.4); for a source library it is informational |
+| `compiler_digest` | the compiler-source digest of the compiler that built the file (`compute_compiler_source_fingerprint`, `compiler/fingerprint.py`, the digest of the object cache). The other half of the stamp (§6.4). Written only for a binary library |
 | `platform` | the host key `<os>_<arch>` (`darwin_arm64`), from `host_key()`, the key of the `<sys/platform>` file; meaningful only when `kind != "source"` |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
@@ -862,6 +865,34 @@ library-load path, and `internals` is the shared bottom layer. The Nori resolver
 this module rather than growing a second implementation. Both packages are in the blocking mypy set
 (`MYPY_PKGS` in `.githooks/pre-push`), so the module must be mypy-clean.
 
+### 6.4 The compiler stamp of a binary library
+
+**The rule.** A binary library works only with the exact compiler that built it. The
+library records a stamp of two parts, `compiler_version` (the exact version) and
+`compiler_digest` (the compiler-source digest). The consumer accepts the library only when
+both parts are equal to its own. A mismatch is a **hard error,
+[CE3520](../error-catalog.md#ce3520)**, and the message names the part that is not equal, the
+version first, with the value of the library and the value of the compiler. The check is
+`_check_library_compiler_stamp` (`compiler/pipeline.py`), in the library load loop beside the
+platform check. `--ignore-compiler-version` does not stop it. `--lib-info` prints the
+digest and does not refuse a mismatch.
+
+**The reason.** Before 1.0 the bitcode ABI changes often: a value layout, a calling
+convention or a mangling rule can change in a patch release. The container `VERSION` and
+`templates.version` do not change with them. A binary library also carries its own copy of
+each stdlib module that it imports, as `weak_odr` (`backend/library_linkage.py`), and LLVM
+takes all copies as equal. So a library from another compiler can run an old stdlib, and a
+fix in the new stdlib does not reach it, with no message. `requires_compiler` (`~0.17`,
+§6.2) cannot see this: it accepts a patch release. The version alone cannot see it either:
+in development, two compilers of one version can have different sources. The digest is the
+one that the object cache already computes, so one function gives the two answers.
+
+**A source library has no stamp.** It is text, and the consumer compiles it. Only
+`requires_compiler` applies to it (§6.2).
+
+**At 1.0** the plan is to keep only the version part. A released compiler then keeps the
+bitcode ABI stable inside one version, so the digest adds nothing to the version.
+
 ## 7. Conflict and safety rules — summary
 
 Rules marked **binary** apply only when `kind != "source"`.
@@ -888,6 +919,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | An `unsafe external "C"` link-name == a symbol this build defines | **[CE5013](../error-catalog.md#ce5013)** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step. A GENERATED stdlib symbol is in none of those, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
 | Container version is not 5 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild |
 | `requires_compiler` not satisfied | **[CE3503](../error-catalog.md#ce3503)** | see §6.2; the escape is `--ignore-compiler-version` |
+| The compiler stamp of a binary library is not the running compiler's (**binary**) | **[CE3520](../error-catalog.md#ce3520)** | see §6.4; the bitcode ABI and the bundled `weak_odr` stdlib change before 1.0. No escape: build the library again |
 | No `library_version` available at build time | **[CE3505](../error-catalog.md#ce3505)** | see §6.1 |
 | Call site's `nom` marker disagrees with the shipped signature | **[CE2427](../error-catalog.md#ce2427)** | the same rule as within a unit: a consume is visible at both ends or at neither (§5.6) |
 

@@ -393,7 +393,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.6
+Protocol: 2.7
 
 Units (1):
   mylib
@@ -572,6 +572,25 @@ confusing error deep inside library source you never wrote.
 
 The escape is `--ignore-compiler-version`, for an author testing a library forward against a
 new compiler. It is build-wide and obviously temporary, on purpose.
+
+### The compiler stamp of a binary library
+
+A binary library holds bitcode, and before 1.0 the bitcode ABI changes often, also in a
+patch release. A binary library also carries its own copy of each stdlib module that it
+imports. So a binary library works only with the exact compiler that built it. It records
+a stamp of two parts: the exact compiler version (`compiler_version`) and the
+compiler-source digest (`compiler_digest`, the digest that the object cache uses). The
+consumer accepts the library only when both parts are equal to its own. A mismatch is a
+hard error, and the message names the part that is not equal:
+
+```
+CE3520: library 'mylib' was built by another compiler: its compiler version is '0.17.0', this compiler has '0.17.1'; build the library again with this compiler
+```
+
+The fix is to build the library again with this compiler. `--ignore-compiler-version`
+does not stop this check. A source library has no stamp: the consumer compiles its text,
+and only `requires_compiler` applies. `--lib-info` prints the digest of a binary library
+as `Compiler digest: <digest>`.
 
 ### The format versions
 

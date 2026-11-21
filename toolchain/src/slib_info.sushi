@@ -1597,6 +1597,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string kind = library_kind(meta).realise("source")
     let string plat = get_str(meta, "platform")
     let string comp = get_str(meta, "compiler_version")
+    let string digest = get_str(meta, "compiler_digest")
     let string req = get_str(meta, "requires_compiler")
     let string ovf = get_str(meta, "overflow")
     let string proto = get_str(meta, "sushi_lib_version")
@@ -1608,6 +1609,8 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     if (ovf != ""):
         println("Overflow: {ovf}")
     println("Compiler: {comp}")
+    if (digest != ""):
+        println("Compiler digest: {digest}")
     if (req != ""):
         println("Requires compiler: {req}")
     println("Protocol: {proto}")

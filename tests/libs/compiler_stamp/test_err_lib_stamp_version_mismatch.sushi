@@ -1,0 +1,11 @@
+# A binary library that another compiler version built. Before 1.0 a binary library works only with the exact compiler that built it, so the consumer refuses it (CE3520).
+# BUILD_LIB_BINARY: stamp_lib.sushi
+# LIB_MANIFEST_SET: stamp_lib compiler_version=0.0.1
+# EXPECT_ERROR_CODE: CE3520
+# EXPECT_STDERR_CONTAINS: "its compiler version is '0.0.1', this compiler has '"
+use <lib/stamp_lib>
+
+fn main() i32:
+    println("{stamp_area(2, 3)}")
+    return 0
+

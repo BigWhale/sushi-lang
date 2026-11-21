@@ -50,6 +50,28 @@ def _check_library_platform(metadata: dict) -> None:
         raise LibraryError("CE3504", lib_platform=lib_platform, current_platform=host)
 
 
+def _check_library_compiler_stamp(metadata: dict, lib_path: str) -> None:
+    """Refuse a binary `.slib` that another compiler built (CE3520).
+
+    The stamp is the exact compiler version and the compiler-source digest of the object
+    cache. Both must be equal to the running compiler. A source library has no stamp.
+    """
+    from sushi_lang import __version__
+    from sushi_lang.backend.library_errors import LibraryError
+    from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
+
+    if library_kind(metadata) == "source":
+        return
+    lib = metadata.get("library_name") or lib_path
+    for part, built, current in (
+            ("version", metadata.get("compiler_version"), __version__),
+            ("source digest", metadata.get("compiler_digest"),
+             compute_compiler_source_fingerprint())):
+        if built != current:
+            raise LibraryError("CE3520", lib=lib, part=part, built=built or "none",
+                               current=current)
+
+
 def _check_library_compiler_version(metadata: dict, lib_path: str,
                                     current: str | None = None,
                                     ignore: bool = False) -> None:
@@ -394,6 +416,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
             loaded[name] = _Loaded(version, slib_path, wanted.origin)
             _check_expected(name, loaded[name], wanted)
             _check_library_platform(metadata)
+            _check_library_compiler_stamp(metadata, wanted.path)
             _check_library_compiler_version(metadata, wanted.path,
                                             ignore=ignore_compiler_version)
             _check_library_templates_version(metadata, wanted.path)
