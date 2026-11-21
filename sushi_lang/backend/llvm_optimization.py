@@ -1,6 +1,7 @@
 """LLVM optimization pipeline and verification for the Sushi language compiler."""
 from __future__ import annotations
 
+import functools
 import typing
 from typing import Optional, Any, Callable, Dict, NamedTuple
 
@@ -81,13 +82,47 @@ _PIPELINES: dict[str, _Pipeline] = {
 }
 
 
+_llvm_initialized = False
+
+
+def _ensure_llvm() -> None:
+    """Initialize the LLVM native target and assembly printer, one time."""
+    global _llvm_initialized
+    if _llvm_initialized:
+        return
+    llvm.initialize_native_target()
+    llvm.initialize_native_asmprinter()
+    _llvm_initialized = True
+
+
+def create_target_machine(target_triple: str | None = None, level: int = 2) -> llvm.TargetMachine:
+    """The one factory of a target machine: the triple (the host triple by default), the
+    relocation model of the platform, and the code generation level `level`."""
+    _ensure_llvm()
+    triple = target_triple or llvm.get_default_triple()
+    target = llvm.Target.from_triple(triple)
+
+    reloc = "default"
+    if "linux" in triple.lower():
+        reloc = "pic"
+
+    return target.create_target_machine(opt=level, reloc=reloc)
+
+
+@functools.cache
+def target_data_layout() -> str:
+    """The LLVM data layout string of the host target, the layout that codegen puts on
+    every module (`ensure_target`). A binary `.slib` records it, and the consumer compares
+    it with its own."""
+    return str(create_target_machine().target_data)
+
+
 class LLVMOptimizer:
     """Handles LLVM optimization pipeline, verification, and target setup."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
         """Initialize optimizer with reference to main codegen instance."""
         self.codegen = codegen
-        self._llvm_init = False
         self._tm_cache: Dict[tuple[str, int], llvm.TargetMachine] = {}
 
     def optimize(self, llmod: llvm.ModuleRef, mode: str = "mem2reg") -> None:
@@ -96,7 +131,7 @@ class LLVMOptimizer:
         if m in ("none", "o0"):
             return
 
-        tm = self._create_target_machine_with_reloc()
+        tm = create_target_machine()
 
         if m == "mem2reg":
             self._apply_mem2reg_optimization(llmod, tm)
@@ -148,40 +183,23 @@ class LLVMOptimizer:
         except Exception as e:
             raise_internal_error("CE0015", message=f"LLVM IR verification failed ({when}): {e}")
 
-    def ensure_llvm(self) -> None:
+    @staticmethod
+    def ensure_llvm() -> None:
         """Initialize LLVM native target and assembly printer."""
-        if self._llvm_init:
-            return
-        llvm.initialize_native_target()
-        llvm.initialize_native_asmprinter()
-        self._llvm_init = True
-
-    def _create_target_machine_with_reloc(self, target_triple: str | None = None,
-                                          level: int = 2) -> llvm.TargetMachine:
-        """Create target machine with appropriate relocation model for the platform, at the
-        code generation level `level`."""
-        self.ensure_llvm()
-        triple = target_triple or llvm.get_default_triple()
-        target = llvm.Target.from_triple(triple)
-
-        reloc = "default"
-        if "linux" in triple.lower():
-            reloc = "pic"
-
-        return target.create_target_machine(opt=level, reloc=reloc)
+        _ensure_llvm()
 
     def ensure_target(self, mod: Optional[Any] = None, opt: str = "mem2reg",
                       target_triple: str | None = None) -> llvm.TargetMachine:
         """Ensure module has target triple and data layout, return the TargetMachine of the
         code generation level of the `--opt` mode `opt`."""
-        self.ensure_llvm()
+        _ensure_llvm()
 
         triple = target_triple or llvm.get_default_triple()
 
         key = (triple, codegen_level(opt))
         tm = self._tm_cache.get(key)
         if tm is None:
-            tm = self._create_target_machine_with_reloc(triple, key[1])
+            tm = create_target_machine(triple, key[1])
             self._tm_cache[key] = tm
 
         if mod is not None:
@@ -189,12 +207,6 @@ class LLVMOptimizer:
             mod.data_layout = str(tm.target_data)
 
         return tm
-
-    def create_target_machine(self, target_triple: str | None = None) -> llvm.TargetMachine:
-        """Create a new target machine for the specified triple."""
-        self.ensure_llvm()
-        triple = target_triple or llvm.get_default_triple()
-        return self._create_target_machine_with_reloc(triple)
 
     @staticmethod
     def get_default_triple() -> str:

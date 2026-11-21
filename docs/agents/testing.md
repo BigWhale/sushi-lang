@@ -63,8 +63,8 @@ Each step has a runner test under `tests/unit/runner/`.
   also fails: lower the baseline to the new count in the same PR, so that the gain stays.
 - **The library-reader gate** (`lib_reader_gate`): damaged copies of a source and a binary
   library (truncated, bad magic, oversize length, a manifest with a missing field, an
-  unknown kind, another compiler stamp) go through both `--lib-info` halves and a
-  consumer. Every case must print its code.
+  unknown kind, another compiler stamp, another data layout) go through both `--lib-info`
+  halves and a consumer. Every case must print its code.
 - **The library-report gate** (`lib_info_report_gate`): a multi-payload variant and a
   two-constraint generic in a source, a binary and a source library whose manifest states
   no kind, through both halves and a consumer.

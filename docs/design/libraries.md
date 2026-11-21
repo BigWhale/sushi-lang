@@ -29,7 +29,8 @@ puts them in the unit table as ordinary units. Source libraries use the same mec
 **Binary distribution stays available as an opt-in** (`--lib-kind binary`), and keeps
 the per-declaration behaviour: concrete bodies as bitcode, generics as
 source slices. §5 specifies it. A binary `.slib` is platform-bound and is rejected on
-a foreign OS or a foreign architecture ([CE3504](../error-catalog.md#ce3504)); a source `.slib` is not.
+a foreign OS, a foreign architecture or a foreign data layout
+([CE3504](../error-catalog.md#ce3504), §6.5); a source `.slib` is not.
 A binary `.slib` is also bound to the exact compiler that built it
 ([CE3520](../error-catalog.md#ce3520), §6.4).
 
@@ -135,7 +136,7 @@ authority, and the index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.7"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"2.9"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
 | `library_name` | from the output filename |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
@@ -144,6 +145,7 @@ authority, and the index is a cache of it.
 | `compiler_version` | exactly which compiler built the file. For a binary library it is half of the compiler stamp (§6.4); for a source library it is informational |
 | `compiler_digest` | the compiler-source digest of the compiler that built the file (`compute_compiler_source_fingerprint`, `compiler/fingerprint.py`, the digest of the object cache). The other half of the stamp (§6.4). Written only for a binary library |
 | `platform` | the host key `<os>_<arch>` (`darwin_arm64`), from `host_key()`, the key of the `<sys/platform>` file; meaningful only when `kind != "source"` |
+| `data_layout` | the LLVM data layout string of the target that built the file (`target_data_layout`, `backend/llvm_optimization.py`, the layout that codegen puts on each module). Written only for a binary library (§6.5) |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `not_exported` | what the library declares and keeps: a name, its kind and the unit that keeps it, one record for each (unit, name), and nothing else (#1112). The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
@@ -923,6 +925,35 @@ stdlib copy.
 **At 1.0** the plan is to keep only the version part. A released compiler then keeps the
 bitcode ABI stable inside one version, so the digest adds nothing to the version.
 
+### 6.5 The data layout of a binary library
+
+**The rule.** A binary library records the LLVM data layout string of the target that
+built it, as `data_layout`. The writer and the consumer take it from one function,
+`target_data_layout` (`backend/llvm_optimization.py`). It reads the `target_data` of a
+target machine from `create_target_machine`, the one factory of a target machine, so the
+recorded layout is the layout that codegen puts on each module. The consumer accepts a
+binary library only when its layout is equal to the layout of this compiler's target. The
+check is the second half of `_check_library_platform` (`compiler/pipeline.py`): first the
+host key, then the layout. A mismatch is
+**[CE3504](../error-catalog.md#ce3504)**, the platform code, and each platform in the
+message shows its layout, as `darwin_arm64 (data layout <layout>)`. A binary library with
+no `data_layout` is refused too, and the message shows `none`. There is no backward
+compatibility: a binary library from protocol `2.8` or earlier must be built again.
+`--lib-info` prints `Data layout: <layout>` for a binary library and does not refuse a
+mismatch.
+
+**The reason.** The data layout gives the size, the alignment and the byte order of each
+value, and the bitcode of a binary library is lowered against it. Two targets with one
+host key can have different layouts (for example, a 32-bit ABI on a 64-bit machine). Today
+the compiler has no `--target`: the host key fixes the target, so the layout of a library
+that this compiler built is always equal to the layout of the consumer. The check thus
+guards a library that was edited by hand or built by another toolchain. It also prepares
+`--target`: when a build can select its target, the host key alone does not say which
+layout the bitcode has, and the check must already be in place.
+
+**A source library has no layout.** It is text, and the consumer compiles it for its own
+target. The writer adds no `data_layout`, and the check skips a source library.
+
 ## 7. Conflict and safety rules — summary
 
 Rules marked **binary** apply only when `kind != "source"`.
@@ -945,7 +976,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | A template snippet fails to re-parse (**binary**) | perk-impl: **[CW3506](../error-catalog.md#cw3506)** (skip); generic fn/type/constant: **[CE3512](../error-catalog.md#ce3512)**, and the build stops | never let a malformed shipped snippet crash or pollute the consumer's own build, and never report it at the consumer's `use` line |
 | A **source** library unit fails to compile | the real diagnostic, plus a `note` naming the library and the `use` that pulled it in (§4.4) | the consumer must never see a bare error about code they did not write |
 | Public native `...T` variadic function | **[CE0116](../error-catalog.md#ce0116)** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
-| Platform mismatch (**binary**) | **[CE3504](../error-catalog.md#ce3504)** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
+| Platform or data layout mismatch (**binary**) | **[CE3504](../error-catalog.md#ce3504)** | bitcode is platform-specific, and it is lowered against one data layout (§6.5); caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
 | An `unsafe external "C"` link-name == a symbol this build defines | **[CE5013](../error-catalog.md#ce5013)** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step. A GENERATED stdlib symbol is in none of those, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
 | Container version is not 5 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild |
 | `requires_compiler` not satisfied | **[CE3503](../error-catalog.md#ce3503)** | see §6.2; the escape is `--ignore-compiler-version` |

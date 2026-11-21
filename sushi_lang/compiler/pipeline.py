@@ -29,18 +29,21 @@ if TYPE_CHECKING:
 
 
 def _check_library_platform(metadata: dict) -> None:
-    """Reject a `.slib` carrying bitcode built for another host (CE3504).
+    """Reject a `.slib` carrying bitcode built for another host or target (CE3504).
 
     The tag and the host are both `host_key()`, `<os>_<arch>`: an OS alone let an arm64
     library through on x86_64, and the fault showed late, at the link. A library with no
     tag, or with a tag that names no host (`unknown`, an old OS-only tag), cannot be
-    checked, so it is refused too.
+    checked, so it is refused too. The data layout of the library must then be the
+    layout of this compiler's target (`target_data_layout`, the one that codegen uses);
+    a library with no layout is refused.
 
     A source library states a platform too -- the machine that produced it -- but
     nothing in it is machine code, so the field says nothing about where it can be
     used, and the check skips it.
     """
     from sushi_lang.backend.library_errors import LibraryError
+    from sushi_lang.backend.llvm_optimization import target_data_layout
 
     if library_kind(metadata) == "source":
         return
@@ -49,6 +52,12 @@ def _check_library_platform(metadata: dict) -> None:
     host = host_key()
     if lib_platform != host:
         raise LibraryError("CE3504", lib_platform=lib_platform, current_platform=host)
+    lib_layout = metadata.get("data_layout")
+    layout = target_data_layout()
+    if lib_layout != layout:
+        raise LibraryError(
+            "CE3504", lib_platform=f"{lib_platform} (data layout {lib_layout or 'none'})",
+            current_platform=f"{host} (data layout {layout})")
 
 
 def _check_library_compiler_stamp(metadata: dict, lib_path: str) -> None:
