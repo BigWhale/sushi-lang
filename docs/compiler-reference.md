@@ -34,6 +34,9 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 
 # With optimization
 ./sushic --opt O3 program.sushi -o optimized
+
+# Link a C library that is outside the default directories (a `link "ssl"` clause)
+./sushic tls_client.sushi -L /opt/homebrew/opt/openssl@3/lib -o tls_client
 ```
 
 ### Options

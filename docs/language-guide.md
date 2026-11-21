@@ -20,6 +20,7 @@ This guide provides a friendly tour of Sushi's features. If you're new to Sushi,
 - [Units and Imports](#units-and-imports)
 - [Memory Management](#memory-management)
 - [Files and Handles](#files-and-handles)
+- [Calling C Libraries](#calling-c-libraries)
 
 ## Hello World
 
@@ -2137,6 +2138,162 @@ fn main() i32:
 
 `into_inner()` is the way back out: it flushes, then hands the handle over.
 
+## Calling C Libraries
+
+An `unsafe external` block declares C functions. Sushi calls them through the namespace of
+the block. The full rules are in [FFI](ffi.md). This section shows how to link a C library
+other than the C runtime, step by step.
+
+### The namespace and the library
+
+`as libc` is only a namespace. It is the name before the dot at the call site, and it
+links nothing. A function of the C runtime (`strlen`, `abs`, `malloc`) needs no more,
+because every program links the C runtime:
+
+```sushi
+unsafe external "C" as libc because "absolute value from the C runtime":
+    fn abs(i32 n) i32 = "abs"
+
+fn main() i32:
+    println(libc.abs(-42))
+    return 0
+```
+
+A function of another library needs a `link` clause. The clause stands between the ABI
+and `as`, and it names the library. `link "z"` tells the linker to use zlib (`-lz`):
+
+```sushi
+unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+fn checksum(string s) u64:
+    return zlib.crc32(0, s, s.len() as u32)
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0
+```
+
+The program prints:
+
+```
+3413997946
+```
+
+Keep the C call in a small Sushi function (`checksum`), and call that function from the
+rest of the program. The C function returns a raw C value and gets no borrow checks, so
+one small wrapper is easy to read and to audit.
+
+`link` is a keyword only in this position. A variable, a field or a function named `link`
+is still correct.
+
+### Two libraries in one clause
+
+A clause can name more than one library. The linker gets them in the written order. A
+TLS block needs OpenSSL, which is two libraries:
+
+<!-- docs-sweep: skip (needs libssl, which the docs machine may not have) -->
+```sushi
+unsafe external "C" link "ssl", "crypto" as tls because "TLS from OpenSSL":
+    fn OPENSSL_init_ssl(u64 opts, ptr settings) i32 = "OPENSSL_init_ssl"
+```
+
+Two blocks can name the same library. The compiler gives each library to the linker one
+time, in the order of its first appearance.
+
+### Libraries outside the default directories
+
+The linker looks for a library in the default directories of the system. When a library
+is in another directory, give the directory with `-L`. For example, Homebrew installs
+OpenSSL on macOS in a directory that the linker does not search:
+
+```bash
+./sushic tls_client.sushi -L /opt/homebrew/opt/openssl@3/lib -o tls_client
+```
+
+You can write `-L` more than one time. A relative directory is relative to the directory
+where you run `sushic`.
+
+### The name of a library
+
+The name in the clause is the name that the linker uses after `-l`: the file name without
+the `lib` prefix and without the suffix. The file `libz.so` (Linux), `libz.dylib` (macOS)
+or `libz.a` is the library `z`. A file name is an error:
+
+<!-- docs-sweep: error CE5018 -->
+```sushi
+unsafe external "C" link "libz.so" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+fn main() i32:
+    return 0
+```
+
+The compiler gives [CE5018](error-catalog.md#ce5018) and the help `write link "z"`.
+Write `link "z"`. A name is also not empty, holds no `/` and no space, and does not start
+with `-` ([CE5017](error-catalog.md#ce5017)), and one clause names a library only one time
+([CE5019](error-catalog.md#ce5019)).
+
+### A library that the linker cannot find
+
+When the library is not installed, or its directory needs `-L`, the link fails with
+[CE3008](error-catalog.md#ce3008). The output of the linker is a note, and a second note
+points at the clause that asked for the library:
+
+```
+app.sushi: error [CE3008]: linking failed: 'cc' exited with status 1.
+  = note: the library 'sqlite3' is asked for here
+    app.sushi:1:26
+    | unsafe external "C" link "sqlite3" as sql because "the SQLite database":
+    `                          ----+----
+  = note: ld: library 'sqlite3' not found
+```
+
+Install the library (for example the `-dev` package on Linux), or add its directory with
+`-L`.
+
+### A library that wraps a C library
+
+A library (`.slib`) can wrap a C library. Write the `link` clause in a unit of the
+library, and make the Sushi wrapper public:
+
+<!-- docs-sweep: skip (a library unit and its consumer, two files) -->
+```sushi
+# zcheck.sushi, built with: ./sushic --lib --lib-version 1.0.0 --lib-kind binary zcheck.sushi
+unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+public fn checksum(string s) u64:
+    return zlib.crc32(0, s, s.len() as u32)
+```
+
+The consumer imports the library and writes no `link` clause:
+
+<!-- docs-sweep: skip (needs zcheck.slib on SUSHI_LIB_PATH) -->
+```sushi
+use <lib/zcheck>
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0
+```
+
+A binary library records its libraries in its manifest, and the consumer links them.
+`./sushic --lib-info zcheck.slib` shows them as `Links: z`. The consumer of a source
+library compiles the blocks of the library, so it reads the clauses there. In both kinds,
+the C library must be installed on the machine that links the consumer, and `-L` goes on
+the build of the consumer. The details are in [Libraries](libraries.md#a-library-that-links-a-c-library).
+
+### libm on Linux
+
+On Linux, every program links libm (`-lm`), because a `%` on a float calls the C function
+`fmod`, and glibc keeps it in libm. So a function of libm (`tan`, `atan2`, `hypot`) needs
+no `link "m"`. On macOS, libSystem holds libm. `<math>` writes `link "m"` itself, and the
+compiler gives `m` to the linker one time.
+
+See [examples/31-ffi-link.sushi](examples/31-ffi-link.sushi) for a program that you can
+run, and [FFI](ffi.md#linking-an-external-library) for all the rules.
+
 ## Next Steps
 
 This guide covered the basics. For more details:
@@ -2145,6 +2302,7 @@ This guide covered the basics. For more details:
 - [Standard Library](standard-library.md) - All built-in types and methods
 - [Error Handling](error-handling.md) - Deep dive into Result and Maybe
 - [Memory Management](memory-management.md) - RAII, borrowing, and ownership
+- [FFI](ffi.md) - C functions, C libraries and the `link` clause
 - [File Operations](stdlib/io/files.md), [Buffered I/O](stdlib/io/buf.md) and
   [I/O Contracts](stdlib/io/contracts.md) - the handle layer in full
 - [Examples](examples/README.md) - Hands-on code examples

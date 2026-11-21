@@ -1,0 +1,30 @@
+# Example 31: Linking a C library
+#
+# Demonstrates:
+# - A `link` clause that names a C library: `link "z"` gives the linker `-lz`
+# - The namespace (`as zlib`) is only the name before the dot; the clause links the library
+# - Two blocks that name the same library: the linker gets it one time
+# - A small safe wrapper around each raw C call
+#
+# zlib is on most systems. If the linker cannot find it, install the zlib development
+# package, or give its directory with `./sushic -L <dir>`. See docs/ffi.md.
+
+unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+unsafe external "C" link "z" as adler because "Adler-32 from zlib":
+    fn adler32(u64 adler, string buf, u32 len) u64 = "adler32"
+
+# The CRC-32 of a string. The start value of a CRC-32 is 0.
+fn crc(string s) u64:
+    return zlib.crc32(0, s, s.len() as u32)
+
+# The Adler-32 of a string. The start value of an Adler-32 is 1.
+fn adler32(string s) u64:
+    return adler.adler32(1, s, s.len() as u32)
+
+fn main() i32:
+    let string towel = "Mostly Harmless"
+    println("crc32:   {crc(towel)}")
+    println("adler32: {adler32(towel)}")
+    return 0

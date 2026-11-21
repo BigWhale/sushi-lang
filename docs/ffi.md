@@ -643,7 +643,8 @@ fn main() i32:
   of its first appearance. The order matters to GNU ld for a static library.
 - **`sushic -L <dir>`** adds a directory where the linker looks for a library. The
   flag is repeatable. A relative directory is relative to the directory where you
-  run `sushic`.
+  run `sushic`. For example, Homebrew OpenSSL on macOS:
+  `./sushic app.sushi -L /opt/homebrew/opt/openssl@3/lib`.
 - **A library that the linker cannot find** is [`CE3008`](error-catalog.md#ce3008).
   The output of `cc` is a note, and each library of the program gets a note at the
   `link` clause that asked for it. A note also gives the `-L` directories.
@@ -680,3 +681,6 @@ pkg-config, a C struct by value, a C callback and rpath are not available yet.
 
 See [examples/28-ffi.sushi](examples/28-ffi.sushi) for the runnable `strlen`
 example used above.
+[examples/31-ffi-link.sushi](examples/31-ffi-link.sushi) links zlib with a `link`
+clause. The [language guide](language-guide.md#calling-c-libraries) teaches the `link`
+clause step by step.
