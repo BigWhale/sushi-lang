@@ -683,6 +683,7 @@ the mangling of the consumer.
 | [CE3517](error-catalog.md#ce3517) | The `nori.toml` in the working directory is not valid |
 | [CE3518](error-catalog.md#ce3518) | The `nori.toml` in the working directory cannot be read |
 | [CE3520](error-catalog.md#ce3520) | A binary library was built by another compiler: its `compiler_version` or its `compiler_digest` is not the one of the running compiler |
+| [CE3521](error-catalog.md#ce3521) | The `library_name` of the file is not the name of the `use` that loaded it (the last part of its path): the file was copied or renamed after its build |
 
 One truncation code per section rather than one shared code: the message names which
 section is short, and that is what tells a reader where the file was cut.

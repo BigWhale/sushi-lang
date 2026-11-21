@@ -1,0 +1,10 @@
+# A `use` path of more than one part names the library with its last part. The library `name_nested` is in the directory `vendor`, and `use <lib/vendor/name_nested>` loads it.
+# RUN_IN_FIXTURE_DIR
+# BUILD_LIB_AT: nested/name_nested.sushi -> vendor/name_nested.slib
+# EXPECT_STDOUT_EXACT: "5\n"
+use <lib/vendor/name_nested>
+
+fn main() i32:
+    println("{nested_area(2, 3)}")
+    return 0
+

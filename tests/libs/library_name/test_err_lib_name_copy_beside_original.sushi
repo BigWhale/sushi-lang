@@ -1,0 +1,13 @@
+# The original library and a copy of it at another version are both on the search path. The copy has the name of the original, so the two files met the one-version rule (CE3519). The name check comes first and names the copy (CE3521).
+# BUILD_LIB: name_probe.sushi @ 1.0.0
+# BUILD_LIB: name_probe.sushi -> name_other.slib @ 2.0.0
+# LIB_MANIFEST_SET: name_other library_name=name_probe
+# EXPECT_ERROR_CODES_EXACT: CE3521
+# EXPECT_STDERR_CONTAINS: "name_other.slib' is the library 'name_probe'"
+use <lib/name_probe>
+use <lib/name_other>
+
+fn main() i32:
+    println("{name_area(2, 3)}")
+    return 0
+

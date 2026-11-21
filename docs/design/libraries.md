@@ -954,6 +954,27 @@ layout the bitcode has, and the check must already be in place.
 **A source library has no layout.** It is text, and the consumer compiles it for its own
 target. The writer adds no `data_layout`, and the check skips a source library.
 
+### 6.6 The library name is the name of the `use`
+
+**The rule.** A build stamps `library_name`, the stem of its output file. A
+`use <lib/...>` names a library with the last part of its path, and the search finds a
+file of that name (`LibraryResolver.resolve_library`). The consumer refuses a file whose
+stamped name is not the name of the `use` that loaded it:
+**[CE3521](../error-catalog.md#ce3521)**, for both kinds. The check is `_check_library_name`
+(`compiler/pipeline.py`), in the library load loop beside the platform check and the
+compiler stamp. It runs on each load of the graph: the consumer's own `use`, a `use` or a
+`public use` of a source library, and a `dependencies` or `reexports` record of a binary
+library. It runs before the loop looks the stamped name up, so a copy beside its original
+is CE3521 and not [CE3519](../error-catalog.md#ce3519). The message names the two names
+and the file, and a note points at the `use`. `--lib-info` reads a file with no `use`, so
+it does not check the name.
+
+**The reason.** The stamped name identifies a library in the graph, and it gives the
+names of the units (`lib/<library>/<unit>`). A copied or renamed file loads under a name
+that is not its own: the build then uses a library that no `use` names, and two files with
+one stamped name meet the one-version rule as two versions of one library, with text that
+names neither file's `use`. A warning was not enough: the load is wrong, not only unusual.
+
 ## 7. Conflict and safety rules — summary
 
 Rules marked **binary** apply only when `kind != "source"`.
@@ -981,6 +1002,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | Container version is not 5 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild |
 | `requires_compiler` not satisfied | **[CE3503](../error-catalog.md#ce3503)** | see §6.2; the escape is `--ignore-compiler-version` |
 | The compiler stamp of a binary library is not the running compiler's (**binary**) | **[CE3520](../error-catalog.md#ce3520)** | see §6.4; the bitcode ABI and the bundled `weak_odr` stdlib change before 1.0. No escape: build the library again |
+| The `library_name` of the file is not the name of the `use` that loaded it | **[CE3521](../error-catalog.md#ce3521)** | see §6.6; a copied or renamed file hides which library a build uses. Build the library again under the name of the `use`, or write the `use` with the library's own name |
 | No `library_version` available at build time | **[CE3505](../error-catalog.md#ce3505)** | see §6.1 |
 | Call site's `nom` marker disagrees with the shipped signature | **[CE2427](../error-catalog.md#ce2427)** | the same rule as within a unit: a consume is visible at both ends or at neither (§5.6) |
 

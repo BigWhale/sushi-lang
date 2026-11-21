@@ -82,6 +82,28 @@ def _check_library_compiler_stamp(metadata: dict, lib_path: str) -> None:
                                current=current)
 
 
+def _check_library_name(metadata: dict, lib_path: str, slib_path: Path) -> None:
+    """Refuse a `.slib` whose stamped name is not the name of the `use` (CE3521).
+
+    The name of a `use <lib/...>` is the last part of its path, and a build stamps the
+    stem of its output file. A copied or renamed file has another name than its stamp.
+    The check runs before the graph looks the name up, so a copy beside its original is
+    this error and not two versions of one library.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+
+    lib = lib_path.rsplit("/", 1)[-1]
+    built = metadata["library_name"]
+    if built == lib:
+        return
+    error = LibraryError("CE3521", use_path=lib_path, lib=lib, path=str(slib_path),
+                         built=built)
+    own_path = f"{lib_path.rsplit('/', 1)[0]}/{built}" if "/" in lib_path else built
+    error.help(f"build the library again with the name '{lib}' (`-o {lib}.slib`), or "
+               f"write `use <{own_path}>`, with the library's own name")
+    raise error
+
+
 def _check_library_compiler_version(metadata: dict, lib_path: str,
                                     current: str | None = None,
                                     ignore: bool = False) -> None:
@@ -413,6 +435,11 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
                 raise
             metadata = LibraryFormat.read_metadata_only(slib_path)
             check_manifest(metadata, str(slib_path))
+            try:
+                _check_library_name(metadata, wanted.path, slib_path)
+            except LibraryError as e:
+                _add_origin_note(e, wanted.origin)
+                raise
             name = metadata["library_name"]
             version = metadata["library_version"]
             names[wanted.path] = name

@@ -1,0 +1,13 @@
+# A source library that is copied to another file name keeps its own library name in the manifest. The `use` names the copy, so the consumer refuses it (CE3521).
+# BUILD_LIB: name_probe.sushi -> name_other.slib
+# LIB_MANIFEST_SET: name_other library_name=name_probe
+# EXPECT_ERROR_CODE: CE3521
+# EXPECT_STDERR_CONTAINS: "`use <lib/name_other>` loads the library 'name_other', but the file '"
+# EXPECT_STDERR_CONTAINS: "name_other.slib' is the library 'name_probe'"
+# EXPECT_STDERR_CONTAINS: "write `use <lib/name_probe>`"
+use <lib/name_other>
+
+fn main() i32:
+    println("{name_area(2, 3)}")
+    return 0
+

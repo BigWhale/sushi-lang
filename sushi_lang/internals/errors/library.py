@@ -178,6 +178,25 @@ _add(ErrorMessage("CE3520", Severity.ERROR,
     "--ignore-compiler-version does not stop this check; it is for `requires_compiler` "
     "(CE3503). A source library has no stamp: the consumer compiles its text."))
 
+_add(ErrorMessage("CE3521", Severity.ERROR,
+    "`use <{use_path}>` loads the library '{lib}', but the file '{path}' is the library "
+    "'{built}'",
+    Category.LIBRARY,
+    "A build stamps the name of a library into its `.slib`: the `library_name` is the stem "
+    "of the output file (`-o <name>.slib`). A `use <lib/...>` names a library with the last "
+    "part of its path, and the search finds the file of that name. So the two names are "
+    "equal, unless a file was copied or renamed after its build. Such a file must not load "
+    "under another name. It hides which library a build uses: its units have the name of "
+    "the stamped library, not the name of the `use`. It also confuses the one-version "
+    "rule: two files with one stamped name meet as two versions of one library (CE3519), "
+    "and the text names a library that no `use` names. The consumer thus refuses every "
+    "library of the graph whose stamped name is not the name of the `use` that loaded it: "
+    "the consumer's own `use`, a `use` or a `public use` of a source library, and a "
+    "`dependencies` or `reexports` record of a binary library. Both kinds are checked. The "
+    "fix is to build the library again with the name of the `use`, or to write the `use` "
+    "with the library's own name. `--lib-info` reads a file with no `use`, so it does not "
+    "check this."))
+
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled
 # library had nowhere to put it: `public use X` makes X's public names the unit's own,

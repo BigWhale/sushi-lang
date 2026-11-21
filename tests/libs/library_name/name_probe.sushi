@@ -1,0 +1,2 @@
+public fn name_area(i32 w, i32 h) i32:
+    return w * h
