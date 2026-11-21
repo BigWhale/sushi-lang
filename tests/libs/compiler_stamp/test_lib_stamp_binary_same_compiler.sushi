@@ -1,0 +1,9 @@
+# A binary library that this compiler built has the stamp of this compiler. It loads, links and runs.
+# BUILD_LIB_BINARY: stamp_lib.sushi
+# EXPECT_STDOUT_EXACT: "6\n"
+use <lib/stamp_lib>
+
+fn main() i32:
+    println("{stamp_area(2, 3)}")
+    return 0
+

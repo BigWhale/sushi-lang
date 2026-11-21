@@ -155,6 +155,22 @@ _add(ErrorMessage("CE3519", Severity.ERROR,
     "recorded the old version against the one that the search finds, or to put the "
     "version that it was built against first on SUSHI_LIB_PATH (#1120)."))
 
+_add(ErrorMessage("CE3520", Severity.ERROR,
+    "library '{lib}' was built by another compiler: its compiler {part} is '{built}', this "
+    "compiler has '{current}'; build the library again with this compiler",
+    Category.LIBRARY,
+    "A binary library holds bitcode, and the bitcode is bound to the compiler that made it. "
+    "Before 1.0 the bitcode ABI (value layouts, calling conventions, mangling) changes "
+    "often, also in a patch release. A binary library also carries its own copy of each "
+    "stdlib module that it imports, as `weak_odr`, and LLVM takes all copies as equal: a "
+    "library from another compiler can run an old stdlib with no message. So a binary "
+    "library records a stamp, the exact compiler version and the compiler-source digest "
+    "(the digest that the object cache uses), and the consumer accepts it only when both "
+    "are equal to its own. The message names the part that is not equal, the version "
+    "first. The fix is to build the library again with this compiler. "
+    "--ignore-compiler-version does not stop this check; it is for `requires_compiler` "
+    "(CE3503). A source library has no stamp: the consumer compiles its text."))
+
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled
 # library had nowhere to put it: `public use X` makes X's public names the unit's own,

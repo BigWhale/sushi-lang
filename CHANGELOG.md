@@ -6,6 +6,19 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A binary `.slib` is bound to the exact compiler that built it.** A binary library
+  records a compiler stamp: the exact compiler version (`compiler_version`) and the
+  compiler-source digest (the new manifest field `compiler_digest`, the digest of the object
+  cache). The consumer refuses a binary library when one part is not equal to its own, with
+  the new code CE3520, and the message names the two values of that part. Before 1.0 the
+  bitcode ABI and the bundled `weak_odr` stdlib change often, so a library of another
+  compiler could run an old stdlib with no message. Build the library again with this
+  compiler. `--ignore-compiler-version` does not stop the check. A source library has no
+  stamp. `--lib-info` prints `Compiler digest:` for a binary library. The manifest protocol
+  is `2.7`. The compiler-source digest now hashes the `*.sushi` files of the compiler too
+  (the Sushi stdlib included), so a stdlib change alone refuses an old binary library, and
+  it also changes the object-cache key.
+
 - **The hybrid library kind is removed.** A `.slib` is `source` (the default) or `binary`.
   A hybrid library carried the source and the bitcode, but the consumer read only the
   bitcode, and a foreign host refused it. `--lib-kind hybrid` is refused (an invalid

@@ -1,0 +1,11 @@
+# A binary library that a compiler of the same version and another source built. The compiler-source digest does not match, so the consumer refuses it (CE3520).
+# BUILD_LIB_BINARY: stamp_lib.sushi
+# LIB_MANIFEST_SET: stamp_lib compiler_digest=0123456789abcdef
+# EXPECT_ERROR_CODE: CE3520
+# EXPECT_STDERR_CONTAINS: "its compiler source digest is '0123456789abcdef', this compiler has '"
+use <lib/stamp_lib>
+
+fn main() i32:
+    println("{stamp_area(2, 3)}")
+    return 0
+

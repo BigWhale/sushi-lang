@@ -146,7 +146,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.6",        # Protocol version
+    "sushi_lib_version": "2.7",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary", matching KIND; no kind is source
@@ -170,7 +170,13 @@ is the authority, and the index is a cache of it.
                                        #   compiled code. Absent when kind == "source"
                                        #   (no compiled code) and in a library from a
                                        #   compiler before the key
-    "compiler_version": str,           # Exactly which compiler built the file
+    "compiler_version": str,           # Exactly which compiler built the file. For
+                                       #   kind == "binary" it is half of the
+                                       #   compiler stamp (CE3520)
+    "compiler_digest": str,            # The compiler-source digest of the compiler
+                                       #   that built the file, the digest of the
+                                       #   object cache. The other half of the stamp.
+                                       #   Written only when kind == "binary"
 
     # The three lists below carry only CONCRETE declarations that the library MARKS
     # `public`. A generic function, struct or enum is filtered out of them and routes
@@ -640,7 +646,10 @@ receiver's TYPE, which is nominal and program-wide, so there is no unit in it to
 
 There is **no scheme identifier**. A manifest records what is, not the recipe, and
 `compiler_version` already says which compiler wrote it -- with `requires_compiler`
-([CE3503](error-catalog.md#ce3503)) refusing a `.slib` the running compiler may not consume.
+([CE3503](error-catalog.md#ce3503)) refusing a `.slib` the running compiler may not consume. A binary
+library is bound tighter: its compiler stamp (`compiler_version` and `compiler_digest`)
+must be equal to the running compiler ([CE3520](error-catalog.md#ce3520)), so its mangling is always
+the mangling of the consumer.
 
 ## Error Codes
 
@@ -663,6 +672,7 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
 | [CE3517](error-catalog.md#ce3517) | The `nori.toml` in the working directory is not valid |
 | [CE3518](error-catalog.md#ce3518) | The `nori.toml` in the working directory cannot be read |
+| [CE3520](error-catalog.md#ce3520) | A binary library was built by another compiler: its `compiler_version` or its `compiler_digest` is not the one of the running compiler |
 
 One truncation code per section rather than one shared code: the message names which
 section is short, and that is what tells a reader where the file was cut.
@@ -683,7 +693,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.6
+Protocol: 2.7
 
 Units (1):
   mylib

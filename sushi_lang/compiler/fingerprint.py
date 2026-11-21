@@ -180,7 +180,7 @@ _compiler_source_fingerprint: str | None = None
 
 
 def compute_compiler_source_fingerprint() -> str:
-    """Content digest of the compiler's own Python sources."""
+    """Content digest of the compiler's own sources (Python and Sushi)."""
     global _compiler_source_fingerprint
     if _compiler_source_fingerprint is not None:
         return _compiler_source_fingerprint
@@ -190,7 +190,8 @@ def compute_compiler_source_fingerprint() -> str:
     sushi_lang_dir = Path(__file__).resolve().parent.parent
     hasher = hashlib.sha256()
     hasher.update(b"COMPILER_SRC:")
-    for path in sorted(sushi_lang_dir.rglob("*.py"), key=str):
+    sources = [*sushi_lang_dir.rglob("*.py"), *sushi_lang_dir.rglob("*.sushi")]
+    for path in sorted(sources, key=str):
         rel = path.resolve().relative_to(sushi_lang_dir)
         hasher.update(f"{rel}:".encode())
         hasher.update(path.read_bytes())

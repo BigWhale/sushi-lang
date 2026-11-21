@@ -578,6 +578,8 @@ def print_library_info(library_path: Path, show_docs: bool = False,
     if metadata.get('overflow'):
         print(f"Overflow: {metadata['overflow']}")
     print(f"Compiler: {metadata['compiler_version']}")
+    if metadata.get('compiler_digest'):
+        print(f"Compiler digest: {metadata['compiler_digest']}")
     if requires:
         print(f"Requires compiler: {requires}")
     print(f"Protocol: {metadata['sushi_lib_version']}")
