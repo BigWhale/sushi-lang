@@ -281,7 +281,7 @@ def reject_extensions_beside_shipped_impl(impl: ExtendWithDef, tables: 'SymbolTa
                                           reporter: Reporter, template: bool) -> None:
     """CE4007 for an extension method beside a perk implementation a library ships (#1255).
 
-    A binary or hybrid library ships its implementation as a manifest record, so no
+    A binary library ships its implementation as a manifest record, so no
     written `extend ... with` in the build meets the check of a written one. Its methods
     are visible in every unit all the same, so the extension method of that name on that
     type can never be called, and the error stands at it. A `template` is judged as a

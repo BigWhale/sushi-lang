@@ -80,7 +80,6 @@ directory when there is one, and from `--lib-version` otherwise; neither is **[C
 |--------|--------------------------|-----|--------------------------------------------|
 | `source` | unit source text | yes | the default; the consumer compiles it |
 | `binary` | LLVM bitcode | no | platform-bound (**[CE3504](error-catalog.md#ce3504)** elsewhere) |
-| `hybrid` | both | no | the bitcode still binds it to one platform |
 
 ```bash
 # The default: one artifact for every platform
@@ -132,12 +131,12 @@ consumer must consent depends on what the library ships:
 | What is marked | Ships as | The consumer must pass `--dont-panic` |
 |---|---|---|
 | A function, in a `source` library | text | yes |
-| A concrete function, in a `binary` or `hybrid` library | bitcode | no |
+| A concrete function, in a `binary` library | bitcode | no |
 | A generic template, in a library of any kind | source text | yes |
 
 The consumer compiles source text, so the consumer accepts the unchecked code. Without the
 flag the build stops with [CE0152](error-catalog.md#ce0152), and the message names the
-library. A concrete body in a binary or hybrid library is compiled already, as a C library's
+library. A concrete body in a binary library is compiled already, as a C library's
 is, and needs no consent. A marked generic template ships as source in every kind, because
 the consumer makes the copies. Build the library itself with `--dont-panic` too.
 
@@ -168,7 +167,7 @@ public functions, constants, unit variables and types (concrete and generic) are
 only in a unit of the consumer that imports the library itself, or that reaches it
 through a `public use` chain. If `main.sushi` writes `use <lib/a>` and `use "helper"`, a
 call of `a_val()` in `helper.sushi` is [CE2008](error-catalog.md#ce2008) until `helper.sushi` writes `use <lib/a>`
-too. A binary or hybrid library follows the rule of a source library here.
+too. A binary library follows the rule of a source library here.
 
 A generic template of a library is copied at the consumer, with the type arguments of
 the call. The body of the copy resolves its names in the scope of the library unit that
@@ -177,7 +176,7 @@ module that THAT unit uses, plain or public. So a template that calls `b_val()` 
 when its unit loads `b` with a plain `use <lib/b>`, and the consumer still cannot
 call `b_val()` itself. The copy works also when the unit that holds it does not import
 the library. A `use` in another unit of the same library does not count: each manifest
-`dependencies` record names the units that write it, so a binary or hybrid library
+`dependencies` record names the units that write it, so a binary library
 gives the same [CE2008](error-catalog.md#ce2008) as a source library (#1123).
 
 A library is identified by the `library_name` stamped into its `.slib`, not by the path
@@ -496,7 +495,7 @@ One file holds a MessagePack index next to a payload, framed by a fixed 52-byte 
 
 The `Kind` field states which payload is present, so a reader can branch before it unpacks
 anything. A source library has an empty bitcode section, a binary one an empty source
-section, and a hybrid carries both. See [Library Format](library-format.md) for the full
+section. See [Library Format](library-format.md) for the full
 specification.
 
 ### Platform Compatibility
@@ -505,8 +504,8 @@ specification.
 same `.slib` builds on macOS and on Linux.
 
 **A binary library is not.** LLVM bitcode looks target-neutral and is not: it carries a
-target triple and a data layout, and the C ABI is already lowered into it. A binary or
-hybrid library records the host that built it as `<os>_<arch>` (`darwin_arm64`,
+target triple and a data layout, and the C ABI is already lowered into it. A binary
+library records the host that built it as `<os>_<arch>` (`darwin_arm64`,
 `linux_x86_64`), the same key that selects the `<sys/platform>` file. Loading a binary
 library built for another OS or another architecture is a hard error:
 
@@ -523,7 +522,7 @@ line for one, because the field means nothing there.
 
 ### Overflow Mode
 
-A binary or hybrid library records the overflow mode that it was built with
+A binary library records the overflow mode that it was built with
 (`--overflow=trap|wrap`, see [Integer Overflow](compiler-reference.md#integer-overflow)) in the
 manifest key `overflow`, and `--lib-info` prints it as `Overflow: wrap`. A library keeps
 its own mode: its compiled code does not change when a consumer builds with a different
@@ -580,7 +579,7 @@ The file itself carries two more versions: the container version (`5`) and the t
 schema version (`8`). A signature without `| E` is bare (`docs/design/error-channel.md`).
 Every function, helper and method record in the manifest states `has_channel`, and the field
 is required. A library of another version is refused: its container version is **[CE3509](error-catalog.md#ce3509)**,
-and the templates schema of a binary or hybrid library is **[CE3512](error-catalog.md#ce3512)**. Rebuild the library
+and the templates schema of a binary library is **[CE3512](error-catalog.md#ce3512)**. Rebuild the library
 with the current compiler. `docs/library-format.md` carries the rows.
 
 ## Symbol Resolution
@@ -732,7 +731,7 @@ Current limitations of the library system:
    but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
    files. A library that binds a platform-specific C function through `unsafe external` still
    only builds where that function exists, and it cannot yet say so.
-2. **A binary library is platform-bound**: `--lib-kind binary` or `hybrid` ships bitcode,
+2. **A binary library is platform-bound**: `--lib-kind binary` ships bitcode,
    which is bound to the platform that produced it (**[CE3504](error-catalog.md#ce3504)**).
 3. **A public generic cannot reach FFI**: a public generic whose body (transitively)
    references an `unsafe external` namespace, or a private helper whose signature exposes a

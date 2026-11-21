@@ -3600,7 +3600,7 @@ gives `sh.Vec` and `sh.area` alike. The rules:
 - `public use` takes no `as` ([`CE3016`](error-catalog.md#ce3016)): a re-export is of names, not of a namespace.
 - A `public use` that hands on nothing public warns ([`CW3005`](error-catalog.md#cw3005)).
 - Every kind of `.slib` carries a `public use`: a source library ships the statement as
-  text, a binary or hybrid one ships a manifest record of it.
+  text, a binary one ships a manifest record of it.
 - A library's `use <lib/b>` LOADS `b` in the consumer's build, plain or public, because
   the library's body calls it: loading is transitive. VISIBILITY is not: a `public use
   <lib/b>` gives the consumer `b`'s public names, as if the consumer wrote `use <lib/b>`,

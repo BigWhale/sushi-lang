@@ -52,18 +52,6 @@ def test_a_binary_library_still_round_trips_metadata_and_bitcode(tmp_path):
     assert read_back == bitcode
 
 
-def test_a_hybrid_carries_both_sections(tmp_path):
-    path = tmp_path / "both.slib"
-    bitcode = b"\xde\xad\xbe\xef"
-    LibraryFormat.write(path, {"library_name": "both", "kind": "hybrid"},
-                        bitcode, source=SOURCE)
-
-    _meta, read_bitcode = LibraryFormat.read(path)
-    _meta2, read_source = LibraryFormat.read_source_only(path)
-    assert read_bitcode == bitcode
-    assert read_source == SOURCE
-
-
 def test_a_library_with_no_source_reads_back_an_empty_map(tmp_path):
     path = tmp_path / "nosrc.slib"
     LibraryFormat.write(path, {"library_name": "nosrc", "kind": "binary"}, b"\x00")
@@ -74,7 +62,7 @@ def test_a_library_with_no_source_reads_back_an_empty_map(tmp_path):
 
 # --- The header mirrors the manifest ---------------------------------------
 
-@pytest.mark.parametrize("kind,code", [("source", 1), ("binary", 2), ("hybrid", 3)])
+@pytest.mark.parametrize("kind,code", [("source", 1), ("binary", 2)])
 def test_the_kind_header_field_mirrors_the_manifest(tmp_path, kind, code):
     path = tmp_path / f"{kind}.slib"
     LibraryFormat.write(path, {"library_name": kind, "kind": kind}, b"", source=SOURCE)
@@ -83,13 +71,22 @@ def test_the_kind_header_field_mirrors_the_manifest(tmp_path, kind, code):
     assert struct.unpack("<I", raw[24:28])[0] == code
 
 
-def test_a_manifest_with_no_kind_is_written_as_binary(tmp_path):
-    # Keeps every pre-v4 caller that passes only metadata and bitcode working.
+def test_a_manifest_with_no_kind_is_written_as_source(tmp_path):
     path = tmp_path / "implicit.slib"
     LibraryFormat.write(path, {"library_name": "implicit"}, b"")
 
     raw = path.read_bytes()
-    assert struct.unpack("<I", raw[24:28])[0] == 2
+    assert struct.unpack("<I", raw[24:28])[0] == 1
+
+
+def test_the_writer_refuses_a_hybrid_kind(tmp_path):
+    path = tmp_path / "hybrid.slib"
+    with pytest.raises(LibraryError) as excinfo:
+        LibraryFormat.write(path, {"library_name": "hybrid", "kind": "hybrid"},
+                            b"\x00", source=SOURCE)
+    assert excinfo.value.code == "CE3512"
+    assert "unknown library kind 'hybrid'" in str(excinfo.value)
+    assert not path.exists()
 
 
 def test_the_compression_flag_is_always_written_as_zero(tmp_path):
@@ -106,7 +103,7 @@ def test_the_compression_flag_is_always_written_as_zero(tmp_path):
 
 def test_read_metadata_only_skips_both_later_sections(tmp_path):
     path = tmp_path / "meta.slib"
-    LibraryFormat.write(path, {"library_name": "meta", "kind": "hybrid"},
+    LibraryFormat.write(path, {"library_name": "meta", "kind": "binary"},
                         b"\x07" * 64, source=SOURCE)
 
     assert LibraryFormat.read_metadata_only(path)["library_name"] == "meta"

@@ -610,7 +610,7 @@ nori exits 0 on success, 1 for a user fault (an NExxxx error), and 2 for an inte
 1. **No build step**: Nori does not compile Sushi source. Use `sushic` to compile first.
 2. **Local sources only**: `nori install` cannot install from a remote repository ([NE3009](error-catalog.md#ne3009)). Use `nori search` to find packages, then install from local archives.
 3. **No version constraint syntax**: `[dependencies]` records exact versions only; range specifiers (`^1.0`, `>=0.2`) are not supported.
-4. **Platform-specific binary libraries**: a `binary` or `hybrid` `.slib` is bound to the platform that built it. The default `source` kind is portable.
+4. **Platform-specific binary libraries**: a `binary` `.slib` is bound to the platform that built it. The default `source` kind is portable.
 5. **No transitive dependency resolution**: If package A depends on package B, you must install both explicitly.
 
 ## See Also

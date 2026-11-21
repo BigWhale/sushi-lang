@@ -36,7 +36,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 ├─────────────────────────────────────────────────────────────┤
 │ FLAGS (4 bytes): uint32 LE (bit 0: source blob compressed)  │
 ├─────────────────────────────────────────────────────────────┤
-│ KIND (4 bytes): uint32 LE (1 source, 2 binary, 3 hybrid)    │
+│ KIND (4 bytes): uint32 LE (1 source, 2 binary)              │
 ├─────────────────────────────────────────────────────────────┤
 │ SPARE_3 (8 bytes): uint64 LE (reserved, must be 0)          │
 ├─────────────────────────────────────────────────────────────┤
@@ -61,7 +61,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 **Endianness:** Little-endian (matches x86-64/ARM64 targets)
 
 `SOURCE_LENGTH` is zero when `KIND` is binary. `BITCODE_LENGTH` is zero when `KIND` is
-source. A hybrid carries both payloads.
+source.
 
 ## Field Details
 
@@ -104,10 +104,13 @@ compressed whatever happens: it is the index, and every reader must take it chea
 |-------|--------|-------------------------|
 | 1 | source | the source section |
 | 2 | binary | the bitcode section |
-| 3 | hybrid | both |
 
 The manifest repeats the value as the `kind` string, so a reader can branch on the header
-before it unpacks any MessagePack.
+before it unpacks any MessagePack. The value 3 was the hybrid kind, which carried both
+sections. It is retired and is not given again. The `kind` string is optional: a manifest
+with no `kind` is a source library. A manifest that states another kind (`hybrid`, from an
+older compiler, included) is refused by every reader with
+[CE3512](error-catalog.md#ce3512); build the library again as `source` or `binary`.
 
 ### Reserved Fields
 
@@ -146,7 +149,7 @@ is the authority, and the index is a cache of it.
     "sushi_lib_version": "2.6",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
-    "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
+    "kind": str,                       # "source" / "binary", matching KIND; no kind is source
     "units": [str],                    # Unit names present in the source section
                                        #   The library's OWN units, and every index
                                        #   below reads the same filter: a
@@ -401,8 +404,8 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 11,                 # Templates schema version. A binary or
-                                       #   hybrid .slib with another schema is
+        "version": 11,                 # Templates schema version. A binary
+                                       #   .slib with another schema is
                                        #   refused (CE3512) and must be rebuilt.
                                        #   The one constant is
                                        #   `TEMPLATES_SCHEMA_VERSION` in
@@ -646,15 +649,15 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | [CE3500](error-catalog.md#ce3500) | The `--lib` output path does not end in `.slib` |
 | [CE3502](error-catalog.md#ce3502) | A `use <lib/...>` names a library that no search directory holds |
 | [CE3503](error-catalog.md#ce3503) | The library's `requires_compiler` excludes the running compiler |
-| [CE3504](error-catalog.md#ce3504) | A binary or hybrid library was built for another platform |
+| [CE3504](error-catalog.md#ce3504) | A binary library was built for another platform |
 | [CE3505](error-catalog.md#ce3505) | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | [CE3506](error-catalog.md#ce3506) | Source section truncated |
 | [CE3508](error-catalog.md#ce3508) | Invalid magic bytes (not a valid `.slib` file) |
 | [CE3509](error-catalog.md#ce3509) | Unsupported format version (a container other than version 5) |
 | [CE3510](error-catalog.md#ce3510) | Metadata section truncated |
 | [CE3511](error-catalog.md#ce3511) | Bitcode section truncated |
-| [CE3507](error-catalog.md#ce3507) | The bitcode of a binary or hybrid library does not link |
-| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 11 (a library built before schema 11 is rebuilt) |
+| [CE3507](error-catalog.md#ce3507) | The bitcode of a binary library does not link |
+| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, a `kind` that is not `source` or `binary` (`unknown library kind '<kind>'`), or a binary library's templates schema is not version 11 (a library built before schema 11 is rebuilt) |
 | [CE3513](error-catalog.md#ce3513) | File exceeds maximum size (1GB) |
 | [CE3515](error-catalog.md#ce3515) | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |

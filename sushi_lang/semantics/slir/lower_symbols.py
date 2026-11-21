@@ -2,7 +2,7 @@
 
 A declaration of the build has the symbol of its declaring unit. An instance of a template of
 a binary library has no declaring unit, and its symbol has no unit either. A declaration of a
-binary or a hybrid library has the `link_symbol` of the manifest, which its callee row
+binary library has the `link_symbol` of the manifest, which its callee row
 carries (S26).
 """
 from __future__ import annotations

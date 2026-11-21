@@ -2,7 +2,7 @@
 
 Read once per declaration, at the marker, in the collect pass: one CE0152 for each
 declaration that the unit may not mark, else one CW0004 for each marked body that holds
-no index to uncheck. The hybrid templates of a library meet the same gate in
+no index to uncheck. The templates of a binary library meet the same gate in
 `library_registration.py`.
 """
 from __future__ import annotations

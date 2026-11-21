@@ -453,7 +453,7 @@ targets the host it runs on, discovered via `llvmlite.binding.get_default_triple
 Two things would need to change before cross-compilation could work:
 - `sushi_stdlib/build.py` generates IR that reflects the *host* platform regardless of
   the `--platform` flag (see Step 4 above) — it is not a cross-compiler today.
-- A binary or hybrid `.slib` is tagged with its host key (`<os>_<arch>`), and a library of
+- A binary `.slib` is tagged with its host key (`<os>_<arch>`), and a library of
   that kind built on one host is rejected (**[CE3504](../../error-catalog.md#ce3504)**) when loaded on another (`compiler/pipeline.py`,
   `_check_library_platform`). A source `.slib` (the default kind) is not checked and
   loads on every platform.

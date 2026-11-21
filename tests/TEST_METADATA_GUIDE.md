@@ -626,9 +626,8 @@ fixture file itself, because the one set of directives describes both steps.
 - Before each compilation, the runner builds the named file of the fixture's directory
   as a SOURCE `.slib` (`--lib --lib-version 0.0.0 --lib-kind source`), and puts the
   directory that holds it first on `SUSHI_LIB_PATH`. The fixture imports it as
-  `use <lib/geolib>`. `BUILD_LIB_BINARY` builds a binary one, and `BUILD_LIB_HYBRID`
-  a hybrid one.
-- The runner builds every `BUILD_LIB`, `BUILD_LIB_BINARY`, `BUILD_LIB_HYBRID` and
+  `use <lib/geolib>`. `BUILD_LIB_BINARY` builds a binary one.
+- The runner builds every `BUILD_LIB`, `BUILD_LIB_BINARY` and
   `BUILD_LIB_WARNS` in the order the fixture writes them, whatever the directive, and
   then every `BUILD_LIB_AT` in written order. A library build has the same directory on its `SUSHI_LIB_PATH`, so
   a library may `use <lib/...>` a library built before it. Write a dependency above the
@@ -638,7 +637,7 @@ fixture file itself, because the one set of directives describes both steps.
 - `# BUILD_LIB: b.sushi @ 0.2.0` stamps the version `0.2.0` in place of `0.0.0`. A
   fixture can build one source twice at two versions; the second build replaces the
   first `.slib`. The two forms combine: `b.sushi -> c.slib @ 0.2.0`.
-- The three directives take both forms. A form names one source.
+- The two directives take both forms. A form names one source.
 - In a rebuild fixture the library is built again after `v2/` is copied in.
 - A library that does not build fails the fixture. A build must exit 0: a build with a
   warning (exit 1) fails the fixture too. Use `BUILD_LIB_WARNS` for a library that must
@@ -654,7 +653,7 @@ fixture file itself, because the one set of directives describes both steps.
 ```
 
 - The runner adds these flags to EVERY library build of the fixture: `BUILD_LIB`,
-  `BUILD_LIB_BINARY`, `BUILD_LIB_HYBRID`, `BUILD_LIB_WARNS` and `BUILD_LIB_AT`. It does
+  `BUILD_LIB_BINARY`, `BUILD_LIB_WARNS` and `BUILD_LIB_AT`. It does
   not add them to the compilation of the fixture itself; that is `COMPILER_FLAGS`.
 - Several flags on one line, or repeat the directive.
 - A flag the runner owns is refused with a printed warning, as in `COMPILER_FLAGS`.
@@ -679,18 +678,6 @@ fixture file itself, because the one set of directives describes both steps.
   each run, so the fixture stays portable.
 - There is no binary form of `BUILD_LIB_AT`; the `-> name.slib` form names the file in
   the `SUSHI_LIB_PATH` directory.
-
-#### BUILD_LIB_HYBRID
-
-```sushi
-# BUILD_LIB_HYBRID: geolib.sushi
-```
-
-- As `BUILD_LIB_BINARY`, but the runner builds a HYBRID `.slib` (`--lib-kind hybrid`):
-  the bitcode and the source in one file.
-- The library goes to the same directory, and the build, the version, the rebuild and
-  a failed build are as for `BUILD_LIB`. Do not name one file in two directives.
-- There is no hybrid form of `BUILD_LIB_AT`.
 
 #### LIB_MANIFEST_SET
 
@@ -723,8 +710,8 @@ fixture file itself, because the one set of directives describes both steps.
   fails the fixture, and so does a build that exits 0. Use it for a library that is
   correct and builds with a warning.
 - The library goes to the same directory as a `BUILD_LIB` library. It is a SOURCE
-  `.slib`, unless a kind word follows the source: `binary` or `hybrid` (or `source`).
-  It builds in written order with the other three directives.
+  `.slib`, unless a kind word follows the source: `binary` (or `source`).
+  It builds in written order with the other two directives.
 - The value is one source, an optional kind word, `->`, and one or more `CW` codes,
   comma or space separated. There is no `-> name.slib` form and no `@ version` form.
   Any other value fails the fixture.

@@ -40,7 +40,7 @@ _add(ErrorMessage("CE3504", Severity.ERROR,
     "platform mismatch: library compiled for '{lib_platform}', current platform is "
     "'{current_platform}'; rebuild the library on this host",
     Category.LIBRARY,
-    "A binary or hybrid library holds machine code, so it is bound to the host that built "
+    "A binary library holds machine code, so it is bound to the host that built "
     "it. The tag is `<os>_<arch>` (`darwin_arm64`, `linux_x86_64`), the same key that selects "
     "the <sys/platform> file. The OS alone was not enough: an arm64 library passed the check "
     "on x86_64, and the fault showed late, at the link. A tag that names no host (`unknown`, "
@@ -90,7 +90,9 @@ _add(ErrorMessage("CE3511", Severity.ERROR,
 
 _add(ErrorMessage("CE3512", Severity.ERROR,
     "invalid library metadata in '{path}': {reason}",
-    Category.LIBRARY, "MessagePack decoding failed or metadata schema is invalid."))
+    Category.LIBRARY, "MessagePack decoding failed, the metadata schema is invalid, or the "
+    "manifest states a kind that is not `source` or `binary`. A library of an older "
+    "compiler can state a removed kind: build it again with this compiler."))
 
 _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",

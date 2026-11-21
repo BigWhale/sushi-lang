@@ -196,7 +196,7 @@ own. This case is rare, and the rule stays until a real program needs more.
   copy"). So a template can call a private extension of its own unit, and the call still
   works when another unit instantiates the template.
 - **A source library** is ordinary source, and R4 to R6 apply to it as written.
-- **A binary or hybrid library** records the marker and the declaring unit of each extension
+- **A binary library** records the marker and the declaring unit of each extension
   in its manifest. The consumer applies R4 to R6 to these records. A private extension is
   not exported.
 - **CW3003** warned that a library which extends a type it does not declare claims that

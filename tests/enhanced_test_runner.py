@@ -857,14 +857,14 @@ class TestRunner:
     def _build_libraries(self, metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
         """Build each library of the BUILD_LIB family.
 
-        The answer is the failure, or None. A BUILD_LIB, BUILD_LIB_BINARY or
-        BUILD_LIB_HYBRID library goes to the directory the runner puts on SUSHI_LIB_PATH,
-        with `--lib-kind source`, `binary` or `hybrid`; a BUILD_LIB_WARNS library goes
+        The answer is the failure, or None. A BUILD_LIB or BUILD_LIB_BINARY library goes
+        to the directory the runner puts on SUSHI_LIB_PATH, with `--lib-kind source` or
+        `binary`; a BUILD_LIB_WARNS library goes
         there too, as a source library unless its value names the kind; a BUILD_LIB_AT library goes where
         the fixture says, inside the copy, as a source library. A `-> name.slib` form names
         the file in the SUSHI_LIB_PATH directory, and an `@ version` form gives the version.
         A build must exit 0, except a BUILD_LIB_WARNS build: it must exit 1 and print
-        exactly the named set of warning codes (#1122). The first four build in
+        exactly the named set of warning codes (#1122). The first three build in
         the order the fixture writes them, whatever the directive, and every BUILD_LIB_AT
         builds after them. Each build sees the directory on its own SUSHI_LIB_PATH, so a
         library may import one built before it. Each
@@ -875,8 +875,7 @@ class TestRunner:
         second version (CE3505).
         """
         workspace.libs.mkdir(parents=True, exist_ok=True)
-        directive_of = {"source": "BUILD_LIB", "binary": "BUILD_LIB_BINARY",
-                        "hybrid": "BUILD_LIB_HYBRID"}
+        directive_of = {"source": "BUILD_LIB", "binary": "BUILD_LIB_BINARY"}
         builds = [("BUILD_LIB_WARNS" if warns else directive_of[kind], kind, source,
                    workspace.libs / slib, version, warns)
                   for kind, source, slib, version, warns in metadata.library_builds]

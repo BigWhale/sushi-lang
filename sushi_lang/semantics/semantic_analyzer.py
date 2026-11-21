@@ -1534,7 +1534,7 @@ class SemanticAnalyzer:
     def _reject_extensions_beside_shipped_perk_impls(self) -> None:
         """CE4007 at an extension method beside a perk method a library ships (#1255).
 
-        A binary or hybrid library's implementation, a template included, has no
+        A binary library's implementation, a template included, has no
         written declaration in the build, so the check of a written one never meets it.
         """
         from sushi_lang.semantics.passes.types.perks import (

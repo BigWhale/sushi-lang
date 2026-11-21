@@ -27,7 +27,7 @@ each named for the stage it runs.
 | `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
 | `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
-| `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)), or with a perk method that a binary or hybrid library ships ([CE4007](../error-catalog.md#ce4007)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
+| `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)), or with a perk method that a binary library ships ([CE4007](../error-catalog.md#ce4007)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, transitively; on the AST | `semantics/passes/effects.py` |
 | `scope` | scope and variable analysis; on the AST | `semantics/passes/scope.py` |
 | `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque; on SHIR, into `TypeckResults` | `semantics/passes/types/` |
@@ -1032,7 +1032,7 @@ A public method that a Sushi-source stdlib module declares on a built-in type is
 in every unit (R1 of `docs/design/extension-visibility.md`), so an extension of its name
 is [`CE2097`](../error-catalog.md#ce2097) too, with a note at the stdlib declaration.
 
-A perk implementation that a binary or hybrid library ships is global too, and it has no
+A perk implementation that a binary library ships is global too, and it has no
 written declaration in the build, so the check of a written implementation in the
 `typecheck` pass never meets it. The pass gives
 [`CE4007`](../error-catalog.md#ce4007) at an extension method of the name of one of its

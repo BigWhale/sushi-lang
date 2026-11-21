@@ -3460,8 +3460,8 @@ value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no environment (8.7)
 case. A generic function as a value names the instance that its position gives (7.3). The
 `Indirect` call of an `IteratorValue` walk has an iterator value as its operand (8.9).
 
-**A library callee.** A function, a method or a static of a binary or a
-hybrid library has no declaring unit in the build: its symbol is its `link_symbol`, from the
+**A library callee.** A function, a method or a static of a binary
+library has no declaring unit in the build: its symbol is its `link_symbol`, from the
 manifest. The `link_symbol` is a fact of the callee row: `typecheck` reads the
 `link_symbol` of the signature or of the extension record and writes it into
 `ResolvedCall`, with no unit (`user_callee`, `passes/types/visit/user_callees.py`). SLIR
@@ -3476,7 +3476,7 @@ units of the build. The verifier finds the declared parameters of a library call
 function table and in the extension table that the `libraries` step fills from the
 manifest, by the `link_symbol` of the row (8.13).
 
-A public constant of a binary or a hybrid library travels as source, and the consumer
+A public constant of a binary library travels as source, and the consumer
 checks its initializer in the scope of the library unit. The export closure of the library
 walks the initializer of each public constant, so a private function that the value names
 travels with its signature and its link symbol, as a private function that a template body
@@ -4383,7 +4383,7 @@ target after it (`conversion_symbol`). `as` is a reserved word, so no other meth
 name. A `Direct` callee with no row is CE0158. A free function, a method or a static
 of the build, a conversion, a function of a registry stdlib module and a C function have a
 row. A `Direct` callee whose symbol is the `link_symbol` of a function, a method or a static
-of a binary or a hybrid library finds its row in the function table or in the extension
+of a binary library finds its row in the function table or in the extension
 table that the `libraries` step fills from the manifest (8.6). An instance of a
 template of a binary library has no unit: the flat view of the function table holds its
 row, and its symbol has no unit prefix. Each row has one symbol: its `link_symbol` when the

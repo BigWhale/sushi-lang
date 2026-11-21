@@ -151,7 +151,7 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
 def user_method(low: Lowering, callee: Method | Static, resolved: ResolvedCall) -> st.Direct:
     """An extension method or a static by its symbol and its written name `<type>.<method>`,
     and a perk method by the perk symbol of the implementation of the receiver type. A method
-    or a static of a binary or a hybrid library has the link symbol of its row."""
+    or a static of a binary library has the link symbol of its row."""
     owner = callee.ty if isinstance(callee, Static) else deref_type(low.type_of(callee.recv))
     name = low.decls.name_of(callee.decl)
     method = unqualified(name)

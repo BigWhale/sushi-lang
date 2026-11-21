@@ -1594,7 +1594,7 @@ A field that the kind of the library makes meaningless does not print.
 fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string libname = get_str(meta, "library_name")
     let string libver = get_str(meta, "library_version")
-    let string kind = get_str(meta, "kind")
+    let string kind = library_kind(meta).realise("source")
     let string plat = get_str(meta, "platform")
     let string comp = get_str(meta, "compiler_version")
     let string req = get_str(meta, "requires_compiler")
@@ -1616,10 +1616,10 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     print_reexports(meta, o)
     print_declarations_at(meta, o)
     print_dependencies(meta, o)
-    if (kind != "binary"):
+    if (kind == "source"):
         let string src = group_thousands(sizes.source)
         println("Source: {o.dim}{src}{o.reset} bytes")
-    if (kind != "source"):
+    else:
         let string bc = group_thousands(sizes.bitcode)
         println("Bitcode: {o.dim}{bc}{o.reset} bytes")
 

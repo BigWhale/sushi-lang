@@ -80,11 +80,9 @@ class TestMetadata:
     build_libs: Optional[List[str]] = None
     # Binary `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
     build_libs_binary: Optional[List[str]] = None
-    # Hybrid `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
-    build_libs_hybrid: Optional[List[str]] = None
     # Source `.slib` files that must build with exit 1 and exactly these warning codes.
     build_libs_warns: Optional[List[Tuple[str, List[str]]]] = None
-    # Every BUILD_LIB, BUILD_LIB_BINARY, BUILD_LIB_HYBRID and BUILD_LIB_WARNS as (kind,
+    # Every BUILD_LIB, BUILD_LIB_BINARY and BUILD_LIB_WARNS as (kind,
     # source, `.slib` file name, version or None, warning codes or None), in written
     # order: the order the runner builds them in.
     library_builds: Optional[List[Tuple[str, str, str, Optional[str],
@@ -148,8 +146,6 @@ class TestMetadata:
             self.build_libs = []
         if self.build_libs_binary is None:
             self.build_libs_binary = []
-        if self.build_libs_hybrid is None:
-            self.build_libs_hybrid = []
         if self.build_libs_warns is None:
             self.build_libs_warns = []
         if self.library_builds is None:
@@ -436,7 +432,7 @@ def _library_build(field_name: str, kind: str):
 _WARNING_CODE = re.compile(r"CW\d{4}")
 
 
-LIBRARY_KINDS = ("source", "binary", "hybrid")
+LIBRARY_KINDS = ("source", "binary")
 
 
 def _build_lib_warns(metadata: TestMetadata, value: str, test_file: Path) -> None:
@@ -447,7 +443,7 @@ def _build_lib_warns(metadata: TestMetadata, value: str, test_file: Path) -> Non
     if (not sep or len(words) not in (1, 2) or kind not in LIBRARY_KINDS or not codes
             or not all(_WARNING_CODE.fullmatch(code) for code in codes)):
         metadata.directive_errors.append(
-            "BUILD_LIB_WARNS takes `<source> [source|binary|hybrid] -> <warning code>"
+            "BUILD_LIB_WARNS takes `<source> [source|binary] -> <warning code>"
             f"[, <warning code>...]`, not {value!r}")
         return
     metadata.build_libs_warns.append((words[0], codes))
@@ -597,7 +593,6 @@ VALUED_DIRECTIVES = {
     'REBUILD_FLAGS': _rebuild_flags,
     'BUILD_LIB': _library_build('build_libs', 'source'),
     'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),
-    'BUILD_LIB_HYBRID': _library_build('build_libs_hybrid', 'hybrid'),
     'BUILD_LIB_WARNS': _build_lib_warns,
     'LIB_FLAGS': _lib_flags,
     'LIB_MANIFEST_SET': _lib_manifest_set,

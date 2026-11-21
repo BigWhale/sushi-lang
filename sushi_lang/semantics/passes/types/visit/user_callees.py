@@ -1,7 +1,7 @@
 """The callee row of a function, a method or a static that a unit declares (ir.md 7.3, 8.6).
 
 A declaration of the build names the unit that declares it (C5). A declaration of a binary
-or a hybrid library has no unit in the build: the row carries its `link_symbol`, from the
+library has no unit in the build: the row carries its `link_symbol`, from the
 manifest, in place of the unit (S26).
 """
 from __future__ import annotations

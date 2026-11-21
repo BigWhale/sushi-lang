@@ -1,6 +1,6 @@
 """What a compiled library's bitcode may define STRONGLY (#594).
 
-A binary or hybrid `.slib` is self-contained: every stdlib module it imports is
+A binary `.slib` is self-contained: every stdlib module it imports is
 compiled into its own bitcode, so a consumer that names nothing of that module still
 links. The same copy is a SECOND definition for a consumer that DOES import the module,
 and `ld` refuses a program built over two strong ones -- 39 duplicate symbols for a

@@ -111,7 +111,7 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
     the flat view holds it. A method or a static has the written name `<type>.<method>`:
     it is the extension of that name whose symbol is the symbol of the callee, else the method of
     the perk implementation of that symbol, and an instance method has its receiver first. A
-    function, a method or a static of a binary or a hybrid library is the row whose
+    function, a method or a static of a binary library is the row whose
     `link_symbol` is the symbol of the callee, as the `libraries` step files it. A
     conversion `<source>.as` has one `Owned` parameter. A function of a registry stdlib module is the row of its
     module, and each of its parameters borrows. A C function is the declaration of `externals`

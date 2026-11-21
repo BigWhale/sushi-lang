@@ -415,7 +415,7 @@ def warn_shadowed_export(
     library or a stdlib module exports.
 
     The one emitter for every library kind (#1103). The collect pass calls it for a
-    source library, and the `libraries` step calls it for a binary or a hybrid
+    source library, and the `libraries` step calls it for a binary
     library. A manifest record has no span, so its warning has no note.
     """
     diagnostic = er.emit_with(reporter, er.ERR.CW3002, name_span, filename=filename,

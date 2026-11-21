@@ -1,11 +1,11 @@
-# A hybrid library ships a marked generic template as source. The consumer does not
+# A binary library ships a marked generic template as source. The consumer does not
 # pass --dont-panic, so the template meets the gate in the consumer's build.
-# BUILD_LIB_HYBRID: dp_hyb_lib.sushi
+# BUILD_LIB_BINARY: dp_bin_tpl_lib.sushi
 # LIB_FLAGS: --dont-panic
 # EXPECT_ERROR_CODES_EXACT: CE0152
-# EXPECT_STDERR_CONTAINS: "dp_hyb_lib"
+# EXPECT_STDERR_CONTAINS: "dp_bin_tpl_lib"
 # EXPECT_STDERR_CONTAINS: "--dont-panic"
-use <lib/dp_hyb_lib>
+use <lib/dp_bin_tpl_lib>
 
 fn main() i32:
     let i32[] xs = from([4, 2])

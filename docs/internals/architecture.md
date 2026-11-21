@@ -275,7 +275,7 @@ A stdlib module is one of two kinds:
   name is in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`) and in
   `_virtual_units` (`backend/stdlib_linker.py`).
 
-A `.slib` library has one of three kinds: source (the default), binary or hybrid. The
+A `.slib` library has one of two kinds: source (the default) or binary. The
 pipeline injects the units of a source library as ordinary units, and the `libraries`
 pass registers the manifest symbols of a binary library. A library definition that a
 consumer can also hold gets `weak_odr` linkage (`backend/library_linkage.py`). See

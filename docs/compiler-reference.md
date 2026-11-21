@@ -49,7 +49,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--keep-object`     | Keep the `.o` file after the link (add `--no-incremental` for a program of more than one unit) |
 | `--build-stdlib`    | Build the standard library bitcode again, from its generators |
 | `--lib`             | Compile to a library (`.slib`) instead of an executable |
-| `--lib-kind KIND`   | What the library ships: `source` (default), `binary`, `hybrid` |
+| `--lib-kind KIND`   | What the library ships: `source` (default) or `binary` |
 | `--lib-version X.Y.Z` | Version of the library being built                |
 | `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
 | `--docs`            | With `--lib-info`: print each symbol's documentation block |
@@ -103,7 +103,7 @@ rules behind them are in
 marked body, an index on an array or a string is not bounds-checked. Without the flag, the
 marker in a user unit is [CE0152](error-catalog.md#ce0152). The flag is also the consent of
 a consumer to the marked functions of a source library, and to the marked generic templates
-of any library kind. A concrete marked body in a binary or hybrid library is compiled
+of any library kind. A concrete marked body in a binary library is compiled
 already and needs no consent. A bundled stdlib unit needs no flag. A build that compiles no marked
 function outside the stdlib gets [CW0003](error-catalog.md#cw0003) for the flag. The build
 prints no list of what it accepted. See the
@@ -159,8 +159,7 @@ bundled stdlib units too.
 
 A `.slib` ships **source** by default: the consumer compiles its units and caches the
 objects, so one file works on every platform. `--lib-kind binary` ships LLVM bitcode
-instead, which binds the library to the platform that built it, and `--lib-kind hybrid`
-ships both.
+instead, which binds the library to the platform that built it.
 
 Every library states its own version. `--lib-version` supplies it, unless the `nori.toml`
 in the current directory does; neither is **[CE3505](error-catalog.md#ce3505)**, and a `nori.toml` there that cannot be
@@ -185,7 +184,7 @@ Conversions (1):
   extend LowError as LibError
 ```
 
-A binary or hybrid library carries its conversions in its manifest, so a consumer's `??`
+A binary library carries its conversions in its manifest, so a consumer's `??`
 and `as` call them with no source.
 
 `--docs` prints each symbol's documentation block under its signature. It is opt-in

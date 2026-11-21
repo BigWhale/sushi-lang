@@ -1,4 +1,4 @@
-"""The SLIR verifier over a callee of a binary or a hybrid library (docs/design/ir.md 8.6, 8.13).
+"""The SLIR verifier over a callee of a binary library (docs/design/ir.md 8.6, 8.13).
 
 A function, a method or a static of such a library has no declaring unit in the build: its
 symbol is its `link_symbol`, and the `libraries` step files it in the function table or in

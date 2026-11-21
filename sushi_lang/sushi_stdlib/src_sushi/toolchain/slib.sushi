@@ -598,7 +598,23 @@ fn value_fault(MsgValue v, string spec, string name) Maybe@(string):
     return Maybe.None()
 
 ##:
-Makes sure that a metadata map has the shape of a manifest.
+Gives the kind of a library: `source` or `binary`.
+
+A manifest with no `kind` is a source library. The Python reader `library_kind` gives
+the same answer, and the same reason for any other kind.
+
+- Parameter meta: The metadata map.
+- Returns: The kind.
+- Errors: `SlibError.Invalid` when the kind is not `source` or `binary`.
+:##
+public fn library_kind(MsgValue meta) string | SlibError:
+    let string kind = map_get_str(meta, "kind").realise("source")
+    if (kind != "source" and kind != "binary"):
+        return Result.Err(SlibError.Invalid("unknown library kind '{kind}'"))
+    return Result.Ok(kind)
+
+##:
+Makes sure that a metadata map has the shape of a manifest, and that its kind is known.
 
 The Python reader makes the same check with the same rows, and gives the same reason.
 
@@ -613,6 +629,7 @@ public fn check_manifest(MsgValue meta) ~ | SlibError:
         Maybe.Some(nom reason) ->
             return Result.Err(SlibError.Invalid(reason))
         Maybe.None() ->
+            let string known = library_kind(meta)??
             return Result.Ok(~)
 
 ##:
