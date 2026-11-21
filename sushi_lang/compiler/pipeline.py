@@ -14,6 +14,7 @@ from sushi_lang.compiler.loader import (
 from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
+from sushi_lang.internals.host import host_key
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -27,24 +28,25 @@ if TYPE_CHECKING:
 
 
 def _check_library_platform(metadata: dict) -> None:
-    """Reject a `.slib` carrying bitcode built for a different platform (CE3504).
+    """Reject a `.slib` carrying bitcode built for another host (CE3504).
+
+    The tag and the host are both `host_key()`, `<os>_<arch>`: an OS alone let an arm64
+    library through on x86_64, and the fault showed late, at the link. A library with no
+    tag, or with a tag that names no host (`unknown`, an old OS-only tag), cannot be
+    checked, so it is refused too.
 
     A source library states a platform too -- the machine that produced it -- but
     nothing in it is machine code, so the field says nothing about where it can be
-    used. Skipping the check for `kind == "source"` is the whole cross-platform fix
-    (`TODO.md` A3): the gate used to reject the WHOLE file over one field, so a
-    library carrying nothing platform-bound was refused anyway.
+    used, and the check skips it.
     """
     from sushi_lang.backend.library_errors import LibraryError
-    from sushi_lang.backend.platform_detect import current_platform_name
 
     if metadata.get("kind") == "source":
         return
 
     lib_platform = metadata.get("platform")
-    host = current_platform_name()
-    # "unknown" on either side means we could not determine a platform; do not block.
-    if lib_platform and lib_platform != "unknown" and host != "unknown" and lib_platform != host:
+    host = host_key()
+    if lib_platform != host:
         raise LibraryError("CE3504", lib_platform=lib_platform, current_platform=host)
 
 
@@ -149,7 +151,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
     from sushi_lang.semantics.stdlib_registry import (
         BUILTIN_TYPE_METHOD_MODULES, PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES,
         builtin_type_method_names, get_stdlib_registry, keep_builtin_type_methods,
-        may_declare_methods, named_methods, platform_key, platform_source,
+        may_declare_methods, named_methods, platform_source,
         resolve_source_stdlib_path, stdlib_imports,
     )
 
@@ -204,7 +206,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
         if module_path in PLATFORM_SOURCE_MODULES and platform_source(module_path) is None:
             from sushi_lang.internals import errors as er
             er.emit(reporter, er.ERR.CE3021, None, module=module_path,
-                    host=platform_key(),
+                    host=host_key(),
                     hosts=", ".join(sorted(PLATFORM_SOURCE_MODULES[module_path])))
             return False
         if src_path is None or not src_path.exists():

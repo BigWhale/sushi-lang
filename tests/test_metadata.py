@@ -89,6 +89,8 @@ class TestMetadata:
     # order: the order the runner builds them in.
     library_builds: Optional[List[Tuple[str, str, str, Optional[str],
                                         Optional[List[str]]]]] = None
+    # Edits of a built `.slib` manifest: (library file stem, top-level key, string value).
+    lib_manifest_sets: Optional[List[Tuple[str, str, str]]] = None
     # Sushi-source stdlib modules the compiler registers from the fixture's copy: name -> path.
     stdlib_modules: Optional[Dict[str, str]] = None
     # Source `.slib` files built at a path inside the copy: (source, target), both relative.
@@ -152,6 +154,8 @@ class TestMetadata:
             self.build_libs_warns = []
         if self.library_builds is None:
             self.library_builds = []
+        if self.lib_manifest_sets is None:
+            self.lib_manifest_sets = []
         if self.stdlib_modules is None:
             self.stdlib_modules = {}
         if self.build_libs_at is None:
@@ -173,8 +177,12 @@ class TestMetadata:
 
     @property
     def libs_on_the_path(self) -> bool:
-        """A library the runner builds into the directory it puts on SUSHI_LIB_PATH."""
-        return bool(self.library_builds)
+        """A library the runner builds into the directory it puts on SUSHI_LIB_PATH.
+
+        A LIB_MANIFEST_SET counts, so a fixture that edits a library it does not build
+        fails at the edit, and the directive is never ignored.
+        """
+        return bool(self.library_builds or self.lib_manifest_sets)
 
     @property
     def reads_the_copy(self) -> bool:
@@ -447,6 +455,17 @@ def _build_lib_warns(metadata: TestMetadata, value: str, test_file: Path) -> Non
         (kind, words[0], f"{Path(words[0]).stem}.slib", None, codes))
 
 
+def _lib_manifest_set(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    """`LIB_MANIFEST_SET: <library> <key>=<value>`: one string field of a built manifest."""
+    library, _, assignment = _unquote(value).strip().partition(' ')
+    key, sep, text = assignment.strip().partition('=')
+    if not library or not sep or not key.strip() or ' ' in key.strip():
+        metadata.directive_errors.append(
+            f"LIB_MANIFEST_SET takes `<library> <key>=<value>`, not {value!r}")
+        return
+    metadata.lib_manifest_sets.append((library, key.strip(), text.strip()))
+
+
 def _build_lib_at(metadata: TestMetadata, value: str, test_file: Path) -> None:
     source, sep, target = _unquote(value).partition('->')
     if sep and source.strip() and target.strip():
@@ -581,6 +600,7 @@ VALUED_DIRECTIVES = {
     'BUILD_LIB_HYBRID': _library_build('build_libs_hybrid', 'hybrid'),
     'BUILD_LIB_WARNS': _build_lib_warns,
     'LIB_FLAGS': _lib_flags,
+    'LIB_MANIFEST_SET': _lib_manifest_set,
     'STDLIB_MODULE': _stdlib_module,
     'BUILD_LIB_AT': _build_lib_at,
     'FIXTURE_CACHE_DIR': _set('fixture_cache_dir', lambda v: _unquote(v).strip()),

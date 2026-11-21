@@ -26,33 +26,6 @@ def test_no_bare_except_in_sushi_lang():
     assert not offenders, f"bare `except:` found (narrow it): {offenders}"
 
 
-# CE3504 -- cross-platform .slib rejected at load
-
-def _host_platform() -> str:
-    from sushi_lang.backend.platform_detect import current_platform_name
-    return current_platform_name()
-
-
-def test_check_library_platform_rejects_a_mismatch():
-    from sushi_lang.backend.library_errors import LibraryError
-    from sushi_lang.compiler.pipeline import _check_library_platform
-
-    other = "linux" if _host_platform() == "darwin" else "darwin"
-    with pytest.raises(LibraryError) as exc:
-        _check_library_platform({"platform": other})
-    assert exc.value.code == "CE3504"
-
-
-def test_check_library_platform_allows_the_host_and_unknown():
-    from sushi_lang.compiler.pipeline import _check_library_platform
-
-    # Same platform: no raise.
-    _check_library_platform({"platform": _host_platform()})
-    # "unknown" on either side: do not block a build over an undetectable platform.
-    _check_library_platform({"platform": "unknown"})
-    _check_library_platform({})
-
-
 # CE3510 / CE3511 -- truncation, raised with a LITERAL code so the gate sees it
 
 def test_truncated_metadata_section_is_ce3510():

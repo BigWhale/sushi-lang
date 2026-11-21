@@ -1,0 +1,9 @@
+# A binary library that this host built loads, links and runs.
+# BUILD_LIB_BINARY: tag_lib.sushi
+# EXPECT_STDOUT_EXACT: "6\n"
+use <lib/tag_lib>
+
+fn main() i32:
+    println("{tag_area(2, 3)}")
+    return 0
+

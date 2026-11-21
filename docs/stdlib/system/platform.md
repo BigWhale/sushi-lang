@@ -78,25 +78,6 @@ Delegates straight to `llvmlite.binding.get_default_triple()` — there is no se
 `llvm.initialize()` call in the current implementation; that happens elsewhere in the
 compiler's LLVM setup.
 
-#### current_platform_name
-
-```python
-def current_platform_name() -> str:
-    """The host platform as the short name a `.slib` records in its metadata.
-
-    The single source of truth for that string: the library manifest writes it and
-    the load-time platform check (CE3504) compares against it, so they must agree.
-    """
-    platform = get_current_platform()
-    return "darwin" if platform.is_darwin else "linux" if platform.is_linux else "unknown"
-```
-
-Used by `compiler/pipeline.py` (`_check_library_platform`) to reject a binary or hybrid
-`.slib` built for a different platform at load time ([CE3504](../../error-catalog.md#ce3504)): its bitcode is
-platform-specific, so a Darwin-built library does not link on a Linux host, and the
-reverse. A source library (`--lib-kind source`, the default) carries no machine code,
-so the check skips it and a source library loads on every platform.
-
 ## Standard Library Platform Support
 
 ### Platform-Specific Implementations
@@ -472,8 +453,8 @@ targets the host it runs on, discovered via `llvmlite.binding.get_default_triple
 Two things would need to change before cross-compilation could work:
 - `sushi_stdlib/build.py` generates IR that reflects the *host* platform regardless of
   the `--platform` flag (see Step 4 above) — it is not a cross-compiler today.
-- A binary or hybrid `.slib` is platform-tagged, and a library of that kind built on one
-  platform is rejected (**[CE3504](../../error-catalog.md#ce3504)**) when loaded on another (`compiler/pipeline.py`,
+- A binary or hybrid `.slib` is tagged with its host key (`<os>_<arch>`), and a library of
+  that kind built on one host is rejected (**[CE3504](../../error-catalog.md#ce3504)**) when loaded on another (`compiler/pipeline.py`,
   `_check_library_platform`). A source `.slib` (the default kind) is not checked and
   loads on every platform.
 

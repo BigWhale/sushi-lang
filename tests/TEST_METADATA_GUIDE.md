@@ -692,6 +692,24 @@ fixture file itself, because the one set of directives describes both steps.
   a failed build are as for `BUILD_LIB`. Do not name one file in two directives.
 - There is no hybrid form of `BUILD_LIB_AT`.
 
+#### LIB_MANIFEST_SET
+
+```sushi
+# BUILD_LIB_BINARY: geolib.sushi
+# LIB_MANIFEST_SET: geolib platform=linux_riscv64
+```
+
+- After the libraries of the fixture build, the runner sets one top-level string field of
+  the manifest of `<library>.slib` in the `SUSHI_LIB_PATH` directory. Use it to state a
+  library that another host built (a foreign `platform`), which the runner cannot build.
+- The form is `<library> <key>=<value>`. `<library>` is the file name without `.slib`
+  (the `-> name.slib` name, if the build gives one). The value is the text after `=`.
+- The runner writes the edit with the splice writer of the library-reader gate
+  (`_edited_slib`, `tests/run_tests.py`); the header and the other sections do not change.
+- In a rebuild fixture the edit is made again after each build of the libraries.
+- The fixture fails when no build wrote the file, when the manifest has no string field
+  of that name, or when the value is not in the form.
+
 #### BUILD_LIB_WARNS
 
 ```sushi

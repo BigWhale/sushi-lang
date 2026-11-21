@@ -6,6 +6,17 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A binary `.slib` records the architecture of its host.** The `platform` field of a
+  binary or hybrid library is now the host key `<os>_<arch>` (`darwin_arm64`,
+  `linux_x86_64`), the same key that selects the `<sys/platform>` file. One function,
+  `host_key()` (`internals/host.py`), gives it. The consumer compares the field with the
+  host key, so a library of the same OS and another architecture is refused at load
+  (CE3504), not at the link. A library tagged `unknown` is refused too. An old binary or
+  hybrid library has the OS-only tag (`darwin`, `linux`) and is refused on every host:
+  build it again. A source library is not checked. The manifest protocol is `2.5`. The
+  test runner has a new directive, `LIB_MANIFEST_SET`, that sets one string field of a
+  built library's manifest.
+
 - **A bundled stdlib module is checked one time, not on each build.** The object of a
   Sushi-source stdlib module that holds no template copy goes to the per-user cache,
   `~/.sushi/cache/compiler/stdlib/<global_key>/<module>.<key>.o`, with a record of the
