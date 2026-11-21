@@ -1,0 +1,11 @@
+# A source library holds no machine code, so its platform tag says nothing about where
+# it can be used. A foreign tag does not stop the consumer.
+# BUILD_LIB: tag_lib.sushi
+# LIB_MANIFEST_SET: tag_lib platform=linux_riscv64
+# EXPECT_STDOUT_EXACT: "6\n"
+use <lib/tag_lib>
+
+fn main() i32:
+    println("{tag_area(2, 3)}")
+    return 0
+

@@ -33,7 +33,8 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        arm_check_variables, spelling_gate_tripped,
                        DocGateResult, stdlib_doc_gate, stdlib_override_command,
                        fixtures_only, _spelled_path, PythonLineGateResult,
-                       stdlib_python_line_gate, STDLIB_PYTHON_SRC, STDLIB_PYTHON_BASELINE)
+                       stdlib_python_line_gate, STDLIB_PYTHON_SRC, STDLIB_PYTHON_BASELINE,
+                       _edited_slib, _put, _slib_manifest)
 from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
 from golden_dumps import check_dumps, dump_flags, gate_seed
 from sushi_lang.internals.user_cache import SUSHI_HOME_ENV
@@ -904,6 +905,26 @@ class TestRunner:
                             f"\n  missing: {', '.join(sorted(expected - printed)) or '-'}"
                             f"\n  not expected: {', '.join(sorted(printed - expected)) or '-'}"
                             f"\nSTDERR: {done.stderr.strip()}")
+        return self._edit_manifests(metadata, workspace)
+
+    @staticmethod
+    def _edit_manifests(metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
+        """Apply each LIB_MANIFEST_SET to a library of the SUSHI_LIB_PATH directory.
+
+        The edit sets one top-level string field of the manifest in the built file, so a
+        fixture can state a library that another host built. The field must exist and
+        hold a string.
+        """
+        for library, key, value in metadata.lib_manifest_sets:
+            target = workspace.libs / f"{library}.slib"
+            if not target.is_file():
+                return (f"✗ Compilation: LIB_MANIFEST_SET names {library}, and no "
+                        f"library build wrote {target.name}")
+            raw = target.read_bytes()
+            if not isinstance(_slib_manifest(raw)[0].get(key), str):
+                return (f"✗ Compilation: LIB_MANIFEST_SET {library}: the manifest has "
+                        f"no string field {key!r}")
+            target.write_bytes(_edited_slib(raw, _put(value, key)))
         return None
 
     def _binary_path(self, test_file: Path, metadata: TestMetadata) -> Path:

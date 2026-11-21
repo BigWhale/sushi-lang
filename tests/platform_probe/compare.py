@@ -22,7 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from sushi_lang.semantics.stdlib_registry import platform_key, platform_source  # noqa: E402
+from sushi_lang.internals.host import host_key  # noqa: E402
+from sushi_lang.semantics.stdlib_registry import platform_source  # noqa: E402
 
 PROBE = Path(__file__).with_name("probe.c")
 DECLARATION = re.compile(r"^public const (\w+) (\w+) = (.+)$", re.MULTILINE)
@@ -36,7 +37,7 @@ def values(text: str) -> dict[str, tuple[str, str]]:
 def main() -> int:
     source = platform_source("sys/platform")
     if source is None:
-        print(f"no <sys/platform> file for the host {platform_key()}")
+        print(f"no <sys/platform> file for the host {host_key()}")
         return 2
     compiler = shutil.which("cc")
     if compiler is None:
@@ -54,11 +55,11 @@ def main() -> int:
         if probed.get(name) != bundled.get(name)
     ]
     if differences:
-        print(f"{source.name} differs from the probe on {platform_key()}:")
+        print(f"{source.name} differs from the probe on {host_key()}:")
         print("\n".join(differences))
         print(f"regenerate it: cc {PROBE.relative_to(ROOT)} -o probe && ./probe > {source}")
         return 1
-    print(f"{source.name}: {len(probed)} constants agree with the probe on {platform_key()}")
+    print(f"{source.name}: {len(probed)} constants agree with the probe on {host_key()}")
     return 0
 
 

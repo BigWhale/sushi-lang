@@ -1,0 +1,11 @@
+# A binary library whose platform is 'unknown' cannot be checked, so the consumer refuses it (CE3504).
+# BUILD_LIB_BINARY: tag_lib.sushi
+# LIB_MANIFEST_SET: tag_lib platform=unknown
+# EXPECT_ERROR_CODE: CE3504
+# EXPECT_STDERR_CONTAINS: "library compiled for 'unknown', current platform is '"
+use <lib/tag_lib>
+
+fn main() i32:
+    println("{tag_area(2, 3)}")
+    return 0
+

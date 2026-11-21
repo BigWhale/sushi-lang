@@ -1,0 +1,11 @@
+# A binary library with the old tag, the OS and no architecture. The tag names no host, so the consumer refuses it (CE3504), on a darwin host too.
+# BUILD_LIB_BINARY: tag_lib.sushi
+# LIB_MANIFEST_SET: tag_lib platform=darwin
+# EXPECT_ERROR_CODE: CE3504
+# EXPECT_STDERR_CONTAINS: "library compiled for 'darwin', current platform is '"
+use <lib/tag_lib>
+
+fn main() i32:
+    println("{tag_area(2, 3)}")
+    return 0
+

@@ -29,7 +29,7 @@ puts them in the unit table as ordinary units. Source libraries use the same mec
 **Binary distribution stays available as an opt-in** (`--lib-kind binary`), and keeps
 the per-declaration behaviour: concrete bodies as bitcode, generics as
 source slices. §5 specifies it. A binary `.slib` is platform-bound and is rejected on
-a foreign platform ([CE3504](../error-catalog.md#ce3504)); a source `.slib` is not.
+a foreign OS or a foreign architecture ([CE3504](../error-catalog.md#ce3504)); a source `.slib` is not.
 
 Note that a binary `.slib` does **not** hide a library's generics. Their
 source text is in the manifest, because that is the only way a generic can cross a
@@ -122,14 +122,14 @@ authority, and the index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.3"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"2.5"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
 | `library_name` | from the output filename |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
 | `kind` | `"source" / `"binary"` / `"hybrid"`, matching the `KIND` header field |
 | `units` | ordered unit names present in the source section |
 | `compiler_version` | informational: exactly which compiler built the file |
-| `platform` | meaningful only when `kind != "source"` |
+| `platform` | the host key `<os>_<arch>` (`darwin_arm64`), from `host_key()`, the key of the `<sys/platform>` file; meaningful only when `kind != "source"` |
 | `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |

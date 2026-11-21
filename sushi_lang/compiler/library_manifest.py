@@ -243,11 +243,10 @@ class LibraryManifestGenerator:
                  kind: str = "binary", source: dict[str, str] | None = None,
                  overflow: str | None = None) -> None:
         """Generate .slib library file."""
-        from sushi_lang.backend.platform_detect import current_platform_name
+        from sushi_lang.internals.host import host_key
         from sushi_lang.internals.version import _get_versions
         from sushi_lang.backend.library_format import LibraryFormat
 
-        platform_name = current_platform_name()
         VERSION = _get_versions()["app"]
 
         library_name = output_path.stem
@@ -264,14 +263,14 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.4",
+            "sushi_lib_version": "2.5",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
             "units": [unit.name for unit in own_units(units)],
             "requires_compiler": _requires_compiler(VERSION),
             "compiled_at": datetime.now(timezone.utc).isoformat(),
-            "platform": platform_name,
+            "platform": host_key(),
             "compiler_version": VERSION,
             "public_functions": public_functions,
             "public_constants": self._extract_public_bindings(units, variables=False),

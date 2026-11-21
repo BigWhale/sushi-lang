@@ -54,12 +54,6 @@ def get_current_platform() -> TargetPlatform:
     return parse_triple(llvm.get_default_triple())
 
 
-def current_platform_name() -> str:
-    """The host platform as the short name a `.slib` records in its metadata."""
-    platform = get_current_platform()
-    return "darwin" if platform.is_darwin else "linux" if platform.is_linux else "unknown"
-
-
 def default_triple() -> str:
     """The host target triple, verbatim. The one reader outside the backend is the
     incremental cache, which folds it into its key."""

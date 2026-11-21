@@ -506,12 +506,18 @@ specification.
 same `.slib` builds on macOS and on Linux.
 
 **A binary library is not.** LLVM bitcode looks target-neutral and is not: it carries a
-target triple and a data layout, and the C ABI is already lowered into it. Loading a binary
-library built for another platform is a hard error:
+target triple and a data layout, and the C ABI is already lowered into it. A binary or
+hybrid library records the host that built it as `<os>_<arch>` (`darwin_arm64`,
+`linux_x86_64`), the same key that selects the `<sys/platform>` file. Loading a binary
+library built for another OS or another architecture is a hard error:
 
 ```
-CE3504: platform mismatch: library compiled for 'linux', current platform is 'darwin'
+CE3504: platform mismatch: library compiled for 'linux_x86_64', current platform is 'darwin_arm64'; rebuild the library on this host
 ```
+
+A tag that names no host is refused too: `unknown`, and the OS-only tag (`darwin`, `linux`)
+of a library from a compiler before the architecture was recorded. Build such a library
+again on this host.
 
 The check is skipped entirely for a source library, and `--lib-info` prints no `Platform`
 line for one, because the field means nothing there.

@@ -99,7 +99,8 @@ Each step has a runner test under `tests/unit/runner/`.
   each with a `-> name.slib` and an `@ version` form, built in written order and required
   to exit 0; `BUILD_LIB_WARNS: x.sushi [kind] -> CW1002` (a library that must build with
   exactly that set of warnings); `BUILD_LIB_AT: x.sushi -> path` (a `.slib` inside the
-  copy); `STDLIB_MODULE: name=path`; `FIXTURE_CACHE_DIR: rel`; `FIXTURE_SUSHI_HOME: rel`
+  copy); `LIB_MANIFEST_SET: <library> <key>=<value>` (set one top-level string field of a
+  built library's manifest, for example a foreign `platform`); `STDLIB_MODULE: name=path`; `FIXTURE_CACHE_DIR: rel`; `FIXTURE_SUSHI_HOME: rel`
   (a per-user home of the fixture's own, for every compile of it); `SECOND_BUILD_IN: rel`
   (a second compile from another directory of the copy); `EXPECT_PATH_EXISTS` /
   `EXPECT_PATH_ABSENT` / `EXPECT_PATH_EXISTS_BEFORE_CLEAN`; `THEN_CLEAN_CACHE: bare|source`;

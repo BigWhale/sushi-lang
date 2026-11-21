@@ -37,8 +37,16 @@ _add(ErrorMessage("CE3503", Severity.ERROR,
 
 
 _add(ErrorMessage("CE3504", Severity.ERROR,
-    "platform mismatch: library compiled for '{lib_platform}', current platform is '{current_platform}'",
-    Category.LIBRARY, "Libraries must be compiled for the same platform they are used on."))
+    "platform mismatch: library compiled for '{lib_platform}', current platform is "
+    "'{current_platform}'; rebuild the library on this host",
+    Category.LIBRARY,
+    "A binary or hybrid library holds machine code, so it is bound to the host that built "
+    "it. The tag is `<os>_<arch>` (`darwin_arm64`, `linux_x86_64`), the same key that selects "
+    "the <sys/platform> file. The OS alone was not enough: an arm64 library passed the check "
+    "on x86_64, and the fault showed late, at the link. A tag that names no host (`unknown`, "
+    "or the old OS-only tag `darwin` or `linux`) cannot be checked, so it is refused too. The "
+    "fix is to build the library again on this host. A source library is never checked: "
+    "nothing in it is machine code."))
 
 
 _add(ErrorMessage("CE3505", Severity.ERROR,
