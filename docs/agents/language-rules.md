@@ -187,7 +187,9 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
 
 ## Other topics with a design doc
 - **FFI** ([`docs/ffi.md`](../ffi.md)): a variadic libc extern MUST be declared `var_arg`; a
-  fixed declaration reads garbage on Apple arm64. `ptr` is opaque and quarantined.
+  fixed declaration reads garbage on Apple arm64. `ptr` is opaque and quarantined. A
+  `link "z"` clause on the block names a C library (the name for `-l`, never `libz.so`);
+  `link` is a keyword only in that position.
 - **Closures** ([`closures.md`](../design/closures.md)): borrow capture is refused (Tier 2).
   Parameter MODES are part of a function type. `(fn(i32) -> i32)[]` is an array of function
   values; `fn(i32) -> i32[]` returns an `i32[]`.

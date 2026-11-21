@@ -3489,7 +3489,14 @@ parameter crosses as its data pointer, a `ptr` has foreign-memory methods
 (`p.load_i64(off)`, `p.store_i32(off, v)`, `p.load_ptr(off)`, `p.offset(n)`,
 `p.to_string(off)`), `errno()` reads the calling thread's `errno`, `var T name =
 "symbol"` declares a read-only C global, and a link name may be a string constant (the
-per-platform names are in `<sys/platform>`). The guide is [FFI](ffi.md).
+per-platform names are in `<sys/platform>`).
+
+A `link` clause between the ABI and `as` names the C libraries that the block needs:
+`unsafe external "C" link "ssl", "crypto" as tls because "..."`. The linker gets `-lssl
+-lcrypto`, each library one time for the whole program. `link` is a keyword only in this
+position. A name is the name for `-l`: `"z"`, not `"libz.so"`
+([`CE5017`](error-catalog.md#ce5017), [`CE5018`](error-catalog.md#ce5018),
+[`CE5019`](error-catalog.md#ce5019)). The guide is [FFI](ffi.md).
 
 ## Module System
 

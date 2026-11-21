@@ -15,6 +15,7 @@ from sushi_lang.semantics.tables import SymbolTables
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.library_registry import LibraryRegistry
+    from sushi_lang.semantics.link_libraries import LinkRequest
     from sushi_lang.semantics.generics.instantiate import InstantiationCollector
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
     from sushi_lang.semantics.generics.perk_copies import PerkCopies
@@ -179,6 +180,8 @@ class SemanticAnalyzer:
         # nothing (D13).
         self.dont_panic = dont_panic
         self.marked: list[str] = []
+        # The `link` clauses of every unit with an AST, in compilation order (`externs`).
+        self.link_requests: list['LinkRequest'] = []
         # `--overflow`: the SLIR of each unit and the backend read it.
         self.overflow = overflow
         # The whole program's symbol tables, and the ONE home of each of them: the
@@ -223,6 +226,7 @@ class SemanticAnalyzer:
             docs          doc blocks against their declarations  _check_docs                       passes/docs.py
             unused        --warn-unused: dead privates, imports  _check_unused                     unused.py
             externs       extern signatures, ptr unit gate       _check_externs                    passes/types/externals.py
+                          and the `link` clauses (link_requests)
             libraries     library symbol registration            _register_libraries               library_registration.py
             namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
             ffi-clash     link-name constants, then an extern    _check_ffi_clash                  passes/types/externals.py
@@ -512,9 +516,10 @@ class SemanticAnalyzer:
             self._merge_unit(unit_reporter)
 
     def _check_externs(self, compilation_order: list[Unit]) -> None:
-        """externs: extern signatures (CE5003), CW5001, and the ptr unit gate (CE5009)."""
+        """externs: extern signatures (CE5003), CW5001, the ptr unit gate (CE5009), and the
+        libraries of the `link` clauses (CE5017-CE5019) into `link_requests`."""
         from sushi_lang.semantics.passes.types.externals import (
-            validate_external_signatures, validate_ptr_unit_gate,
+            link_requests, validate_external_signatures, validate_ptr_unit_gate,
         )
         for unit in compilation_order:
             if unit.ast is None:
@@ -522,6 +527,8 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             validate_external_signatures(unit_reporter, unit.ast)
             validate_ptr_unit_gate(unit_reporter, unit.ast)
+            self.link_requests.extend(
+                link_requests(unit_reporter, unit.ast, unit.name, str(unit.file_path)))
             self._merge_unit(unit_reporter)
 
     def _register_libraries(self, compilation_order: list[Unit],

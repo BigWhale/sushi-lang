@@ -582,6 +582,8 @@ def print_library_info(library_path: Path, show_docs: bool = False,
         print(f"Compiler digest: {metadata['compiler_digest']}")
     if requires:
         print(f"Requires compiler: {requires}")
+    if metadata.get('link_libraries'):
+        print(f"Links: {', '.join(metadata['link_libraries'])}")
     print(f"Protocol: {metadata['sushi_lib_version']}")
     print()
 

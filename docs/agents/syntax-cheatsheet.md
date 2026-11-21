@@ -203,6 +203,12 @@ foreach(entry in map.entries()):
     println("{entry.key}: {entry.value}")
 map.free()
 
+# FFI: a block of C functions; `link` names the C libraries (`-lz`), and `because`
+# acknowledges the four suspended guarantees. `link` is a keyword only here.
+unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+# call site: zlib.crc32(0, s, s.len() as u32)
+
 # main is bare: it returns the exit code (`| E` on it is refused)
 fn main() i32:
     return 0

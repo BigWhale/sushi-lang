@@ -1,0 +1,8 @@
+# A library name is the name without the `lib` prefix and the file suffix.
+# EXPECT_ERROR_CODES_EXACT: CE5018, CE5018
+# EXPECT_STDERR_CONTAINS: "help: write link"
+unsafe external "C" link "libz", "z.so" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+fn main() i32:
+    return 0

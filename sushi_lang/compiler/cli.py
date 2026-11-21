@@ -144,6 +144,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Allow a function marked `dont_panic` in this build: each `[]` in its body "
              "emits no bounds check (CE0152 without the flag)",
     )
+    build.add_argument(
+        "-L",
+        dest="link_dirs",
+        action="append",
+        metavar="DIR",
+        help="Add DIR to the directories where the linker looks for the libraries of a "
+             "`link` clause (repeatable)",
+    )
     library.add_argument(
         "--lib",
         action="store_true",
@@ -223,6 +231,8 @@ _NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ..
     ("lib_version", "--lib-version", lambda a: not a.lib, "without --lib"),
     ("keep_object", "--keep-object", lambda a: a.lib,
      "with --lib: a library build writes no object file"),
+    ("link_dirs", "-L", lambda a: a.lib or a.lib_info,
+     "with --lib or --lib-info: the build links no executable"),
 )
 
 

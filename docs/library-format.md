@@ -146,7 +146,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.7",        # Protocol version
+    "sushi_lib_version": "2.8",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary", matching KIND; no kind is source
@@ -177,6 +177,12 @@ is the authority, and the index is a cache of it.
                                        #   that built the file, the digest of the
                                        #   object cache. The other half of the stamp.
                                        #   Written only when kind == "binary"
+    "link_libraries": [str],           # The C libraries of the `link` clauses of the
+                                       #   library's OWN units, in the order of the
+                                       #   first appearance; the consumer links them.
+                                       #   Written only when kind == "binary" and a
+                                       #   clause exists. A dependency's libraries are
+                                       #   in its own manifest. Since protocol 2.8
 
     # The three lists below carry only CONCRETE declarations that the library MARKS
     # `public`. A generic function, struct or enum is filtered out of them and routes
@@ -693,7 +699,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.7
+Protocol: 2.8
 
 Units (1):
   mylib

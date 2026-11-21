@@ -72,3 +72,16 @@ _add(ErrorMessage("CE5016", Severity.ERROR,
 _add(ErrorMessage("CE5012", Severity.ERROR,
     "foreign `ptr` cannot be a type argument of '{base}'",
     Category.FFI, "Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))
+
+# The `link` clause of an external block: the names of the C libraries.
+_add(ErrorMessage("CE5017", Severity.ERROR,
+    "the library name '{name}' is not valid: {reason}",
+    Category.FFI, "A name in the `link` clause of an `unsafe external` block goes to the linker as `-l<name>`. So the name is not empty, it holds no `/` and no white space, and it does not start with `-`: a `-` would make the name a second linker flag. A path to a library is not a name; give the directory of the library with `sushic -L <dir>` and write the name alone."))
+
+_add(ErrorMessage("CE5018", Severity.ERROR,
+    "the library name '{name}' is a file name, not a library name",
+    Category.FFI, "The linker makes the file name from the library name: `-lz` finds `libz.so`, `libz.dylib` or `libz.a`. So a name in the `link` clause has no `lib` prefix and no `.so`, `.dylib` or `.a` suffix. The help gives the name to write."))
+
+_add(ErrorMessage("CE5019", Severity.ERROR,
+    "the library '{name}' is named two times in one `link` clause",
+    Category.FFI, "One `link` clause names each library one time. The note points at the first name. Two blocks may name the same library: the link plan keeps each library one time, in the order of its first appearance."))

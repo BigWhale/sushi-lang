@@ -32,6 +32,36 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
         _emit_block_warning(reporter, block)
 
 
+def link_requests(reporter: Reporter, program: 'Program', unit: str,
+                  filename: Optional[str]) -> list:
+    """The `LinkRequest` of each name of each `link` clause, in source order, after the
+    name rules: CE5017 (not a name for `-l`), CE5018 (a file name), CE5019 (two times in
+    one clause). A refused name gives no request."""
+    from sushi_lang.semantics.link_libraries import (
+        LinkRequest, invalid_reason, library_of_file_name,
+    )
+    requests = []
+    for block in getattr(program, "externals", None) or ():
+        first_span: dict[str, object] = {}
+        for name, span in zip(block.libraries, block.library_spans, strict=True):
+            reason = invalid_reason(name)
+            stem = library_of_file_name(name) if reason is None else None
+            if reason is not None:
+                er.emit(reporter, er.ERR.CE5017, span or block.loc, name=name, reason=reason)
+            elif stem is not None:
+                er.emit_with(reporter, er.ERR.CE5018, span or block.loc, name=name).help(
+                    f'write link "{stem}"').emit()
+            elif name in first_span:
+                builder = er.emit_with(reporter, er.ERR.CE5019, span or block.loc, name=name)
+                if first_span[name] is not None:
+                    builder.note_at("the first name is here", first_span[name])
+                builder.emit()
+            else:
+                first_span[name] = span
+                requests.append(LinkRequest(name, span=span, filename=filename, unit=unit))
+    return requests
+
+
 # The kept kinds that emit a symbol in the library bitcode. A generic function, a struct
 # and an enum emit none of that name.
 _KEPT_KINDS_WITH_A_SYMBOL = frozenset({"function", "constant", "variable"})

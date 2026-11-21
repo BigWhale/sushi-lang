@@ -34,6 +34,9 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 
 # With optimization
 ./sushic --opt O3 program.sushi -o optimized
+
+# Link a C library that is outside the default directories (a `link "ssl"` clause)
+./sushic tls_client.sushi -L /opt/homebrew/opt/openssl@3/lib -o tls_client
 ```
 
 ### Options
@@ -46,6 +49,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--opt LEVEL`       | Set optimization level (none, mem2reg, O1, O2, O3) |
 | `--overflow MODE`   | What an integer overflow does at run time: `trap` (the default) or `wrap` (see [Integer Overflow](#integer-overflow)) |
 | `--no-verify`       | Do not verify the LLVM IR before and after optimization |
+| `-L DIR`            | Add `DIR` to the directories where the linker looks for the library of a `link` clause; repeatable ([FFI](ffi.md#linking-an-external-library)) |
 | `--keep-object`     | Keep the `.o` file after the link (add `--no-incremental` for a program of more than one unit) |
 | `--build-stdlib`    | Build the standard library bitcode again, from its generators |
 | `--lib`             | Compile to a library (`.slib`) instead of an executable |

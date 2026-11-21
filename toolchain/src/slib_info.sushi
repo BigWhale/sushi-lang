@@ -1601,6 +1601,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string req = get_str(meta, "requires_compiler")
     let string ovf = get_str(meta, "overflow")
     let string proto = get_str(meta, "sushi_lib_version")
+    let string links = join_at(meta, "link_libraries", ", ")
     println("Library: {libname}")
     println("Version: {libver}")
     println("Kind: {kind}")
@@ -1613,6 +1614,8 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
         println("Compiler digest: {digest}")
     if (req != ""):
         println("Requires compiler: {req}")
+    if (links != ""):
+        println("Links: {links}")
     println("Protocol: {proto}")
     println("")
     print_units(meta, o)

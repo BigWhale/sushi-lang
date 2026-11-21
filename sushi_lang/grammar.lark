@@ -39,7 +39,10 @@ perk_def: PUBLIC? PERK NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLI
 perk_method: FN NAME "(" [parameters] ")" type ["|" type] [dont_panic] _NEWLINE
 
 // Foreign Function Interface (FFI) - unsafe external blocks
-external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | extern_decl | extern_var)+ _DEDENT
+external_block: UNSAFE EXTERNAL STRING [external_link] AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | extern_decl | extern_var)+ _DEDENT
+// The `link` clause names the C libraries of the block. `link` is a NAME, so that it stays an
+// identifier everywhere else; the AST builder refuses any other word (CE6001).
+external_link: NAME STRING ("," STRING)*
 extern_decl: FN NAME "(" [ extern_params ] ")" type [dont_panic] "=" (STRING | extern_link_name) _NEWLINE
 // A C global variable, read-only from Sushi (#1090).
 extern_var: VAR type NAME "=" (STRING | extern_link_name) _NEWLINE

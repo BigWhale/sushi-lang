@@ -232,6 +232,34 @@ not in the consumer's tables at all -- but the manifest names what the library d
 keeps, so the answer is [`CE3005`](error-catalog.md#ce3005) there too, naming the library instead of a unit. [`CE2008`](error-catalog.md#ce2008)
 is left for what it is for: a name that no unit and no linked library declares.
 
+### A library that links a C library
+
+A unit of a library can declare an `unsafe external` block with a `link` clause
+([FFI](ffi.md#linking-an-external-library)). Keep the block private, and make a Sushi
+wrapper public:
+
+<!-- docs-sweep: skip (a library unit; build it with --lib) -->
+```sushi
+unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+public fn checksum(string s) u64:
+    return zlib.crc32(0, s, s.len() as u32)
+```
+
+- **A binary library** records the libraries of its own clauses in its manifest
+  (`link_libraries`). `--lib-info` prints them as `Links: z`. The consumer links them, and
+  writes no `link` clause of its own. The libraries of a library that this library imports
+  are in the manifest of that library.
+- **A source library** records nothing. The consumer compiles the blocks of the library,
+  so it reads the clauses there. `--lib-info` prints no `Links:` line.
+- **The consumer's machine** must have the C library, because the consumer runs the link.
+  When the library is outside the default directories, the consumer builds with
+  `./sushic main.sushi -L <dir>`. A missing library is
+  [`CE3008`](error-catalog.md#ce3008), and a note names the library that asked for it.
+- The library build itself links nothing, so `-L` with `--lib` has no effect
+  ([`CW0003`](error-catalog.md#cw0003)).
+
 ### No main() Required
 
 Libraries do not need a `main()` function. If you include one, compilation will fail.
@@ -393,7 +421,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.7
+Protocol: 2.8
 
 Units (1):
   mylib

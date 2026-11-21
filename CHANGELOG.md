@@ -196,6 +196,19 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **A program can link a C library.** A `link` clause on an `unsafe external` block names
+  the C libraries that the block needs: `unsafe external "C" link "z" as zlib because
+  "...":`. The compiler collects the clauses of every block of the program and gives each
+  library to the linker one time (`-lz`). The new flag `sushic -L <dir>` adds a search
+  directory. A name is the name for `-l`: CE5017 refuses an empty name, a `/`, white space
+  and a leading `-`, CE5018 refuses a file name (`libz.so`), and CE5019 refuses a name two
+  times in one clause. When the linker cannot find a library, CE3008 has a note at each
+  clause that asked for it. A binary `.slib` records the libraries of its own clauses in the
+  new manifest field `link_libraries` (protocol 2.8), the consumer links them, and
+  `--lib-info` prints them as `Links:`. `link` stays an identifier everywhere else. The
+  `-lm` of the driver is now a library of the C runtime in the link plan (`m` on Linux), and
+  `<math>` writes `link "m"`.
+
 - **`!` marks a function that never returns.** `fn fail(string msg) !:` and the extern
   `fn exit(i32 code) ! = "exit"`. A statement that calls a `!` function ends the path: the
   function needs no `return` after it (no CE0107), a statement after it is CE0140, and no

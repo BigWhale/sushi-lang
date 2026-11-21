@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.overflow_mode import OverflowMode
@@ -32,6 +33,9 @@ class BuildOptions:
     no_incremental: bool
     cache_dir: Optional[str]
     dont_panic: bool
+    # `-L`: the search directories of the link, each resolved against the user's
+    # directory (`cli.py:main()` changed into it).
+    link_dirs: tuple[Path, ...] = ()
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "BuildOptions":
@@ -54,6 +58,7 @@ class BuildOptions:
             no_incremental=args.no_incremental,
             cache_dir=args.cache_dir,
             dont_panic=args.dont_panic,
+            link_dirs=tuple(Path(d).resolve() for d in args.link_dirs or ()),
         )
 
     @property

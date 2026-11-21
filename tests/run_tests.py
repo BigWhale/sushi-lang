@@ -1002,6 +1002,9 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
 _REPORT_LIBRARY = """\
 use <collections/strings>
 
+unsafe external "C" link "z" as zlib because "the report prints the libraries":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
 ##: A colour. :##
 public enum Colour:
     ##: No payload. :##
@@ -1262,10 +1265,17 @@ REPORT_KINDS = ("source", "binary", REPORT_UNSTATED)
 # compiled code, so it prints no mode.
 REPORT_OVERFLOW = "--overflow=wrap"
 REPORT_OVERFLOW_LINE = "Overflow: wrap"
-# The lines of a library that holds compiled code: the overflow mode, the host key and
-# the compiler-source digest. A source library prints none of them.
+# The lines of a library that holds compiled code: the overflow mode, the host key, the
+# compiler-source digest and the libraries of its `link` clauses. A source library prints
+# none of them: the consumer reads its clauses in its source.
 REPORT_COMPILED_LINES = (REPORT_OVERFLOW_LINE, f"Platform: {host_key()}",
-                         f"Compiler digest: {compute_compiler_source_fingerprint()}")
+                         f"Compiler digest: {compute_compiler_source_fingerprint()}",
+                         "Links: z")
+# A binary library with no `link` clause prints no `Links:` line.
+_REPORT_NO_LINKS_LIBRARY = """\
+public fn answer() i32:
+    return 42
+"""
 REPORT_MODE_KINDS = ("binary",)
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
@@ -1273,6 +1283,30 @@ REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
 # templates of `_REPORT_LIBRARY`, and every library kind ships a template as source, which
 # the consumer's build parses again.
 REPORT_CONSENT = ("--dont-panic",)
+
+
+def _check_no_links_line(sushic: str, tmp: Path, cache: str, tool_bin: str,
+                         result: ReaderGateResult) -> None:
+    """A binary library with no `link` clause: neither half prints a `Links:` line."""
+    plain_dir = tmp / "no_links"
+    plain_dir.mkdir()
+    (plain_dir / "plain_lib.sushi").write_text(_REPORT_NO_LINKS_LIBRARY, encoding="utf-8")
+    lib = plain_dir / "plain_lib.slib"
+    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", "binary",
+                       str(plain_dir / "plain_lib.sushi"), "-o", str(lib),
+                       "--cache-dir", cache], plain_dir, {})
+    result.checks += 1
+    if built.returncode != 0:
+        result.failures.append(f"the library with no clause does not build: "
+                               f"{built.stderr.strip()[:200]}")
+        return
+    for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
+                      ("python", {"SUSHI_TOOLCHAIN": "off"})):
+        done = _gate_run([sushic, "--lib-info", str(lib)], plain_dir, env)
+        result.checks += 1
+        if any(line.startswith("Links:") for line in done.stdout.splitlines()):
+            result.failures.append(f"--lib-info ({half}): a library with no `link` clause "
+                                   f"prints a Links line")
 
 
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
@@ -1344,6 +1378,7 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             ran = _gate_run([str(kind_dir / "main")], kind_dir, {})
             if ran.stdout != REPORT_CONSUMER_STDOUT:
                 result.failures.append(f"a consumer, {kind}: printed {ran.stdout!r}")
+        _check_no_links_line(sushic, tmp, cache, tool_bin, result)
     result.duration = time.time() - start
     return result
 

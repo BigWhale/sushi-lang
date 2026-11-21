@@ -133,6 +133,11 @@ Calling an external C function (`strlen`) through an `unsafe external "C"` block
 and a safe wrapper. Shows the Result-exemption and no-leak string marshalling.
 See [../ffi.md](../ffi.md).
 
+### 31-ffi-link.sushi
+Linking a C library (zlib) with a `link "z"` clause: `crc32` and `adler32` of
+"Mostly Harmless". Shows that the namespace links nothing, and that two blocks can name
+one library. See [../ffi.md](../ffi.md#linking-an-external-library).
+
 ---
 
 **Tip**: Examples are numbered for suggested reading order, but feel free to explore based on your interests!

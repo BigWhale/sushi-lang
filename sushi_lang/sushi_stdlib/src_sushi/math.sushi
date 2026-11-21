@@ -28,7 +28,7 @@ unsafe external "C" as llvm because "the LLVM math intrinsics":
     fn maxnum_f32(f32 a, f32 b) f32 = "llvm.maxnum.f32"
     fn maxnum_f64(f64 a, f64 b) f64 = "llvm.maxnum.f64"
 
-unsafe external "C" as libc because "the C library math functions":
+unsafe external "C" link "m" as libc because "the C library math functions":
     fn tan(f64 x) f64 = "tan"
     fn asin(f64 x) f64 = "asin"
     fn acos(f64 x) f64 = "acos"

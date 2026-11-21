@@ -1,0 +1,8 @@
+# A library name goes to the linker as `-l<name>`, so a name that is empty, that holds a
+# `/` or a space, or that starts with `-` is refused.
+# EXPECT_ERROR_CODES_EXACT: CE5017, CE5017, CE5017, CE5017
+unsafe external "C" link "", "a/b", "z lib", "-lz" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+fn main() i32:
+    return 0
