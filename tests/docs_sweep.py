@@ -741,6 +741,8 @@ def main() -> int:
 
     tallies: list[tuple[str, Tally]] = []
     with tempfile.TemporaryDirectory(prefix="docs_sweep_") as tmpdir:
+        from sushi_lang.internals.user_cache import SUSHI_HOME_ENV
+        os.environ[SUSHI_HOME_ENV] = str(Path(tmpdir) / "sushi_home")
         if args.only in ("all", "docs"):
             tallies.append(("candidate blocks",
                             sweep_pages(tmpdir, args.jobs, args.verbose)))

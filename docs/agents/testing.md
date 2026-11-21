@@ -32,6 +32,8 @@ edit the docs. The full text of each `# EXPECT_*` directive is in
 - Each run sets `SUSHI_HOME` to a directory in its temporary directory, so the per-user
   cache of the compiler (the stdlib objects, the grammar tables) is the run's own. A run
   never writes the home directory of the user.
+- The pytest layer (`tests/unit/conftest.py`) and `tests/docs_sweep.py` also set
+  `SUSHI_HOME` to a temporary directory of their own.
 - `-j N` sets the parallel job count. The default is 4, which suits a GitHub standard
   runner (4 vCPU on Linux, 3 on macOS). `SUSHI_TEST_JOBS` overrides it on a development
   machine with more cores (`export SUSHI_TEST_JOBS=8`). An explicit `-j` beats the
