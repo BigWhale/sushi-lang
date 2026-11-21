@@ -21,6 +21,7 @@ from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
 from sushi_lang.internals.parse_errors import lark_to_diagnostic
 from sushi_lang.internals.indenter import LangIndenter
 from sushi_lang.internals.report import Reporter, Span, span_of
+from sushi_lang.internals.user_cache import compiler_cache_dir, owned_by_me, trusted_dir
 from sushi_lang.semantics.ast_builder import ASTBuilder
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
@@ -91,40 +92,16 @@ def grammar_cache_dir() -> Optional[Path]:
     """The directory for the grammar-table cache, or None for no cache.
 
     `SUSHI_GRAMMAR_CACHE_DIR` overrides it, and `off` turns the cache off. Otherwise it
-    is the user cache directory: `~/Library/Caches/sushi` on macOS, else
-    `$XDG_CACHE_HOME/sushi` or `~/.cache/sushi`.
+    is `~/.sushi/cache/compiler/grammar`, or None when that directory is not trusted.
     """
     override = os.environ.get(GRAMMAR_CACHE_ENV)
     if override:
         return None if override == "off" else Path(override)
-    try:
-        home = Path.home()
-    except (RuntimeError, KeyError, OSError):
-        return None
-    if sys.platform == "darwin":
-        return home / "Library" / "Caches" / "sushi"
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    base = Path(xdg) if xdg and os.path.isabs(xdg) else home / ".cache"
-    return base / "sushi"
+    return compiler_cache_dir("grammar")
 
 
 def _build_lark(grammar_text: str, grammar_path: Path, options: dict[str, Any]) -> Lark:
     return Lark(grammar_text, source_path=str(grammar_path), **options)
-
-
-def _owned_by_me(st: os.stat_result) -> bool:
-    """The entry is mine, and no other user can write it."""
-    return st.st_uid == os.geteuid() and not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
-
-
-def _trusted_dir(cache_dir: Path) -> bool:
-    """Make the directory if it is missing; True only if it is mine alone."""
-    try:
-        cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        st = os.lstat(cache_dir)
-    except OSError:
-        return False
-    return stat.S_ISDIR(st.st_mode) and _owned_by_me(st)
 
 
 def _load_cached(cache_file: Path, runtime: dict[str, Any]) -> Optional[Lark]:
@@ -136,7 +113,7 @@ def _load_cached(cache_file: Path, runtime: dict[str, Any]) -> Optional[Lark]:
     try:
         with open(cache_file, "rb") as f:
             st = os.fstat(f.fileno())
-            if not stat.S_ISREG(st.st_mode) or not _owned_by_me(st):
+            if not stat.S_ISREG(st.st_mode) or not owned_by_me(st):
                 return None
             data = pickle.load(f)
         return Lark.__new__(Lark)._load(data, **runtime)
@@ -173,7 +150,7 @@ def cached_lark(grammar_path: Path, cache_dir: Optional[Path], **options: Any) -
     grammar_text = grammar_path.read_text(encoding="utf-8")
     runtime = {k: v for k, v in options.items() if k in _RUNTIME_OPTIONS}
     stored = {k: v for k, v in options.items() if k not in _RUNTIME_OPTIONS}
-    if cache_dir is None or not hasattr(os, "geteuid") or not _trusted_dir(cache_dir):
+    if cache_dir is None or not trusted_dir(cache_dir):
         return _build_lark(grammar_text, grammar_path, options)
 
     key = hashlib.sha256("\0".join((

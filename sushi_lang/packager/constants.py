@@ -1,9 +1,9 @@
 """Nori package manager constants."""
-from pathlib import Path
+from sushi_lang.internals.user_cache import sushi_home, user_cache_root
 
-SUSHI_HOME = Path.home() / ".sushi"
+SUSHI_HOME = sushi_home()
 BIN_DIR = SUSHI_HOME / "bin"
-CACHE_DIR = SUSHI_HOME / "cache"
+CACHE_DIR = user_cache_root()
 BENTO_DIR = SUSHI_HOME / "bento"
 STORE_DIR = SUSHI_HOME / "store"
 

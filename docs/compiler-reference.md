@@ -332,13 +332,37 @@ Success! Wrote native binary: main
   `.ll` file or the object file
 - The cache directory (`__sushi_cache__/`) is already in `.gitignore`
 
+### Where the Caches Are
+
+The compiler keeps two caches:
+
+| Cache | Location | Holds |
+|---|---|---|
+| Project cache | `__sushi_cache__/` in the working directory, or `--cache-dir PATH` | The object file of each unit of an incremental build |
+| Per-user cache | `~/.sushi/cache/compiler/` | The grammar tables (`grammar/`) |
+
+The per-user cache is in the same `~/.sushi` tree as the Nori packages. Set
+`SUSHI_HOME=DIR` (an absolute path) to move the full tree, for example in a test or in
+CI. The compiler uses a directory of the per-user cache only when the directory is yours
+and no other user can write it. It makes a missing directory with mode `0700`. No cache
+goes into a system-wide directory or into an operating-system cache directory.
+
+`--clean-cache` removes the project cache only. To clear the per-user cache, delete the
+directory:
+
+```bash
+rm -rf ~/.sushi/cache/compiler
+```
+
+The next compile makes it again.
+
 ### Grammar Cache
 
-The parser tables of `grammar.lark` are kept in one file in the user cache directory:
-`~/Library/Caches/sushi` on macOS, `$XDG_CACHE_HOME/sushi` or `~/.cache/sushi` on Linux.
-The first compile writes the file, and each later compile loads it instead of building
-the tables again. Set `SUSHI_GRAMMAR_CACHE_DIR=DIR` to use a different directory, or
-`SUSHI_GRAMMAR_CACHE_DIR=off` to build the tables in each process.
+The parser tables of `grammar.lark` are kept in one file in
+`~/.sushi/cache/compiler/grammar/`. The first compile writes the file, and each later
+compile loads it instead of building the tables again. Set `SUSHI_GRAMMAR_CACHE_DIR=DIR`
+to use a different directory, or `SUSHI_GRAMMAR_CACHE_DIR=off` to build the tables in
+each process.
 
 The cache never changes a result. The file name holds a hash of the grammar and of the
 Lark and Python versions, so a changed grammar does not read an old file. A broken file

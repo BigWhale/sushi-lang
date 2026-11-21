@@ -67,3 +67,18 @@ when you add or change a flag, change the driver, compare IR, or build a library
 `--opt {none,mem2reg,O1,O2,O3}`, `--no-verify`, `--keep-object`, `--no-incremental`,
 `--clean-cache`, `--cache-dir PATH`, `--build-stdlib`. The cache key makes `--clean-cache`
 unnecessary for correctness (see the Backend line in `CLAUDE.md`, Architecture).
+
+## The per-user cache root
+
+- The one helper is `internals/user_cache.py`. `sushi_home()` gives `~/.sushi`
+  (`$SUSHI_HOME` when it is an absolute path), and `packager/constants.py` reads it too.
+  `compiler_cache_dir(name)` gives `~/.sushi/cache/compiler/<name>`, made with mode
+  `0700`, or None when the directory is not the user's alone (`trusted_dir`). A new
+  per-user cache of the compiler gets its directory from this helper and from nothing
+  else.
+- The grammar tables are in `grammar/` (`internals/parser.py:grammar_cache_dir`).
+  `SUSHI_GRAMMAR_CACHE_DIR` still overrides that one directory, and `off` turns it off.
+- `SUSHI_HOME` moves the tree for a test or CI. The fork server compares it, with `HOME`,
+  before it reuses a warm child (`tests/fork_server.py:IMPORT_TIME_ENV`).
+- `--clean-cache` removes the project cache only. To clear the per-user cache, delete
+  `~/.sushi/cache/compiler/`.

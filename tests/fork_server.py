@@ -36,7 +36,7 @@ from typing import Callable, Dict, List, Mapping, Optional
 # the grammar is built), and the interpreter reads PYTHONHASHSEED when it starts, so each
 # child keeps the hash seed of the server. A compile whose environment gives one of them
 # another value than the server had cannot use the server.
-IMPORT_TIME_ENV = ("SUSHI_GRAMMAR_CACHE_DIR", "XDG_CACHE_HOME", "HOME", "PYTHONHASHSEED")
+IMPORT_TIME_ENV = ("SUSHI_GRAMMAR_CACHE_DIR", "SUSHI_HOME", "HOME", "PYTHONHASHSEED")
 
 # A Python file that a compile starts in place of `python -m sushi_lang`. Only the runner
 # tests set it: the stub of the golden dumps stands in for a compiler flag.
