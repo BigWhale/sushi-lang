@@ -784,6 +784,10 @@ LIB_INFO_CASES = (
         libs / "gate_lib.slib", d / "gate_lib.slib")),
     ("an older container version", "CE3509", lambda libs, d: _write_bytes(
         d / "gate_lib.slib", _container_version(libs / "gate_lib.slib", _OLD_CONTAINER))),
+    ("a hybrid kind", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _put("hybrid", "kind"))),
+    ("a binary library cut to half", "CE3511", lambda libs, d: _write_bytes(
+        d / "gate_bin.slib", _half(libs / "gate_bin.slib"))),
 )
 
 def _append(text: str, *keys):
@@ -817,6 +821,7 @@ CONSUMER_CASES = (
      _append("\npublic const i32 OTHER = 1\n", "public_constants", 0, "source")),
     ("a bare function record that states a channel", "CE3512",
      _put(True, "public_functions", 0, "has_channel")),
+    ("a hybrid kind", "CE3512", _put("hybrid", "kind")),
 )
 
 
@@ -1233,7 +1238,10 @@ REPORT_LINES = (
     "  fn front(i32[] xs) peek i32[]",
     "  public extend Crate@(T) value_view() peek T",
 )
-REPORT_KINDS = ("source", "hybrid", "binary")
+# A library whose manifest states no kind: the source library with its `kind` field
+# dropped. A manifest with no kind is a source library, in both halves and in the consumer.
+REPORT_UNSTATED = "unstated"
+REPORT_KINDS = ("source", "hybrid", "binary", REPORT_UNSTATED)
 # The report library is built in the mode that is not the default, and a kind that carries
 # bitcode prints that mode (docs/adr/0002-overflow-mode.md). A source library carries no
 # compiled code, so it prints no mode.
@@ -1276,7 +1284,8 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             kind_dir = tmp / kind
             kind_dir.mkdir()
             lib = kind_dir / "report_lib.slib"
-            built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
+            read_as = "source" if kind == REPORT_UNSTATED else kind
+            built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", read_as,
                                "--dont-panic", REPORT_OVERFLOW,
                                str(tmp / "report_lib.sushi"), "-o", str(lib),
                                "--cache-dir", cache], tmp, {})
@@ -1284,6 +1293,8 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                 result.failures.append(f"the {kind} report library does not build: "
                                        f"{built.stderr.strip()[:200]}")
                 continue
+            if kind == REPORT_UNSTATED:
+                lib.write_bytes(_edited_slib(lib.read_bytes(), _drop("kind")))
             for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
                               ("python", {"SUSHI_TOOLCHAIN": "off"})):
                 done = _gate_run([sushic, "--lib-info", str(lib)], kind_dir, env)
@@ -1297,11 +1308,14 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                 result.checks += 1
                 compiled = kind in REPORT_MODE_KINDS
                 wrong = [line for line in REPORT_COMPILED_LINES if (line in lines) != compiled]
+                wrong += [line for line in lines
+                          if line.startswith("Kind:") and line != f"Kind: {read_as}"]
                 if wrong:
                     result.failures.append(
                         f"--lib-info ({half}), {kind}: the line(s) "
-                        f"{', '.join(repr(line) for line in wrong)} "
-                        f"{'absent' if compiled else 'present'}")
+                        f"{', '.join(repr(line) for line in wrong)} are wrong for a "
+                        f"{read_as} library (the compiled lines "
+                        f"{'absent' if compiled else 'present'}, or a wrong Kind line)")
             program = kind_dir / "main.sushi"
             program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
             done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"), *REPORT_CONSENT,

@@ -1,0 +1,7 @@
+# `--lib-kind` accepts `source` and `binary` only. The hybrid kind is removed.
+# OUTPUT_PATH: out/x.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0 --lib-kind hybrid
+# EXPECT_STDERR_CONTAINS: "argument --lib-kind: invalid choice: 'hybrid'"
+
+public fn hr_flag() i32:
+    return 1
