@@ -32,14 +32,16 @@ _LIBRARY_FILES: dict[Path, str] = {}
 
 def label_library_file(path: Path, unit_name: str) -> None:
     """The materialized file `path` of the source library unit `unit_name` prints as
-    `<lib/<name>/<unit>>`."""
-    _LIBRARY_FILES[path.resolve()] = f"<{unit_name}>"
+    `lib/<name>/<unit>.sushi`, its path inside the library. A diagnostic prints a file of
+    the program as `./<path>` or as a bare file name, so no file of the program has this
+    label."""
+    _LIBRARY_FILES[path.resolve()] = f"{unit_name}.sushi"
 
 
 def object_label(filename: str) -> str:
     """The file name that the object of a unit prints in an `assert` or a trap, and that
     its key holds. A bundled stdlib module is `<sys/process>` and a source library unit is
-    `<lib/geo/geo>`, the same from each working directory; any other file is the name a
+    `lib/geo/geo.sushi`, the same from each working directory; any other file is the name a
     diagnostic prints."""
     if not (filename.startswith("<") and filename.endswith(">")):
         from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES

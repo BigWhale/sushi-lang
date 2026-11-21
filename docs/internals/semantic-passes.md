@@ -1097,7 +1097,7 @@ diagnostic to show.
   one of its methods (that is CE4007, which the `typecheck` pass of the unit reports). Its
   BASE key is `compute_unit_fingerprint` (`compiler/fingerprint.py`) with the copies and the
   `Drop` set of this point: for a unit with no copy it is the full key. The label in the key
-  is `object_label`: `<sys/process>` for a bundled module, `<lib/geo/geo>` for a source
+  is `object_label`: `<sys/process>` for a bundled module, `lib/geo/geo.sushi` for a source
   library unit (`label_library_file` registers the materialized file), so the key does not
   depend on the working directory. The key of a source library unit also holds the digest
   of its `.slib` (`Unit.library_digest`), so a new version or another manifest gives a new

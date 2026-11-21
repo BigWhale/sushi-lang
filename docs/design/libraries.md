@@ -240,7 +240,7 @@ manifest holds no field that changes from build to build (no timestamp). So a li
 that is built again with no change rebuilds nothing at the consumer.
 
 - On the source path, the key of a library unit is the key of any other unit, plus the
-  digest of the bytes of its `.slib` and the label `<lib/<name>/<unit>>` (not the path of
+  digest of the bytes of its `.slib` and the label `lib/<name>/<unit>.sushi` (not the path of
   the materialized file). A change of the library rebuilds the units of the library and
   what depends on their interfaces. A library unit that holds no template copy is also
   REUSED: a later build skips its body passes and takes its object and the record of its
