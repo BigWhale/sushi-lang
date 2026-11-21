@@ -582,6 +582,41 @@ fixture file itself, because the one set of directives describes both steps.
   the clean and is gone after it.
 - It needs `RUN_IN_FIXTURE_DIR`. A value other than `bare` or `source` fails the fixture.
 
+#### FIXTURE_SUSHI_HOME
+
+```sushi
+# FIXTURE_SUSHI_HOME: home
+# EXPECT_PATH_EXISTS: home/cache/compiler/stdlib
+```
+
+- The runner sets `SUSHI_HOME` to this directory of the fixture's copy for each compile of
+  the fixture (the libraries of the BUILD_LIB family, the clean and the second build
+  included). The per-user cache of the compiler (`$SUSHI_HOME/cache/compiler/`) is then the
+  fixture's own, and no other fixture can fill it.
+- With no such directive, each compile of the run has the run's own home, in the run's
+  temporary directory. A run never writes the home directory of the user.
+- Use it in each fixture that reads what the per-user cache does: the objects of the
+  bundled stdlib units are there, not in the project cache.
+- An empty path, an absolute path, or a path with a `..` part fails the fixture.
+
+#### SECOND_BUILD_IN
+
+```sushi
+# FIXTURE_SUSHI_HOME: home
+# SECOND_BUILD_IN: elsewhere/deeper
+# EXPECT_CACHED: test_two_dirs, sys/process
+```
+
+- After the compilation passes its checks, the runner compiles the fixture again, from
+  this directory of the copy (the runner makes it). The source and the `-o` path are
+  absolute; the cache and the environment are those of the first compilation. Only the
+  working directory changes.
+- The second compilation must exit as the first must. Its binary is the one the runtime
+  directives describe, and its code-generation report is the one `EXPECT_REBUILT` /
+  `EXPECT_CACHED` read. So these two need no `v2/` here.
+- It does not go with `v2/`, `THEN_CLEAN_CACHE` or `FIXTURE_CACHE_DIR`. An empty path, an
+  absolute path, or a path with a `..` part fails the fixture.
+
 #### BUILD_LIB
 
 ```sushi

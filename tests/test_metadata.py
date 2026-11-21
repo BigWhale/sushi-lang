@@ -95,6 +95,10 @@ class TestMetadata:
     build_libs_at: Optional[List[Tuple[str, str]]] = None
     # A relative `--cache-dir`, spelled as given, for a fixture that runs in its own directory.
     fixture_cache_dir: Optional[str] = None
+    # The per-user home (`SUSHI_HOME`) of every compile of the fixture, relative to its copy.
+    fixture_sushi_home: Optional[str] = None
+    # A second compilation, started in this directory of the copy (relative).
+    second_build_in: Optional[str] = None
     # Paths of the copy read after the fixture's last compiler invocation.
     expect_paths_exist: Optional[List[str]] = None
     expect_paths_absent: Optional[List[str]] = None
@@ -176,6 +180,8 @@ class TestMetadata:
     def reads_the_copy(self) -> bool:
         """A directive that names a path in the fixture's copy, so the fixture needs one."""
         return bool(self.build_libs_at or self.fixture_cache_dir is not None
+                    or self.fixture_sushi_home is not None
+                    or self.second_build_in is not None
                     or self.expect_paths_exist or self.expect_paths_absent
                     or self.expect_paths_exist_before_clean
                     or self.then_clean_cache is not None or self.directive_errors
@@ -462,6 +468,18 @@ def _then_clean_cache(metadata: TestMetadata, value: str, test_file: Path) -> No
             f"THEN_CLEAN_CACHE takes {' or '.join(CLEAN_CACHE_FORMS)}, not {value!r}")
 
 
+def _copy_dir(field_name: str, directive: str):
+    """A directive that names a directory inside the fixture's copy."""
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        path = _unquote(value).strip()
+        if not path or Path(path).is_absolute() or ".." in Path(path).parts:
+            metadata.directive_errors.append(
+                f"{directive} takes a relative path inside the fixture's copy, not {value!r}")
+        else:
+            setattr(metadata, field_name, path)
+    return handle
+
+
 def _output_path(metadata: TestMetadata, value: str, test_file: Path) -> None:
     path = _unquote(value).strip()
     if not path or Path(path).is_absolute() or ".." in Path(path).parts:
@@ -571,6 +589,8 @@ VALUED_DIRECTIVES = {
     'EXPECT_PATH_EXISTS_BEFORE_CLEAN': _extend('expect_paths_exist_before_clean',
                                                lambda v: _split(_unquote(v))),
     'THEN_CLEAN_CACHE': _then_clean_cache,
+    'FIXTURE_SUSHI_HOME': _copy_dir('fixture_sushi_home', 'FIXTURE_SUSHI_HOME'),
+    'SECOND_BUILD_IN': _copy_dir('second_build_in', 'SECOND_BUILD_IN'),
     'OUTPUT_PATH': _output_path,
     'EXPECT_IR_HOLDS': _ir_expectation('EXPECT_IR_HOLDS', True),
     'EXPECT_IR_LACKS': _ir_expectation('EXPECT_IR_LACKS', False),

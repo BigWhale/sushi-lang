@@ -29,6 +29,9 @@ edit the docs. The full text of each `# EXPECT_*` directive is in
 - `--enhanced` is accepted and does nothing. Every run is that run. It stays for the CI
   lines and for a typed habit.
 - `--filter <pattern>` selects by a substring of the path under `tests/`.
+- Each run sets `SUSHI_HOME` to a directory in its temporary directory, so the per-user
+  cache of the compiler (the stdlib objects, the grammar tables) is the run's own. A run
+  never writes the home directory of the user.
 - `-j N` sets the parallel job count. The default is 4, which suits a GitHub standard
   runner (4 vCPU on Linux, 3 on macOS). `SUSHI_TEST_JOBS` overrides it on a development
   machine with more cores (`export SUSHI_TEST_JOBS=8`). An explicit `-j` beats the
@@ -94,7 +97,9 @@ Each step has a runner test under `tests/unit/runner/`.
   each with a `-> name.slib` and an `@ version` form, built in written order and required
   to exit 0; `BUILD_LIB_WARNS: x.sushi [kind] -> CW1002` (a library that must build with
   exactly that set of warnings); `BUILD_LIB_AT: x.sushi -> path` (a `.slib` inside the
-  copy); `STDLIB_MODULE: name=path`; `FIXTURE_CACHE_DIR: rel`; `EXPECT_PATH_EXISTS` /
+  copy); `STDLIB_MODULE: name=path`; `FIXTURE_CACHE_DIR: rel`; `FIXTURE_SUSHI_HOME: rel`
+  (a per-user home of the fixture's own, for every compile of it); `SECOND_BUILD_IN: rel`
+  (a second compile from another directory of the copy); `EXPECT_PATH_EXISTS` /
   `EXPECT_PATH_ABSENT` / `EXPECT_PATH_EXISTS_BEFORE_CLEAN`; `THEN_CLEAN_CACHE: bare|source`;
   `OUTPUT_PATH: rel` (the `-o` path inside the copy; the one way a fixture spells `--lib`).
 - A success test that prints MUST carry an `EXPECT_STDOUT_*` (ratchet:
