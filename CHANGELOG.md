@@ -15,7 +15,9 @@ All notable changes to Sushi Lang will be documented in this file.
   compiler could run an old stdlib with no message. Build the library again with this
   compiler. `--ignore-compiler-version` does not stop the check. A source library has no
   stamp. `--lib-info` prints `Compiler digest:` for a binary library. The manifest protocol
-  is `2.7`.
+  is `2.7`. The compiler-source digest now hashes the `*.sushi` files of the compiler too
+  (the Sushi stdlib included), so a stdlib change alone refuses an old binary library, and
+  it also changes the object-cache key.
 
 - **The hybrid library kind is removed.** A `.slib` is `source` (the default) or `binary`.
   A hybrid library carried the source and the bitcode, but the consumer read only the

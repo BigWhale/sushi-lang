@@ -579,7 +579,8 @@ A binary library holds bitcode, and before 1.0 the bitcode ABI changes often, al
 patch release. A binary library also carries its own copy of each stdlib module that it
 imports. So a binary library works only with the exact compiler that built it. It records
 a stamp of two parts: the exact compiler version (`compiler_version`) and the
-compiler-source digest (`compiler_digest`, the digest that the object cache uses). The
+compiler-source digest (`compiler_digest`, the digest that the object cache uses: every
+`*.py` and `*.sushi` file of the compiler, the Sushi stdlib included). The
 consumer accepts the library only when both parts are equal to its own. A mismatch is a
 hard error, and the message names the part that is not equal:
 

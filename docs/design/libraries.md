@@ -885,7 +885,11 @@ takes all copies as equal. So a library from another compiler can run an old std
 fix in the new stdlib does not reach it, with no message. `requires_compiler` (`~0.17`,
 §6.2) cannot see this: it accepts a patch release. The version alone cannot see it either:
 in development, two compilers of one version can have different sources. The digest is the
-one that the object cache already computes, so one function gives the two answers.
+one that the object cache already computes, so one function gives the two answers. It hashes
+every `*.py` and every `*.sushi` file under `sushi_lang/`, sorted by path, with the relative
+path of each file. So a change in the Sushi stdlib (`sushi_stdlib/src_sushi/`) alone, with no
+version bump, also changes the digest and refuses a binary library that bundles the old
+stdlib copy.
 
 **A source library has no stamp.** It is text, and the consumer compiles it. Only
 `requires_compiler` applies to it (§6.2).
