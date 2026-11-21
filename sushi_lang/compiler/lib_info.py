@@ -557,7 +557,7 @@ def print_library_info(library_path: Path, show_docs: bool = False,
                        color: str = "auto") -> int:
     """Print formatted metadata from a .slib library file. A fault raises its code."""
     opts = _Report(show_docs, should_colour(sys.stdout, color))
-    from sushi_lang.backend.library_format import LibraryFormat, check_manifest
+    from sushi_lang.backend.library_format import LibraryFormat, check_manifest, library_kind
     from sushi_lang.backend.library_errors import LibraryError
 
     if library_path.suffix != '.slib':
@@ -567,7 +567,7 @@ def print_library_info(library_path: Path, show_docs: bool = False,
 
     # A field the kind makes meaningless is not printed: a source library runs
     # everywhere, so it has no platform, and it carries no bitcode to measure.
-    kind = metadata.get('kind', '')
+    kind = library_kind(metadata)
     requires = metadata.get('requires_compiler', '')
 
     print(f"Library: {metadata['library_name']}")
@@ -586,9 +586,9 @@ def print_library_info(library_path: Path, show_docs: bool = False,
     for section in _SECTIONS:
         _print_section(section, metadata, opts)
 
-    if kind != 'binary':
+    if kind == 'source':
         print(f"Source: {opts.p.dim}{source_size:,}{opts.p.reset} bytes")
-    if kind != 'source':
+    else:
         print(f"Bitcode: {opts.p.dim}{bitcode_size:,}{opts.p.reset} bytes")
 
     return 0

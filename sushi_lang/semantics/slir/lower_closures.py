@@ -3,7 +3,7 @@
 
 A named function as a value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no
 environment. The symbol comes from the callee row of the `GlobalRef`, as for a call of the
-function: a function of a binary or a hybrid library has its link symbol. A call of a
+function: a function of a binary library has its link symbol. A call of a
 function value is `Indirect(Operand)`, and the operand is the closure value: a copy of its
 place, or a temporary of the statement. SLIR does not see the layout.
 

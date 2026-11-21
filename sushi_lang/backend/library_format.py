@@ -15,14 +15,28 @@ if TYPE_CHECKING:
     from sushi_lang.backend.library_errors import LibraryError
 
 
-# Header KIND values. A source library carries no bitcode, a binary one carries no
-# source, a hybrid carries both. The manifest's `kind` field is the authority; the
-# header mirrors it so a reader can branch before it unpacks any MessagePack.
+# Header KIND values. A source library carries no bitcode, and a binary one carries no
+# source. The manifest's `kind` field is the authority; the header mirrors it so a reader
+# can branch before it unpacks any MessagePack. The value 3 was the hybrid kind. It is
+# retired, and it is not given again.
 KIND_SOURCE = 1
 KIND_BINARY = 2
-KIND_HYBRID = 3
 
-KIND_BY_NAME = {"source": KIND_SOURCE, "binary": KIND_BINARY, "hybrid": KIND_HYBRID}
+KIND_BY_NAME = {"source": KIND_SOURCE, "binary": KIND_BINARY}
+
+
+def library_kind(metadata: dict, path: str = "") -> str:
+    """The kind of a library: `source` or `binary`. A manifest with no `kind` is source.
+
+    Each reader of the manifest `kind` asks this, so that all of them take one path for one
+    manifest. Any other value is CE3512.
+    """
+    kind = metadata.get("kind", "source")
+    if kind not in KIND_BY_NAME:
+        from sushi_lang.backend.library_errors import LibraryError
+
+        raise LibraryError("CE3512", path=path, reason=f"unknown library kind '{kind}'")
+    return kind
 
 
 # The words for an OS error, one row per IoError variant the Sushi reader can answer.
@@ -352,6 +366,7 @@ def check_manifest(metadata: object, path: str) -> None:
              else "the metadata is not a map")
     if fault is not None:
         raise LibraryError("CE3512", path=path, reason=fault)
+    library_kind(metadata, path)
 
 
 def _record_fault(record: dict, kind: str, where: str) -> Optional[str]:
@@ -427,7 +442,7 @@ class LibraryFormat:
         """Write .slib file with metadata, optional unit source, and bitcode."""
         metadata_blob = msgpack.packb(metadata, use_bin_type=True)
         source_blob = msgpack.packb(source, use_bin_type=True) if source else b""
-        kind = KIND_BY_NAME.get(metadata.get("kind", "binary"), KIND_BINARY)
+        kind = KIND_BY_NAME[library_kind(metadata, str(output_path))]
 
         from sushi_lang.backend.driver import writing_output
 

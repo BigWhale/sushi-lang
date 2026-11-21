@@ -11,7 +11,7 @@ from pathlib import Path
 from sushi_lang.compiler.loader import (
     load_unit_recursively,
 )
-from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
+from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION, library_kind
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.host import host_key
@@ -41,7 +41,7 @@ def _check_library_platform(metadata: dict) -> None:
     """
     from sushi_lang.backend.library_errors import LibraryError
 
-    if metadata.get("kind") == "source":
+    if library_kind(metadata) == "source":
         return
 
     lib_platform = metadata.get("platform")
@@ -103,7 +103,7 @@ def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
     """
     from sushi_lang.backend.library_errors import LibraryError
 
-    if metadata.get("kind") == "source":
+    if library_kind(metadata) == "source":
         return
     templates = metadata.get("templates") or {}
     version = templates.get("version")
@@ -398,7 +398,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
                                             ignore=ignore_compiler_version)
             _check_library_templates_version(metadata, wanted.path)
 
-            if metadata.get("kind") == "source":
+            if library_kind(metadata) == "source":
                 injected = _inject_library_source(unit_manager, slib_path, metadata,
                                                   wanted.path, cache)
                 dependencies = _source_library_dependencies(metadata, injected)
@@ -954,8 +954,7 @@ def _emit_library(driver, analyzer, compilation_order, out_path: Path,
     }
 
     kind = options.lib_kind
-    # A source library needs no bitcode at all. A hybrid still compiles it, and so
-    # does a binary library, which is what every build produced before v4.
+    # A source library needs no bitcode at all, and a binary library carries no source.
     if kind == "source":
         bitcode = b""
     else:
@@ -964,7 +963,7 @@ def _emit_library(driver, analyzer, compilation_order, out_path: Path,
             verify=not options.no_verify,
             exported_private_functions=closure_fn_symbols)
 
-    source = manifest_gen.source_map(compilation_order) if kind != "binary" else None
+    source = manifest_gen.source_map(compilation_order) if kind == "source" else None
 
     manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates,
                           library_version=library_version, kind=kind, source=source,

@@ -121,7 +121,7 @@ def is_template_copy(body: object) -> bool:
     generic function and a method of a copied perk implementation carry `instance_of`; a
     copy of an extension carries the unit it went home to.
 
-    One copy is not muted: a copy of a binary or hybrid library's template. The template is
+    One copy is not muted: a copy of a binary library's template. The template is
     only in the tables, no walk of this build reads it, so the copy is the one place its
     body is checked.
     """
