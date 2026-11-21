@@ -91,9 +91,10 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
 
     # A source library unit: the digest of its `.slib`, so a new version or another
     # manifest of the library gives a new key.
-    if unit.library_digest is not None:
+    library_digest = getattr(unit, "library_digest", None)
+    if library_digest is not None:
         hasher.update(b"LIBRARY:")
-        hasher.update(unit.library_digest.encode())
+        hasher.update(library_digest.encode())
 
     # 7. Which types implement `Drop`, whole-program (HANDLES.md ruling R2). Nothing
     # else here covers it: a perk implementation carries no visibility marker, so it is
