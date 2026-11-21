@@ -41,7 +41,7 @@ def label_library_file(path: Path, unit_name: str) -> None:
 def object_label(filename: str) -> str:
     """The file name that the object of a unit prints in an `assert` or a trap, and that
     its key holds. A bundled stdlib module is `<sys/process>` and a source library unit is
-    `lib/geo/geo.sushi`, the same from each working directory; any other file is the name a
+    `lib/<name>/<unit>.sushi`, the same from each working directory; any other file is the name a
     diagnostic prints."""
     if not (filename.startswith("<") and filename.endswith(">")):
         from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES

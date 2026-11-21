@@ -302,7 +302,7 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
   working directory of the build, because an `assert` prints that name at run time. The
   same source built from another directory with one `--cache-dir` is another object. A
   bundled stdlib module has the name `<sys/process>` in its key and in its `assert`
-  text, and a source library unit has the name `lib/geo/geo.sushi`, the same from each
+  text, and a source library unit has the name `lib/<name>/<unit>.sushi`, the same from each
   directory
 - Each cached object is content-addressed: its filename is
   `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
