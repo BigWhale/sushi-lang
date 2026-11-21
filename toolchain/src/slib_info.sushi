@@ -1598,6 +1598,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string plat = get_str(meta, "platform")
     let string comp = get_str(meta, "compiler_version")
     let string digest = get_str(meta, "compiler_digest")
+    let string layout = get_str(meta, "data_layout")
     let string req = get_str(meta, "requires_compiler")
     let string ovf = get_str(meta, "overflow")
     let string proto = get_str(meta, "sushi_lib_version")
@@ -1612,6 +1613,8 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     println("Compiler: {comp}")
     if (digest != ""):
         println("Compiler digest: {digest}")
+    if (layout != ""):
+        println("Data layout: {layout}")
     if (req != ""):
         println("Requires compiler: {req}")
     if (links != ""):

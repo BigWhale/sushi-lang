@@ -146,7 +146,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.8",        # Protocol version
+    "sushi_lib_version": "2.9",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary", matching KIND; no kind is source
@@ -177,6 +177,10 @@ is the authority, and the index is a cache of it.
                                        #   that built the file, the digest of the
                                        #   object cache. The other half of the stamp.
                                        #   Written only when kind == "binary"
+    "data_layout": str,                # The LLVM data layout string of the target
+                                       #   that built the file. The consumer refuses
+                                       #   another layout, or none (CE3504). Written
+                                       #   only when kind == "binary". Since protocol 2.9
     "link_libraries": [str],           # The C libraries of the `link` clauses of the
                                        #   library's OWN units, in the order of the
                                        #   first appearance; the consumer links them.
@@ -664,7 +668,7 @@ the mangling of the consumer.
 | [CE3500](error-catalog.md#ce3500) | The `--lib` output path does not end in `.slib` |
 | [CE3502](error-catalog.md#ce3502) | A `use <lib/...>` names a library that no search directory holds |
 | [CE3503](error-catalog.md#ce3503) | The library's `requires_compiler` excludes the running compiler |
-| [CE3504](error-catalog.md#ce3504) | A binary library was built for another platform |
+| [CE3504](error-catalog.md#ce3504) | A binary library was built for another platform, or for another data layout |
 | [CE3505](error-catalog.md#ce3505) | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | [CE3506](error-catalog.md#ce3506) | Source section truncated |
 | [CE3508](error-catalog.md#ce3508) | Invalid magic bytes (not a valid `.slib` file) |
@@ -699,7 +703,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.8
+Protocol: 2.9
 
 Units (1):
   mylib

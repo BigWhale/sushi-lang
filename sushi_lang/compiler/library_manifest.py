@@ -262,7 +262,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.8",
+            "sushi_lib_version": "2.9",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -282,6 +282,8 @@ class LibraryManifestGenerator:
         if kind == "binary":
             from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
             manifest["compiler_digest"] = compute_compiler_source_fingerprint()
+            from sushi_lang.backend.llvm_optimization import target_data_layout
+            manifest["data_layout"] = target_data_layout()
             # The C libraries of the library's own `link` clauses, which the consumer
             # links. A dependency's come from its own manifest. Absent when there is none.
             from sushi_lang.semantics.link_libraries import library_names

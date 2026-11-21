@@ -45,8 +45,15 @@ _add(ErrorMessage("CE3504", Severity.ERROR,
     "the <sys/platform> file. The OS alone was not enough: an arm64 library passed the check "
     "on x86_64, and the fault showed late, at the link. A tag that names no host (`unknown`, "
     "or the old OS-only tag `darwin` or `linux`) cannot be checked, so it is refused too. The "
-    "fix is to build the library again on this host. A source library is never checked: "
-    "nothing in it is machine code."))
+    "fix is to build the library again on this host. When the tag is equal, the data layout "
+    "must be equal too: a binary library records the LLVM data layout of the target that "
+    "built it (the sizes, the alignments and the byte order of each value), and the consumer "
+    "compares it with the layout of its own target. Today the host key fixes the layout, so "
+    "a different layout comes from a library that was edited by hand or built by another "
+    "toolchain; the check prepares `--target`. The message then shows each platform with its "
+    "data layout, as `darwin_arm64 (data layout <layout>)`, and a library with no layout "
+    "shows 'none'. A source library is never checked: nothing in "
+    "it is machine code."))
 
 
 _add(ErrorMessage("CE3505", Severity.ERROR,

@@ -1,0 +1,11 @@
+# A binary library with the data layout of another target (a 32-bit layout). The host key is the host key of this compiler, but the value layouts are not the same, so the consumer must refuse it (CE3504).
+# BUILD_LIB_BINARY: layout_lib.sushi
+# LIB_MANIFEST_SET: layout_lib data_layout=e-m:e-p:32:32-i64:64-n32-S128
+# EXPECT_ERROR_CODE: CE3504
+# EXPECT_STDERR_CONTAINS: " (data layout e-m:e-p:32:32-i64:64-n32-S128)', current platform is '"
+use <lib/layout_lib>
+
+fn main() i32:
+    println("{layout_area(2, 3)}")
+    return 0
+

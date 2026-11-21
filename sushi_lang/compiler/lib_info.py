@@ -580,6 +580,8 @@ def print_library_info(library_path: Path, show_docs: bool = False,
     print(f"Compiler: {metadata['compiler_version']}")
     if metadata.get('compiler_digest'):
         print(f"Compiler digest: {metadata['compiler_digest']}")
+    if metadata.get('data_layout'):
+        print(f"Data layout: {metadata['data_layout']}")
     if requires:
         print(f"Requires compiler: {requires}")
     if metadata.get('link_libraries'):

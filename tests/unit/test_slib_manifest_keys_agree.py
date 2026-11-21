@@ -165,7 +165,7 @@ SUSHI_READER: dict[str, set[str]] = {
                  "units", "unit_docs", "reexports", "public_functions",
                  "public_constants", "public_variables", "structs", "enums",
                  "templates", "conversions", "dont_panic",
-                 "dependencies", "compiler_digest", "link_libraries"},
+                 "dependencies", "compiler_digest", "data_layout", "link_libraries"},
     "templates": {"generic_functions", "generic_structs", "generic_enums", "perks",
                   "perk_impls", "generic_perk_impls", "extensions", "generic_extensions"},
     "function": {"name", "params", "return_type", "error_type", "return_mode",

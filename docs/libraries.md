@@ -421,7 +421,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.8
+Protocol: 2.9
 
 Units (1):
   mylib
@@ -544,6 +544,19 @@ CE3504: platform mismatch: library compiled for 'linux_x86_64', current platform
 A tag that names no host is refused too: `unknown`, and the OS-only tag (`darwin`, `linux`)
 of a library from a compiler before the architecture was recorded. Build such a library
 again on this host.
+
+A binary library also records the LLVM data layout of the target that built it
+(`data_layout`: the size, the alignment and the byte order of each value). When the tag is
+equal and the layout is not the layout of this compiler's target, the error is the same
+code, and each platform shows its layout:
+
+```
+CE3504: platform mismatch: library compiled for 'darwin_arm64 (data layout e-m:e-p:32:32-i64:64-n32-S128)', current platform is 'darwin_arm64 (data layout e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32)'; rebuild the library on this host
+```
+
+Today the host key fixes the layout, so only a library that was edited by hand or built by
+another toolchain gets this error. A binary library with no layout is refused too.
+`--lib-info` prints the layout of a binary library as `Data layout: <layout>`.
 
 The check is skipped entirely for a source library, and `--lib-info` prints no `Platform`
 line for one, because the field means nothing there.

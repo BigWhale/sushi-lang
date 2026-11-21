@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Set, TextIO, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from sushi_lang.backend.llvm_optimization import target_data_layout  # noqa: E402
 from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint  # noqa: E402
 from sushi_lang.internals.host import host_key  # noqa: E402
 from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
@@ -798,6 +799,8 @@ LIB_INFO_CASES = (
         d / "gate_bin.slib", _half(libs / "gate_bin.slib"))),
     ("a compiler digest that is a number", "CE3512", lambda libs, d: _write_edit(
         libs / "gate_bin.slib", d, _put(7, "compiler_digest"))),
+    ("a data layout that is a number", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_bin.slib", d, _put(7, "data_layout"))),
     ("another compiler version is printed, not refused", None, lambda libs, d: _write_edit(
         libs / "gate_bin.slib", d, _put("0.0.1", "compiler_version"))),
 )
@@ -837,6 +840,8 @@ CONSUMER_CASES = (
     ("another compiler version", "CE3520", _put("0.0.1", "compiler_version")),
     ("another compiler source digest", "CE3520", _put("0" * 64, "compiler_digest")),
     ("no compiler source digest", "CE3520", _drop("compiler_digest")),
+    ("another data layout", "CE3504", _put("e-m:e-p:32:32-i64:64-n32-S128", "data_layout")),
+    ("no data layout", "CE3504", _drop("data_layout")),
 )
 
 
@@ -1266,10 +1271,11 @@ REPORT_KINDS = ("source", "binary", REPORT_UNSTATED)
 REPORT_OVERFLOW = "--overflow=wrap"
 REPORT_OVERFLOW_LINE = "Overflow: wrap"
 # The lines of a library that holds compiled code: the overflow mode, the host key, the
-# compiler-source digest and the libraries of its `link` clauses. A source library prints
-# none of them: the consumer reads its clauses in its source.
+# compiler-source digest, the data layout and the libraries of its `link` clauses. A
+# source library prints none of them: the consumer reads its clauses in its source.
 REPORT_COMPILED_LINES = (REPORT_OVERFLOW_LINE, f"Platform: {host_key()}",
                          f"Compiler digest: {compute_compiler_source_fingerprint()}",
+                         f"Data layout: {target_data_layout()}",
                          "Links: z")
 # A binary library with no `link` clause prints no `Links:` line.
 _REPORT_NO_LINKS_LIBRARY = """\

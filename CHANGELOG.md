@@ -6,6 +6,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A binary `.slib` records the data layout of its target.** A binary library records
+  the LLVM data layout string of the target that built it (the new manifest field
+  `data_layout`, from the target machine of codegen). The consumer refuses a binary library
+  whose layout is not the layout of its own target, or that has no layout, with CE3504, and
+  each platform in the message shows its layout. Today the host key fixes the layout, so the
+  check guards a library that was edited by hand or built by another toolchain, and it
+  prepares `--target`. A source library has no layout and no check. `--lib-info` prints
+  `Data layout:` for a binary library. The manifest protocol is `2.9`. Build an older binary
+  library again.
+
 - **A unit of a source library is checked one time, not on each build.** When the project
   cache holds the object of a source library unit (`lib/<name>/<unit>`) and the unit holds
   no template copy, a later build skips its body passes (scope, typecheck, lift, borrow,

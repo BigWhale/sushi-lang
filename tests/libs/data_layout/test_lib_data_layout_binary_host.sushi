@@ -1,0 +1,9 @@
+# A binary library that this compiler built has the data layout of this compiler's target. It loads, links and runs.
+# BUILD_LIB_BINARY: layout_lib.sushi
+# EXPECT_STDOUT_EXACT: "6\n"
+use <lib/layout_lib>
+
+fn main() i32:
+    println("{layout_area(2, 3)}")
+    return 0
+
