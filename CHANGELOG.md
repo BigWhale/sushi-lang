@@ -6,6 +6,15 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **The per-user cache of the compiler is `~/.sushi/cache/compiler/`.** The grammar tables
+  move from the operating-system cache directory (`~/Library/Caches/sushi`,
+  `$XDG_CACHE_HOME/sushi` or `~/.cache/sushi`) to `~/.sushi/cache/compiler/grammar/`. One
+  helper, `internals/user_cache.py`, gives the root and makes each directory with mode
+  `0700`; a directory that another user can write is not used. `SUSHI_HOME` (an absolute
+  path) moves the full `~/.sushi` tree, for the compiler and for Nori.
+  `SUSHI_GRAMMAR_CACHE_DIR` still overrides the grammar directory. `--clean-cache` removes
+  the project cache only; to clear the per-user cache, delete the directory. The old
+  directory is not read and not removed: delete it by hand.
 - **`ProcessError.ExitFailure` is deleted.** `run` never gave it: a non-zero exit is data in
   `Ok`, in `ProcessOutput.exit_code`. `ProcessError` has two variants, `SpawnFailed` and
   `SignalReceived`, so a match on the two is complete, and a `_` arm after them is now
