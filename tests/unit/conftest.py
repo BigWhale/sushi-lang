@@ -6,11 +6,22 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 UNIT_ROOT = Path(__file__).resolve().parent
 if str(UNIT_ROOT) not in sys.path:
     sys.path.insert(0, str(UNIT_ROOT))
 
 import compiler_stage_gate  # noqa: E402
+from sushi_lang.internals.user_cache import SUSHI_HOME_ENV  # noqa: E402
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _temporary_sushi_home(tmp_path_factory):
+    """Each pytest session gets its own `SUSHI_HOME`, so no test writes `~/.sushi`."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv(SUSHI_HOME_ENV, str(tmp_path_factory.mktemp("sushi_home")))
+        yield
 
 
 def pytest_configure(config):
