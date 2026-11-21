@@ -1,0 +1,9 @@
+# A binary library records the libraries of its own blocks in its manifest, and the
+# consumer links them.
+# BUILD_LIB_BINARY: zcheck_bin.sushi
+# EXPECT_STDOUT_EXACT: "3413997946\n"
+use <lib/zcheck_bin>
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0

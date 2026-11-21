@@ -1,0 +1,9 @@
+# The consumer compiles the blocks of a source library, and links the libraries of their
+# clauses.
+# BUILD_LIB: zcheck_src.sushi
+# EXPECT_STDOUT_EXACT: "3413997946\n"
+use <lib/zcheck_src>
+
+fn main() i32:
+    println(checksum("Mostly Harmless"))
+    return 0

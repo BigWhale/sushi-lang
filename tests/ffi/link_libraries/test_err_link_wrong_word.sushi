@@ -1,0 +1,8 @@
+# Only the word `link` can stand between the ABI and `as`.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+# EXPECT_STDERR_CONTAINS: "unexpected token 'lnk'"
+unsafe external "C" lnk "z" as zlib because "CRC-32 from zlib":
+    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
+
+fn main() i32:
+    return 0
