@@ -716,6 +716,13 @@ def _half(source: Path) -> bytes:
     return raw[:len(raw) // 2]
 
 
+def _half_payload(source: Path) -> bytes:
+    """A copy cut in the middle of the sections after the metadata, so the metadata is whole."""
+    raw = source.read_bytes()
+    _meta, end = _slib_manifest(raw)
+    return raw[:end + (len(raw) - end) // 2]
+
+
 def _meta_len(source: Path, length: int) -> bytes:
     """A copy whose header declares a metadata section of `length` bytes."""
     import struct
@@ -774,8 +781,8 @@ LIB_INFO_CASES = (
     ("no such file", "CE3515", lambda libs, d: d / "gate_lib.slib"),
     ("not a .slib name", "CE3516", lambda libs, d: _write_bytes(
         d / "gate_lib.txt", (libs / "gate_lib.slib").read_bytes())),
-    ("cut to half", "CE3511", lambda libs, d: _write_bytes(
-        d / "gate_lib.slib", _half(libs / "gate_lib.slib"))),
+    ("the source section cut to half", "CE3506", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _half_payload(libs / "gate_lib.slib"))),
     ("a short file with a bad magic", "CE3508", lambda libs, d: _write_bytes(
         d / "gate_lib.slib", b"hello!")),
     ("a metadata length past the end", "CE3510", lambda libs, d: _write_bytes(
@@ -942,7 +949,7 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
         libs.mkdir()
         (tmp / "gate_lib.sushi").write_text(_GATE_LIBRARY, encoding="utf-8")
         tool_bin = _gate_tool(project_root, tmp, result)
-        for kind, name in (("hybrid", "gate_lib"), ("binary", "gate_bin")):
+        for kind, name in (("source", "gate_lib"), ("binary", "gate_bin")):
             built = run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
                          str(tmp / "gate_lib.sushi"), "-o", str(libs / f"{name}.slib"),
                          "--cache-dir", cache], tmp, {})
@@ -1241,7 +1248,7 @@ REPORT_LINES = (
 # A library whose manifest states no kind: the source library with its `kind` field
 # dropped. A manifest with no kind is a source library, in both halves and in the consumer.
 REPORT_UNSTATED = "unstated"
-REPORT_KINDS = ("source", "hybrid", "binary", REPORT_UNSTATED)
+REPORT_KINDS = ("source", "binary", REPORT_UNSTATED)
 # The report library is built in the mode that is not the default, and a kind that carries
 # bitcode prints that mode (docs/adr/0002-overflow-mode.md). A source library carries no
 # compiled code, so it prints no mode.
@@ -1250,7 +1257,7 @@ REPORT_OVERFLOW_LINE = "Overflow: wrap"
 # The lines of a library that holds compiled code: the overflow mode and the host key.
 # A source library prints neither.
 REPORT_COMPILED_LINES = (REPORT_OVERFLOW_LINE, f"Platform: {host_key()}")
-REPORT_MODE_KINDS = ("hybrid", "binary")
+REPORT_MODE_KINDS = ("binary",)
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer of each kind passes `--dont-panic` (D9). It instantiates the two marked

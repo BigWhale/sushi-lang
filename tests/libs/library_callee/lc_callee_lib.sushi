@@ -1,5 +1,5 @@
-# The library of the library-callee fixtures. Each fixture builds it as a binary or a
-# hybrid library, so each call of the consumer names a symbol that the bitcode defines.
+# The library of the library-callee fixtures. Each fixture builds it as a binary
+# library, so each call of the consumer names a symbol that the bitcode defines.
 
 public struct Crate:
     i32 weight

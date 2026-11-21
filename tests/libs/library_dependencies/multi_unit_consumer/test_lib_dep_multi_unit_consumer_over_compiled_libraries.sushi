@@ -2,7 +2,7 @@
 # each use one binary ld_mu_b. The link holds one copy of each body.
 # BUILD_LIB_BINARY: ld_mu_b.sushi
 # BUILD_LIB_BINARY: ld_mu_a.sushi
-# BUILD_LIB_HYBRID: ld_mu_c.sushi
+# BUILD_LIB_BINARY: ld_mu_c.sushi
 # EXPECT_STDOUT_EXACT: "8\n17\n"
 use <lib/ld_mu_a>
 use "ld_mu_helper"
