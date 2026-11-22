@@ -499,11 +499,8 @@ outnumbers a static call 22 to 1 (10,469 to 479).
   constructor. [CE4014](../error-catalog.md#ce4014).
 - **No overloading.** A name has one home; both collisions above are refusals.
 
-A static exports through every library kind, as an instance method does. A SOURCE
-`.slib` ships the declaration as text. A BINARY `.slib` ships an `extensions`
-record (the signature, `static`, and the symbol that its bitcode defines) for a concrete
-method, and a `generic_extensions` record (the source) for a template
-(`docs/library-format.md`).
+A static exports through a library, as an instance method does: a `.slib` ships the
+declaration as text (`docs/library-format.md`).
 
 ## A perk method and an extension method differ in one thing
 

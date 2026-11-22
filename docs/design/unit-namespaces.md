@@ -208,31 +208,29 @@ site with [`CE3005`](../error-catalog.md#ce3005), which points at the declaratio
 them out of the namespace instead would turn "not yours" into "no such name", which is the
 worse diagnostic and the one [`CE3005`](../error-catalog.md#ce3005) exists to avoid.
 
-### 3.2 The table is built by its own pass, and it goes after `libraries`
+### 3.2 The table is built by its own pass, and it goes before `ffi-clash`
 
 A namespace binding needs two things that different steps produce, so the position is
 forced rather than chosen. The pass is named **`namespaces`**, and the order is:
 
 ```
-collect -> docs -> externs -> libraries -> namespaces -> ffi-clash -> entrypoint -> ...
+collect -> docs -> unused -> externs -> namespaces -> ffi-clash -> entrypoint -> ...
 ```
 
-Four constraints fix it there, and each names the step that supplies something:
+Three constraints fix it there, and each names the step that supplies something:
 
 | A provider needs | Supplied by | Where |
 |---|---|---|
 | a unit's own declarations (`UnitNamespace`) | `collect` | the collect loop, `semantic_analyzer.py`. Its tables carry a unit key |
 | an FFI block's foreign functions (`ExternalNamespace`) | `collect` as well — NOT the `externs` pass | `external_collector.collect(root)`, `passes/collect/__init__.py:216`. The `externs` pass validates the signatures it finds; it does not fill the table |
-| a BINARY library's declarations (`UnitNamespace` over a `.slib`) | `libraries` | `LibraryRegistration.register`, `semantics/library_registration.py` |
 | a registry module's functions (`StdlibNamespace`) | `collect` | `register_stdlib_functions`, `passes/collect/__init__.py:215` |
 
-The third row is the one that pushes the pass past `libraries` and is easy to miss: a
-SOURCE library's units are ordinary compilation units and `collect` sees them, but a binary
-`.slib` has no AST at all — its declarations arrive from a manifest, and only the
-`libraries` step puts them anywhere. `use <lib/foo/bar> as f` must work for both kinds, so
-the table cannot be complete before that step has run.
+A library's units are ordinary compilation units, so `collect` sees them, and
+`use <lib/foo/bar> as f` needs nothing more. (A binary `.slib` once put its declarations
+in the tables in a `libraries` step after `externs`; that kind and its step are retired,
+`docs/design/libraries.md` section 5.)
 
-Nothing between `collect` and `libraries` resolves a name that could be qualified. `docs`
+Nothing between `collect` and `namespaces` resolves a name that could be qualified. `docs`
 walks declarations and matches doc blocks to them; `externs` validates C-ABI types, which
 are a closed set with no user type in it. `ffi-clash` is the first step that asks whether a
 name is already taken, and it is the first that has to ask it of ONE unit, which is why the
@@ -864,14 +862,8 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
 2. Only a `public use` re-exports. A plain `use` in U brings nothing to U's importers. Re-exports compose along `public use` chains -- if X says `public use Y`, U's
    importers get Y -- and never along a plain `use`. A cycle of `public use` is legal and
    terminates on a visited set.
-3. Every kind of `.slib` carries a re-export. A source `.slib` needs nothing -- the consumer re-parses the
-   statement. A binary one ships a `reexports` list in the manifest, one record
-   per statement: the target, the unit that wrote it, and which of the three producers the
-   target is, so the consumer reaches the same provider builder the written statement
-   would have. `docs/design/libraries.md` section 5 carries the two consequences: the
-   `units` index is what finds a façade unit that declares nothing of its own, and a
-   re-exported stdlib module reaches the consumer's build through the record because no
-   `use` line of its own does.
+3. A `.slib` carries a re-export with no extra record: the consumer re-parses the
+   statement in the source of the library.
 4. The predefined enums stay synthesized and homed (Ruling 3). A module makes a home
    reachable by re-exporting it -- `public use <io/error>` in `<io/contracts>` -- and the
    stamp machinery (`homed_enums`, `UnitScope.holds_home`, `reject_out_of_scope_type`)
@@ -914,10 +906,8 @@ re-export in written order, then theirs. A binding a re-export answers carries t
 re-export's provider, so a call through `sh.origin` routes to the unit that declares
 `origin`. The flat scope reads the SAME walk: `_scope_of` puts every reached unit, module
 and generic into `UnitScope`, so the dot and the bare name cannot disagree. The
-`namespaces` pass stays where section 3.2 puts it -- a provider needs only what `collect` and
-`libraries` produce, and a unit's own AST, which it has. A COMPILED library's unit has no
-AST, so `_binary_reexports` reads the manifest record in its place and composes the same
-way, with the same chain and the same visited set.
+`namespaces` pass stays where section 3.2 puts it -- a provider needs only what `collect`
+produces, and a unit's own AST, which it has.
 
 **Tests.** `tests/namespaces/reexport/`: the flat and the aliased import of a re-exporting
 unit; a two-hop chain; a plain `use` in the middle that re-exports nothing ([CE2001](../error-catalog.md#ce2001) with the
@@ -936,35 +926,16 @@ so a consumer of A writes them.
 transitive: A records every `use <lib/...>` of its own units, plain or public, in the
 manifest `dependencies` with the name and the version of the `.slib` that its build
 found, and the consumer's build loads the whole graph (`_resolve_library_imports`,
-`compiler/pipeline.py`): a source A by its re-parsed statements, a compiled A by its
-records. VISIBILITY is this section's rule and is not transitive: only a `public use` in
+`compiler/pipeline.py`) through the re-parsed statements of A. VISIBILITY is this section's rule and is not transitive: only a `public use` in
 A, or the consumer's own `use <lib/b>`, gives the consumer B's names. A plain `use
 <lib/b>` loads B for A's body and hands nothing on, so a bare `b_val()` at the consumer is
 [CE2008](../error-catalog.md#ce2008).
 
-**A compiled library is a unit for the scope** (#1120). A source library's declarations
-are filed under its injected units (`lib/<library>/<unit>`), and a compiled library's
-are filed under the same names: each public function in `funcs.by_unit`, each public
-constant and unit variable in `constants.by_unit` (its `ConstSig.unit_name` is the
-library unit), and each public struct, enum and generic type as a visibility record of
-that unit (`library_registration.py`). So a compiled library's name reaches only a unit
-whose scope holds the library unit -- its own `use <lib/a>`, or a `public use` chain --
-and a second unit of the consumer that does not import the library hears [CE2008](../error-catalog.md#ce2008), [CE1001](../error-catalog.md#ce1001)
-or [CE2001](../error-catalog.md#ce2001), as for a source library.
-
-A copy of a compiled library's template lands in a unit of the consumer and still
-resolves the names of its body where the template was written. The `namespaces` step
-builds one table for each unit of each compiled library
-(`build_compiled_library_namespaces`): the units of the library, and every module and
-library of its `dependencies` records, plain or public. The manifest records the `use`
-statements of the library as a whole, so each unit of a library sees what any unit of
-it uses. The copy carries that unit as `scope_unit` (`generics/synthesis.py` for a
-function, `_library_scope` in the analyzer for an extension and a perk implementation, a
-lifted lambda from its owner), and a library constant that lands in a host unit carries
-it too. Each reader of a body asks `body_namespaces` and reads that table: the `scope`,
-`typecheck` and `borrow` passes and the backend (`LLVMCodegen.body_scope_unit`). The
-type arguments still come from the consumer, and the identity of an instance is still
-`(unit, name, type args)`.
+**A library is a unit for the scope** (#1120). A library's declarations are filed under
+its injected units (`lib/<library>/<unit>`). So a library's name reaches only a unit whose
+scope holds the library unit -- its own `use <lib/a>`, or a `public use` chain -- and a
+second unit of the consumer that does not import the library hears [CE2008](../error-catalog.md#ce2008), [CE1001](../error-catalog.md#ce1001)
+or [CE2001](../error-catalog.md#ce2001).
 
 A library is identified by its stamped `library_name`, and the driver stamps every `use
 <lib/...>` with the name and the version that it found (`UseStatement.library_name`), so
@@ -1006,8 +977,7 @@ Four things are exempt, and each for its own reason:
 - **A lifted lambda.** Its name already carries the per-unit lifter's counter.
   A monomorphized INSTANCE is not exempt: it goes home to the unit that declared
   its generic and takes that unit's prefix, so two units' instances of one
-  mangled base name are two symbols. The one instance that stays bare is a binary
-  library's template instance, whose home names no unit in the consumer's build.
+  mangled base name are two symbols.
 - **An extension or perk-impl method.** Its symbol is derived from the receiver's TYPE,
   which is nominal and program-wide. This is not an oversight but Ruling 2 of
   `visibility.md`: a method is found on the receiver's type, so there is no unit to put it
@@ -1030,23 +1000,13 @@ Every reader asks with a unit: the typecheck pass (`TypeValidator.func_sig`,
 `TypeValidator.const_sig`), the borrow pass (`view_for`) and the back end
 (`codegen.emitting_unit`).
 
-### 9.2 A binary `.slib` names the symbol, and every record names its unit
+### 9.2 Every manifest record names its unit
 
-Manifest protocol **2.3** (`sushi_lib_version`), two keys, and they answer different questions.
-
-**`link_symbol`** names the symbol a record has in the SHIPPED BITCODE. Written by every
-build, and read by the **binary** path alone. A source library recompiles at the consumer,
-where its units are renamed to `lib/<library>/<unit>`, so the consumer derives
-`lib$<library>$<unit>$name` and a producer-written symbol would be wrong. A binary library
-links: its private closure helpers ship as signatures with `"source": null`, and the
-consumer compiles a re-monomorphized template body that CALLS a name it cannot derive from
-anything it can see. Only a record with a symbol carries the key — a public constant ships
-its source and is re-evaluated, a template is monomorphized at the consumer, and a
-perk-impl method already carries the derived `symbol`.
-
-**`unit`** names the unit that DECLARED the record, on every record. It is what Ruling 1
-binds an alias to: `use <lib/foo/bar> as f` binds `f` to the unit `bar`, and for a binary
-library the manifest is the only place that can say.
+**`unit`** names the unit that DECLARED the record, on every record (manifest protocol
+**2.3**, `sushi_lib_version`). `--lib-info` reads it. A record carries no symbol: the
+consumer compiles the library, renames its units to `lib/<library>/<unit>`, and derives
+`lib$<library>$<unit>$name` itself, so a producer-written symbol would be wrong. (The
+`link_symbol` key, which the binary kind read, is retired with that kind.)
 
 **There is no scheme identifier.** A manifest records what is, not the recipe, and
 `compiler_version` already says which compiler wrote it, with [`CE3503`](../error-catalog.md#ce3503) refusing a `.slib`
@@ -1093,7 +1053,7 @@ only on top of a name-level import, so this question also decides whether a seal
 becomes possible. It is a separate feature and it composes with everything here.
 
 **Re-export of one name.** Section 8.1 decides `public use X`. It leaves open a name-level
-form (`public use "geometry".Vec`) and re-exporting a binary library.
+form (`public use "geometry".Vec`).
 
 **A wildcard, and a nested namespace.** `my_math.*` and `a.b.c` are both out. A namespace
 is one flat set of names bound to one alias.

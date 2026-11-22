@@ -114,9 +114,9 @@ a value. A `var` is ONE storage, so:
 - the declaring unit's module DEFINES it (`@io$fs$stdout = global %File {...}`), with
   external linkage under the unit-mangled symbol (`docs/design/unit-namespaces.md`
   section 9);
-- every other module DECLARES it (`@io$fs$stdout = external global %File`);
-- a consumer of a BINARY library declares it under the manifest's `link_symbol`, and the
-  library's bitcode carries the definition.
+- every other module DECLARES it (`@io$fs$stdout = external global %File`).
+
+A `var` of a library is a `var` of a library unit, so the same two rules apply.
 
 The reads and writes reach it as a `Global` place of SLIR (`semantics/slir/places.py`),
 which carries the symbol of the global and the declared type of the `var`. The emitter finds
@@ -131,11 +131,8 @@ it at an exit (`docs/design/ir.md`, 8.4 and 8.10).
 ## Library manifest
 
 `public_variables` mirrors `public_constants` -- `name`, `unit`, `type`, the declaration as
-`source`, an optional `doc` -- plus `link_symbol`. A source library needs none of it: its
-units are recompiled and the per-unit rule above applies. A private `var` is named in
-`not_exported` with kind `variable`, so a consumer naming it hears [CE3005](../error-catalog.md#ce3005) and not [CE1001](../error-catalog.md#ce1001).
-A private `var` an exported generic's body names ships in the export closure's `constants`
-with its `link_symbol`, and the consumer declares it.
+`source`, an optional `doc`. It is an index for `--lib-info`: the consumer recompiles the
+units of the library, and the per-unit rule above applies.
 
 ## What was refused
 

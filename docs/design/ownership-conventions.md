@@ -132,9 +132,9 @@ perk, because `PerkImplementationTable.replace` would otherwise let a consumer s
 stop a handle from closing. A GENERIC target reads its **base** name for that rule: the
 key the implementation registers under carries the type arguments (`Crate<T>`,
 `Box<i32>`), which matches no declaration record, so the rule would go silent on the one
-shape a generic `Drop` needs. The rule holds for a type that a binary library
-declares too: the library ships its `Drop` implementations in the manifest, so the type is
-in the consumer's Drop set and moves there, and a consumer `Drop` on it is [CE4012](../error-catalog.md#ce4012).
+shape a generic `Drop` needs. The rule holds for a type that a library declares too: the
+library's units are units of the build, so the type is in the consumer's Drop set and moves
+there, and a consumer `Drop` on it is [CE4012](../error-catalog.md#ce4012).
 
 **`drops` is a required argument, with no default.** `owns_resource` and `type_class_of`
 both take the set of types that implement `Drop`, and a caller that cannot supply it does

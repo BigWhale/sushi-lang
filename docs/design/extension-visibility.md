@@ -195,10 +195,7 @@ own. This case is rare, and the rule stays until a real program needs more.
   the scope of the unit that instantiates it (`ufcs-combinators.md`, "The home unit of a
   copy"). So a template can call a private extension of its own unit, and the call still
   works when another unit instantiates the template.
-- **A source library** is ordinary source, and R4 to R6 apply to it as written.
-- **A binary library** records the marker and the declaring unit of each extension
-  in its manifest. The consumer applies R4 to R6 to these records. A private extension is
-  not exported.
+- **A library** is ordinary source, and R4 to R6 apply to it as written.
 - **CW3003** warned that a library which extends a type it does not declare claims that
   name for every consumer. Under R6 the extension is visible only where it is imported, so
   that problem does not exist any more. The code is retired.

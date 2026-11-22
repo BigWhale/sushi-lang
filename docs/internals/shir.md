@@ -397,7 +397,7 @@ The answer classes are in `typeck.py`:
 
 - `ResolvedCall` (`callee`, `type_args`, `unit`, `link_symbol`, `tail`): the callee with
   the type arguments of a generic callee, the unit that declares it, and the variadic
-  `Tail`. A library callee has a `link_symbol` and no unit.
+  `Tail`.
 - `Tail` (`position`, `ty`, `convention`): the variadic tail of a call.
 - `ConversionChoice` is `Conversion | NoConversion`. `NoConversion` is a numeric cast, or a
   `??` whose error type is the error type of the function.

@@ -57,8 +57,7 @@ and a channel would only force a dead `.realise` or `??` on every caller.
 
 Write a channel for everything else: a function that does I/O, parses, allocates on a
 size it is given, or can gain a failure later. The reason for a public function is the
-ABI: a channel added later changes the signature, and that breaks every caller and every
-binary `.slib`. A public function keeps a channel when there is any doubt. The compiler
+ABI: a channel added later changes the signature, and that breaks every caller. A public function keeps a channel when there is any doubt. The compiler
 does not enforce this rule; there is no lint.
 
 ## Traps are not errors
@@ -86,7 +85,7 @@ function returns `Result` only when its type says so.
 - **An uninhabited error type** (Swift `throws(Never)`, Rust `Infallible`). A Result that
   cannot fail still has the Result ABI and still needs an unwrap at every call.
 - **Inferring "cannot fail" from the body.** An edit to the body would then change a
-  public signature, and the ABI of a binary `.slib`, in silence.
+  public signature in silence.
 
 ## The one predicate
 

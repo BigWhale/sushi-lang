@@ -681,9 +681,8 @@ class FunctionCollector:
         self.current_unit_name: Optional[str] = None
         self.refused = RefusedDeclarations()
         # Unit names that came from a source library. A consumer definition that
-        # collides with one of theirs SHADOWS it silently, which is the rule a binary
-        # library already follows (docs/design/libraries.md section 7). Without this,
-        # `--lib-kind` would change program semantics rather than just distribution.
+        # collides with one of theirs SHADOWS it silently (docs/design/libraries.md
+        # section 7).
         self.library_units: Set[str] = set()
         self.stdlib_reach = StdlibReach()
         # The bodies that name a type pack as one type (CE0147, #1167) or hold a

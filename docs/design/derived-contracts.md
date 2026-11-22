@@ -176,12 +176,12 @@ and still get the derived `Ord`. An explicit `a.compare(b)` reads the implementa
 because the `contract` method family yields to a perk (`beats_perk=False`). `a < b` still
 reads `Ord`, because the operator asks the contract and not the method name.
 
-### 12. The binary `.slib` ships the implementations
+### 12. A library's implementations are units of the consumer
 
-A binary library now ships its implementations of `Hashable`, `Eq`, `Ord` and `Display`. A
-consumer's derived method of a type that holds a library type reads the implementation. A
-consumer that only saw the derived rule would compare a library type by its fields and
-ignore the override.
+A `.slib` is source, so its implementations of `Hashable`, `Eq`, `Ord` and `Display` are
+units of the consumer's build. A consumer's derived method of a type that holds a library
+type reads the implementation, as for a type of its own units. (The retired binary kind had
+to ship the implementations in its manifest for this.)
 
 ## Where it lives
 

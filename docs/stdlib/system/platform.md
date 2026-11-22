@@ -450,13 +450,13 @@ equivalent) on `./sushic` — checked against the actual argument list in
 targets the host it runs on, discovered via `llvmlite.binding.get_default_triple()`
 (see [get_current_platform](#get_current_platform) above).
 
-Two things would need to change before cross-compilation could work:
-- `sushi_stdlib/build.py` generates IR that reflects the *host* platform regardless of
-  the `--platform` flag (see Step 4 above) — it is not a cross-compiler today.
-- A binary `.slib` is tagged with its host key (`<os>_<arch>`), and a library of
-  that kind built on one host is rejected (**[CE3504](../../error-catalog.md#ce3504)**) when loaded on another (`compiler/pipeline.py`,
-  `_check_library_platform`). A source `.slib` (the default kind) is not checked and
-  loads on every platform.
+One thing would need to change before cross-compilation could work:
+`sushi_stdlib/build.py` generates IR that reflects the *host* platform regardless of
+the `--platform` flag (see Step 4 above) — it is not a cross-compiler today.
+
+A `.slib` does not stop cross-compilation. It holds source text, and it records the host
+key (`<os>_<arch>`) of the host that built it, but the consumer does not check the key, so
+a library loads on every platform.
 
 Producing genuinely portable output would require an actual cross-compiling stdlib build
 (generating Linux-shaped IR from a macOS host, or vice versa) plus a target-triple CLI

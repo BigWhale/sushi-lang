@@ -38,7 +38,7 @@ the driver, and the plan writes it in the same way as each other library.
 
 The `externs` pass collects the clauses of each unit that has an AST, so a unit from the
 object cache still gives its libraries, and the libraries are not in the key of an object.
-A binary `.slib` records the libraries of its own clauses in the manifest field
-`link_libraries` (protocol 2.8), and the consumer links them. pkg-config, a C struct by
+The consumer of a `.slib` compiles the units of the library, so it collects their clauses
+too. pkg-config, a C struct by
 value, a C callback, rpath and a mode that writes the objects and prints the link line are
 later steps.

@@ -35,9 +35,7 @@ take it as its name ([CE6001](../error-catalog.md#ce6001), as for every keyword)
 2. **The output carries `file:line:col`.** The position is the position of the `assert`
    keyword. The file name is the name that a compile-time diagnostic in that file shows:
    a path relative to the working directory of the build (`./src/stats.sushi`), or the
-   base name of a file outside it. A generic function of a binary library is a slice of
-   source in the manifest, so its position is the one its diagnostics show: the label
-   `<template:lib:name>` and the line in the slice.
+   base name of a file outside it.
 3. **An assert is always on.** No flag, no build mode turns it off. Sushi has no
    debug/release split, and a condition with a side effect (`assert(xs.pop().is_some())`)
    must do the same thing in every build. A flag can come later; it is not part of this

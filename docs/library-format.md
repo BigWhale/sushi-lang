@@ -7,23 +7,18 @@ Technical specification for the `.slib` library container.
 ## Overview
 
 Sushi libraries use the `.slib` format: one container that holds a MessagePack index next
-to a payload. The payload is Sushi source text, or LLVM bitcode, or both. The header states
-which, in the `KIND` field.
-
-**Source is the default.** A source library carries no machine code, so one file works on
-every platform; the consumer compiles its units and caches the objects. A binary library is
-the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
+to the Sushi source text of the library. A library carries no machine code, so one file
+works on every platform; the consumer compiles its units and caches the objects.
 
 **Key features:**
 - Single file distribution (no separate manifest)
 - Efficient binary metadata (MessagePack)
-- One artifact for every platform, when the payload is source
+- One artifact for every platform
 - Forward-compatible via version field and reserved space
 - Fast introspection with `--lib-info`
 
 > Contributor-level design: see [design/libraries.md](design/libraries.md) for how the
-> `templates` section is produced/consumed (the export closure, perk-impl shipping,
-> the two link paths a consumer uses).
+> manifest is produced and how a consumer reads a library.
 
 ## Binary Layout
 
@@ -36,7 +31,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 ├─────────────────────────────────────────────────────────────┤
 │ FLAGS (4 bytes): uint32 LE (bit 0: source blob compressed)  │
 ├─────────────────────────────────────────────────────────────┤
-│ KIND (4 bytes): uint32 LE (1 source, 2 binary)              │
+│ KIND (4 bytes): uint32 LE (1 source)                        │
 ├─────────────────────────────────────────────────────────────┤
 │ SPARE_3 (8 bytes): uint64 LE (reserved, must be 0)          │
 ├─────────────────────────────────────────────────────────────┤
@@ -52,7 +47,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 ├─────────────────────────────────────────────────────────────┤
 │ BITCODE_LENGTH (8 bytes): uint64 LE                         │
 ├─────────────────────────────────────────────────────────────┤
-│ BITCODE_BLOB (M bytes): Raw LLVM bitcode                    │
+│ BITCODE_BLOB (M bytes): empty                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,8 +55,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 
 **Endianness:** Little-endian (matches x86-64/ARM64 targets)
 
-`SOURCE_LENGTH` is zero when `KIND` is binary. `BITCODE_LENGTH` is zero when `KIND` is
-source.
+`BITCODE_LENGTH` is always zero: the bitcode section is empty.
 
 ## Field Details
 
@@ -83,9 +77,8 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 
 Used for forward compatibility checks. A reader accepts version 5 only; anything else is
 **[CE3509](error-catalog.md#ce3509)**. There is no upgrade shim, and none is planned: Sushi has no users in the wild,
-so a file of another version is rejected rather than read with a guess. A file of another
-version can have a different ABI in its bitcode, and a reader must not call it with the wrong
-ABI. Rebuild the library.
+so a file of another version is rejected rather than read with a guess. Rebuild the
+library.
 
 ### Flags
 
@@ -98,19 +91,12 @@ compressed whatever happens: it is the index, and every reader must take it chea
 
 ### Kind
 
-4-byte unsigned integer, and the authority on which payload sections a file carries:
-
-| Value | Kind | Carries |
-|-------|--------|-------------------------|
-| 1 | source | the source section |
-| 2 | binary | the bitcode section |
-
-The manifest repeats the value as the `kind` string, so a reader can branch on the header
-before it unpacks any MessagePack. The value 3 was the hybrid kind, which carried both
-sections. It is retired and is not given again. The `kind` string is optional: a manifest
-with no `kind` is a source library. A manifest that states another kind (`hybrid`, from an
-older compiler, included) is refused by every reader with
-[CE3512](error-catalog.md#ce3512); build the library again as `source` or `binary`.
+4-byte unsigned integer. A library writes `1`, the source kind. The manifest repeats the
+value as the `kind` string, so a reader can branch on the header before it unpacks any
+MessagePack. The `kind` string is optional: a manifest with no `kind` is a source library.
+A manifest that states another kind is refused by every reader with
+[CE3512](error-catalog.md#ce3512). This includes `binary` and `hybrid` from an older
+compiler, which are retired kinds. Build the library again.
 
 ### Reserved Fields
 
@@ -126,14 +112,14 @@ Variable-length MessagePack-encoded dictionary containing library information.
 ### Source Section
 
 Variable-length MessagePack map from unit name to that unit's complete source text. Whole
-files, not per-declaration slices: a source library has no export closure to compute,
-because it leaves nothing out. Private declarations ship with the rest.
+files, not per-declaration slices: a library leaves nothing out. Private declarations ship
+with the rest.
 
 **Preceded by:** 8-byte length field (uint64 LE)
 
 ### Bitcode Section
 
-Variable-length raw LLVM bitcode (identical to `.bc` files).
+The bitcode section is empty. Its 8-byte length field is zero.
 
 **Preceded by:** 8-byte length field (uint64 LE)
 
@@ -141,15 +127,17 @@ Variable-length raw LLVM bitcode (identical to `.bc` files).
 
 The manifest is an **index, not the authority**. Everything a library contains must be
 knowable from it alone, so `--lib-info` never parses source to answer what a library holds.
-For a source library the index is derived from the units at build time: the source section
-is the authority, and the index is a cache of it.
+The index is derived from the units at build time: the source section is the authority,
+and the index is a cache of it. The consumer reads `library_name`, `library_version`,
+`requires_compiler` and `dependencies` to load the library graph, and compiles the source
+section. `--lib-info` reads the other keys.
 
 ```python
 {
     "sushi_lib_version": "2.10",       # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
-    "kind": str,                       # "source" / "binary", matching KIND; no kind is source
+    "kind": str,                       # "source", matching KIND; no kind is source
     "units": [str],                    # Unit names present in the source section
                                        #   The library's OWN units, and every index
                                        #   below reads the same filter: a
@@ -163,43 +151,17 @@ is the authority, and the index is a cache of it.
     "requires_compiler": str,          # Compiler constraint, e.g. "~0.11" ("" if unknown)
     "platform": str,                   # The host key <os>_<arch> of the machine that
                                        #   built the file: "darwin_arm64",
-                                       #   "linux_x86_64". The same key selects the
-                                       #   <sys/platform> file. Meaningful only when
-                                       #   kind != "source"
-    "overflow": str,                   # "trap" or "wrap": the --overflow mode of the
-                                       #   compiled code. Absent when kind == "source"
-                                       #   (no compiled code) and in a library from a
-                                       #   compiler before the key
-    "compiler_version": str,           # Exactly which compiler built the file. For
-                                       #   kind == "binary" it is half of the
-                                       #   compiler stamp (CE3520)
-    "compiler_digest": str,            # The compiler-source digest of the compiler
-                                       #   that built the file, the digest of the
-                                       #   object cache. The other half of the stamp.
-                                       #   Written only when kind == "binary"
-    "data_layout": str,                # The LLVM data layout string of the target
-                                       #   that built the file. The consumer refuses
-                                       #   another layout, or none (CE3504). Written
-                                       #   only when kind == "binary". Since protocol 2.9
-    "link_libraries": [str],           # The C libraries of the `link` clauses of the
-                                       #   library's OWN units, in the order of the
-                                       #   first appearance; the consumer links them.
-                                       #   Written only when kind == "binary" and a
-                                       #   clause exists. A dependency's libraries are
-                                       #   in its own manifest. Since protocol 2.8
+                                       #   "linux_x86_64". No reader checks it
+    "compiler_version": str,           # Exactly which compiler built the file
 
     # The three lists below carry only CONCRETE declarations that the library MARKS
     # `public`. A generic function, struct or enum is filtered out of them and routes
     # to "templates" instead: a generic is not a concrete callable, and listing one
-    # here would hand the consumer a signature with unresolved type parameters. An
-    # unmarked declaration is not API and goes to "not_exported" instead.
+    # here would hand the reader a signature with unresolved type parameters. An
+    # unmarked declaration is not API and is not in the index.
     #
-    # Two keys answer different questions. `unit` names the
-    # unit that DECLARED the record, and every record carries it: a consumer binding
-    # `use <lib/foo/bar> as f` binds the alias to the unit `bar`, and for a binary
-    # library the manifest is the only place that can say which unit a name came from.
-    # `link_symbol` names the symbol the record HAS IN THE SHIPPED BITCODE, and only a
-    # record that has one carries it. See "The two symbol keys" below.
+    # `unit` names the unit that DECLARED the record, and every record carries it. See
+    # "The unit key" below.
     # DOC is the parsed parts of one `##: ... :##` block. Every field is optional and an
     # empty one is OMITTED, so a reader cannot mistake an absent field for an empty
     # string. The whole block is deliberately not stored. A record that names a symbol
@@ -218,11 +180,10 @@ is the authority, and the index is a cache of it.
     #                                  #   attributes are a harness instruction, not docs
     #
     # A PARAMETER record deliberately carries no doc: its text lives in the enclosing
-    # symbol's `doc.params`. So does a private or closure-path record: a private symbol
-    # is not part of the documented API.
+    # symbol's `doc.params`. A private symbol is not in the index.
 
     # A SIGNATURE is four keys, built by one function (`signature_record`) so the
-    # concrete record, the generic record and the closure record cannot drift apart.
+    # concrete record and the generic record cannot drift apart.
     # `has_channel` is REQUIRED on every function, helper and method record (templates
     # schema 8): a reader never guesses a channel from an absent key. It is true when
     # the declaration writes `| E` or returns an explicit `Result@(T, E)`, and false
@@ -238,9 +199,7 @@ is the authority, and the index is a cache of it.
     #                   "is_pack": bool,    # Present (true) for `...Ts args` alone
     #                   "variadic": bool}], # Present (true) for a native `...T` alone;
     #                                       #   `type` is then `T`, not the `T[]` of the
-    #                                       #   body. Only a source library writes it: a
-    #                                       #   binary library refuses `...T` (CE0116).
-    #                                       #   Since protocol 2.10
+    #                                       #   body. Since protocol 2.10
     #       "return_type": str,
     #       "has_channel": bool,       # Required: does a call answer a Result
     #       "error_type": str,         # If the declaration says `| E`
@@ -248,20 +207,12 @@ is the authority, and the index is a cache of it.
     #   }
     #
     # Every `type`, `return_type` and `error_type` is the INTERNAL identity spelling,
-    # `List<i32>` and not `List@(i32)`: a consumer reads these back with
-    # `parse_type_string`, so this is a wire format. Rendering `@(...)` is the report's
-    # job. The consumer's ONE reader is `LibraryRegistry._parse_functions`: it reads all
-    # three keys into the signature, so a `| E` is the call's Err arm at the consumer,
-    # and a spelling that names an instantiation the consumer has not interned
-    # (`Box<i32>`, an explicit `Result<i32, MyErr>` return) reads back as the generic
-    # reference the producer wrote it from -- so the instantiate pass collects it and a
-    # Result is never wrapped twice.
+    # `List<i32>` and not `List@(i32)`. Rendering `@(...)` is the report's job.
 
     "public_functions": [
         {
             "name": str,
             "unit": str,               # The unit that declared it
-            "link_symbol": str,        # Its symbol in the shipped bitcode
             **SIG,
             "doc": DOC                 # If documented
         }
@@ -277,17 +228,14 @@ is the authority, and the index is a cache of it.
         }
     ],
 
-    # A unit variable (`public var`, docs/design/unit-storage.md) mirrors a constant --
-    # the consumer needs the declared type -- and adds the symbol of its ONE storage,
-    # which the library's bitcode defines and the consumer declares as external. A
-    # source library recompiles the declaring unit and reads none of this.
+    # A unit variable (`public var`, docs/design/unit-storage.md) mirrors a constant.
+    # The consumer compiles the declaring unit and reads none of this.
     "public_variables": [
         {
             "name": str,
             "unit": str,
             "type": str,
             "source": str,             # The whole `public var ...` declaration
-            "link_symbol": str,        # `<unit>$<name>`, the data symbol
             "doc": DOC                 # If documented
         }
     ],
@@ -333,26 +281,21 @@ is the authority, and the index is a cache of it.
     # conversion lives in the unit of its TARGET, and it is as visible as that type,
     # so only a conversion into a public error type of the library ships. `source` and
     # `target` are the names of two non-generic error types, in the internal spelling.
-    # The body is in the bitcode under `link_symbol`, which is always the symbol made
-    # from the pair (`conversion_symbol`, `<Source>_as__<Target>`); the consumer
-    # declares it and files the pair, so its `??` and `as` call it. A record whose
-    # sides are not two error types, or whose symbol is another one, is refused
-    # (CE3512). A conversion is not an `extension` record. The whole key is absent
-    # when there is no record.
+    # A conversion is not an `extension` record. The whole key is absent when there is
+    # no record.
     "conversions": [
         {
             "source": str,             # The source error type: "LowError"
             "target": str,             # The target error type: "LibError"
-            "link_symbol": str,        # Its symbol in the shipped bitcode
             "unit": str,               # The unit that declared it; optional
             "doc": DOC                 # If documented
         }
     ],
 
     # Each declaration of the library's own units that is marked `dont_panic`, with
-    # its `because` text (docs/design/dont-panic.md, D10). Every kind writes it, so
-    # `--lib-info` shows a reviewer the unchecked code before the first build; a
-    # source library carries the marker in its text as well. A written declaration
+    # its `because` text (docs/design/dont-panic.md, D10). `--lib-info` shows a
+    # reviewer the unchecked code before the first build; the library carries the
+    # marker in its text as well. A written declaration
     # only: a monomorphized copy is not listed. `name` is `fn_name` for a function or a
     # generic template, `Type.method` for an extension method, a static and a perk
     # implementation method (the type in the `@(...)` spelling), and `Source as Target`
@@ -366,27 +309,19 @@ is the authority, and the index is a cache of it.
 
     # What each unit RE-EXPORTS: one record per `public use`, in written order.
     # `public use X` makes X's public names the unit's own, so the unit's importers get
-    # them where its own names land. A SOURCE library needs no record -- its units are
-    # in the source section and the consumer re-parses the statement -- but the index
-    # must answer without a parser, so every kind writes it. A compiled library has
-    # nothing else: the consumer composes the unit's namespace from its own records
-    # plus the providers of what these name.
+    # them where its own names land. The consumer needs no record -- the units are in
+    # the source section and the consumer parses the statement -- but the index must
+    # answer without a parser, so the build writes it.
     #
     # `unit` is the unit that WROTE the statement, and only the library's own units
     # appear: a bundled stdlib module and an injected source library re-export
-    # on their own account. `kind` says which producer the target is, so the consumer
-    # reaches the same provider builder the written statement would have:
+    # on their own account. `kind` says which producer the target is:
     #
     #   "unit"    -- a sibling unit of THIS library. `path` is the name the `units`
     #                index carries, so the consumer looks it up with no guessing
-    #   "stdlib"  -- a stdlib module. `path` is the import path, `io/fs`. The
-    #                consumer's build compiles the module and links its bitcode on
-    #                the strength of this record alone, because no unit wrote the
-    #                import (`_compiled_stdlib_modules`)
+    #   "stdlib"  -- a stdlib module. `path` is the import path, `io/fs`
     #   "library" -- another library. `path` is the written `lib/...` path. The
-    #                record gives the consumer the library's public NAMES. The
-    #                `dependencies` record of the same `use` is what LOADS it (#1120),
-    #                and a library built before that key reads this record for both;
+    #                `dependencies` record of the same `use` is what LOADS it (#1120);
     #                a library that is not on the path is CE3502 with a note that
     #                names this library
     #
@@ -410,32 +345,24 @@ is the authority, and the index is a cache of it.
     # one library is CE3519. Visibility does not follow: a plain `use` gives the
     # consumer no name, and only a `public use` (`reexports`) hands names on.
     # `units` names the library's own units that write the `use` (#1123). The load and
-    # the version check read the record whole. A copy of a template of the library
-    # resolves its body in the scope of its own unit, and that scope holds only the
-    # records that name the unit. A module that only a unit the library does not own
-    # uses has an empty list. A record with no `units` is read for every unit.
+    # the version check read the record whole. A module that only a unit the library
+    # does not own uses has an empty list.
     "dependencies": [
         {"path": str, "kind": "stdlib", "units": [str]},
         {"path": str, "kind": "library", "library_name": str, "library_version": str,
          "units": [str]}
     ],
 
-    # Written for EVERY kind. A source library ships whole units, so a generic in it is
-    # already there as ordinary source -- but the index must answer without a parser, and
-    # a template's own doc block stands OUTSIDE its source slice, so the record is the
-    # only place it can travel.
+    # A library ships whole units, so a generic in it is already there as ordinary
+    # source -- but the index must answer without a parser, and a template's own doc
+    # block stands OUTSIDE its source slice, so the record is the only place it can
+    # travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 11,                 # Templates schema version. A binary
-                                       #   .slib with another schema is
-                                       #   refused (CE3512) and must be rebuilt.
-                                       #   The one constant is
-                                       #   `TEMPLATES_SCHEMA_VERSION` in
-                                       #   `backend/library_format.py`
+        "version": 11,                 # Templates schema version. The one
+                                       #   constant is `TEMPLATES_SCHEMA_VERSION`
+                                       #   in `backend/library_format.py`
 
-        # Generic functions (incl. variadic packs), as re-parsable source
-        # slices; monomorphized at the consumer's call sites. Public ones plus
-        # export-closure PRIVATE helpers (flagged "private": true - the
-        # consumer applies CE5007 clash, not local-wins, semantics to those).
+        # Public generic functions (incl. variadic packs), as source slices.
         "generic_functions": [
             {
                 "name": str,
@@ -445,16 +372,7 @@ is the authority, and the index is a cache of it.
                                        #   tags name something a report can print
                 "source": str,         # Self-contained, re-parsable decl text
                 "free_perks": [str],   # Perk names from type-param bounds
-                "private": bool,       # Present (true) for closure-shipped helpers
-                "doc": DOC,            # If documented, and never when private
-                "bindings": {str: str} # Every free name in `source`
-                                       #   the producer's closure resolved, mapped to
-                                       #   its link symbol. The consumer re-parses
-                                       #   the source and binds each named call to
-                                       #   that symbol -- a non-dependent name in a
-                                       #   template binds in the DEFINITION's scope,
-                                       #   never at the point of use. Absent when
-                                       #   the body resolved nothing
+                "doc": DOC             # If documented
             }
         ],
 
@@ -481,26 +399,23 @@ is the authority, and the index is a cache of it.
         ],
 
         # Concrete perk IMPLEMENTATIONS of those perks, and of every predefined
-        # perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`). Bodies live in
-        # the bitcode (weak linkage); the record carries signatures (source)
-        # and symbol names for declare-and-link at the consumer. A `Drop` record
-        # puts the type in the consumer's Drop set, so the type moves there and
-        # its scope exit calls the library's compiled drop().
+        # perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`). The record carries the
+        # source and the signature of each method, with the symbol of the method.
         "perk_impls": [
             {
                 "type": str,           # Concrete target type name
                 "perk": str,
                 "unit": str,           # The unit that declared it
                 "source": str,         # The whole `extend T with P:` block
-                "methods": [{**METHOD, "symbol": str}],   # the symbol to link
+                "methods": [{**METHOD, "symbol": str}],
                 "doc": DOC             # If documented
             }
         ],
 
         # Generic-target perk IMPLEMENTATIONS: `extend Box@(T) with Show`
-        # is a TEMPLATE. It names no instantiation, so there is no symbol to declare
-        # and link: it ships as source alone, and the consumer cuts one copy per
-        # instantiation of `Box` it names, exactly as for its own template. The
+        # is a TEMPLATE. It names no instantiation, so there is no symbol: it ships as
+        # source alone, and the consumer cuts one copy per instantiation of `Box` it
+        # names, exactly as for its own template. The
         # library's monomorphized copies are NOT in `perk_impls` -- a copy's source
         # slice is the template's, and shipping it re-parsed to `Box@(T)`.
         "generic_perk_impls": [
@@ -510,23 +425,19 @@ is the authority, and the index is a cache of it.
                 "perk": str,
                 "unit": str,           # The unit that declared it
                 "source": str,         # The whole `extend Box@(T) with P:` block
-                "methods": [METHOD],   # Written in the target's parameters; no symbol,
-                                       #   because there is no copy to link
+                "methods": [METHOD],   # Written in the target's parameters; no symbol
                 "doc": DOC             # If documented
             }
         ],
 
-        # Extension methods, instance and static. A CONCRETE one ships as a signature:
-        # the body is in the bitcode, and the consumer declares `link_symbol` and links
-        # it. The methods of an implementation of a perk that does not ship are records
+        # Extension methods, instance and static. A CONCRETE one is a signature
+        # record. The methods of an implementation of a perk that does not ship are records
         # here too: the contract stays hidden, and each method is an ordinary method of
         # the type. An extension on a private type that nothing ships is left out. A
         # private extension ships with `"public": false`: a copy of a template of the
         # library can call it, and the consumer refuses a call of it from its own units
-        # (docs/design/extension-visibility.md R4 to R6). The `link_symbol` of a concrete
-        # one carries its unit, `<unit>$<receiver>_<name>`, so two units can each declare
-        # a private method of one name (C5); a perk method has no unit. The whole key is
-        # absent when there is no record.
+        # (docs/design/extension-visibility.md R4 to R6). The whole key is absent when
+        # there is no record.
         #
         #   EXTENSION = {
         #       "type": str,           # The target, in the internal spelling: "Vec",
@@ -539,132 +450,40 @@ is the authority, and the index is a cache of it.
         #       "unit": str,           # The unit that declared it
         #       "doc": DOC             # If documented
         #   }
-        "extensions": [
-            {**EXTENSION, "link_symbol": str}   # Its symbol in the shipped bitcode
-        ],                                      #   (see "The two symbol keys")
+        "extensions": [EXTENSION],
 
         # Extension TEMPLATES: a generic target (`Box@(T)`), a concrete-instance target
         # (`Box@(i32)`), an array target (`T[]`) and a method type parameter
         # (`pick@(U)`). A template names no instance, so it ships as source, and the
-        # consumer makes one copy for each instance and method that a call reaches. It joins the export
-        # closure, so its body may call a private function of the library. The whole
-        # key is absent when there is no record.
+        # consumer makes one copy for each instance and method that a call reaches. Its
+        # body may call a private function of the library. The whole key is absent when
+        # there is no record.
         "generic_extensions": [
             {
                 **EXTENSION,
                 "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
                                        # The method's own type parameters
-                "source": str,         # The whole `extend ...` declaration
-                "bindings": {str: str} # As for a generic function; absent when empty
+                "source": str          # The whole `extend ...` declaration
             }
-        ],
-
-        # Export closure: private symbols exported generics transitively
-        # reference. Concrete helpers ship as signature records (definitions
-        # carry external linkage in the bitcode); constants and types ship with
-        # source -- the consumer needs a constant's value for compile-time
-        # evaluation, and a type's shape to register it before a monomorphized
-        # template body names it. Every record is one per (unit, name):
-        # two of the library's own units may each ship a private `helper`, and
-        # each record names its unit.
-        "private_functions": [
-            {                          # No doc: a private symbol is not documented API
-                "name": str,
-                "unit": str,           # The unit that declared it
-                "link_symbol": str,    # Its symbol in the shipped bitcode
-                **SIG,
-            }
-        ],
-        "constants": [
-            {"name": str, "unit": str, "source": str}
-        ],
-        "private_types": [             # A private struct or enum a template body names
-            {"name": str, "unit": str, "source": str}
-        ],
-        "closure_summary": {           # What shipped, by kind (sorted names)
-            "private_functions": [str],
-            "private_generic_functions": [str],
-            "constants": [str],
-            "private_types": [str]
-        }
-    },
-
-    # What the library DECLARES and does not export -- the closure's complement, and the
-    # other half of the same bookkeeping: a private is named in exactly one of the two.
-    # A name and its kind, and nothing else: no signature, no body, no source. Written
-    # for every kind, and the whole key is ABSENT when a library keeps nothing.
-    #
-    # It exists so that a consumer naming one hears CE3005: on the binary path the
-    # symbol is not in the consumer's tables, and "undefined" would be the wrong word for
-    # a function the library defines and deliberately keeps. A name here is not shipped
-    # and clashes with nothing, so a consumer may declare its own function of the same
-    # name. A kept TYPE answers CE3005 the same way from the type funnel. A kept CONSTANT
-    # answers from the scope pass, which lets the name through so the type pass can say
-    # whose it is: a PUBLIC constant registers from `public_constants[].source`, so "no
-    # such name" would be the wrong word for the one next to it that the library keeps.
-    #
-    # A name the CLOSURE ships is not here. Each private is named in exactly one of the
-    # two places, and the closure carries a private constant and a private type as
-    # SOURCE (`templates.constants`, `templates.private_types`), because a monomorphized
-    # template body names them and the consumer has to register them.
-    #
-    # One record for each (unit, name): two units may each keep a `helper` (#1112).
-    # `unit` is the producer's unit that keeps the declaration, so CE5013 refuses the
-    # one symbol `<unit>$<name>` that the bitcode defines. A record with no `unit` (a
-    # library built before the field) matches that name in each unit of `units`.
-    "not_exported": [
-        {
-            "name": str,
-            "kind": str,               # "function" / "generic_function" / "struct"
-                                       #   / "enum" / "constant" / "variable"
-            "unit": str                # optional
-        }
-    ]
+        ]
+    }
 }
 ```
 
-## The two symbol keys
-
-The protocol gives a record two ways to name where it came from, and neither substitutes
-for the other.
+## The unit key
 
 **`unit` says whose declaration this is.** Every record carries it. A Sushi symbol is
 `<unit>$<name>` (`docs/design/unit-namespaces.md` section 9), so two units may each
-declare `helper`, and a consumer that wants a namespace has to know which unit a name
-belongs to. A source library's units are in the source section and could be re-read for
-it; a BINARY library ships no source at all, so the manifest is the only place that can
-answer.
+declare `helper`, and a reader that wants a namespace has to know which unit a name
+belongs to. `--lib-info` prints it, for example before the name of a `dont_panic` record.
 
-**`link_symbol` says what the shipped bitcode calls it**, and only a record with a symbol
-in that bitcode carries one: a public function, and an export-closure private function.
-It is **written by every build and read by the BINARY path alone.** A concrete extension
-method's record carries one too. Its symbol has no unit in it, as a perk-impl method's
-has not, so the consumer's backend gets the same name from the same rule
-(`extension_receiver_name`), declares it, and links the body from the bitcode.
-
-That asymmetry is the point:
-
-- A **source** library recompiles at the consumer, and its units are renamed to
-  `lib/<library>/<unit>` on the way in. The consumer's own mangling therefore produces
-  `lib$<library>$<unit>$helper` and never the producer's `<unit>$helper`. Reading the
-  producer's field there would name a symbol that does not exist in the consumer's build.
-- A **binary** library links. Its private closure helpers ship as signatures with
-  `"source": null` -- the body is in the bitcode -- so the consumer compiles a
-  re-monomorphized template body that CALLS a name it cannot derive from anything it can
-  see. `link_symbol` is that name.
-
-**A record without a symbol takes no `link_symbol`.** A public CONSTANT ships its
-`source` and is re-evaluated at the consumer. A TEMPLATE ships source and is
-monomorphized there, so its instances take the consumer's mangling. A PERK-IMPL method
-already carries `symbol`, and it needs nothing more: a method's symbol is derived from the
-receiver's TYPE, which is nominal and program-wide, so there is no unit in it to record.
+A record carries no link symbol. The consumer compiles the source section, and its units
+are renamed to `lib/<library>/<unit>` on the way in, so the consumer derives every symbol
+itself: `lib$<library>$<unit>$helper`.
 
 There is **no scheme identifier**. A manifest records what is, not the recipe, and
 `compiler_version` already says which compiler wrote it -- with `requires_compiler`
-([CE3503](error-catalog.md#ce3503)) refusing a `.slib` the running compiler may not consume. A binary
-library is bound tighter: its compiler stamp (`compiler_version` and `compiler_digest`)
-must be equal to the running compiler ([CE3520](error-catalog.md#ce3520)), so its mangling is always
-the mangling of the consumer.
+([CE3503](error-catalog.md#ce3503)) refusing a `.slib` the running compiler may not consume.
 
 ## Error Codes
 
@@ -673,21 +492,18 @@ the mangling of the consumer.
 | [CE3500](error-catalog.md#ce3500) | The `--lib` output path does not end in `.slib` |
 | [CE3502](error-catalog.md#ce3502) | A `use <lib/...>` names a library that no search directory holds |
 | [CE3503](error-catalog.md#ce3503) | The library's `requires_compiler` excludes the running compiler |
-| [CE3504](error-catalog.md#ce3504) | A binary library was built for another platform, or for another data layout |
 | [CE3505](error-catalog.md#ce3505) | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | [CE3506](error-catalog.md#ce3506) | Source section truncated |
 | [CE3508](error-catalog.md#ce3508) | Invalid magic bytes (not a valid `.slib` file) |
 | [CE3509](error-catalog.md#ce3509) | Unsupported format version (a container other than version 5) |
 | [CE3510](error-catalog.md#ce3510) | Metadata section truncated |
 | [CE3511](error-catalog.md#ce3511) | Bitcode section truncated |
-| [CE3507](error-catalog.md#ce3507) | The bitcode of a binary library does not link |
-| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, a `kind` that is not `source` or `binary` (`unknown library kind '<kind>'`), or a binary library's templates schema is not version 11 (a library built before schema 11 is rebuilt) |
+| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type (`MANIFEST_SCHEMA`), a variant with `has_data` has no `data_types`, a function or method record has no `has_channel`, a `kind` that is not `source` (`unknown library kind '<kind>'`), or the retired `binary` kind (`a binary library; this compiler reads only a source library (build the library again)`) |
 | [CE3513](error-catalog.md#ce3513) | File exceeds maximum size (1GB) |
 | [CE3515](error-catalog.md#ce3515) | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
 | [CE3517](error-catalog.md#ce3517) | The `nori.toml` in the working directory is not valid |
 | [CE3518](error-catalog.md#ce3518) | The `nori.toml` in the working directory cannot be read |
-| [CE3520](error-catalog.md#ce3520) | A binary library was built by another compiler: its `compiler_version` or its `compiler_digest` is not the one of the running compiler |
 | [CE3521](error-catalog.md#ce3521) | The `library_name` of the file is not the name of the `use` that loaded it (the last part of its path): the file was copied or renamed after its build |
 
 One truncation code per section rather than one shared code: the message names which
@@ -706,7 +522,6 @@ Example output, with `--docs` (without it, no doc block prints):
 ```
 Library: mylib
 Version: 1.0.0
-Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
 Protocol: 2.10
@@ -762,9 +577,9 @@ open or of a read is [CE3515](error-catalog.md#ce3515).
 5. Read the 8-byte metadata length
 6. Read the metadata blob, deserialize it with MessagePack ([CE3512](error-catalog.md#ce3512))
 7. Read the 8-byte source length
-8. Read the source blob, deserialize it with MessagePack (skip it to reach the bitcode)
-9. Read the 8-byte bitcode length
-10. Read the bitcode blob
+8. Read the source blob, deserialize it with MessagePack
+9. Read the 8-byte bitcode length (zero)
+
 After the read, the consumer and `--lib-info` check the manifest against `MANIFEST_SCHEMA`
 (`check_manifest`, [CE3512](error-catalog.md#ce3512)).
 
@@ -784,9 +599,9 @@ without keeping either blob.
 4. Write 16 bytes of zeros (reserved)
 5. Serialize metadata to MessagePack
 6. Write 8-byte metadata length, then the metadata blob
-7. Serialize the unit source map to MessagePack (empty for a binary library)
+7. Serialize the unit source map to MessagePack
 8. Write 8-byte source length, then the source blob
-9. Write 8-byte bitcode length, then the bitcode blob (both empty for a source library)
+9. Write 8-byte bitcode length (zero); the bitcode section is empty
 
 ## See Also
 

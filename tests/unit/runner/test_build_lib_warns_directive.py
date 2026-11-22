@@ -2,8 +2,7 @@
 
 Exit 1 is a library built with a warning. When every library build accepted it, a fixture
 could not fail on a warning that nobody expected. `BUILD_LIB_WARNS: x.sushi -> CW1002`
-builds a library that must exit 1 and print exactly the named set of warning codes; a kind
-word after the source (`x.sushi binary -> CW1002`) builds a binary one.
+builds a library that must exit 1 and print exactly the named set of warning codes.
 """
 from __future__ import annotations
 
@@ -43,17 +42,9 @@ def test_the_directive_parses(tmp_path):
     assert meta.libs_on_the_path
 
 
-def test_the_kind_word_parses(tmp_path):
-    meta = parse_test_metadata(_fixture(
-        tmp_path, "# BUILD_LIB_WARNS: dep.sushi binary -> CW1002\n", CLEAN))
-    assert meta.directive_errors == []
-    assert meta.library_builds == [("binary", "dep.sushi", "dep.slib", None, ["CW1002"])]
-
-
 @pytest.mark.parametrize("value", ["dep.sushi", "dep.sushi ->", "-> CW1002",
                                    "dep.sushi -> CE1001", "a.sushi b.sushi -> CW1002",
-                                   "dep.sushi binary extra -> CW1002",
-                                   "dep.sushi hybrid -> CW1002"])
+                                   "dep.sushi binary -> CW1002"])
 def test_a_bad_value_is_a_directive_error(tmp_path, value):
     meta = parse_test_metadata(_fixture(tmp_path, f"# BUILD_LIB_WARNS: {value}\n", CLEAN))
     assert meta.directive_errors, meta
@@ -65,12 +56,10 @@ def test_a_bad_value_is_a_directive_error(tmp_path, value):
     ("# BUILD_LIB_WARNS: dep.sushi -> CW1002\n", SHADOWS_AND_UNUSED, False),
     ("# BUILD_LIB_WARNS: dep.sushi -> CW1002, CW1001\n", SHADOWS, False),
     ("# BUILD_LIB_WARNS: dep.sushi -> CW1002\n", CLEAN, False),
-    ("# BUILD_LIB_WARNS: dep.sushi binary -> CW1002\n", SHADOWS, True),
     ("# BUILD_LIB: dep.sushi\n", SHADOWS, False),
-    ("# BUILD_LIB_BINARY: dep.sushi\n", SHADOWS, False),
     ("# BUILD_LIB: dep.sushi\n", CLEAN, True),
 ], ids=["the named code", "two named codes", "an extra code", "a missing code",
-        "exit 0", "a binary library", "BUILD_LIB with a warning", "BUILD_LIB_BINARY with a warning",
+        "exit 0", "BUILD_LIB with a warning",
         "control: BUILD_LIB with no warning"])
 def test_the_library_build_decides_the_verdict(tmp_path, header, dep, passes):
     result = run_single(_fixture(tmp_path, header, dep))

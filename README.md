@@ -533,7 +533,7 @@ architecture.
 **Nori (海苔)** — The package manager for Sushi Lang.
 > Nori is edible seaweed, most commonly used as the dark green wrapper
 > that holds sushi rolls together. In the Sushi ecosystem, Nori is the
-> tool that wraps everything up — it packages compiled libraries into
+> tool that wraps everything up — it packages libraries into
 > distributable `.nori` archives, manages project manifests
 > (`nori.toml`), and handles installing and publishing packages.
 

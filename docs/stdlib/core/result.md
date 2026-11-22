@@ -22,7 +22,7 @@ A bare function is the exception, not the default style. Use it only when the fu
 total over its inputs and will stay so (a checksum, a pure arithmetic or string helper, a
 path join). Write a channel for everything else, and keep a channel on a public function
 when you are not sure: a channel that you add later changes the signature and breaks every
-caller and every binary `.slib`. See [The error channel](../../design/error-channel.md) and
+caller. See [The error channel](../../design/error-channel.md) and
 [Error handling](../../error-handling.md).
 
 The error type `E` must be an ERROR TYPE: an enum declared with `error`, or one of the

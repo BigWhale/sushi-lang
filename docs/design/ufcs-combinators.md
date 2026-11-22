@@ -44,7 +44,7 @@ unless its function argument fails, and a bare function argument cannot. A bare 
 is the exception, not the default style. Write a channel (`| E`) for a function that does
 I/O, parses, allocates on a size it is given, or can gain a failure later. A public
 function keeps a channel when there is any doubt, because a channel added later changes
-the signature and breaks every caller and every binary `.slib`. The compiler does not
+the signature and breaks every caller. The compiler does not
 enforce this. `docs/design/error-channel.md` carries the rule.
 
 ## The concept

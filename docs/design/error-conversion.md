@@ -520,11 +520,9 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
   monomorphizer where it validates type arguments. Every call emits [CE2084](../error-catalog.md#ce2084). CE2086 is
   removed from `internals/errors/types.py`. `signature_result_arms` also serves the
   backend and emits nothing.
-- **Libraries.** The `enum` row of a binary manifest gets an `is_error` field,
-  and so does the `generic_type` record of a generic enum (`backend/library_format.py`,
-  read by `semantics/library_registration.py`). The schema version changes, so a binary
-  library built before this work is refused and is rebuilt. A source `.slib`
-  carries the keyword as text. `--lib-info` and `slib-info` print `error`, for a generic
+- **Libraries.** The `enum` row of a manifest gets an `is_error` field, and so does
+  the `generic_type` record of a generic enum (`backend/library_format.py`). A `.slib`
+  carries the keyword as text, and the consumer compiles it. `--lib-info` and `slib-info` print `error`, for a generic
   error type too.
 - **Display.** A message that names the declaration kind says "error type" for a flagged
   enum.
@@ -561,8 +559,8 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
   that the path leaves come next, and the block returns. The conversion runs before those
   drops, and the moved error is not dropped again, so it is freed once. `r??` on a named
   wrapper (#548) hands the error over in the same way.
-- **Libraries.** A binary manifest gets a `conversions` row (source, target,
-  link symbol). `--lib-info` and `slib-info` print it.
+- **Libraries.** A manifest gets a `conversions` row (source, target). `--lib-info` and
+  `slib-info` print it.
 - **`effects`.** The destroy summary reads the `poke` parameters of free functions. A
   conversion has none, so the hidden call at a `??` adds no edge.
 - **Lints.** A conversion is an `extend` block, so `--warn-unused` treats it as a root.

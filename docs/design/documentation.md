@@ -665,8 +665,7 @@ reads the same walk (R22). The walk keeps the order `documented()` uses, because
 numbers its generated `doc_example_<n>` helpers from it.
 
 **R35 — the lint switches are one keyword argument, not a compiler options object.**
-`SemanticAnalyzer.__init__` takes `lints: Lints` beside `unit_manager`, `library_linker` and
-`library_registry`. `Lints` is a frozen dataclass in `semantics/semantic_analyzer.py` with
+`SemanticAnalyzer.__init__` takes `lints: Lints` beside `unit_manager`. `Lints` is a frozen dataclass in `semantics/semantic_analyzer.py` with
 one field for each warning-control flag (`missing_docs`, `unused`). `BuildOptions.lints`
 makes it from the command line, and `compile_multi_file` passes it to the analyzer.
 
@@ -794,12 +793,10 @@ block on:
 Line numbers are deliberately not given, because a commit that has nothing to do with the
 manifest moves them.
 
-Two records deliberately do **not** carry the key:
+One record deliberately does **not** carry the key:
 
 - **The parameter record.** Per-parameter text lives in the enclosing function's `doc.params`
   map, keyed by name. A parameter is not a symbol; it is part of one.
-- **The binary closure path.** Those records describe private symbols shipped so that a
-  binary library links. A private symbol is not part of the documented API.
 
 The per-method record inside `serialize_perk_impl` carries a `doc` key too (**R3**), so a
 documented perk method survives the boundary. A perk DEFINITION has no
@@ -910,9 +907,8 @@ make it true:
 - A **perk** reaches the manifest only when an exported generic's constraint names it, and a
   **perk implementation** only when its perk was already seen. A documented perk that no
   generic references is not in the file at all.
-- **Externals are never serialized.** The external namespaces are read to drive the [CE5006](../error-catalog.md#ce5006)
-  rejection and nothing else, and `dependencies` is a list of bare strings with nowhere to
-  hang a key.
+- **Externals are never serialized.** The consumer compiles the external blocks from the
+  source section, and `dependencies` has no place for a doc key.
 - **Generic declarations are excluded from `public_functions`, `structs` and `enums`** by
   design; their docs ride in `templates`.
 
@@ -922,7 +918,7 @@ Record the limit rather than papering over it.
 Two more are limits of a record and not of the file:
 
 - **An extension has no manifest record at all.** `extend i32 squared()` reaches a consumer
-  through the source section or through monomorphized bitcode, and `--lib-info` does not
+  through the source section, and `--lib-info` does not
   list one. Its doc block cannot travel in the index.
 - **A generic struct's field blocks, and a perk definition's method blocks, travel only
   inside the source slice** (R3). They are in the file; the index cannot answer for them.
@@ -1230,9 +1226,8 @@ both print.
 INTERNAL identity spelling and `docs/design/type-identity.md` reserves them for interned
 names, mangled symbols and the match sites that read them.
 
-The MANIFEST keeps them. A consumer reads every `type` and `return_type` back through
-`parse_type_string`, so those strings are a wire format, not display text; converting them
-at the producer would break every library already built. **The renderer converts**, which
+The MANIFEST keeps them. The `type` and `return_type` strings are a wire format, not
+display text, and both report renderers read them. **The renderer converts**, which
 is what `display_type_name` does for diagnostics: no `<`, an `->` anywhere, or
 unbalanced brackets all mean "leave it alone"; otherwise `<` opens and `>` closes. The
 Sushi tool spells the same four rules as `to_surface`.

@@ -31,7 +31,7 @@ FAKE_SUSHIC = textwrap.dedent("""\
     #!{python}
     import sys
     from pathlib import Path
-    name = Path(sys.argv[sys.argv.index("--lib-kind") + 2]).stem
+    name = Path(sys.argv[sys.argv.index("--lib-version") + 2]).stem
     if name == "broken_lib":
         print("error: broken_lib does not compile", file=sys.stderr)
         sys.exit(2)

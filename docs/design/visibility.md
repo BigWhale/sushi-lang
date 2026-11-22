@@ -321,7 +321,7 @@ perk; scope decides where the name is written. An implementation (`extend T with
 constraint (`@(T: P)`) and a pack constraint (`@(...Ts: P)`) are legal only when `P` is
 declared in the unit, or its own `use` brings it, or a `public use` chain re-exports it. A
 flat import gives the bare name; an aliased import gives `p.P` (`extend Dog with p.Named`).
-A perk that a compiled library ships follows the same rule at the consumer. A perk out of
+A perk that a library declares follows the same rule at the consumer. A perk out of
 scope is [CE4003](../error-catalog.md#ce4003) in every position, one time, with the import in the help: a plain `use` in
 another unit does not bring it, because scope is not transitive. The predefined perks
 (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) are in every scope. The check reads the scope
@@ -565,17 +565,11 @@ Only four Sushi sources cross a unit boundary with a type, and all four are mark
 `.slib` production carries the gate. `_extract_public_types` (structs and enums) and
 `_extract_public_bindings` (constants and variables), in `compiler/library_manifest.py`,
 read the marker, as `_extract_public_functions` does, and the constant extractor reads the
-library's own units alone. The `not_exported` list (`_extract_not_exported`) has a
-`struct`, an `enum` and a `constant` kind, so a consumer naming a library-private type
-hears [CE3005](../error-catalog.md#ce3005) rather than "unknown type".
+library's own units alone. The manifest is an index for `--lib-info`: the consumer compiles
+the units of the library, so a consumer naming a library-private type hears
+[CE3005](../error-catalog.md#ce3005) from the ordinary visibility rule.
 
-A private type that a public generic's template body NAMES travels with the export
-closure as source, beside the closure's private constants, and the consumer registers it
-with a PRIVATE record -- so only the transplanted body may name it. Each private is named
-in exactly one place: the closure, or the kept list.
-
-The manifest protocol is **2.3** (`docs/library-format.md`). Every record carries `unit`,
-and every record with a symbol in the shipped bitcode carries `link_symbol`
+The manifest protocol is **2.3** (`docs/library-format.md`). Every record carries `unit`
 (`docs/design/unit-namespaces.md` section 9). An older `.slib` is refused through the
 compiler-version gate ([CE3503](../error-catalog.md#ce3503)).
 
@@ -640,14 +634,10 @@ The consumer's own call resolves to the consumer's declaration, with the consume
 signature. There is no single winner of a function name, so nothing is dropped and
 nothing is booked as a loser. Shadowing an export is legal but rarely intended, so
 **[CW3002](../error-catalog.md#cw3002)** says so, and `use <lib/flib> as fl` puts the export behind a dot and the shadow
-away. The warning is the same for every library kind (#1103): for a binary
-library, the `libraries` step reads the export from the manifest, which lists every public
-function and template.
+away.
 
-For a TYPE, a public name of a SOURCE library stays the plain duplicate ([CE0004](../error-catalog.md#ce0004) / [CE2046](../error-catalog.md#ce2046));
-a public concrete type of a BINARY library is **[CE3011](../error-catalog.md#ce3011)**, because the consumer cannot see
-the declaration to point a note at; and a library's PRIVATE type is **[CE3011](../error-catalog.md#ce3011)** for both
-kinds: type identity is nominal, so one name is one shape
+For a TYPE, a public name of a library stays the plain duplicate ([CE0004](../error-catalog.md#ce0004) / [CE2046](../error-catalog.md#ce2046)),
+and a library's PRIVATE type is **[CE3011](../error-catalog.md#ce3011)**: type identity is nominal, so one name is one shape
 and the consumer cannot have its own. A library's private CONSTANT is not refused: it is
 the function rule's shape and it takes the function rule's answer, so the two coexist and
 each unit reads its own. A library's PUBLIC constant stays a duplicate, because

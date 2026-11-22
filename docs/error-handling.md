@@ -83,8 +83,7 @@ only force a dead `.realise` or `??` on every caller.
 
 Write a channel for everything else: a function that does I/O, parses, allocates on a size
 it is given, or can gain a failure later. The reason for a public function is the ABI: a
-channel added later changes the signature, and that breaks every caller and every binary
-`.slib`. A public function keeps a channel when there is any doubt.
+channel added later changes the signature, and that breaks every caller. A public function keeps a channel when there is any doubt.
 
 The compiler does not enforce this rule. There is no lint.
 

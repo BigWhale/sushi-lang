@@ -24,8 +24,7 @@ and links:
 |---|---|
 | `compile_multi_unit` | the monolithic path: one module for the whole program, then the link |
 | `compile_single_unit_to_object` | the incremental path: the module of one unit (`build_module_single_unit`) to one object |
-| `compile_stdlib_to_object`, `compile_library_to_object` | a bitcode stdlib module or a binary library to an object, for the cache |
-| `compile_to_bitcode` | the bitcode of a `.slib` library |
+| `compile_stdlib_to_object` | a bitcode stdlib module to an object, for the cache |
 | `link_object_files` | the link of the objects with `cc` |
 
 The emit order in a module is: the declarations of the runtime and the libc externs, the
@@ -385,15 +384,12 @@ PYTHONHASHSEED=0 ./sushic --dump-ll --opt O2 program.sushi > optimized.ll
 - **Monolithic path.** `compile_multi_unit` builds one module. The stdlib bitcode is
   parsed with `llvm.parse_bitcode` and linked in with `link_in`. The target machine emits
   one object (`emit_object`), and `link_object_files` links it.
-- **Incremental path.** Each unit, each bitcode stdlib module and each binary library is
+- **Incremental path.** Each unit and each bitcode stdlib module is
   compiled to its own cached object (`compiler/cache.py`), and `link_object_files` links
   all of them.
 
 The linker is `cc`. The command is `cc <objects> -o <output>`, with `-lm` on Linux. The
-stdlib linker is `StdlibLinker` (`backend/stdlib_linker.py`); `TwoPhaseLinker`
-(`backend/module_linker.py`) resolves a duplicate symbol by its source on the monolithic
-path. A library definition that a consumer can also hold is `weak_odr`
-(`backend/library_linkage.py`).
+stdlib linker is `StdlibLinker` (`backend/stdlib_linker.py`).
 
 ---
 

@@ -587,7 +587,7 @@ them, so its `- Parameter` tags print like any other's. An `- Example:` prints w
 
 ### What does not travel
 
-Three things an author can write do not reach the index. Each one is a limit of a record,
+Two things an author can write do not reach the index. Each one is a limit of a record,
 not of the file, and `docs/design/documentation.md` section 8 carries the reasons:
 
 - **An extension's block.** `extend i32 squared()` has no manifest record of any kind, so
@@ -595,8 +595,6 @@ not of the file, and `docs/design/documentation.md` section 8 carries the reason
 - **A generic struct's field blocks.** They are in the file, inside the shipped source
   slice, and the index cannot answer for them. (A perk method is a record of its own, so
   `--lib-info --docs` prints its block under its signature.)
-- **A private symbol's block.** A helper that ships only so a binary library links is not
-  part of the documented API.
 
 ## See also
 

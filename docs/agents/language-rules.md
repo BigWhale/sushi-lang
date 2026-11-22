@@ -164,7 +164,7 @@ seam in the code that holds each rule is in `docs/agents/one-seam-rules.md`; the
   imported public ones and no own one is CE3023 at the CALL (no qualified method call: split
   the unit); a name of a method visible everywhere is refused at the declaration (CE2097 for a
   built-in or stdlib method, CE4007 for a perk-implementation method).
-- A binary manifest records `"public"` per extension (templates schema 11, which adds
+- A manifest records `"public"` per extension (templates schema 11, which adds
   `return_mode`). CE3015 and CW3003 are RETIRED.
 
 ## Unit-level storage: `var` ([`docs/design/unit-storage.md`](../design/unit-storage.md))

@@ -53,7 +53,6 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--keep-object`     | Keep the `.o` file after the link (add `--no-incremental` for a program of more than one unit) |
 | `--build-stdlib`    | Build the standard library bitcode again, from its generators |
 | `--lib`             | Compile to a library (`.slib`) instead of an executable |
-| `--lib-kind KIND`   | What the library ships: `source` (default) or `binary` |
 | `--lib-version X.Y.Z` | Version of the library being built                |
 | `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
 | `--docs`            | With `--lib-info`: print each symbol's documentation block |
@@ -106,9 +105,7 @@ rules behind them are in
 `--dont-panic` lets the build accept functions marked `dont_panic because "<reason>"`. In a
 marked body, an index on an array or a string is not bounds-checked. Without the flag, the
 marker in a user unit is [CE0152](error-catalog.md#ce0152). The flag is also the consent of
-a consumer to the marked functions of a source library, and to the marked generic templates
-of any library kind. A concrete marked body in a binary library is compiled
-already and needs no consent. A bundled stdlib unit needs no flag. A build that compiles no marked
+a consumer to the marked functions of a source library. A bundled stdlib unit needs no flag. A build that compiles no marked
 function outside the stdlib gets [CW0003](error-catalog.md#cw0003) for the flag. The build
 prints no list of what it accepted. See the
 [language reference](language-reference.md#unchecked-indexes-dont_panic).
@@ -161,9 +158,8 @@ bundled stdlib units too.
 ./sushic --lib-info mylib.slib --docs
 ```
 
-A `.slib` ships **source** by default: the consumer compiles its units and caches the
-objects, so one file works on every platform. `--lib-kind binary` ships LLVM bitcode
-instead, which binds the library to the platform that built it.
+A `.slib` ships the **source** of the library: the consumer compiles its units and caches
+the objects, so one file works on every platform.
 
 Every library states its own version. `--lib-version` supplies it, unless the `nori.toml`
 in the current directory does; neither is **[CE3505](error-catalog.md#ce3505)**, and a `nori.toml` there that cannot be
@@ -171,6 +167,10 @@ read (**[CE3518](error-catalog.md#ce3518)**) or is not valid (**[CE3517](error-c
 `~<major>.<minor>` of the building compiler -- because a source library is compiled by the
 consumer's compiler and a later one may reject it. A consumer outside that range is
 **[CE3503](error-catalog.md#ce3503)**, and `--ignore-compiler-version` overrides the check for the whole build.
+
+The report starts with the header lines `Library:`, `Version:`, `Compiler:`,
+`Requires compiler:` (when the manifest has it) and `Protocol:`. The sections come next,
+and the last line is `Source: N bytes`, the size of the source section.
 
 The plain report is the API surface: one line per symbol, plus a parameter's `nom` mode
 beside its type, which is the one mode a type cannot spell for itself. A perk prints with
@@ -187,9 +187,6 @@ the form of its declaration without the colon:
 Conversions (1):
   extend LowError as LibError
 ```
-
-A binary library carries its conversions in its manifest, so a consumer's `??`
-and `as` call them with no source.
 
 `--docs` prints each symbol's documentation block under its signature. It is opt-in
 because prose is what makes a report long -- a library of forty documented functions runs
@@ -740,7 +737,7 @@ before code generation. It gives these diagnostics:
 | [CW0002](error-catalog.md#cw0002) | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
 | [CE0152](error-catalog.md#ce0152) | `<function> is marked dont_panic, and this build does not allow it` | A user unit writes the `dont_panic` marker and the build has no `--dont-panic`, or a library that the build uses has the marker and the build has no `--dont-panic` |
 | [CE6111](error-catalog.md#ce6111) | `'dont_panic' cannot stand on <position>: <reason>` | The marker is on a lambda, a perk contract method or an extern |
-| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, `--write-ll` / `--keep-object` on the incremental build, or `--dont-panic` with `--lib-info` or on a build with no function marked `dont_panic` outside the bundled stdlib |
+| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-version` without `--lib`, `--keep-object` with `--lib`, `--write-ll` / `--keep-object` on the incremental build, or `--dont-panic` with `--lib-info` or on a build with no function marked `dont_panic` outside the bundled stdlib, or `--dump-shir` / `--dump-slir` with `--lib-info` |
 | [CW0004](error-catalog.md#cw0004) | `<function> is marked dont_panic, but its body has no index to uncheck` | The marker removes no check. For an author only: a user unit and a bundled stdlib unit |
 
 A warning makes the compiler exit 1; an error makes it exit 2.
