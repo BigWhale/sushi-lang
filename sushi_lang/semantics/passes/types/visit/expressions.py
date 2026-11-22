@@ -35,7 +35,7 @@ from sushi_lang.semantics.passes.types.inference import (
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import reject_named_argument
 from sushi_lang.semantics.passes.types.visibility import (
-    KEPT_STORAGE_KINDS, name_was_refused, reject_ambiguous_name, reject_private_kept, reject_private_name,
+    name_was_refused, reject_ambiguous_name, reject_private_name,
     reject_private_type, type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.calls import reject_undefined_function
 from sushi_lang.semantics.passes.types.visit.constructions import (
@@ -147,8 +147,6 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
     written = validator.decl_name(node.const_id)
     record = constant_record(validator, written)
     if record is None:
-        if reject_private_kept(validator, written, node.loc, kinds=KEPT_STORAGE_KINDS):
-            return None
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"the constant '{written}' has no record")
     if not isinstance(record, ConstSig):

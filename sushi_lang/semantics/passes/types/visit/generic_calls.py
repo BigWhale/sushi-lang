@@ -232,10 +232,8 @@ def declared_or_late_instance(validator: TypeValidator, ref: e.GlobalRef,
 def _declared_instance(validator: TypeValidator, template: GenericFuncDef,
                        mangled: str) -> Optional[FuncSig]:
     """The signature of the instance in the unit of the template, with no fall-back to another
-    unit (the identity of an instance holds its unit). The instance of a template of a compiled
-    library has no unit in this build."""
-    unit = None if template.is_library_template else template.unit_name
-    return validator.func_table.declared(mangled, unit)
+    unit (the identity of an instance holds its unit)."""
+    return validator.func_table.declared(mangled, template.unit_name)
 
 
 def _joining_faults(validator: TypeValidator) -> int:

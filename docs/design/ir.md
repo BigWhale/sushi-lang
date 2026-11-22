@@ -401,7 +401,6 @@ FunctionDecl
 
 MethodDecl
   name, symbol                         # the symbol of a call site: `extension_decl_symbol`
-  link_name  : str                     # `symbol` (a field of the retired binary kind)
   receiver   : Type | None             # None for a static
   by_pointer : bool                    # a `peek self` or a `poke self` receiver
   params     : [(str, Type)]
@@ -414,7 +413,6 @@ GlobalDecl
   data_name   : str                    # the name of the bytes of a string value
   ty          : Type | None
   is_var      : bool
-  link_symbol : str | None             # None (a field of the retired binary kind)
   empty       : bool                   # a `var` whose initializer allocates nothing
   value       : ConstantValue | None   # the folded value of the initializer (9.5)
   loc         : Span
@@ -3455,9 +3453,7 @@ case. A generic function as a value names the instance that its position gives (
 
 **A library callee.** A library needs nothing, because its units are ordinary units of the
 build: a function, a method or a static of a library has a declaring unit, and its callee
-row is the row of any other unit. (A binary library once gave a callee row a `link_symbol`
-from its manifest, with no unit; that kind is retired, `docs/design/libraries.md`
-section 5.)
+row is the row of any other unit.
 
 ### 8.7 Rvalues
 

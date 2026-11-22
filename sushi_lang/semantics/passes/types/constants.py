@@ -15,7 +15,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, VarDef
 from sushi_lang.semantics.const_eval import allocates_nothing
-from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.type_predicates import holds_dynamic_array
 from sushi_lang.semantics.typesys import BuiltinType, Type
 
@@ -51,16 +50,11 @@ def assignment_span(const: ConstDef) -> Optional[Span]:
 
 
 def validate_constant(self, const: ConstDef) -> None:
-    """Validate the declared type of a constant, then walk its initializer, in the scope its
-    initializer resolves in."""
-    from .signatures import unit_tables
-    # The initializer of a compiled library's constant names what its library unit may
-    # name, a private function of the library included.
+    """Validate the declared type of a constant, then walk its initializer."""
     outer = self.in_library_body
-    self.in_library_body = self.in_library_unit or const.scope_unit is not None
+    self.in_library_body = self.in_library_unit
     try:
-        with in_body_scope(self, "namespaces", const, unit_tables(self)):
-            _validate_constant(self, const)
+        _validate_constant(self, const)
     finally:
         self.in_library_body = outer
 

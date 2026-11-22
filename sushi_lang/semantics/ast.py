@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
-from sushi_lang.internals.report import Origin, Span
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.conversions import CONVERSION_METHOD
 from sushi_lang.semantics.typesys import Type
@@ -234,11 +234,6 @@ class FuncDef(Node):
     # a function dropped it, so a diagnostic about the channel pointed at the return
     # type beside it -- or, in a perk implementation, at nothing at all (#662).
     err_span: Optional[Span] = None
-    is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
-    # Set with `is_library_template` and never without it: the mark answers who may
-    # be called from this body (#468), the origin answers how a diagnostic raised in
-    # it is rendered (#471).
-    library_origin: Optional[Origin] = None
     self_mode: Optional[str] = None  # "peek"/"poke" for a perk-IMPL method declared
                                      # `(poke self, ...)` (#327). Always None on a plain
                                      # top-level function (collect rejects it there).
@@ -269,9 +264,6 @@ class FuncDef(Node):
     # may have made a Result (a monomorphized instance, a lifted lambda). None on a
     # written declaration, which `channel.has_channel` reads directly.
     written_channel: Optional[bool] = None
-    # The `lib/<library>/<unit>` whose scope the names of this body resolve in: a copy
-    # of a compiled library's template, which lands in a unit of the consumer (#1120).
-    scope_unit: Optional[str] = None
     # The written type-pack parameters of the template this body is an instance of. The
     # copy fans each one out, so the name is no local; a use outside `expand` is CE0144.
     pack_names: Tuple[str, ...] = ()
@@ -301,9 +293,6 @@ class ConstDef(Node):
     # consumer's copy of the global takes its symbol from this unit, not from the
     # unit that holds the copy; None for a constant this program declares.
     home_unit: Optional[str] = None
-    # The `lib/<library>/<unit>` whose scope the initializer of a compiled library's
-    # constant resolves in, and the unit the constant is a name of (#1120).
-    scope_unit: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -317,9 +306,6 @@ class VarDef(ConstDef):
     variable is data-segment storage that a rebind, a `poke` and a mutating method
     reach (docs/design/unit-storage.md).
     """
-    # A consumer of a BINARY library declares the storage the library's bitcode
-    # defines, under this symbol; None for a variable this program defines itself.
-    link_symbol: Optional[str] = None
 
 @dataclass(slots=True)
 class StructField:
@@ -391,17 +377,11 @@ class ExtendDef(Node):
     # The unit that declared the template of a monomorphized copy (#1064). The copy is
     # checked in that unit's scope and defined in that unit's module. None on a written one.
     home_unit: Optional[str] = None
-    # The file of the template record of a monomorphized copy: a library template's is
-    # its source slice (#1070). None on a written one.
+    # The file of the template record of a monomorphized copy (#1070). None on a
+    # written one.
     template_file: Optional[str] = None
     # Whether the template's WRITTEN signature has a channel; see `FuncDef`.
     written_channel: Optional[bool] = None
-    # A template a binary library ships, and how a diagnostic in its body is rendered;
-    # see `FuncDef`. A copy keeps both, so its body may call the library's privates.
-    is_library_template: bool = False
-    library_origin: Optional[Origin] = None
-    # The scope the names of the body resolve in; see `FuncDef`.
-    scope_unit: Optional[str] = None
     # A conversion: the pair the collect pass filed, with its types resolved. None on
     # every other extension, and on a refused conversion.
     declared_conversion: Optional["Conversion"] = None
@@ -424,12 +404,9 @@ class ExtendDef(Node):
     is_public: bool = False
     public_span: Optional[Span] = None
     # The unit that declares the method, for its symbol (`extension_symbol`): the unit
-    # of the template of a copy, or the library unit of a method that a compiled
-    # library ships. None on a written one, whose unit is the unit that holds it.
+    # of the template of a copy. None on a written one, whose unit is the unit that
+    # holds it.
     declaring_unit: Optional[str] = None
-    # The symbol that the bitcode of a binary library gave the method. None on every
-    # other extension.
-    link_symbol: Optional[str] = None
     # A `peek T` return; see `FuncDef`.
     borrowed_return: Optional["BorrowedReturn"] = None
 

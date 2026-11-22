@@ -950,22 +950,10 @@ class SemanticAnalyzer:
                      if u.ast is not None and u.name == unit_name), None)
         return home or self._entry_unit(compilation_order)
 
-    def _library_scope(self, unit_name: Optional[str], home: Optional[Unit]) -> Optional[str]:
-        """The compiled library unit a copy's names resolve in, or None (#1120).
-
-        A copy of a compiled library's template goes home to a unit of the consumer,
-        because the template's unit is not a unit of this build. Its body still means
-        what it meant in the library, so it reads the scope of the declaring unit.
-        """
-        if unit_name is None or (home is not None and home.name == unit_name):
-            return None
-        return unit_name if unit_name in self.tables.namespaces else None
-
     def _adopt_extension_copy(self, extend_def: ExtendDef,
                               compilation_order: list[Unit]) -> None:
         """Give an extension copy its home unit and queue it for the check and codegen."""
         home = self._home_unit(extend_def.home_unit, compilation_order)
-        extend_def.scope_unit = self._library_scope(extend_def.home_unit, home)
         extend_def.home_unit = home.name if home is not None else None
         self.monomorphized_extensions.append(extend_def)
 
@@ -1292,9 +1280,6 @@ class SemanticAnalyzer:
         Answers the home unit.
         """
         home = self._home_unit(template.unit_name, compilation_order)
-        scope_unit = self._library_scope(template.unit_name, home)
-        for method in impl.methods:
-            method.scope_unit = scope_unit
         if home is not None:
             home.ast.perk_impls.append(impl)
         for method in impl.methods:
@@ -1508,8 +1493,7 @@ class SemanticAnalyzer:
         for base, methods in list(templates.by_type.items()):
             for own in list(methods.values()):
                 decl = own.decl
-                if (own.unit_name is None or decl is None or decl.target_type is None
-                        or decl.is_library_template):
+                if own.unit_name is None or decl is None or decl.target_type is None:
                     continue
                 scope = scope_of(own.unit_name)
                 for other in templates.declarations(base, own.name):

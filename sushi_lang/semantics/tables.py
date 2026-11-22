@@ -55,10 +55,6 @@ class SymbolTables:
     # `namespaces` pass. Here because a reader in one unit folds another unit's constant
     # in THAT unit's scope (#561), so every unit's table has to be reachable from any.
     namespaces: dict[str, NamespaceTable] = field(default_factory=dict)
-    # A name a linked library declares and keeps: name -> (library, kind) (#469). Not a
-    # table of callables -- no signature travels with a kept name, so it holds what the
-    # CE3005 gate needs and nothing more.
-    library_not_exported: dict[str, tuple[str, str]] = field(default_factory=dict)
     # Extension instantiations the typecheck pass requested at CALL SITES:
     # (template, target_type, receiver_args, method_type_args). An array template's
     # element and a method-generic's solved margs both live only at the call, so these

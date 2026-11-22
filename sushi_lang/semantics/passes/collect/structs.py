@@ -145,8 +145,7 @@ class StructCollector:
         if reject_duplicate_type_name(self.r, "struct", name, name_span, type_name_rules(
             "struct", structs=self.structs, generic_structs=self.generic_structs,
             enums=self.enums, generic_enums=self.generic_enums,
-        ), library_clash=self._reject_library_clash, visibility=self.visibility,
-                generic=bool(type_params)):
+        ), library_clash=self._reject_library_clash, generic=bool(type_params)):
             return
 
         if reject_type_pack_param(self.r, type_params_raw, name_span, "a struct"):

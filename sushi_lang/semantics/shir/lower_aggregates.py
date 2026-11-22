@@ -207,7 +207,7 @@ def lower_member(lw: BodyLowerer, node: a.MemberAccess) -> e.ShirExpr:
 def _namespace_member(lw: BodyLowerer, node: a.MemberAccess, alias: str) -> e.ShirExpr:
     """`ns.m`: what the namespace holds under `m`, by the qualified name as written."""
     lookup = lw.lookup
-    kind = None if lookup is None else lookup.member_kind(lw.bindings.body, alias, node.member)
+    kind = None if lookup is None else lookup.member_kind(alias, node.member)
     loc = lw.span(node)
     written = f"{alias}.{node.member}"
     if kind == "constant":

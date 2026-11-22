@@ -131,7 +131,6 @@ class TypeValidator:
         # The types that implement `Drop`, for `owns_resource` (ruling R2a). A property
         # rather than a snapshot: a later unit may add an implementation, and a stale
         # set here would classify a handle PLAIN.
-        self.library_not_exported = tables.library_not_exported
         self.visibility = tables.visibility
         # What this unit may write behind a dot. One seam for an FFI namespace and a
         # `use ... as` alias alike; with no unit of its own a validator still reaches
@@ -167,9 +166,8 @@ class TypeValidator:
         # be shown a diagnostic about code they did not write, which is the same reason
         # the `docs` pass skips a library unit whole.
         self.in_library_unit = in_library_unit
-        # A library body transplanted into this program: a monomorphized instance of a
-        # `.slib` template, or a lambda lifted out of one. It calls what it called at
-        # home, the export closure included (#468).
+        # A library body: it calls what it called at home, the library's privates
+        # included (#468).
         self.in_library_body = in_library_unit
         # A body the compiler wrote: a monomorphized instance, whose type arguments were
         # chosen at the instantiation site and checked in the scope that wrote them. The

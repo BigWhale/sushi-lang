@@ -1005,8 +1005,7 @@ Every reader asks with a unit: the typecheck pass (`TypeValidator.func_sig`,
 **`unit`** names the unit that DECLARED the record, on every record (manifest protocol
 **2.3**, `sushi_lib_version`). `--lib-info` reads it. A record carries no symbol: the
 consumer compiles the library, renames its units to `lib/<library>/<unit>`, and derives
-`lib$<library>$<unit>$name` itself, so a producer-written symbol would be wrong. (The
-`link_symbol` key, which the binary kind read, is retired with that kind.)
+`lib$<library>$<unit>$name` itself, so a producer-written symbol would be wrong.
 
 **There is no scheme identifier.** A manifest records what is, not the recipe, and
 `compiler_version` already says which compiler wrote it, with [`CE3503`](../error-catalog.md#ce3503) refusing a `.slib`

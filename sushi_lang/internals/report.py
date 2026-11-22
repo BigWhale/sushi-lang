@@ -117,11 +117,9 @@ class Diagnostic:
 class Origin:
     """The file a span belongs to, when it is not the file the reporter covers.
 
-    One reporter serves many files in two places. A binary `.slib` ships a public generic
-    as a source SLICE, re-parsed at the consumer, so the instance's spans are line 1 of
-    that slice and mean nothing against the consumer's file (#471). And the collect pass
-    walks every unit through one reporter, so a declaration in a non-entry unit rendered
-    against the entry file names a line the user did not write (#473).
+    One reporter serves many files: the collect pass walks every unit through one
+    reporter, so a declaration in a non-entry unit rendered against the entry file names a
+    line the user did not write (#473).
 
     Each field answers one question: what to call it, what text the caret marks, and why
     it is being compiled here at all. `source` is None when the file is on disk and the
@@ -225,8 +223,8 @@ def display_filename(filename: str) -> str:
     An `assert` prints the same name at run time, so the two always agree.
     """
     # A name in angle brackets is not a path and has no directory to strip:
-    # `<input>` for a single string, `<template:lib:name>` for a slice a library
-    # shipped. Prefixing `./` onto one made it read as a file next door.
+    # `<input>` for a single string. Prefixing `./` onto one made it read as a file
+    # next door.
     if filename.startswith("<") and filename.endswith(">"):
         return filename
     try:
@@ -299,11 +297,9 @@ class Reporter:
         # neither print nor change the exit status. The caller can say otherwise: the
         # stdlib gates make the bundled stdlib's author the one who compiles it.
         self.keeps_warnings = provenance is None if keeps_warnings is None else keeps_warnings
-        # Set while a pass checks a body that is NOT this reporter's file: a
-        # monomorphized instance of a binary library's template. Its spans came from
-        # parsing the manifest slice, so rendering them against the consumer's file
-        # names a line the consumer never wrote (#471). One place stamps it, because
-        # `_record` is the one place every diagnostic passes through.
+        # Set while a pass reads a unit that is NOT this reporter's file: the collect
+        # pass walks every unit through one reporter (#473). One place stamps it,
+        # because `_record` is the one place every diagnostic passes through.
         self.origin: Optional[Origin] = None
         # Set while a pass reads the body of a MONOMORPHIZED INSTANCE. Every instance of
         # one generic carries the TEMPLATE's spans, so a fault in the shared source would
@@ -327,13 +323,8 @@ class Reporter:
         self._template: object = None
         self.items: List[Diagnostic] = []
         self._identities: set = set()
-        # The text of each source slice that a library ships, by its label (#471). A
-        # span in a slice indexes into the slice and into nothing else, and a location
-        # names the slice by its label: the location of a diagnostic and of each note
-        # alike. The program reporter renders, so the libraries step fills its map.
-        self.slices: dict[str, str] = {}
         # The note of each file whose code the user did not write, by its name: the unit
-        # of a source library or of the stdlib, and the slice of a binary library. A
+        # of a source library or of the stdlib. A
         # diagnostic at such a file carries the note when nothing else gave one. A stage
         # that emits through the program reporter, at a site in a library body, then
         # tells whose code it is, as a per-unit reporter does.
@@ -345,9 +336,7 @@ class Reporter:
     def enter_body(self, func) -> None:
         """Tell the reporter whose body a pass is about to read.
 
-        Two answers ride on the same moment, and every per-unit pass needs both.
-        `origin` is whose FILE the spans belong to -- a transplanted library template's
-        came from the manifest slice, not from the consumer's file (#471).
+        A body of the unit has the spans of the unit's file, so `origin` is cleared.
         `collapse_repeats` is whether this body is one of many copies of one source.
         The template of the body has three answers (#1070). A copy of a template whose
         check reported an error is `muted`: a muted diagnostic counts as offered and is
@@ -357,7 +346,7 @@ class Reporter:
         template reported (`template_warnings`). Any other body reports everything.
         """
         template = getattr(func, "template_id", None)
-        self.origin = getattr(func, "library_origin", None)
+        self.origin = None
         self.collapse_repeats = getattr(func, "instance_of", None) is not None
         self.muted = template in self.refused_templates
         self.instance_only = not self.muted and template in self.checked_templates
@@ -461,15 +450,12 @@ class Reporter:
 
     def body_source(self) -> Optional[str]:
         """The text of the file that the spans of the body a pass reads belong to: the file
-        of the origin that `enter_body` set (a library slice included), else this reporter's
-        own source."""
+        of the origin, else this reporter's own source."""
         origin = self.origin
         if origin is None:
             return self.source
         if origin.source is not None:
             return origin.source
-        if origin.filename in self.slices:
-            return self.slices[origin.filename]
         try:
             return Path(origin.filename).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -480,9 +466,7 @@ class Reporter:
         self.provenances[filename] = provenance
 
     def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
-        """Get source lines for a file: a library slice, this reporter's source, or disk."""
-        if filename in self.slices:
-            return self.slices[filename].splitlines()
+        """Get source lines for a file: this reporter's source, or disk."""
         if filename == self.filename:
             return src_lines
         try:

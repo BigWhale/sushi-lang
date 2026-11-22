@@ -62,25 +62,6 @@ def link_requests(reporter: Reporter, program: 'Program', unit: str,
     return requests
 
 
-# The kept kinds that emit a symbol in the library bitcode. A generic function, a struct
-# and an enum emit none of that name.
-_KEPT_KINDS_WITH_A_SYMBOL = frozenset({"function", "constant", "variable"})
-
-
-def _kept_symbols(lib) -> set[str]:
-    """The symbols that a library's kept declarations emit.
-
-    A kept record names the unit that keeps it (#1112), so the symbol is exact. A
-    record of a library built before the record had a unit falls back to each unit
-    that the manifest lists.
-    """
-    every_unit = lib.raw_manifest.get("units") or [lib.name]
-    return {emitted_symbol(name, unit)
-            for record_unit, name, kind in lib.kept
-            if kind in _KEPT_KINDS_WITH_A_SYMBOL
-            for unit in ([record_unit] if record_unit is not None else every_unit)}
-
-
 def _table_entries(table) -> list:
     """Every signature of a two-view table: the flat view, then each unit's own view.
 
@@ -93,43 +74,22 @@ def _table_entries(table) -> list:
 def _declaration_emitting(symbol: str, candidates):
     """The collected function or constant whose emitted symbol is `symbol`, or None.
 
-    A binary library's function carries its `link_symbol`, and a library's unit
-    variable carries it on its declaration. A monomorphized instance carries its home
-    unit, which is the unit that the back end names its symbol with (#1113).
+    A monomorphized instance carries its home unit, which is the unit that the back end
+    names its symbol with (#1113).
     """
     for sig in candidates:
-        link_symbol = (getattr(sig, "link_symbol", None)
-                       or getattr(getattr(sig, "decl", None), "link_symbol", None))
-        if symbol == emitted_symbol(sig.name, sig.unit_name, link_symbol):
+        if symbol == emitted_symbol(sig.name, sig.unit_name):
             return sig
     return None
 
 
-def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Optional[tuple]:
+def _defining_site(symbol: str, tables, generated=frozenset()) -> Optional[tuple]:
     """Where this build defines `symbol`, as (note, span, filename). None if nowhere.
 
     A function row and the constant row compare the symbol that the declaration EMITS
-    (`<unit>$<name>`, or a binary library's `link_symbol`), not its Sushi name (#1098).
-
-    Ordered by how much the answer can say. A library record carries no span, so its
-    note is a plain fact; a declaration this program holds carries its own file and
-    line, which makes the diagnostic relational.
+    (`<unit>$<name>`), not its Sushi name (#1098). A declaration with a span gives a
+    relational diagnostic; one with no span gives a plain fact.
     """
-    if registry is not None:
-        for lib in registry.get_all_libraries().values():
-            if symbol in _kept_symbols(lib):
-                return (f"library '{lib.name}' declares it and does not export it",
-                        None, None)
-
-        for lib_name, shipped in registry.get_all_private_functions().values():
-            if symbol == emitted_symbol(shipped.name, None, shipped.link_symbol):
-                return (f"library '{lib_name}' ships it in its export closure", None, None)
-
-        for lib in registry.get_all_libraries().values():
-            if any(symbol == emitted_symbol(sig.name, None, sig.link_symbol)
-                   for sig in lib.functions.values()):
-                return (f"library '{lib.name}' exports it", None, None)
-
     sig = _declaration_emitting(symbol, _table_entries(tables.funcs))
     if sig is not None:
         if sig.name_span is not None:
@@ -194,7 +154,7 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
 
 def reject_external_naming_a_defined_symbol(
     reporter: Reporter, program: 'Program', tables, unit_name: Optional[str],
-    registry=None, generated_symbols=frozenset(),
+    generated_symbols=frozenset(),
 ) -> None:
     """CE5013: an `unsafe external` may name a FOREIGN symbol, never one this build defines.
 
@@ -202,8 +162,8 @@ def reject_external_naming_a_defined_symbol(
     clash the linker would catch -- the call simply enters the program's own body with no
     ABI check (#470). The link-name is what collides, not the Sushi name beside it.
 
-    Needs the whole program's symbols, the linked libraries included, so it runs after
-    the `libraries` step and not with the per-unit extern validation above.
+    Needs the whole program's symbols, so it runs after the collect pass and not with the
+    per-unit extern validation above.
 
     `generated_symbols` is what the stdlib generators define, read from the manifest
     the stdlib build writes. It is reserved whether this program links the unit or
@@ -216,7 +176,7 @@ def reject_external_naming_a_defined_symbol(
     for block in externals:
         for decl in [*block.decls, *block.variables]:
             link_name = tables.externals.link_name_of(unit_name, block.namespace, decl)
-            found = _defining_site(link_name, tables, registry, generated_symbols)
+            found = _defining_site(link_name, tables, generated_symbols)
             if found is not None:
                 _emit_defined_symbol(reporter, decl, link_name, *found)
 
@@ -238,8 +198,7 @@ def monomorphized_instances(compilation_order, funcs) -> list[tuple]:
 
     The body is a copy of its generic, so it carries the template's span and file.
     Its signature carries the home unit (`generics/synthesis.py`), which is the unit
-    that the back end names the symbol with: the unit that declared the generic, or no
-    unit for a binary library's template.
+    that the back end names the symbol with: the unit that declared the generic.
     """
     instances = []
     for unit in compilation_order:
@@ -260,9 +219,8 @@ def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
     """CE5013, the instance half: an extern that names a monomorphized instance (#1113).
 
     An instance exists only after the `monomorphize` pass, and the first half runs
-    before it, so this half reads the instances that the pass made. A library's
-    template comes from a manifest slice that the consumer does not have, so its note
-    is a plain fact.
+    before it, so this half reads the instances that the pass made. An instance with
+    no span gives a plain fact.
     """
     externals = getattr(program, "externals", None)
     if not externals or not instances:
@@ -276,7 +234,7 @@ def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
                 continue
             fn = bodies[id(sig)]
             generic = getattr(fn, "instance_of", None) or fn.name
-            if getattr(fn, "is_library_template", False) or fn.name_span is None:
+            if fn.name_span is None:
                 _emit_defined_symbol(
                     reporter, decl, link_name,
                     f"an instance of the library generic '{generic}' defines it",

@@ -2,8 +2,8 @@
 
 Two units may each declare `helper`, so a symbol has to say which unit's declaration it
 is (`docs/design/unit-namespaces.md` section 9). `mangle_unit_symbol` is that name, read
-by the back end when it declares and by the `.slib` producer when it records
-`link_symbol`. `UnitKeyedSymbols` is the index the back end reads it back through.
+by the back end when it declares. `UnitKeyedSymbols` is the index the back end reads it
+back through.
 """
 from __future__ import annotations
 
@@ -40,17 +40,14 @@ def mangle_unit_symbol(unit_name: Optional[str], name: str) -> str:
     return f"{unit_name.replace('/', UNIT_SEP)}{UNIT_SEP}{name}"
 
 
-def emitted_symbol(name: str, unit_name: Optional[str] = None,
-                    link_symbol: Optional[str] = None) -> str:
+def emitted_symbol(name: str, unit_name: Optional[str] = None) -> str:
     """The symbol that a function, a constant or a unit variable EMITS.
 
-    The back end names each function with it, and each global through `global_symbol`. A binary
-    library's record carries the `link_symbol` its producer gave the declaration, and
-    that name wins, because the consumer cannot compute it. Every other declaration
-    takes `mangle_unit_symbol`. CE5013 reads the same answer, so the check and the back
+    The back end names each function with it, and each global through `global_symbol`.
+    It is `mangle_unit_symbol`. CE5013 reads the same answer, so the check and the back
     end cannot disagree about which symbols a build defines (#1098).
     """
-    return link_symbol or mangle_unit_symbol(unit_name, name)
+    return mangle_unit_symbol(unit_name, name)
 
 
 def function_symbol(name: str, unit_name: Optional[str]) -> str:
@@ -71,17 +68,15 @@ def function_symbol(name: str, unit_name: Optional[str]) -> str:
 def global_symbol(decl: "ConstDef", unit_name: Optional[str]) -> str:
     """The symbol of a unit-level global: a constant or a `var` (docs/design/ir.md 8.2).
 
-    The back end names the global with it. A compiled library's declaration is a name of
-    its library unit (`scope_unit`, #1120). A `var` of a binary library takes its
-    `link_symbol`. A library constant's copy takes the unit that declared it (`home_unit`,
-    #1101), so it never takes the name of a function in the unit that holds the copy.
+    The back end names the global with it. A library constant's copy takes the unit that
+    declared it (`home_unit`, #1101), so it never takes the name of a function in the unit
+    that holds the copy.
     """
     from sushi_lang.semantics.ast import VarDef
 
-    unit = decl.scope_unit or unit_name
     if isinstance(decl, VarDef):
-        return emitted_symbol(decl.name, unit, decl.link_symbol)
-    return mangle_unit_symbol(decl.home_unit or unit, decl.name)
+        return emitted_symbol(decl.name, unit_name)
+    return mangle_unit_symbol(decl.home_unit or unit_name, decl.name)
 
 
 def declaring_unit(fn: object, unit_name: Optional[str]) -> Optional[str]:
@@ -91,8 +86,7 @@ def declaring_unit(fn: object, unit_name: Optional[str]) -> Optional[str]:
     `home_unit` is stamped by `generics/synthesis.py`, and two units' instances of
     one mangled base name become two symbols. A lifted lambda carries no home and
     keeps its bare name -- the per-unit lifter's counter already makes it unique
-    (#402) -- and so does a binary library's template instance, whose home names no
-    unit in the build.
+    (#402).
     """
     if getattr(fn, "is_synthesized", False):
         return getattr(fn, "home_unit", None)

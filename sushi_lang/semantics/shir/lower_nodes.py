@@ -449,7 +449,7 @@ def _constructed_type(lw: BodyLowerer, found: Optional[bd.Resolution]) -> Option
     if isinstance(found, bd.TypeName):
         return found.name
     if (isinstance(found, bd.Function) and lw.lookup is not None
-            and lw.lookup.constructs_struct(lw.bindings.body, found.name)):
+            and lw.lookup.constructs_struct(found.name)):
         return found.name
     return None
 
@@ -495,8 +495,7 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall, alias: str)
     the call (CE6104). A named argument on anything else is an error hole (CE6104).
     Anything else that the namespace holds under the name is a hole.
     """
-    kind = None if lw.lookup is None else lw.lookup.member_kind(lw.bindings.body, alias,
-                                                                node.method)
+    kind = None if lw.lookup is None else lw.lookup.member_kind(alias, node.method)
     if kind == "struct" and not _type_args(node):
         return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
                            node.field_names, lw.span(node))
@@ -538,7 +537,7 @@ def _qualified_type(lw: BodyLowerer, receiver: Any) -> Optional[UnknownType]:
     def behind_alias(member: a.MemberAccess) -> Optional[UnknownType]:
         found = lw.bindings.resolution_of(member.receiver)
         if not (isinstance(found, bd.Namespace) and lookup.member_kind(
-                lw.bindings.body, found.name, member.member) in TYPE_KINDS):
+                found.name, member.member) in TYPE_KINDS):
             return None
         return UnknownType(member.member, namespace=found.name)
 

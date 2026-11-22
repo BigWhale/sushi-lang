@@ -84,10 +84,8 @@ def _spelled_name(kind: str, decl: Any) -> str:
 
 
 def _is_written(decl: object) -> bool:
-    """A declaration the source wrote, not one the compiler or a library put here."""
-    return not (getattr(decl, "is_synthesized", False)
-                or getattr(decl, "is_library_template", False)
-                or getattr(decl, "link_symbol", None))
+    """A declaration the source wrote, not one the compiler put here."""
+    return not getattr(decl, "is_synthesized", False)
 
 
 def _is_root(kind: str, decl: object) -> bool:

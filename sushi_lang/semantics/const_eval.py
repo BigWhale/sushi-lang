@@ -387,7 +387,7 @@ class ConstantEvaluator:
         sig = self.functions.lookup(name, unit, scope)
         if sig is None:
             return None
-        return ScalarConstant(emitted_symbol(sig.name, sig.unit_name, sig.link_symbol),
+        return ScalarConstant(emitted_symbol(sig.name, sig.unit_name),
                               expected_type)
 
     def _evaluate_dot_call(self, expr: DotCall, expected_type: Type,

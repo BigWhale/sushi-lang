@@ -363,7 +363,7 @@ class LLVMCodegen:
                             filename: Optional[str]) -> None:
         """Define a `var`'s storage in its own unit's module; declare it everywhere else."""
         ll_type = self.types.ll_type(ty)
-        if var.link_symbol is not None or not defining:
+        if not defining:
             self._register_global_constant(var.name, ll_type, None, var.unit,
                                            symbol=var.symbol, storage=True)
             return

@@ -120,14 +120,8 @@ def is_template_copy(body: object) -> bool:
     of such a template does not run them again: one fault, one diagnostic. A copy of a
     generic function and a method of a copied perk implementation carry `instance_of`; a
     copy of an extension carries the unit it went home to.
-
-    One copy is not muted: a copy of a binary library's template. The template is
-    only in the tables, no walk of this build reads it, so the copy is the one place its
-    body is checked.
     """
     from sushi_lang.semantics.ast import ExtendDef
-    if getattr(body, "is_library_template", False):
-        return False
     if isinstance(body, ExtendDef):
         return body.home_unit is not None
     return getattr(body, "instance_of", None) is not None

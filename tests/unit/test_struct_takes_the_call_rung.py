@@ -47,13 +47,13 @@ def _lookup(*, concrete: Optional[str] = None, generic: Optional[str] = None,
 def test_a_struct_takes_the_call_from_a_concrete_function_of_another_unit(
         generic_struct: bool) -> None:
     assert _lookup(concrete="other", generic_struct=generic_struct).constructs_struct(
-        object(), "Crate")
+        "Crate")
 
 
 def test_a_concrete_function_of_the_unit_takes_the_call() -> None:
-    assert not _lookup(concrete=UNIT).constructs_struct(object(), "Crate")
+    assert not _lookup(concrete=UNIT).constructs_struct("Crate")
 
 
 @pytest.mark.parametrize("unit", [UNIT, "other"])
 def test_a_generic_function_of_the_scope_takes_the_call(unit: str) -> None:
-    assert not _lookup(generic=unit).constructs_struct(object(), "Crate")
+    assert not _lookup(generic=unit).constructs_struct("Crate")

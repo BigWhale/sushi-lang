@@ -15,15 +15,11 @@ from sushi_lang.semantics.typesys import (
     ReferenceType, IteratorType)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
-    built_in_generic_unreachable, name_was_refused, reject_private_kept,
+    built_in_generic_unreachable, name_was_refused,
     reject_private_type)
 
 if TYPE_CHECKING:
     from . import TypeValidator
-
-
-# What a kept NAME may be, when it is written where a type belongs.
-_KEPT_TYPE_KINDS = frozenset({"struct", "enum"})
 
 
 def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> bool:
@@ -245,11 +241,8 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
         if type_obj.name in validator.enum_table.by_name:
             reject_private_type(validator, type_obj.name, span)
             return
-        # A binary library's kept type reaches no table at all, so "unknown" was the
-        # wrong word for it (#469, the type half).
         # A name CE1005 refused in this unit is that one fault (#1102).
-        if (reject_private_kept(validator, type_obj.name, span, kinds=_KEPT_TYPE_KINDS)
-                or name_was_refused(validator, type_obj.name)):
+        if name_was_refused(validator, type_obj.name):
             return
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
@@ -366,8 +359,6 @@ def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,
         return True
     if declared:
         return False
-    if reject_private_kept(validator, name, span, kinds=_KEPT_TYPE_KINDS):
-        return True
     er.emit(validator.reporter, er.ERR.CE2001, span, name=name)
     return True
 

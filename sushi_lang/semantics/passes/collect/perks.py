@@ -33,9 +33,6 @@ class PerkTable:
     # The unit each perk was defined in. A PerkDef is an AST node and carries no file,
     # and a duplicate is reported while ANOTHER unit is being collected (#473).
     files: Dict[str, Optional[str]] = field(default_factory=dict)
-    # The `lib/<library>/<unit>` key of each perk a compiled library ships. Such a perk
-    # has no visibility record, and the scope of a unit is asked for this key (#1124).
-    library_units: Dict[str, str] = field(default_factory=dict)
 
     def register(self, perk: PerkDef) -> bool:
         """Register a perk. Returns False if duplicate."""
@@ -508,8 +505,7 @@ class PerkCollector:
                                    else GenericPerkImplTable())
         # Which unit is being collected, which units came from a source library, and
         # which unit registered each impl. Together they let a consumer impl replace a
-        # library one silently -- the rule a binary library already follows
-        # (docs/design/libraries.md section 7).
+        # library one silently (docs/design/libraries.md section 7).
         self.current_unit_name: Optional[str] = None
         self.refused = RefusedDeclarations()
         self.library_units: Set[str] = set()

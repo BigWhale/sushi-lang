@@ -32,7 +32,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import AfterAnError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
-from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
+from sushi_lang.semantics.namespaces import NamespaceTable
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
@@ -88,10 +88,8 @@ class BorrowChecker:
         # fn name -> the poke param indices it destroys (#168), over EVERY unit, so a
         # cross-unit callee is not a blind spot (the `effects` pass).
         self.destroy_effects = destroy_effects
-        # The names of the unit, and the names that the body resolves in (`_enter`): the
-        # names of its unit, or of the library unit of a library copy (#1120).
-        self.unit_names = namespaces if namespaces is not None else NamespaceTable()
-        self.names = self.unit_names
+        # The names of the unit, which every body of the unit resolves in.
+        self.names = namespaces if namespaces is not None else NamespaceTable()
         # The body that the pass walks, its tables and its locals.
         self.body: Optional[ShirBody] = None
         self.typeck: Optional[TypeckResults] = None
@@ -185,8 +183,6 @@ class BorrowChecker:
 
     def _enter(self, decl: object, body: ShirBody, tables: SymbolTables) -> None:
         self.tables, self.types = tables, TypeQueries(tables)
-        self.names = (body_namespaces(decl, getattr(tables, "namespaces", None))
-                      or self.unit_names)
         self.body = body
         self.typeck = self.shir.typeck_of(body)
         self.ownership = self.shir.ownership_table_of(body)

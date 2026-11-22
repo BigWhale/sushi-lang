@@ -22,7 +22,6 @@ from sushi_lang.semantics.tables import SymbolTables
 # The fields the collect pass does NOT fill, and the step that does.
 FILLED_LATER = {
     "namespaces": "the namespaces pass",
-    "library_not_exported": "the libraries step",
     "pending_extension_instantiations": "the typecheck pass",
     "queued_extension_keys": "the typecheck pass",
     "refused_extension_keys": "the typecheck pass",

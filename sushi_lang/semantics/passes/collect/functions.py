@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, TYPE_CHECKING
 
-from sushi_lang.internals.report import Origin, Reporter, Span
+from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 
@@ -288,10 +288,6 @@ class FuncSig:
                                          # to name its file explicitly or it renders against
                                          # whichever file the reporter happens to be pointing at.
     err_type: Optional[Type] = None      # The `| E` channel; None is a bare function
-    link_symbol: Optional[str] = None    # The symbol a BINARY .slib's bitcode gave this
-                                         # function. Read from the manifest and never
-                                         # derived: a producer's `<unit>$<name>` is not a
-                                         # name the consumer can compute (section 9).
     borrowed_return: Optional['BorrowedReturn'] = None  # A `peek T` return (#1229)
 
 
@@ -311,8 +307,6 @@ class GenericFuncDef:
     err_span: Optional[Span] = None              # Where the channel is written (#662); an
                                                  # instance is a copy of this node and the
                                                  # signature walk reads the span off it
-    is_library_template: bool = False            # True if registered from a consumed library's .slib templates
-    library_origin: Optional[Origin] = None      # Set with the mark: how to render a diagnostic from this body
     unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
     filename: Optional[str] = None               # The file it was declared in, for the same reason `FuncSig`
                                                  # carries one: this pass shares ONE reporter across units
@@ -320,8 +314,6 @@ class GenericFuncDef:
                                                  # by the resolve pass, as on `FuncDef` (#857)
     written_channel: Optional[bool] = None       # On an instance: the template's written
                                                  # channel, as on `FuncDef`
-    scope_unit: Optional[str] = None             # On an instance of a compiled library's
-                                                 # template: the scope it reads, as on `FuncDef`
     # Each type parameter's opaque form, by name (#1070): what the record's signature is
     # written in, and the substitution the template check cuts its body with.
     opaque: Dict[str, TypeParameter] = field(default_factory=dict)
@@ -428,8 +420,6 @@ class ExtensionMethod:
     borrowed_return: Optional['BorrowedReturn'] = None
     # The solved method-level type arguments of a copy of a method-generic template.
     method_type_args: tuple[Type, ...] = ()
-    # The symbol a BINARY .slib's bitcode gave this method; the unit does not make it.
-    link_symbol: Optional[str] = None
 
 
 @dataclass
@@ -841,8 +831,7 @@ class FunctionCollector:
         """Forget a registration, so the caller's own can take the name.
 
         The branch this replaces dropped the previous entry and returned without
-        registering anything, so the consumer lost its own declaration as well and the
-        library's came back through the `libraries` pass.
+        registering anything, so the consumer lost its own declaration as well.
 
         Only the FLAT view is dropped. A unit does not stop having declared what it
         declared, and `view_for` is how its own body still reads it (#487).

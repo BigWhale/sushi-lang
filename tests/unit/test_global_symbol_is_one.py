@@ -34,15 +34,11 @@ def _var(**fields: object) -> VarDef:
     (_const(), "test_main", "test_main$STEP"),
     (_const(), "units/levels", "units$levels$STEP"),
     (_const(home_unit="lib/geo/shapes"), "test_main", "lib$geo$shapes$STEP"),
-    (_const(scope_unit="lib/geo/shapes"), "test_main", "lib$geo$shapes$STEP"),
     (_var(), "test_main", "test_main$count"),
     (_var(), "units/levels", "units$levels$count"),
-    (_var(scope_unit="lib/geo/shapes"), "test_main", "lib$geo$shapes$count"),
     (_var(home_unit="lib/geo/shapes"), "test_main", "test_main$count"),
-    (_var(link_symbol="geo$count"), "test_main", "geo$count"),
 ], ids=["const in the program unit", "const in another unit", "const of a library copy",
-        "const of a compiled library", "var in the program unit", "var in another unit",
-        "var of a compiled library", "var ignores the home unit", "var of a binary library"])
+        "var in the program unit", "var in another unit", "var ignores the home unit"])
 def test_a_global_has_one_symbol(decl: ConstDef, unit: str, symbol: str) -> None:
     assert global_symbol(decl, unit) == symbol
 
