@@ -14,7 +14,6 @@ from sushi_lang.semantics.passes.collect.dont_panic import MarkerGate
 from sushi_lang.semantics.tables import SymbolTables
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.library_registry import LibraryRegistry
     from sushi_lang.semantics.link_libraries import LinkRequest
     from sushi_lang.semantics.generics.instantiate import InstantiationCollector
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
@@ -39,8 +38,6 @@ from sushi_lang.semantics.unit_reuse import UnitReuse
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
-from sushi_lang.semantics.library_registration import (
-    LibraryRegistration, LoadedLibraries)
 
 
 # The test runner's stdlib gates, hidden like SUSHI_SPELLING_GATE. Set, a lint also checks
@@ -150,7 +147,7 @@ def _copy_entry(node: Any) -> _CopyEntry:
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, lints: Optional[Lints] = None,
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, lints: Optional[Lints] = None,
                  generated_symbols: frozenset[str] = frozenset(),
                  is_library: bool = False, dont_panic: bool = False,
                  overflow: OverflowMode = OverflowMode.TRAP,
@@ -161,10 +158,6 @@ class SemanticAnalyzer:
         self.reuse = reuse
         self.filename = filename
         self.unit_manager = unit_manager
-        # A backend LibraryResolver, held through a Protocol: semantics must not
-        # import backend (Tier 4.1 layering invariant).
-        self.library_linker = library_linker
-        self.library_registry = library_registry
         self._refused_pack_bodies: list[str] = []
         # What the stdlib generators define, read from the manifest their build writes.
         # A NAME list and nothing else: no semantic table holds these symbols, which is
@@ -190,13 +183,11 @@ class SemanticAnalyzer:
         # the collect pass filled -- never None, so no reader needs a guard (#673).
         self.tables: SymbolTables = SymbolTables()
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
-        self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         # The perk copies cut on demand (#699); set with the monomorphizer.
         self.perk_copies: Optional['PerkCopies'] = None
         # The implementations on one instantiation that no unit reached at the drop,
         # with their units: a late cut can still intern the instance.
         self._unreached_perk_impls: list[tuple[Unit, ExtendWithDef]] = []
-        self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
         # The SHIR of each body that the scope pass checked, per unit, in the compilation
         # order (docs/design/ir.md 6.3). The typecheck pass walks it, and `--dump-shir`
@@ -227,7 +218,6 @@ class SemanticAnalyzer:
             unused        --warn-unused: dead privates, imports  _check_unused                     unused.py
             externs       extern signatures, ptr unit gate       _check_externs                    passes/types/externals.py
                           and the `link` clauses (link_requests)
-            libraries     library symbol registration            _register_libraries               library_registration.py
             namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
             ffi-clash     link-name constants, then an extern    _check_ffi_clash                  passes/types/externals.py
                           naming a defined symbol, then two                                        passes/collect/externals.py
@@ -241,10 +231,8 @@ class SemanticAnalyzer:
             derive        auto-derived hash() and clone()        _derive                           passes/derive.py
             shadowing     reject an extension over a built-in    _check_extension_shadows_builtin  here
                           or a stdlib method on a built-in
-                          type (C2), and over a perk method a    _reject_extensions_beside_shipped_perk_impls  here
-                          compiled library ships, then warn
-                          where an own extension hides an        _warn_hidden_imported_extensions  here
-                          imported one (C3)
+                          type (C2), then warn where an own
+                          extension hides an imported one (C3)   _warn_hidden_imported_extensions  here
             effects       destroy-effect summary (AST)           _compute_effects                  passes/effects.py
             scope         scope and variable analysis (AST)      _check_units                      passes/scope.py
             lowering      the SHIR body of each declaration      _check_units                      shir/lowering.py
@@ -343,11 +331,10 @@ class SemanticAnalyzer:
             if unit.provenance is not None:
                 self.reporter.add_provenance(str(unit.file_path), unit.provenance)
 
-        libraries = self._collect(compilation_order)
+        refused_library_types = self._collect(compilation_order)
         self._check_docs(compilation_order)
         self._check_unused(compilation_order, self.unit_manager.units)
         self._check_externs(compilation_order)
-        self._register_libraries(compilation_order, libraries)
         self._build_namespaces(compilation_order, self.unit_manager.units)
         self._check_ffi_clash(compilation_order)
         self._check_entrypoint(compilation_order)
@@ -359,7 +346,7 @@ class SemanticAnalyzer:
         if self._refused_pack_bodies:
             return
 
-        instantiations = self._collect_instantiations(compilation_order, libraries)
+        instantiations = self._collect_instantiations(compilation_order)
         monomorphizer = self._monomorphize(compilation_order, instantiations)
         self._check_instance_clash(compilation_order)
 
@@ -370,8 +357,8 @@ class SemanticAnalyzer:
         # type a consumer declaration took from a library stops it for the same reason:
         # CE3011 stands at the declaration, and one name means two shapes to the two
         # sides, so a later pass measures one side's code against the other's (#761,
-        # #814, #902 -- binary and source alike).
-        if monomorphizer.constraint_violations or libraries.refused_types:
+        # #814, #902).
+        if monomorphizer.constraint_violations or refused_library_types:
             return
 
         self._resolve_types()
@@ -379,7 +366,6 @@ class SemanticAnalyzer:
             return
         self._derive()
         self._check_extension_shadows_builtin(monomorphizer.sites)
-        self._reject_extensions_beside_shipped_perk_impls()
         self._warn_hidden_imported_extensions()
 
         self._start_late_requests(monomorphizer, compilation_order)
@@ -387,8 +373,8 @@ class SemanticAnalyzer:
         if self.reuse is not None:
             self.reuse.decide(compilation_order, self.tables, self.monomorphized_extensions,
                               drop_type_names(self.tables.perk_impls))
-        self._check_units(compilation_order, monomorphizer, libraries)
-        self._check_array_extensions(compilation_order, monomorphizer, libraries)
+        self._check_units(compilation_order, monomorphizer)
+        self._check_array_extensions(compilation_order, monomorphizer)
         self._reject_opaque_in_program_tables()
 
     def check_error_holes(self) -> None:
@@ -421,11 +407,10 @@ class SemanticAnalyzer:
                 if isinstance(held, TypeParameter) and held.is_opaque:
                     raise_internal_error("CE0148", name=entry.name)
 
-    def _collect(self, compilation_order: list[Unit]) -> LibraryRegistration:
+    def _collect(self, compilation_order: list[Unit]) -> list:
         """collect: constants, headers and generic types, from every unit.
 
-        It answers the `libraries` step's registration, which is built here because the
-        perk definitions it seeds have to reach the tables before the first unit.
+        It answers the library types that a declaration of the consumer took (CE3011).
         """
         collector = CollectorPass(
             self.reporter,
@@ -436,19 +421,6 @@ class SemanticAnalyzer:
         # it holds IS the whole program's answer and nothing copies it into a second
         # set (#672).
         global_tables = collector.tables
-
-        libraries = LibraryRegistration(self.reporter, global_tables,
-                                        self.library_linker, self.library_registry,
-                                        dont_panic=self.dont_panic)
-        # BEFORE the consumer's units: perk-impl collection validates each impl against
-        # the visible perk definitions (CE4003), so the contract must already be here.
-        # A library's generic TYPES are seeded for the same reason one kind on: a
-        # consumer's `extend Crate@(T)` names one in its TARGET, and the collect pass
-        # reads that name while it collects the unit (#728).
-        if self.library_linker is not None:
-            libraries.seed_perks(global_tables.perks)
-            libraries.seed_generic_types()
-            collector.admit_binary_libraries(libraries.library_names())
 
         for unit in compilation_order:
             if unit.ast is None:
@@ -469,13 +441,12 @@ class SemanticAnalyzer:
                     unit.ast.perk_impls = [i for i in unit.ast.perk_impls
                                            if id(i) not in dropped]
 
-        libraries.refused_types.extend(collector.refused_library_types)
         self._refused_pack_bodies = collector.refused_pack_bodies
         self.marked.extend(collector.marked)
         self.tables = global_tables
         from sushi_lang.semantics.generics.iterators import install_item_owner
         install_item_owner(self.tables)
-        return libraries
+        return list(collector.refused_library_types)
 
     def _check_docs(self, compilation_order: list[Unit]) -> None:
         """docs: check each doc block against the declaration beside it."""
@@ -503,7 +474,6 @@ class SemanticAnalyzer:
     def _check_unused(self, compilation_order: list[Unit], all_units: dict) -> None:
         """unused: `--warn-unused`, a dead private declaration and an unused import."""
         # Beside `docs` and for its reason: it reads the WRITTEN declarations, before
-        # `libraries` appends a binary library's constants to a host unit and before
         # `monomorphize` appends the instances.
         if not self.lints.unused:
             return
@@ -531,39 +501,18 @@ class SemanticAnalyzer:
                 link_requests(unit_reporter, unit.ast, unit.name, str(unit.file_path)))
             self._merge_unit(unit_reporter)
 
-    def _register_libraries(self, compilation_order: list[Unit],
-                            libraries: LibraryRegistration) -> None:
-        """libraries: every symbol a binary `.slib` exports enters the collected tables."""
-        # The order of the arms is the step's own (`library_registration.py`); the perk
-        # DEFINITIONS were seeded ahead of the collect loop.
-        libraries.register(compilation_order)
-        self.library_registry = libraries.registry
-        self.library_perk_impls = libraries.shipped_perk_impls
-        self.library_extensions = libraries.shipped_extensions
-        self.marked.extend(libraries.marked)
-
     def _build_namespaces(self, compilation_order: list[Unit], all_units: dict) -> None:
         """namespaces: what each unit may write behind a dot."""
-        # After `libraries`, because a BINARY library's declarations exist only once that
-        # step has read the manifest, and before `ffi-clash`, which is the first step that
-        # asks whether a name is already taken (`unit-namespaces.md` section 3.2).
-        from sushi_lang.semantics.passes.namespaces import (
-            build_compiled_library_namespaces, build_namespaces,
-        )
+        # Before `ffi-clash`, which is the first step that asks whether a name is already
+        # taken (`unit-namespaces.md` section 3.2).
+        from sushi_lang.semantics.passes.namespaces import build_namespaces
         for unit in compilation_order:
             if unit.ast is None:
                 continue
             unit_reporter = self._unit_reporter(unit)
             self.tables.namespaces[unit.name] = build_namespaces(
-                unit_reporter, unit, self.tables, units=all_units,
-                library_registry=self.library_registry)
+                unit_reporter, unit, self.tables, units=all_units)
             self._merge_unit(unit_reporter)
-        # A compiled library's units have no AST here, and a copy of one of their
-        # templates still resolves its names in their scope (#1120).
-        for unit_name, table in build_compiled_library_namespaces(
-                self.tables, units=all_units,
-                library_registry=self.library_registry).items():
-            self.tables.namespaces.setdefault(unit_name, table)
 
     def _check_ffi_clash(self, compilation_order: list[Unit]) -> None:
         """ffi-clash: fold the link-name constants (#1089), then an extern naming a symbol
@@ -581,8 +530,8 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             fold_link_names(unit_reporter, unit.ast, self.tables, unit.name)
             reject_external_naming_a_defined_symbol(
-                unit_reporter, unit.ast, self.tables, unit.name, self.library_registry,
-                self.generated_symbols)
+                unit_reporter, unit.ast, self.tables, unit.name,
+                generated_symbols=self.generated_symbols)
             self._merge_unit(unit_reporter)
 
         # One C symbol has one signature in the program (#1099). The names of every unit
@@ -636,8 +585,8 @@ class SemanticAnalyzer:
                                                self.tables.externals, instances, unit.name)
             self._merge_unit(unit_reporter)
 
-    def _collect_instantiations(self, compilation_order: list[Unit],
-                                libraries: LibraryRegistration) -> 'InstantiationCollector':
+    def _collect_instantiations(self, compilation_order: list[Unit]
+                                ) -> 'InstantiationCollector':
         """instantiate: every generic instantiation the program asks for."""
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
         instantiation_collector = InstantiationCollector(
@@ -662,10 +611,6 @@ class SemanticAnalyzer:
         instantiation_collector.namespaces = None
         instantiation_collector.current_file = None
         instantiation_collector.generic_funcs = self.tables.generic_funcs.by_name
-        # A BINARY library's signatures name instantiations too, and no unit walk sees
-        # them (#543): `fn make_box(i32 v) Box@(i32)` is a manifest record here.
-        if self.library_registry is not None:
-            instantiation_collector.collect_from_signatures(libraries.signatures())
         return instantiation_collector
 
     def _monomorphize(self, compilation_order: list[Unit],
@@ -856,8 +801,7 @@ class SemanticAnalyzer:
             unit.ast for unit in compilation_order if unit.ast is not None
         )
 
-    def _check_units(self, compilation_order: list[Unit], monomorphizer,
-                     libraries: LibraryRegistration) -> None:
+    def _check_units(self, compilation_order: list[Unit], monomorphizer) -> None:
         """scope, lowering, typecheck, lift, borrow and the SLIR stage, per unit, in one loop.
 
         Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
@@ -878,9 +822,9 @@ class SemanticAnalyzer:
                 if self._replay(unit, monomorphizer, compilation_order):
                     continue
                 self.reuse.fall_back(unit)
-            self._check_unit(unit, monomorphizer, libraries)
+            self._check_unit(unit, monomorphizer)
 
-    def _check_unit(self, unit: Unit, monomorphizer, libraries: LibraryRegistration) -> None:
+    def _check_unit(self, unit: Unit, monomorphizer) -> None:
         """The body passes of one unit. A unit that records (`unit_reuse.py`) fills its
         record while they run."""
         record = self.reuse.recording(unit) if self.reuse is not None else None
@@ -888,7 +832,7 @@ class SemanticAnalyzer:
             record.perk_question if record is not None else None)
         try:
             unit_reporter = self._unit_reporter(unit)
-            passes = self._unit_passes(unit, unit_reporter, monomorphizer, libraries)
+            passes = self._unit_passes(unit, unit_reporter, monomorphizer)
             passes.typecheck.body_record = record
             passes.scope.run(unit.ast)
             lower_unit(self.shir, unit, passes.scope.bindings,
@@ -914,8 +858,7 @@ class SemanticAnalyzer:
         self._merge_unit(reporter)
         return True
 
-    def _fall_back(self, units: list[Unit], monomorphizer,
-                   libraries: LibraryRegistration) -> bool:
+    def _fall_back(self, units: list[Unit], monomorphizer) -> bool:
         """Run the body passes of each reused unit of `units` after all. True when one ran.
 
         A reused unit that gets a template copy, or whose key changed after the per-unit
@@ -928,7 +871,7 @@ class SemanticAnalyzer:
                        if unit is not None and self.reuse.is_reused(unit)}.values())
         for unit in fallen:
             self.reuse.fall_back(unit)
-            self._check_unit(unit, monomorphizer, libraries)
+            self._check_unit(unit, monomorphizer)
         return bool(fallen)
 
     def _pending_homes(self, compilation_order: list[Unit], monomorphizer,
@@ -946,7 +889,7 @@ class SemanticAnalyzer:
         return homes
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
-                     monomorphizer, libraries: LibraryRegistration) -> _UnitPasses:
+                     monomorphizer) -> _UnitPasses:
         """The scope, typecheck, lift and borrow passes and the SLIR stage of ONE unit, in
         its own scope.
 
@@ -959,7 +902,6 @@ class SemanticAnalyzer:
         scope = ScopeAnalyzer(reporter, self.tables.constants, self.tables.structs,
                               self.tables.enums, self.tables.generic_enums,
                               self.tables.generic_structs, external_table=self.tables.externals,
-                              kept_constants=libraries.kept_constant_names(),
                               namespaces=namespaces,
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
@@ -1027,8 +969,8 @@ class SemanticAnalyzer:
         extend_def.home_unit = home.name if home is not None else None
         self.monomorphized_extensions.append(extend_def)
 
-    def _check_array_extensions(self, compilation_order: list[Unit], monomorphizer,
-                                libraries: LibraryRegistration) -> None:
+    def _check_array_extensions(self, compilation_order: list[Unit],
+                                monomorphizer) -> None:
         """Check each call-site-driven extension copy, to a fixpoint."""
         # An array-target template instantiates at the CALL SITE (the typecheck pass
         # queued it), and checking one monomorphized body can resolve a call that queues
@@ -1050,7 +992,7 @@ class SemanticAnalyzer:
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
             homes = self._pending_homes(compilation_order, monomorphizer,
                                         self.monomorphized_extensions[checked:])
-            if self._fall_back(homes, monomorphizer, libraries):
+            if self._fall_back(homes, monomorphizer):
                 continue
             perk_copies = self._place_perk_copies(monomorphizer, compilation_order)
             perk_copies += self._place_reached_perk_impls()
@@ -1061,7 +1003,7 @@ class SemanticAnalyzer:
                 if self.reuse is not None and self._fall_back(
                         self.reuse.drifted(compilation_order, self.monomorphized_extensions,
                                            drop_type_names(self.tables.perk_impls)),
-                        monomorphizer, libraries):
+                        monomorphizer):
                     continue
                 break
             checked = len(self.monomorphized_extensions)
@@ -1070,7 +1012,7 @@ class SemanticAnalyzer:
                 (units[ext.home_unit or ""], ext) for ext in batch]
             copies += perk_copies
             copies += functions
-            self._check_copies(copies, monomorphizer, libraries)
+            self._check_copies(copies, monomorphizer)
             if marks != table_marks(self.tables.structs, self.tables.enums):
                 growing_rounds += 1
             if growing_rounds >= bound:
@@ -1427,8 +1369,7 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.generics.late_interning import settle_new_instances
         settle_new_instances(self.tables, self.reporter, marks)
 
-    def _check_copies(self, copies: list[tuple[Unit, Any]], monomorphizer,
-                      libraries: LibraryRegistration) -> None:
+    def _check_copies(self, copies: list[tuple[Unit, Any]], monomorphizer) -> None:
         """scope, lowering, typecheck, lift and borrow over each copy cut after the loop.
 
         A late function copy (#1155), an extension copy of a generic or an array target,
@@ -1453,7 +1394,7 @@ class SemanticAnalyzer:
         seen = {diagnostic_identity(d) for d in self.reporter.items}
         for home, nodes in by_home.values():
             scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, monomorphizer, libraries)
+            passes = self._unit_passes(home, scratch, monomorphizer)
             lookup = DeclLookup.of(self.tables, home.name)
             for node in nodes:
                 entry = _copy_entry(node)
@@ -1537,23 +1478,6 @@ class SemanticAnalyzer:
                 found, sites, lambda item: getattr(item[0], "name", None),
                 lambda item: (display_type(item[0]),))[0]
             self._reject_builtin_shadow(*first)
-
-    def _reject_extensions_beside_shipped_perk_impls(self) -> None:
-        """CE4007 at an extension method beside a perk method a library ships (#1255).
-
-        A binary library's implementation, a template included, has no
-        written declaration in the build, so the check of a written one never meets it.
-        """
-        from sushi_lang.semantics.passes.types.perks import (
-            reject_extensions_beside_shipped_impl)
-        for impl in self.library_perk_impls:
-            reject_extensions_beside_shipped_impl(impl, self.tables, self.reporter,
-                                                  template=False)
-        for templates in list(self.tables.generic_perk_impls.by_base.values()):
-            for found in templates:
-                if any(m.is_library_template for m in found.impl.methods):
-                    reject_extensions_beside_shipped_impl(found.impl, self.tables,
-                                                          self.reporter, template=True)
 
     def _warn_hidden_imported_extensions(self) -> None:
         """CW3007: a unit's own extension hides an imported public one (C3).

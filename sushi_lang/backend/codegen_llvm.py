@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Callable, Dict, NoReturn, Optional
 from llvmlite import ir
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.backend.slir.bodies import SlirBodies
     from sushi_lang.semantics.decl_table import DeclTable, FunctionDecl, GlobalDecl, MethodDecl
     from sushi_lang.semantics.passes.collect import PerkImplementationTable
@@ -17,14 +16,13 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.overflow_mode import OverflowMode
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
-from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
 from sushi_lang.backend.runtime.strings import literal_fat_pointer
 from sushi_lang.backend.functions import LLVMFunctionManager
-from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager, text_global
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -95,15 +93,9 @@ class LLVMCodegen:
 
         self.main_expects_args: bool = False
 
-        self.is_library_mode: bool = False
-
-        self.library_linker: Optional['LibraryResolver'] = None
-
         # `--overflow` (`codegen_for`): what a checked integer operator does with a result
         # that its type cannot hold.
         self.overflow: OverflowMode = OverflowMode.TRAP
-
-        self.library_registry: Optional[LibraryRegistry] = None
 
         # The declaration table of the program (`codegen_for`, docs/design/ir.md 6.3): the
         # declaration round reads each declaration from it. None in a codegen that
@@ -156,17 +148,11 @@ class LLVMCodegen:
         from sushi_lang.backend.runtime.args import generate_argc_argv_conversion
         return generate_argc_argv_conversion(self, argc, argv)
 
-    def build_module_multi_unit(self, units: list[Unit],
-                                weak_units: frozenset[str] = frozenset()) -> ir.Module:
-        """Generate LLVM IR for multiple compilation units and return the module.
-
-        `weak_units` names the units whose definitions the consumer of this module may
-        also hold -- a library build's bundled stdlib modules (#594). Empty for a
-        program, which is the only build that owns every symbol it emits.
-        """
+    def build_module_multi_unit(self, units: list[Unit]) -> ir.Module:
+        """Generate LLVM IR for multiple compilation units and return the module."""
         self.runtime.declare_externs()
         self.declare_user_externs()
-        self._emit_multi_unit_program(units, weak_units=weak_units)
+        self._emit_multi_unit_program(units)
         return self.module
 
     def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
@@ -251,36 +237,22 @@ class LLVMCodegen:
 
         return result_module
 
-    def _emit_multi_unit_program(self, units: list[Unit],
-                                 weak_units: frozenset[str] = frozenset()) -> None:
-        """Emit LLVM IR for multiple compilation units.
-
-        A unit named in `weak_units` is not this module's to own: its definitions are
-        weakened so a consumer that compiles the same unit keeps one copy of each
-        (`backend/library_linkage.py`). The module is asked what appeared while the
-        unit was emitted, so no symbol name is re-derived here.
-        """
-        from sushi_lang.backend.library_linkage import weaken_foreign_globals
-
+    def _emit_multi_unit_program(self, units: list[Unit]) -> None:
+        """Emit LLVM IR for multiple compilation units."""
         def emit_constants() -> None:
             for unit in units:
                 decls = self.declaration_table().unit(unit.name)
                 if decls is None:
                     continue
-
-                before = set(self.module.globals) if unit.name in weak_units else None
                 for const in decls.globals:
                     self._emit_global_constant(const, filename=str(unit.file_path))
-                if before is not None:
-                    weaken_foreign_globals(self.module, before)
 
         self._declare_and_define(units, units, declares_private=lambda unit: True,
-                                 emit_constants=emit_constants, weak_units=weak_units)
+                                 emit_constants=emit_constants)
 
     def _declare_and_define(self, declared: list[Unit], defined: list[Unit], *,
                             declares_private: Callable[[Unit], bool],
-                            emit_constants: Callable[[], None],
-                            weak_units: frozenset[str] = frozenset()) -> None:
+                            emit_constants: Callable[[], None]) -> None:
         """Declare the functions of `declared`, emit the constants, then define the bodies of
         `defined`.
 
@@ -292,11 +264,8 @@ class LLVMCodegen:
         extension is declared in every module and defined in the module of its HOME unit
         alone, the unit that declared its template, like a perk-impl copy (#1064): its body
         names that unit's private functions and aliases, and one definition is one symbol
-        (#404). A unit named in `weak_units` has each of its bodies weakened
-        (`backend/library_linkage.py`).
+        (#404).
         """
-        from sushi_lang.backend.library_linkage import weaken_all
-
         table = self.declaration_table()
         for unit in declared:
             decls = table.unit(unit.name)
@@ -314,13 +283,6 @@ class LLVMCodegen:
         for method in table.copies:
             self.functions.emit_extension_method_decl(method)
 
-        if self.library_linker is not None:
-            self._declare_library_functions()
-            # Library-shipped perk impls and extensions (C4a): declared only, never
-            # defined - the bodies link in from the library bitcode.
-            for method in (*table.shipped_perks, *table.shipped_methods):
-                self.functions.emit_extension_method_decl(method)
-
         emit_constants()
 
         for unit in defined:
@@ -329,16 +291,10 @@ class LLVMCodegen:
                 continue
 
             self.emitting_unit = unit.name
-            # Each body as the emitter named it. A snapshot cannot find these: the
-            # declaration round above already put every function in the module.
-            emitted: list[ir.Function] = []
             bodies: list[FunctionDecl | MethodDecl] = [*decls.functions, *decls.methods]
             bodies.extend(method for method in table.copies if method.home_unit == unit.name)
             for decl in bodies:
-                emitted.extend(self._define(decl, str(unit.file_path)))
-
-            if unit.name in weak_units:
-                weaken_all(emitted)
+                self._define(decl, str(unit.file_path))
         self.emitting_unit = None
 
     def declaration_table(self) -> 'DeclTable':
@@ -365,54 +321,6 @@ class LLVMCodegen:
             defined.append(self.functions.main_wrapper.emit_main())
         return defined
 
-    def _declare_library_functions(self) -> None:
-        """Declare every loaded library's functions from the registry's signatures.
-
-        The registry is the ONE reader of a manifest signature; a second builder here
-        read `return_type` alone and declared every `| E` as StdError (#541). A PUBLIC
-        record declares under its bare name. A PRIVATE record declares under ITS unit
-        -- two library units may each ship a `helper` (#494) -- and also under its LINK
-        SYMBOL, which is the callee a template body's bindings rewrite produced (D4).
-        """
-        if self.library_registry is None:
-            return
-
-        def _declare_one(func_sig, name: str, unit: str | None):
-            from sushi_lang.backend.functions.signature import call_signature
-            from sushi_lang.backend.generics.result_builder import declared_return_ll
-
-            param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
-            # The typecheck pass's derivation, so the call and the prototype agree on the
-            # channel: `| E` is the Err arm, an explicit Result is not wrapped twice
-            # (#541), and a bare signature is its return.
-            ll_ret = declared_return_ll(self, func_sig)
-
-            symbol = emitted_symbol(name, None, getattr(func_sig, "link_symbol", None))
-            llvm_fn = self.module.globals.get(symbol)
-            if llvm_fn is None:
-                llvm_fn = ir.Function(self.module,
-                                      call_signature(ll_ret, param_types).function_type,
-                                      name=symbol)
-                llvm_fn.linkage = 'external'
-                for i, p in enumerate(func_sig.params):
-                    if i < len(llvm_fn.args):
-                        llvm_fn.args[i].name = p.name
-
-            self.funcs.declare(name, llvm_fn, unit=unit)
-            if symbol != name:
-                self.funcs.declare(symbol, llvm_fn)
-
-        for func_name, func_sig in self.library_registry.get_all_functions().items():
-            if func_name in self.funcs:
-                continue
-            _declare_one(func_sig, func_name, None)
-
-        for (unit, name), (_lib, sig) in \
-                self.library_registry.get_all_private_functions().items():
-            if self.funcs.declared(name, unit) is not None:
-                continue
-            _declare_one(sig, name, unit)
-
     def _constant_string_value(self, text: str, data_name: str) -> ir.Constant:
         """A string constant, with its backing byte array global.
 
@@ -435,9 +343,8 @@ class LLVMCodegen:
         A constant is `internal` and `.rodata`: every module that reads it gets its own
         copy, which is harmless for a value. A unit variable (`storage`) is ONE storage
         per program (docs/design/unit-storage.md), so it is writable and externally
-        linked: the declaring unit's module defines it, and every other module -- and a
-        consumer of a binary library, under the manifest's `symbol` -- declares it with
-        no initializer.
+        linked: the declaring unit's module defines it, and every other module declares it
+        with no initializer.
         """
         global_var = ir.GlobalVariable(self.module, llvm_type, name=symbol)
         if storage:

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Iterable, Mapping, Optional, overload
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import (
-    ConstDef, ExtendDef, ExtendWithDef, FuncDef, Param, Program, VarDef,
+    ConstDef, ExtendDef, FuncDef, Param, Program, VarDef,
 )
 from sushi_lang.semantics.const_eval import ConstantEvaluator, allocates_nothing
 from sushi_lang.semantics.generics.iterators import settle_in_tables
@@ -101,8 +101,6 @@ class DeclTable:
     """The declarations of one program."""
     units: Mapping[str, UnitDecls]
     copies: tuple[MethodDecl, ...]
-    shipped_perks: tuple[MethodDecl, ...]
-    shipped_methods: tuple[MethodDecl, ...]
 
     def unit(self, name: str) -> Optional[UnitDecls]:
         """The declarations of the unit `name`, or None for a unit with no AST."""
@@ -110,19 +108,13 @@ class DeclTable:
 
 
 def declarations(units: Iterable[Unit], tables: SymbolTables, shir: LoweredProgram, *,
-                 copies: Iterable[ExtendDef], shipped_methods: Iterable[ExtendDef],
-                 shipped_perks: Iterable[ExtendWithDef]) -> DeclTable:
+                 copies: Iterable[ExtendDef]) -> DeclTable:
     """The declaration table of the program of `units` (ir.md 6.3)."""
     builder = _Builder(tables, shir)
-    shipped: list[MethodDecl] = []
-    for impl in shipped_perks:
-        shipped.extend(builder.shipped_perk_methods(impl))
     return DeclTable(
         units=MappingProxyType({unit.name: builder.unit(unit.name, unit.ast) for unit in units
                                 if unit.ast is not None}),
-        copies=tuple(builder.extension(ext, None) for ext in copies),
-        shipped_perks=tuple(shipped),
-        shipped_methods=tuple(builder.extension(ext, None) for ext in shipped_methods))
+        copies=tuple(builder.extension(ext, None) for ext in copies))
 
 
 def _module_order(functions: Iterable[FuncDef]) -> list[FuncDef]:
@@ -193,17 +185,6 @@ class _Builder:
             by_pointer=_by_pointer(receiver, method.self_mode), params=params, ret=ret,
             err_type=err_type, written_channel=method.written_channel, home_unit=None,
             body=body)
-
-    def shipped_perk_methods(self, impl: ExtendWithDef) -> list[MethodDecl]:
-        """The methods of a perk implementation that a library ships, declared and never
-        defined. A template is source text, so a type that the program declares arrives as
-        an `UnknownType`; it resolves against the tables of the program."""
-        target = self.resolved(impl.target_type)
-        return [self.perk_method(
-            target, method,
-            tuple((p.name, self.resolved(p.ty)) for p in method.params if p.ty),
-            self.resolved(method.ret), self.resolved(method.err_type), None)
-            for method in impl.methods]
 
     def param_type(self, ty: Type) -> Type:
         """The type of a parameter. A written instance (`Box@(i32) b`) names the instance

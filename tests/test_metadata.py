@@ -81,14 +81,11 @@ class TestMetadata:
     run_in_fixture_dir: bool = False
     # Source `.slib` files the runner builds in the fixture's copy before each compilation.
     build_libs: Optional[List[str]] = None
-    # Binary `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
-    build_libs_binary: Optional[List[str]] = None
     # Source `.slib` files that must build with exit 1 and exactly these warning codes.
     build_libs_warns: Optional[List[Tuple[str, List[str]]]] = None
-    # Every BUILD_LIB, BUILD_LIB_BINARY and BUILD_LIB_WARNS as (kind,
-    # source, `.slib` file name, version or None, warning codes or None), in written
-    # order: the order the runner builds them in.
-    library_builds: Optional[List[Tuple[str, str, str, Optional[str],
+    # Every BUILD_LIB and BUILD_LIB_WARNS as (source, `.slib` file name, version or
+    # None, warning codes or None), in written order: the order the runner builds them in.
+    library_builds: Optional[List[Tuple[str, str, Optional[str],
                                         Optional[List[str]]]]] = None
     # Edits of a built `.slib` manifest: (library file stem, top-level key, string value).
     lib_manifest_sets: Optional[List[Tuple[str, str, str]]] = None
@@ -149,8 +146,6 @@ class TestMetadata:
             self.rebuild_flags = []
         if self.build_libs is None:
             self.build_libs = []
-        if self.build_libs_binary is None:
-            self.build_libs_binary = []
         if self.build_libs_warns is None:
             self.build_libs_warns = []
         if self.library_builds is None:
@@ -240,10 +235,10 @@ RUNNER_OWNED_FLAGS = frozenset({
     *(dump.flag for dump in GOLDEN_DUMPS),
 })
 
-# The two flags the runner writes for each library build. `LIB_FLAGS` refuses them, because
-# a later one would win silently; `COMPILER_FLAGS` may spell them, as a fixture's own
-# build is no library build.
-LIB_BUILD_FLAGS = frozenset({'--lib-kind', '--lib-version'})
+# The flag the runner writes for each library build. `LIB_FLAGS` refuses it, because a
+# later one would win silently; `COMPILER_FLAGS` may spell it, as a fixture's own build
+# is no library build.
+LIB_BUILD_FLAGS = frozenset({'--lib-version'})
 
 # The one runner-owned flag a fixture may spell once it names its own output (OUTPUT_PATH):
 # the build kind is then the fixture's, because the runner no longer picks the file.
@@ -405,8 +400,8 @@ def _stdlib_module(metadata: TestMetadata, value: str, test_file: Path) -> None:
         _warn(f"Invalid STDLIB_MODULE value in {test_file}: {value}")
 
 
-def _library_build(field_name: str, kind: str):
-    """A BUILD_LIB-family directive: the kind's own list, and the one ordered list.
+def _library_build(field_name: str):
+    """A BUILD_LIB directive: its own list, and the one ordered list.
 
     `x.sushi` builds `x.slib` at the runner's version. `x.sushi -> y.slib` builds the
     same source under another file name, so the library name is not the unit name, and
@@ -422,14 +417,14 @@ def _library_build(field_name: str, kind: str):
                     or (sep and (not target.endswith('.slib')
                                  or len(Path(target).parts) != 1))):
                 metadata.directive_errors.append(
-                    f"a {kind} library build takes `<source>`, `<source> -> <name>.slib` "
+                    f"a library build takes `<source>`, `<source> -> <name>.slib` "
                     f"or either with `@ <version>`, not {value!r}")
                 return
             pairs = [(source, target or f"{Path(source).stem}.slib")]
         else:
             pairs = [(name, f"{Path(name).stem}.slib") for name in _split(source)]
         getattr(metadata, field_name).extend(name for name, _ in pairs)
-        metadata.library_builds.extend((kind, name, slib, version, None)
+        metadata.library_builds.extend((name, slib, version, None)
                                        for name, slib in pairs)
     return handle
 
@@ -437,23 +432,19 @@ def _library_build(field_name: str, kind: str):
 _WARNING_CODE = re.compile(r"CW\d{4}")
 
 
-LIBRARY_KINDS = ("source", "binary")
-
-
 def _build_lib_warns(metadata: TestMetadata, value: str, test_file: Path) -> None:
-    """`x.sushi -> CW1001`, or `x.sushi binary -> CW1001` for another library kind."""
+    """`x.sushi -> CW1001`: the library builds with exit 1 and these warning codes."""
     head, sep, codes = _unquote(value).partition('->')
     words, codes = _split(head), _split(codes)
-    kind = words[1] if len(words) == 2 else "source"
-    if (not sep or len(words) not in (1, 2) or kind not in LIBRARY_KINDS or not codes
+    if (not sep or len(words) != 1 or not codes
             or not all(_WARNING_CODE.fullmatch(code) for code in codes)):
         metadata.directive_errors.append(
-            "BUILD_LIB_WARNS takes `<source> [source|binary] -> <warning code>"
+            "BUILD_LIB_WARNS takes `<source> -> <warning code>"
             f"[, <warning code>...]`, not {value!r}")
         return
     metadata.build_libs_warns.append((words[0], codes))
     metadata.library_builds.append(
-        (kind, words[0], f"{Path(words[0]).stem}.slib", None, codes))
+        (words[0], f"{Path(words[0]).stem}.slib", None, codes))
 
 
 def _lib_manifest_set(metadata: TestMetadata, value: str, test_file: Path) -> None:
@@ -597,8 +588,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
     'EXPECT_COMPILER_STDOUT_CONTAINS': _extend('expect_compiler_stdout_contains', _text),
     'REBUILD_FLAGS': _rebuild_flags,
-    'BUILD_LIB': _library_build('build_libs', 'source'),
-    'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),
+    'BUILD_LIB': _library_build('build_libs'),
     'BUILD_LIB_WARNS': _build_lib_warns,
     'LIB_FLAGS': _lib_flags,
     'LIB_MANIFEST_SET': _lib_manifest_set,

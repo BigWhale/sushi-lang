@@ -2,8 +2,7 @@
 
 Read once per declaration, at the marker, in the collect pass: one CE0152 for each
 declaration that the unit may not mark, else one CW0004 for each marked body that holds
-no index to uncheck. The templates of a binary library meet the same gate in
-`library_registration.py`.
+no index to uncheck.
 """
 from __future__ import annotations
 
@@ -52,11 +51,6 @@ class MarkerGate:
         stdlib = unit.is_bundled_stdlib
         return cls(allowed=stdlib or flag, library=unit.library_name,
                    warns_inert=unit.is_authors_unit, counts=not stdlib)
-
-    @classmethod
-    def for_library_template(cls, library: str, flag: bool) -> 'MarkerGate':
-        """A template of a library, parsed again in the consumer's build."""
-        return cls(allowed=flag, library=library, counts=True)
 
 
 def marked_name(decl: MarkedDecl, owner: Optional[ExtendWithDef] = None) -> str:

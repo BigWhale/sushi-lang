@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
 def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None,
                              monomorphized_extensions: list | None = None,
-                             library_fingerprints: dict[str, str] | None = None,
                              drop_types: frozenset[str] | None = None) -> str:
     """Compute a semantic fingerprint for a compilation unit."""
     hasher = hashlib.sha256()
@@ -79,15 +78,6 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         for name in sorted(unit_manager.units):
             hasher.update(f"UNIT:{name}:".encode())
             hasher.update(_interface_digest(unit_manager.units[name]).encode())
-
-    # 6. Imported library fingerprints (cross-library generic templates).
-    # Folding the whole-`.slib` digest in covers any library template a
-    # consumer unit may monomorphize; since the digest hashes the entire file,
-    # any template-body change flips it and forces a consumer rebuild.
-    if library_fingerprints:
-        hasher.update(b"LIB_TEMPLATES:")
-        for lib_path in sorted(library_fingerprints):
-            hasher.update(f"{lib_path}:{library_fingerprints[lib_path]}".encode())
 
     # A source library unit: the digest of its `.slib`, so a new version or another
     # manifest of the library gives a new key.
@@ -353,10 +343,8 @@ def _definition_signature(defn) -> str:
         return _callable_signature(defn)
 
     if isinstance(defn, VarDef):
-        # Unit-level STORAGE, not a folded value: the address is the interface, and a
-        # binary library's consumer declares it under `link_symbol`.
-        link = f"@{defn.link_symbol}" if defn.link_symbol else ""
-        return f"var:{defn.ty}:{defn.name}={_node_digest(defn.value)}{link}"
+        # Unit-level STORAGE, not a folded value: the address is the interface.
+        return f"var:{defn.ty}:{defn.name}={_node_digest(defn.value)}"
 
     if isinstance(defn, ConstDef):
         # The VALUE, because a constant is folded into every unit that names it. The old

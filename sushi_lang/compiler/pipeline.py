@@ -11,7 +11,7 @@ from pathlib import Path
 from sushi_lang.compiler.loader import (
     load_unit_recursively,
 )
-from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION, library_kind
+from sushi_lang.backend.library_format import library_kind
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.host import host_key
@@ -23,63 +23,8 @@ from sushi_lang.semantics.unit_reuse import UnitReuse
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.backend.link_plan import LinkInputs
     from sushi_lang.compiler.options import BuildOptions
-
-
-def _check_library_platform(metadata: dict) -> None:
-    """Reject a `.slib` carrying bitcode built for another host or target (CE3504).
-
-    The tag and the host are both `host_key()`, `<os>_<arch>`: an OS alone let an arm64
-    library through on x86_64, and the fault showed late, at the link. A library with no
-    tag, or with a tag that names no host (`unknown`, an old OS-only tag), cannot be
-    checked, so it is refused too. The data layout of the library must then be the
-    layout of this compiler's target (`target_data_layout`, the one that codegen uses);
-    a library with no layout is refused.
-
-    A source library states a platform too -- the machine that produced it -- but
-    nothing in it is machine code, so the field says nothing about where it can be
-    used, and the check skips it.
-    """
-    from sushi_lang.backend.library_errors import LibraryError
-    from sushi_lang.backend.llvm_optimization import target_data_layout
-
-    if library_kind(metadata) == "source":
-        return
-
-    lib_platform = metadata.get("platform")
-    host = host_key()
-    if lib_platform != host:
-        raise LibraryError("CE3504", lib_platform=lib_platform, current_platform=host)
-    lib_layout = metadata.get("data_layout")
-    layout = target_data_layout()
-    if lib_layout != layout:
-        raise LibraryError(
-            "CE3504", lib_platform=f"{lib_platform} (data layout {lib_layout or 'none'})",
-            current_platform=f"{host} (data layout {layout})")
-
-
-def _check_library_compiler_stamp(metadata: dict, lib_path: str) -> None:
-    """Refuse a binary `.slib` that another compiler built (CE3520).
-
-    The stamp is the exact compiler version and the compiler-source digest of the object
-    cache. Both must be equal to the running compiler. A source library has no stamp.
-    """
-    from sushi_lang import __version__
-    from sushi_lang.backend.library_errors import LibraryError
-    from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
-
-    if library_kind(metadata) == "source":
-        return
-    lib = metadata.get("library_name") or lib_path
-    for part, built, current in (
-            ("version", metadata.get("compiler_version"), __version__),
-            ("source digest", metadata.get("compiler_digest"),
-             compute_compiler_source_fingerprint())):
-        if built != current:
-            raise LibraryError("CE3520", lib=lib, part=part, built=built or "none",
-                               current=current)
 
 
 def _check_library_name(metadata: dict, lib_path: str, slib_path: Path) -> None:
@@ -141,63 +86,11 @@ def _check_library_compiler_version(metadata: dict, lib_path: str,
                            requires=requires, current=current)
 
 
-def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
-    """Refuse a binary `.slib` whose templates schema is not the current one (CE3512).
-
-    Version 5 keys every closure record by its unit and gives a source-shipped
-    template its `bindings` map (#494, D4). A version-4 library's bare-name records
-    can bind a template to another unit's body, which is a silent wrong answer, so
-    an old library is refused and must be rebuilt -- decision B of the epic. Version 6
-    ships every public perk and every generic-target perk implementation template
-    (#543); a version-5 library has neither, so a contract it implements would be
-    CE2008 at the consumer. Version 7 gives every perk method record its signature and
-    receiver mode, on the contract and on both kinds of implementation (#537); a
-    version-6 library's report would list its contracts with no methods. A SOURCE
-    library recompiles from its units and reads none of this.
-    """
-    from sushi_lang.backend.library_errors import LibraryError
-
-    if library_kind(metadata) == "source":
-        return
-    templates = metadata.get("templates") or {}
-    version = templates.get("version")
-    if version != TEMPLATES_SCHEMA_VERSION:
-        raise LibraryError(
-            "CE3512", path=lib_path,
-            reason=(f"templates schema version {version}; this compiler requires "
-                    f"{TEMPLATES_SCHEMA_VERSION} (rebuild the library)"))
-
-
-def _compiled_stdlib_modules(library_linker) -> set[str]:
-    """The stdlib modules a loaded COMPILED library's units use or re-export.
-
-    A source library brings its modules about by being text -- its `use` line is in the
-    consumer's build and the walk over unit ASTs finds it. A compiled library has only
-    its manifest: the `reexports` records (#585) and the `dependencies` records (#1120).
-    A re-exported module's names reach the consumer, and a used module is LOADED with
-    no name given: a public struct of the library can hold a `File`, so the type has to
-    resolve and the module's bitcode has to be on the link line. Visibility stays the
-    unit's, as for a library dependency.
-    """
-    if library_linker is None:
-        return set()
-    from sushi_lang.semantics.library_registry import (
-        manifest_reexports, stdlib_dependencies)
-
-    modules: set[str] = set()
-    for manifest in library_linker.loaded_libraries.values():
-        modules.update(record["path"] for record in manifest_reexports(manifest)
-                       if record.get("kind") == "stdlib" and record.get("path"))
-        modules.update(stdlib_dependencies(manifest))
-    return modules
-
-
-def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
-                                library_linker=None) -> bool:
+def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:
     """Merge the bundled Sushi-source stdlib modules that the build needs, as units.
 
-    A module is needed when a unit imports it, when a compiled library uses it, and when
-    a unit names a method that the module declares on a built-in type. Such a method
+    A module is needed when a unit imports it, and when a unit names a method that the
+    module declares on a built-in type. Such a method
     needs no import (`docs/design/extension-visibility.md` R1), so its module is loaded
     with no `use`. That load brings no name to a unit (R2).
     """
@@ -209,7 +102,6 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
         resolve_source_stdlib_path, stdlib_imports,
     )
 
-    compiled = _compiled_stdlib_modules(library_linker)
     texts: dict[str, str] = {}
     sources: dict[str, tuple[Path, str, Program]] = {}
     named: dict[str, frozenset[str]] = {}
@@ -218,7 +110,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
         needed = set()
         paths = [path for unit in units if unit.ast is not None
                  for path in stdlib_imports(unit.ast)]
-        for path in [*paths, *compiled]:
+        for path in paths:
             if path in SOURCE_STDLIB_MODULES:
                 needed.add(path)
                 continue
@@ -385,8 +277,7 @@ def _spelled(use) -> str:
 
 
 def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
-                             ignore_compiler_version: bool,
-                             cache: CacheManager) -> tuple[LibraryResolver | None, set[str]] | None:
+                             ignore_compiler_version: bool, cache: CacheManager) -> bool:
     """Load the whole library graph: every `use <lib/...>`, transitively (#1120).
 
     LOADING is transitive. A library records every `use <lib/...>` that its units write,
@@ -396,13 +287,11 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
     of a library loaded.
 
     A library is identified by the `library_name` stamped into its `.slib`. Two paths to
-    one library load it once; two versions of one library are CE3519. A source library
-    is injected as ordinary units; a compiled one reaches the analyzer through the
-    resolver's `loaded_libraries`, and its bitcode is linked once.
+    one library load it once; two versions of one library are CE3519. Each library is
+    injected as ordinary units.
 
     Every `use <lib/...>` of every unit is then stamped with the name and the version it
-    found. Returns (resolver-or-None, compiled import paths), or None when a library
-    failed to load.
+    found. False when a library failed to load.
     """
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.backend.library_format import LibraryFormat, check_manifest
@@ -411,12 +300,9 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
 
     todo = _consumer_wants(unit_manager)
     if not todo:
-        return None, set()
+        return True
 
     resolver = LibraryResolver()
-    binary_imports: set[str] = set()
-    compiled_dependencies: dict[str, list[str]] = {}
-    source_units: dict[str, list[str]] = {}
     names: dict[str, str] = {}
     loaded: dict[str, _Loaded] = {}
 
@@ -452,35 +338,25 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
                 continue
             loaded[name] = _Loaded(version, slib_path, wanted.origin)
             _check_expected(name, loaded[name], wanted)
-            _check_library_platform(metadata)
-            _check_library_compiler_stamp(metadata, wanted.path)
+            if library_kind(metadata) != "source":
+                raise LibraryError(
+                    "CE3512", path=str(slib_path),
+                    reason="a binary library; this compiler reads only a source library "
+                           "(build the library again)")
             _check_library_compiler_version(metadata, wanted.path,
                                             ignore=ignore_compiler_version)
-            _check_library_templates_version(metadata, wanted.path)
 
-            if library_kind(metadata) == "source":
-                injected = _inject_library_source(unit_manager, slib_path, metadata,
-                                                  wanted.path, cache)
-                dependencies = _source_library_dependencies(metadata, injected)
-                source_units[wanted.path] = [unit.name for unit in injected]
-            else:
-                binary_imports.add(wanted.path)
-                metadata["library_path"] = str(slib_path)
-                resolver.loaded_libraries[name] = metadata
-                dependencies = _compiled_library_dependencies(metadata)
-                compiled_dependencies[wanted.path] = [w.path for w in dependencies]
-
-            todo.extend(dependencies)
+            injected = _inject_library_source(unit_manager, slib_path, metadata,
+                                              wanted.path, cache)
+            todo.extend(_source_library_dependencies(metadata, injected))
             print(f"  - {' / '.join(wanted.path.split('/'))}")
         except LibraryError as e:
             er.emit_exception(reporter, e)
-            return None
+            return False
     print()
 
     _stamp_library_uses(unit_manager, names, loaded)
-    _depend_on_compiled_libraries(unit_manager, compiled_dependencies, source_units,
-                                  names)
-    return (resolver if binary_imports else None), binary_imports
+    return True
 
 
 def _stamp_library_uses(unit_manager: UnitManager, names: dict[str, str],
@@ -496,47 +372,22 @@ def _stamp_library_uses(unit_manager: UnitManager, names: dict[str, str],
                 use.library_version = loaded[name].version
 
 
-def _depend_on_compiled_libraries(unit_manager: UnitManager,
-                                  compiled_dependencies: dict[str, list[str]],
-                                  source_units: dict[str, list[str]],
-                                  names: dict[str, str]) -> None:
-    """A unit that imports a compiled library depends on the source units it loads.
+def _manifest_dependencies(manifest: dict) -> tuple[dict, ...]:
+    """Every `dependencies` record of a manifest (#1120): what the library's units use."""
+    return tuple(record for record in manifest.get("dependencies") or ()
+                 if isinstance(record, dict))
 
-    A source library's `use` line is an edge of the dependency graph, but a compiled
-    library's record is not text, so its importer gets the edge here: the collect
-    order and the cache key both read the graph. Paths are compared through the
-    library NAME they found, so two paths to one library are one edge.
-    """
-    if not compiled_dependencies:
-        return
-    by_name: dict[str, list[str]] = {}
-    for path, units in source_units.items():
-        by_name.setdefault(names[path], []).extend(units)
-    compiled_by_name = {names[path]: [names[dep] for dep in deps if dep in names]
-                        for path, deps in compiled_dependencies.items()}
-    for unit in list(unit_manager.units.values()):
-        if unit.ast is None:
-            continue
-        todo = [names[use.path] for use in unit.ast.uses
-                if use.is_library and names.get(use.path) in compiled_by_name]
-        seen: set[str] = set()
-        while todo:
-            name = todo.pop()
-            if name in seen:
-                continue
-            seen.add(name)
-            todo.extend(compiled_by_name.get(name, ()))
-            for unit_name in by_name.get(name, ()):
-                if unit_name != unit.name and unit_name not in unit.dependencies:
-                    unit.dependencies.append(unit_name)
+
+def _library_dependencies(manifest: dict) -> tuple[dict, ...]:
+    """The `dependencies` records that name another library."""
+    return tuple(record for record in _manifest_dependencies(manifest)
+                 if record.get("kind") == "library" and record.get("path"))
 
 
 def _recorded_versions(metadata: dict) -> dict[str, str]:
     """The version a library's build found for each `lib/...` path it uses."""
-    from sushi_lang.semantics.library_registry import library_dependencies
-
     return {record["path"]: record["library_version"]
-            for record in library_dependencies(metadata)
+            for record in _library_dependencies(metadata)
             if record.get("library_version")}
 
 
@@ -561,35 +412,6 @@ def _source_library_dependencies(metadata: dict, units: list[Unit]) -> list[_Wan
             expected = None if version is None else (
                 version, f"'{name}' was built against {version}, with `{_spelled(use)}`")
             wants.append(_Wanted(use.path, note, expected))
-    return wants
-
-
-def _compiled_library_dependencies(metadata: dict) -> list[_Wanted]:
-    """Every library a compiled library's manifest records, with the note.
-
-    A `dependencies` record states the version; a `reexports` record of a library built
-    before the dependencies were recorded states only the path.
-    """
-    from sushi_lang.semantics.library_registry import (
-        library_dependencies, reexported_libraries)
-
-    name = metadata.get("library_name") or "?"
-    reexported = reexported_libraries(metadata)
-    wants = []
-    seen: set[str] = set()
-    for record in library_dependencies(metadata):
-        path = record["path"]
-        spelled = f"{'public ' if path in reexported else ''}use <{path}>"
-        version = record.get("library_version")
-        expected = None if not version else (
-            version, f"'{name}' was built against {version}, with `{spelled}`")
-        wants.append(_Wanted(path, (f"'{name}' needs it, with `{spelled}`", None, None),
-                             expected))
-        seen.add(path)
-    for path in reexported:
-        if path not in seen:
-            wants.append(_Wanted(
-                path, (f"'{name}' needs it, with `public use <{path}>`", None, None)))
     return wants
 
 
@@ -714,21 +536,15 @@ def _load_units(main_ast: Program, src_path: Path, reporter: Reporter) -> UnitMa
     return unit_manager
 
 
-def _stdlib_units(compilation_order: list[Unit], library_linker,
+def _stdlib_units(compilation_order: list[Unit],
                   reporter: Reporter) -> set[str] | None:
-    """Every stdlib module the program links, built and resolved (CE3006 when unknown).
-
-    A compiled library's re-exported or used module joins the set for the same reason
-    the injection reads it (#585, #1120): the module's symbols are named, so its bitcode
-    has to be on the link line even where no unit of the build wrote the import.
-    """
+    """Every stdlib module the program links, built and resolved (CE3006 when unknown)."""
     from sushi_lang.backend.stdlib_linker import linked_stdlib_paths
     from sushi_lang.semantics.stdlib_registry import named_methods, stdlib_imports
     programs = [unit.ast for unit in compilation_order if unit.ast]
     stdlib_units = set(linked_stdlib_paths(
         [path for program in programs for path in stdlib_imports(program)],
-        frozenset().union(*(named_methods(program) for program in programs)),
-        also=sorted(_compiled_stdlib_modules(library_linker))))
+        frozenset().union(*(named_methods(program) for program in programs))))
 
     if len(compilation_order) > 1:
         print(f"Found {len(compilation_order)} units:")
@@ -780,20 +596,8 @@ def _generated_symbols(compilation_order: list[Unit]):
     return generated_symbols
 
 
-def _library_fingerprints(library_linker, library_imports) -> dict[str, str]:
-    """The digest of each imported `.slib`. It goes into the key of every unit (a
-    library template that a consumer monomorphizes) and into the key of the library's
-    own object."""
-    from sushi_lang.compiler.fingerprint import compute_lib_fingerprint
-    if library_linker is None:
-        return {}
-    return {lib_path: compute_lib_fingerprint(library_linker.resolve_library(lib_path))
-            for lib_path in sorted(library_imports)}
-
-
 def _unit_reuse(options: BuildOptions, cache: CacheManager, incremental: bool,
-                unit_manager: UnitManager,
-                library_fingerprints: dict[str, str]) -> Optional[UnitReuse]:
+                unit_manager: UnitManager) -> Optional[UnitReuse]:
     """The reuse decisions of this build, or None when no unit may skip its body passes.
 
     A build that dumps SHIR or SLIR prints each body, and a build that is not incremental
@@ -807,19 +611,16 @@ def _unit_reuse(options: BuildOptions, cache: CacheManager, incremental: bool,
         return None
 
     def key_of(unit: Unit, copies: list, drops: frozenset) -> str:
-        return compute_unit_fingerprint(unit, unit_manager, copies,
-                                        library_fingerprints=library_fingerprints,
-                                        drop_types=drops)
+        return compute_unit_fingerprint(unit, unit_manager, copies, drop_types=drops)
     return UnitReuse(cache.user_stdlib_path, cache.library_reuse_path, key_of)
 
 
-def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_linker,
+def _analyse(unit_manager: UnitManager, compilation_order: list[Unit],
              reporter: Reporter, entry_name: str, options: BuildOptions,
              reuse: Optional[UnitReuse] = None) -> SemanticAnalyzer:
     """Every semantic pass over the whole program."""
     analyzer = SemanticAnalyzer(
         reporter, filename=entry_name, unit_manager=unit_manager,
-        library_linker=library_linker,
         lints=options.lints,
         generated_symbols=_generated_symbols(compilation_order), is_library=options.lib,
         dont_panic=options.dont_panic, overflow=options.overflow, reuse=reuse)
@@ -893,29 +694,26 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     # source library's units have to be in the table when it is built, and a bundled
     # module the LIBRARY uses still needs injecting.
     cache = CacheManager.for_run(options, src_path.parent)
-    resolved = _resolve_library_imports(unit_manager, reporter,
-                                        options.ignore_compiler_version, cache)
-    if resolved is None:
+    if not _resolve_library_imports(unit_manager, reporter,
+                                    options.ignore_compiler_version, cache):
         return 2
-    library_linker, library_imports = resolved
 
-    if not _inject_source_stdlib_units(unit_manager, reporter, library_linker):
+    if not _inject_source_stdlib_units(unit_manager, reporter):
         return 2
 
     compilation_order = unit_manager.get_compilation_order()
     if compilation_order is None:
         return 2
 
-    stdlib_units = _stdlib_units(compilation_order, library_linker, reporter)
+    stdlib_units = _stdlib_units(compilation_order, reporter)
     if stdlib_units is None:
         return 2
 
     use_incremental = (len(compilation_order) > 1 and not options.lib
                        and not options.no_incremental and not options.dump_ll)
-    library_fingerprints = _library_fingerprints(library_linker, library_imports)
-    reuse = _unit_reuse(options, cache, use_incremental, unit_manager, library_fingerprints)
-    analyzer = _analyse(unit_manager, compilation_order, library_linker, reporter,
-                        src_path.stem, options, reuse)
+    reuse = _unit_reuse(options, cache, use_incremental, unit_manager)
+    analyzer = _analyse(unit_manager, compilation_order, reporter, src_path.stem, options,
+                        reuse)
     if options.dump_shir is not None:
         _write_shir_dump(analyzer, options.dump_shir, reporter)
     if options.dump_slir is not None:
@@ -927,30 +725,18 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if use_incremental:
         return _compile_incremental(
             compilation_order, analyzer, out_path, reporter, options,
-            stdlib_units, library_imports, library_linker, unit_manager, cache,
-            library_fingerprints,
+            stdlib_units, unit_manager, cache,
         )
-    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
-                               options, library_linker)
+    return _compile_monolithic(compilation_order, analyzer, out_path, reporter, options)
 
 
-def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit],
-                library_linker: Optional['LibraryResolver'] = None) -> 'LLVMCodegen':
+def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit]) -> 'LLVMCodegen':
     """One `LLVMCodegen` over the analyzer's program tables.
 
     The ONE hand-off from the front end to the back end. Both build paths need the same
     five tables, the externals and the per-unit namespaces, and each used to read them
     off the analyzer by attribute name with a silent default -- two copies of one list,
     where a name the analyzer stopped carrying would have answered None in both (#673).
-
-    What a loaded library brings travels the same way and for the same reason: the
-    PROGRAM path took the resolver, the registry and the shipped perk implementations
-    and the LIBRARY path took none, so a compiled library over a binary dependency
-    declared no prototype for the dependency's symbols and the dispatcher answered a
-    KeyError (#645). The resolver comes as an argument because the analyzer holds it
-    through a Protocol that names its manifests alone -- the back end also resolves a
-    path with it -- and the registry and the implementations come off the analyzer,
-    which is where the `libraries` step files them.
 
     The SLIR of the program travels the same way: every body that the backend defines
     comes from the `SlirFunction` of the analysis (docs/design/ir.md 8.2). So does the
@@ -965,30 +751,20 @@ def codegen_for(analyzer: SemanticAnalyzer, units: list[Unit],
     cg = LLVMCodegen(struct_table=tables.structs, enum_table=tables.enums,
                      perk_impl_table=tables.perk_impls)
     cg.external_table = tables.externals
-    cg.library_linker = library_linker
     cg.overflow = analyzer.overflow
-    cg.library_registry = analyzer.library_registry
     cg.decls = declarations(units, tables, analyzer.shir,
-                            copies=analyzer.monomorphized_extensions,
-                            shipped_methods=analyzer.library_extensions,
-                            shipped_perks=analyzer.library_perk_impls)
+                            copies=analyzer.monomorphized_extensions)
     cg.slir_bodies = SlirBodies(analyzer.slir)
     return cg
 
 
-def _link_inputs(analyzer: SemanticAnalyzer, library_linker,
-                 options: BuildOptions) -> 'LinkInputs':
+def _link_inputs(analyzer: SemanticAnalyzer, options: BuildOptions) -> 'LinkInputs':
     """What the link of the program is asked for: the `link` clause of each unit with an
-    AST (a unit from the cache included: the analysis reads every AST), then the
-    libraries that the manifest of each binary library records."""
+    AST (a unit from the cache included: the analysis reads every AST)."""
     from sushi_lang.backend.link_plan import LinkInputs
-    from sushi_lang.semantics.link_libraries import manifest_requests
 
-    requests = list(analyzer.link_requests)
-    loaded = library_linker.loaded_libraries if library_linker is not None else {}
-    for name, metadata in sorted(loaded.items()):
-        requests.extend(manifest_requests(name, metadata))
-    return LinkInputs(requests=tuple(requests), search_dirs=options.link_dirs)
+    return LinkInputs(requests=tuple(analyzer.link_requests),
+                      search_dirs=options.link_dirs)
 
 
 def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
@@ -1004,65 +780,33 @@ def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
     print(f"wrote LLVM IR: {ll_path}")
 
 
-def _emit_library(driver, analyzer, compilation_order, out_path: Path,
+def _emit_library(analyzer, compilation_order, out_path: Path,
                   reporter: Reporter, options: BuildOptions) -> bool:
     """Write the `.slib`. False when a gate refused it; the reporter holds why."""
     from sushi_lang.compiler.library_manifest import (
         LibraryManifestGenerator, resolve_library_version,
     )
-    # Resolve the library's own version FIRST: a missing or contradicted version is
-    # CE3505, and there is no point compiling bitcode for a library that cannot be
-    # stamped (the same reasoning as the export closure below).
+    # A missing or contradicted version is CE3505, before the manifest is made.
     library_version = resolve_library_version(options.lib_version, out_path.stem)
     manifest_gen = LibraryManifestGenerator(analyzer)
-    # Extract the templates section FIRST: the export closure decides which private
-    # functions must carry external (not internal) linkage in the bitcode (their
-    # definitions resolve consumer call sites at link time), and a rejected export
-    # closure (CE5006) ends the build HERE, before the expensive bitcode compilation.
-    templates = manifest_gen._extract_templates(compilation_order)
-    if reporter.has_errors:
-        return False
-    # The SYMBOLS, not the names: a private helper's symbol carries its unit, and
-    # the promotion below looks it up in the emitted module by symbol. The manifest
-    # record that the consumer reads and this set are the same field, so the two
-    # cannot drift.
-    closure_fn_symbols = {
-        record["link_symbol"]
-        for record in templates.get("private_functions", []) or []
-        if record.get("link_symbol")
-    }
-
-    kind = options.lib_kind
-    # A source library needs no bitcode at all, and a binary library carries no source.
-    if kind == "source":
-        bitcode = b""
-    else:
-        bitcode = driver.compile_to_bitcode(
-            compilation_order, debug=options.dump_ll, opt=options.opt,
-            verify=not options.no_verify,
-            exported_private_functions=closure_fn_symbols)
-
-    source = manifest_gen.source_map(compilation_order) if kind == "source" else None
-
-    manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates,
-                          library_version=library_version, kind=kind, source=source,
-                          overflow=options.overflow.value)
-    # CE0116 and CE5002 are found while the public API is extracted, so the second
-    # gate is here. `generate()` wrote nothing; this is what keeps the success line
-    # from following a diagnostic.
+    manifest_gen.generate(compilation_order, out_path,
+                          library_version=library_version,
+                          source=manifest_gen.source_map(compilation_order))
+    # CE5002 is found while the public API is extracted, so the second gate is here.
+    # `generate()` wrote nothing; this is what keeps the success line from following a
+    # diagnostic.
     return not reporter.has_errors
 
 
 def _compile_monolithic(compilation_order, analyzer, out_path: Path,
-                        reporter: Reporter, options: BuildOptions, library_linker) -> int:
+                        reporter: Reporter, options: BuildOptions) -> int:
     """One module for the whole program: a native binary, or a `.slib`."""
     from sushi_lang.backend.driver import LLVMDriver
-    cg = codegen_for(analyzer, compilation_order, library_linker)
+    cg = codegen_for(analyzer, compilation_order)
     driver = LLVMDriver(cg)
 
     if options.lib:
-        if not _emit_library(driver, analyzer, compilation_order, out_path,
-                             reporter, options):
+        if not _emit_library(analyzer, compilation_order, out_path, reporter, options):
             return 2
         written = "library"
     else:
@@ -1071,7 +815,7 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                                   verify=not options.no_verify,
                                   keep_object=options.keep_object,
                                   main_expects_args=analyzer.main_expects_args,
-                                  link=_link_inputs(analyzer, library_linker, options))
+                                  link=_link_inputs(analyzer, options))
         written = "native binary"
 
     if options.write_ll:
@@ -1082,9 +826,8 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
 
 
 def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: Reporter,
-                         options: BuildOptions, stdlib_units, library_imports,
-                         library_linker, unit_manager, cache: CacheManager,
-                         library_fingerprints: dict[str, str]) -> int:
+                         options: BuildOptions, stdlib_units, unit_manager,
+                         cache: CacheManager) -> int:
     """Incremental compilation path: per-unit .o caching.
 
     The module of every unit that the cache does not hold is built before the first
@@ -1099,13 +842,12 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
         compute_stdlib_fingerprint,
-        compute_lib_fingerprint,
     )
 
     monomorphized_extensions = analyzer.monomorphized_extensions
 
     from sushi_lang.backend.driver import LLVMDriver
-    cg = codegen_for(analyzer, compilation_order, library_linker)
+    cg = codegen_for(analyzer, compilation_order)
     driver = LLVMDriver(cg)
     cg.main_expects_args = analyzer.main_expects_args
 
@@ -1122,7 +864,6 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     fingerprints = {
         unit.name: compute_unit_fingerprint(
             unit, unit_manager, monomorphized_extensions,
-            library_fingerprints=library_fingerprints,
             drop_types=drop_types,
         )
         for unit in compilation_order
@@ -1191,28 +932,15 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
             obj_path = cache.store_stdlib_object(stdlib_unit, obj_bytes, fp)
             obj_paths.append(obj_path)
 
-    if library_linker is not None:
-        for lib_path in sorted(library_imports):
-            slib_path = library_linker.resolve_library(lib_path)
-            fp = library_fingerprints.get(lib_path) or compute_lib_fingerprint(slib_path)
-            lib_name = lib_path.replace("/", "_")
-            if cache.has_cached_lib(lib_name, fp):
-                obj_paths.append(cache.lib_object_path(lib_name, fp))
-            else:
-                obj_bytes = driver.compile_library_to_object(lib_path, library_linker, opt=options.opt)
-                obj_path = cache.store_lib_object(lib_name, obj_bytes, fp)
-                obj_paths.append(obj_path)
-
     codegen_time = time.monotonic() - t0
 
     t1 = time.monotonic()
     driver.link_object_files(obj_paths, out_path, cc="cc", debug=options.dump_ll,
-                             link=_link_inputs(analyzer, library_linker, options))
+                             link=_link_inputs(analyzer, options))
     link_time = time.monotonic() - t1
 
     total_units = len(compilation_order)
     stdlib_count = len(stdlib_units)
-    lib_count = len(library_imports)
     if reuse is not None and (reuse.reused_count(False) or reuse.reused_count(True)
                               or reuse.fell_back):
         print(f"\nFront end: {reuse.reused_count(False)} stdlib units reused, "
@@ -1222,8 +950,6 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     link_desc = f"{total_units} units"
     if stdlib_count:
         link_desc += f" + {stdlib_count} stdlib"
-    if lib_count:
-        link_desc += f" + {lib_count} libs"
     print(f"Linking: {link_desc} in {link_time:.2f}s")
 
     from sushi_lang.compiler.cli import COMMAND_LINE

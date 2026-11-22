@@ -171,7 +171,7 @@ def _brings(use_stmt: UseStatement, unit: Unit, tables: SymbolTables,
     """What, written in `unit`, would be answered through this import: the names it
     brings, and the methods it makes callable (R6)."""
     from sushi_lang.semantics.passes.namespaces import _provider_for
-    provider = _provider_for(use_stmt, tables, units, None, unit)
+    provider = _provider_for(use_stmt, tables, units, unit)
     if use_stmt.alias is not None:
         names = {use_stmt.alias}
     else:

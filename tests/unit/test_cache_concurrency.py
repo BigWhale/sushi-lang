@@ -115,7 +115,6 @@ def test_object_path_is_keyed_by_global_params(tmp_path):
 @pytest.mark.parametrize("store,path,has", [
     ("store_unit_object", "unit_object_path", "has_cached_unit"),
     ("store_stdlib_object", "stdlib_object_path", "has_cached_stdlib"),
-    ("store_lib_object", "lib_object_path", "has_cached_lib"),
 ])
 def test_store_round_trips_and_leaves_no_temp_files(tmp_path, store, path, has):
     """Every cache section stores atomically and cleans up after itself."""

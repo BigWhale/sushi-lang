@@ -10,9 +10,8 @@ from sushi_lang.backend.codegen_llvm import LLVMCodegen
 from sushi_lang.backend.driver import LLVMDriver
 
 DRIVER_METHODS = (
-    "compile_multi_unit", "compile_to_bitcode", "link_executable",
-    "compile_single_unit_to_object", "compile_stdlib_to_object",
-    "compile_library_to_object", "link_object_files",
+    "compile_multi_unit", "link_executable",
+    "compile_single_unit_to_object", "compile_stdlib_to_object", "link_object_files",
 )
 
 

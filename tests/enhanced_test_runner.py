@@ -857,14 +857,12 @@ class TestRunner:
     def _build_libraries(self, metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
         """Build each library of the BUILD_LIB family.
 
-        The answer is the failure, or None. A BUILD_LIB or BUILD_LIB_BINARY library goes
-        to the directory the runner puts on SUSHI_LIB_PATH, with `--lib-kind source` or
-        `binary`; a BUILD_LIB_WARNS library goes
-        there too, as a source library unless its value names the kind; a BUILD_LIB_AT library goes where
-        the fixture says, inside the copy, as a source library. A `-> name.slib` form names
+        The answer is the failure, or None. A BUILD_LIB or BUILD_LIB_WARNS library goes
+        to the directory the runner puts on SUSHI_LIB_PATH; a BUILD_LIB_AT library goes
+        where the fixture says, inside the copy. A `-> name.slib` form names
         the file in the SUSHI_LIB_PATH directory, and an `@ version` form gives the version.
         A build must exit 0, except a BUILD_LIB_WARNS build: it must exit 1 and print
-        exactly the named set of warning codes (#1122). The first three build in
+        exactly the named set of warning codes (#1122). The first two build in
         the order the fixture writes them, whatever the directive, and every BUILD_LIB_AT
         builds after them. Each build sees the directory on its own SUSHI_LIB_PATH, so a
         library may import one built before it. Each
@@ -875,22 +873,21 @@ class TestRunner:
         second version (CE3505).
         """
         workspace.libs.mkdir(parents=True, exist_ok=True)
-        directive_of = {"source": "BUILD_LIB", "binary": "BUILD_LIB_BINARY"}
-        builds = [("BUILD_LIB_WARNS" if warns else directive_of[kind], kind, source,
+        builds = [("BUILD_LIB_WARNS" if warns else "BUILD_LIB", source,
                    workspace.libs / slib, version, warns)
-                  for kind, source, slib, version, warns in metadata.library_builds]
-        builds += [("BUILD_LIB_AT", "source", source, workspace.root / target, None, None)
+                  for source, slib, version, warns in metadata.library_builds]
+        builds += [("BUILD_LIB_AT", source, workspace.root / target, None, None)
                    for source, target in metadata.build_libs_at]
         env = self._compile_env(metadata, workspace)
         env["SUSHI_LIB_PATH"] = os.pathsep.join(
             [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
-        for directive, kind, source, target, written, warns in builds:
+        for directive, source, target, written, warns in builds:
             target.parent.mkdir(parents=True, exist_ok=True)
             stated = (workspace.home / "nori.toml").is_file()
             version = ([] if stated and written is None
                        else ["--lib-version", written or "0.0.0"])
             done = self._sushic(
-                ["--lib", *version, "--lib-kind", kind, *metadata.lib_flags,
+                ["--lib", *version, *metadata.lib_flags,
                  str(workspace.root / source), "-o", str(target),
                  "--cache-dir", str(workspace.home / "libcache")],
                 cwd=workspace.home, env=env, timeout=60)

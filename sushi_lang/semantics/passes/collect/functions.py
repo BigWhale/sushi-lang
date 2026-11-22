@@ -1097,23 +1097,6 @@ class FunctionCollector:
 
         self._collect_for_target(header)
 
-    def refile_extension(self, ext: ExtendDef) -> bool:
-        """File one concrete `extend` declaration again, once its target type exists.
-
-        A binary library's concrete types enter the tables in the `libraries` step,
-        after this pass, so an extension a consumer writes on one finds no target here
-        and files nothing. The step calls this for it. The refusals ran already, so only
-        the filing runs again. A conversion is judged whole here, because the collect
-        pass could not resolve it. The answer is False when the declaration is refused
-        and leaves the AST.
-        """
-        if ext.is_conversion:
-            return collect_conversion(self, ext, refile=True) is not Filed.REFUSED
-        header = _read_extension_header(ext)
-        if header is not None:
-            self._collect_for_target(header)
-        return True
-
     def _reject_signature_faults(self, h: '_ExtensionHeader') -> None:
         """Every refusal the signature carries, whatever the target kind is."""
         if h.ret_ty is None:

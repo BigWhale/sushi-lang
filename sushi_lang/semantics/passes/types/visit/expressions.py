@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics import integer_ops
-from sushi_lang.semantics.library_registry import KEPT_STORAGE_KINDS
 from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.calls.structs import check_struct_fields
@@ -36,7 +35,7 @@ from sushi_lang.semantics.passes.types.inference import (
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import reject_named_argument
 from sushi_lang.semantics.passes.types.visibility import (
-    name_was_refused, reject_ambiguous_name, reject_private_kept, reject_private_name,
+    KEPT_STORAGE_KINDS, name_was_refused, reject_ambiguous_name, reject_private_kept, reject_private_name,
     reject_private_type, type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.calls import reject_undefined_function
 from sushi_lang.semantics.passes.types.visit.constructions import (

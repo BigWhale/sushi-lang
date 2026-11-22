@@ -1,51 +1,9 @@
 """Unit tests for the .slib generic-template codec (Phase 2, P2-T1 + P2-T2)."""
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.library_registration import LibraryRegistration
-from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.library_templates import (
     impl_method_symbol,
 )
-
-
-# P2-T4: consumer-side registration of library generic templates.
-
-
-def _registration_with_loaded_libraries(loaded: dict) -> LibraryRegistration:
-    """Build a bare registration wired with a fake library linker + empty tables."""
-    reporter = Reporter(source="", filename="consumer")
-    fake_linker = SimpleNamespace(loaded_libraries=loaded)
-    return LibraryRegistration(reporter, SymbolTables(), fake_linker, None)
-
-
-def test_register_library_generic_function_guards_missing_templates():
-    """A manifest without a templates section registers nothing and does not crash."""
-    libraries = _registration_with_loaded_libraries(
-        {"mathlib": {"library_name": "mathlib"}}
-    )
-
-    libraries._register_generic_functions(set(), set())
-
-    assert libraries.tables.generic_funcs.by_name == {}
-
-
-# Phase 2 Step A: perk DEFINITION shipping (definitions only, no impls).
-
-
-def test_seed_library_perks_guards_missing_templates():
-    """A manifest without a templates section seeds nothing and does not crash."""
-    libraries = _registration_with_loaded_libraries(
-        {"mathlib": {"library_name": "mathlib"}}
-    )
-    from sushi_lang.semantics.passes.collect import PerkTable
-    table = PerkTable()
-
-    libraries.seed_perks(table)
-
-    assert table.by_name == {}
 
 
 # C4a: concrete perk-impl shipping (templates.perk_impls)

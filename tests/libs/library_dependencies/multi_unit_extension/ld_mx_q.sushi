@@ -1,5 +1,0 @@
-public extend i32 doubled() i32:
-    return self * 3
-
-public fn q_val() i32:
-    return 2

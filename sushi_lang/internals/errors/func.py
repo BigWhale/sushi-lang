@@ -71,10 +71,6 @@ _add(ErrorMessage("CE0115", Severity.ERROR,
     "variadic {what} not allowed in {context}",
     Category.FUNC, "Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods. A type pack '...Ts' is refused in the type-parameter list of a struct, an enum, an error type, an extension method and a static method: a pack has two halves, and only a free function has the parameter list for its value pack '...Ts name'. The caret is on the '...Ts'. When a method has a type pack and a value pack, the type pack is the one fault. The analysis stops after the refusal, so a written instance of the type or a call of the method adds no second diagnostic."))
 
-_add(ErrorMessage("CE0116", Severity.ERROR,
-    "public function '{name}' is variadic and cannot appear in the public API of a binary library",
-    Category.FUNC, "A public native variadic function ('...T') cannot be in a binary library: the binary path cannot describe the call, which collects the trailing arguments into a 'T[]'. A source library can have one: the consumer compiles the unit of the library as its own, and the index marks the parameter 'variadic' (protocol 2.10). The escape is '--lib-kind source', or a 'T[]' parameter in place of '...T'. A type pack ('...Ts') is not refused: it ships as a template in both kinds. Until protocol 2.10 the code fired for a source library too."))
-
 _add(ErrorMessage("CE0117", Severity.ERROR,
     "{message}",
     Category.FUNC, "A type-pack parameter '...Ts' must be the last parameter, and a function may declare at most one type-pack."))
@@ -163,7 +159,7 @@ _add(ErrorMessage("CE0151", Severity.ERROR,
 
 _add(ErrorMessage("CE0152", Severity.ERROR,
     "{subject} is marked dont_panic, and this build does not allow it",
-    Category.FUNC, "The `dont_panic because \"<reason>\"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error RE2020 (docs/design/dont-panic.md). Only three kinds of unit may write it. A bundled stdlib unit needs no flag (ruling D7). A unit of a build that passes `--dont-panic` may write it (ruling D8). A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents (ruling D9). The message then names the library. A CONCRETE marked body of a binary library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. The gate is read once per declaration, at the marker, in the collect pass. Pass `--dont-panic`, or remove the marker."))
+    Category.FUNC, "The `dont_panic because \"<reason>\"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error RE2020 (docs/design/dont-panic.md). Only three kinds of unit may write it. A bundled stdlib unit needs no flag (ruling D7). A unit of a build that passes `--dont-panic` may write it (ruling D8). A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents (ruling D9). The message then names the library. A marked generic TEMPLATE of a library ships as source, so the consumer compiles it and must pass `--dont-panic`. The gate is read once per declaration, at the marker, in the collect pass. Pass `--dont-panic`, or remove the marker."))
 
 # The `!` return marker (docs/design/never-return.md, #1325)
 _add(ErrorMessage("CE0159", Severity.ERROR,

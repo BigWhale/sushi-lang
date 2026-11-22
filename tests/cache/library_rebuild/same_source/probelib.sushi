@@ -1,6 +1,0 @@
-use <io/fs>
-
-public fn probe_say(string text) i32:
-    match stdout.write(text):
-        Result.Ok(_) -> return 0
-        Result.Err(_) -> return 4

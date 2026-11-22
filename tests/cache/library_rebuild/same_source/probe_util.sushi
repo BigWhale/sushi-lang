@@ -1,2 +1,0 @@
-public fn probe_twice(i32 n) i32:
-    return n * 2

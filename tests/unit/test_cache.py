@@ -81,10 +81,6 @@ def test_stdlib_object_path_mangles_separators(cache):
     assert path.parent == cache.stdlib_path
 
 
-def test_lib_object_path_lands_in_the_libs_section(cache):
-    assert cache.lib_object_path("mylib", "fp-1").parent == cache.libs_path
-
-
 # Directory lifecycle
 
 def test_prepare_is_idempotent(tmp_path):

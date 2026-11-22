@@ -1,5 +1,0 @@
-public var i32 COUNTER = 5
-
-public fn bump() i32:
-    COUNTER := COUNTER + 1
-    return COUNTER

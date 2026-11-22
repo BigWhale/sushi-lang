@@ -20,7 +20,7 @@ _add(ErrorMessage("CE3501", Severity.ERROR,
 
 _add(ErrorMessage("CE3502", Severity.ERROR,
     "library not found: '{lib}' (searched: {paths})",
-    Category.LIBRARY, "Library bitcode and manifest files not found in search paths."))
+    Category.LIBRARY, "No .slib file of the library is in the search paths."))
 
 _add(ErrorMessage("CE3503", Severity.ERROR,
     "library '{lib}' accepts compiler {requires}, this is {current}",
@@ -34,26 +34,6 @@ _add(ErrorMessage("CE3503", Severity.ERROR,
     "as a confusing error inside library source the consumer never wrote. The escape, for an "
     "author testing a library forward against a new compiler, is --ignore-compiler-version. "
     "The check is skipped, never failed, when either version cannot be parsed."))
-
-
-_add(ErrorMessage("CE3504", Severity.ERROR,
-    "platform mismatch: library compiled for '{lib_platform}', current platform is "
-    "'{current_platform}'; rebuild the library on this host",
-    Category.LIBRARY,
-    "A binary library holds machine code, so it is bound to the host that built "
-    "it. The tag is `<os>_<arch>` (`darwin_arm64`, `linux_x86_64`), the same key that selects "
-    "the <sys/platform> file. The OS alone was not enough: an arm64 library passed the check "
-    "on x86_64, and the fault showed late, at the link. A tag that names no host (`unknown`, "
-    "or the old OS-only tag `darwin` or `linux`) cannot be checked, so it is refused too. The "
-    "fix is to build the library again on this host. When the tag is equal, the data layout "
-    "must be equal too: a binary library records the LLVM data layout of the target that "
-    "built it (the sizes, the alignments and the byte order of each value), and the consumer "
-    "compares it with the layout of its own target. Today the host key fixes the layout, so "
-    "a different layout comes from a library that was edited by hand or built by another "
-    "toolchain; the check prepares `--target`. The message then shows each platform with its "
-    "data layout, as `darwin_arm64 (data layout <layout>)`, and a library with no layout "
-    "shows 'none'. A source library is never checked: nothing in "
-    "it is machine code."))
 
 
 _add(ErrorMessage("CE3505", Severity.ERROR,
@@ -73,10 +53,6 @@ _add(ErrorMessage("CE3506", Severity.ERROR,
     "The container's sibling of CE3510/CE3511 for the source section that version 4 added "
     "between the metadata and the bitcode. Three codes rather than one because the registry "
     "text names which section is short, which is what tells a reader where the file was cut."))
-
-_add(ErrorMessage("CE3507", Severity.ERROR,
-    "failed to link library '{lib}': {reason}",
-    Category.LIBRARY, "LLVM bitcode linking failed for the specified library."))
 
 # Binary library format errors (.slib)
 _add(ErrorMessage("CE3508", Severity.ERROR,
@@ -98,8 +74,9 @@ _add(ErrorMessage("CE3511", Severity.ERROR,
 _add(ErrorMessage("CE3512", Severity.ERROR,
     "invalid library metadata in '{path}': {reason}",
     Category.LIBRARY, "MessagePack decoding failed, the metadata schema is invalid, or the "
-    "manifest states a kind that is not `source` or `binary`. A library of an older "
-    "compiler can state a removed kind: build it again with this compiler."))
+    "manifest states a kind that this compiler does not read. The binary kind is retired, "
+    "and this compiler reads only a source library. A library of an older compiler can "
+    "state a removed kind: build it again with this compiler."))
 
 _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",
@@ -162,22 +139,6 @@ _add(ErrorMessage("CE3519", Severity.ERROR,
     "recorded the old version against the one that the search finds, or to put the "
     "version that it was built against first on SUSHI_LIB_PATH (#1120)."))
 
-_add(ErrorMessage("CE3520", Severity.ERROR,
-    "library '{lib}' was built by another compiler: its compiler {part} is '{built}', this "
-    "compiler has '{current}'; build the library again with this compiler",
-    Category.LIBRARY,
-    "A binary library holds bitcode, and the bitcode is bound to the compiler that made it. "
-    "Before 1.0 the bitcode ABI (value layouts, calling conventions, mangling) changes "
-    "often, also in a patch release. A binary library also carries its own copy of each "
-    "stdlib module that it imports, as `weak_odr`, and LLVM takes all copies as equal: a "
-    "library from another compiler can run an old stdlib with no message. So a binary "
-    "library records a stamp, the exact compiler version and the compiler-source digest "
-    "(the digest that the object cache uses), and the consumer accepts it only when both "
-    "are equal to its own. The message names the part that is not equal, the version "
-    "first. The fix is to build the library again with this compiler. "
-    "--ignore-compiler-version does not stop this check; it is for `requires_compiler` "
-    "(CE3503). A source library has no stamp: the consumer compiles its text."))
-
 _add(ErrorMessage("CE3521", Severity.ERROR,
     "`use <{use_path}>` loads the library '{lib}', but the file '{path}' is the library "
     "'{built}'",
@@ -191,8 +152,7 @@ _add(ErrorMessage("CE3521", Severity.ERROR,
     "rule: two files with one stamped name meet as two versions of one library (CE3519), "
     "and the text names a library that no `use` names. The consumer thus refuses every "
     "library of the graph whose stamped name is not the name of the `use` that loaded it: "
-    "the consumer's own `use`, a `use` or a `public use` of a source library, and a "
-    "`dependencies` or `reexports` record of a binary library. Both kinds are checked. The "
+    "the consumer's own `use`, and a `use` or a `public use` of a library. The "
     "fix is to build the library again with the name of the `use`, or to write the `use` "
     "with the library's own name. `--lib-info` reads a file with no `use`, so it does not "
     "check this."))

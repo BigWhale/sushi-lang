@@ -1,8 +1,0 @@
-# A binary library cannot have a public native variadic function (`...T`): the binary index does not describe the trailing array (CE0116). A source library can have one.
-# OUTPUT_PATH: varlib_binary.slib
-# COMPILER_FLAGS: --lib --lib-version 1.0.0 --lib-kind binary
-# EXPECT_ERROR_CODES_EXACT: CE0116
-# EXPECT_STDERR_CONTAINS: "public function 'varlib_count' is variadic"
-
-public fn varlib_count(...i32 nums) i32:
-    return nums.len() as i32

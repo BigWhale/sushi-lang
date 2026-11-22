@@ -475,10 +475,6 @@ class Reporter:
         except (OSError, UnicodeDecodeError):
             return None
 
-    def add_slice(self, label: str, source: str) -> None:
-        """Record the text of a library slice under its label, for the renderer."""
-        self.slices[label] = source
-
     def add_provenance(self, filename: str, provenance: str) -> None:
         """Record whose code `filename` is, for a diagnostic at it."""
         self.provenances[filename] = provenance
