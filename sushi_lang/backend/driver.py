@@ -12,7 +12,6 @@ from sushi_lang.semantics.units import Unit
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.decl_table import DeclTable
 
 
 @contextmanager
@@ -32,17 +31,6 @@ def _print_numbered(title: str, module: ir.Module) -> None:
     print(title)
     for i, line in enumerate(str(module).splitlines(), 1):
         print(f"{i:4} {line}")
-
-
-def _set_weak_odr_on_perk_impls(module: ir.Module, decls: 'DeclTable',
-                                units: list[Unit]) -> None:
-    """Set weak_odr linkage on every perk-impl method in a library module."""
-    for unit in units:
-        unit_decls = decls.unit(unit.name)
-        for symbol in () if unit_decls is None else unit_decls.perk_symbols:
-            fn = module.globals.get(symbol)
-            if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
-                fn.linkage = "weak_odr"
 
 
 class LLVMDriver:
@@ -78,12 +66,7 @@ class LLVMDriver:
         main_expects_args: bool = False,
         link: LinkInputs = NO_LINK_INPUTS,
     ) -> Path:
-        """Compile every unit into one module, and link it to a native executable.
-
-        The loaded libraries are read off the codegen, where the pipeline's one hand-off
-        put them (#645); taking them as arguments here gave the library build path no way
-        to supply them.
-        """
+        """Compile every unit into one module, and link it to a native executable."""
         cg = self.codegen
         cg.main_expects_args = main_expects_args
 
@@ -94,48 +77,7 @@ class LLVMDriver:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        from sushi_lang.backend.stdlib_linker import table_stdlib_paths
-        stdlib_units = table_stdlib_paths(cg.declaration_table())
-
-        # Every COMPILED library of the graph, once, by its stamped name (#1120): the
-        # pipeline loaded each one, the consumer's own imports, the dependencies and
-        # the re-exports alike, so this is the one list of bitcode to link.
-        library_linker = cg.library_linker
-        libraries = (dict(library_linker.loaded_libraries)
-                     if library_linker is not None else {})
-        if libraries:
-            from sushi_lang.backend.module_linker import TwoPhaseLinker
-
-            target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
-            data_layout = llmod.data_layout if hasattr(llmod, 'data_layout') else ""
-
-            two_phase = TwoPhaseLinker(target_triple, data_layout)
-
-            two_phase.add_main_module(llmod, "main")
-
-            from sushi_lang.backend.library_format import LibraryFormat
-            from sushi_lang.backend.library_errors import LibraryError
-            for lib_name, loaded in sorted(libraries.items()):
-                try:
-                    _metadata, bitcode = LibraryFormat.read(Path(loaded["library_path"]))
-                    lib_mod = llvm.parse_bitcode(bitcode)
-                    two_phase.add_library_module(lib_mod, lib_name)
-                except LibraryError:
-                    raise
-                except Exception as e:
-                    raise LibraryError("CE3507", lib=lib_name, reason=str(e)) from e
-
-            for stdlib_path in stdlib_units:
-                bc_paths = cg.stdlib._resolve_stdlib_unit(stdlib_path)
-                for bc_path in bc_paths:
-                    with open(bc_path, 'rb') as f:
-                        stdlib_mod = llvm.parse_bitcode(f.read())
-                        two_phase.add_stdlib_module(stdlib_mod, stdlib_path)
-
-            llmod = two_phase.link()
-
-        else:
-            cg.stdlib.link_stdlib_modules(llmod, cg.declaration_table())
+        cg.stdlib.link_stdlib_modules(llmod, cg.declaration_table())
 
         tm = cg.optimizer.ensure_target(llmod, opt)
         self._verify_and_optimize(llmod, opt, verify)
@@ -145,62 +87,6 @@ class LLVMDriver:
         out_path = out or Path("a.out")
         return self.link_executable(llmod, out_path, cc, debug, tm=tm, keep_object=keep_object,
                                     link=link)
-
-    def compile_to_bitcode(
-        self,
-        units: list[Unit],
-        debug: bool = False,
-        opt: str = "mem2reg",
-        verify: bool = True,
-        exported_private_functions: frozenset[str] | set[str] = frozenset(),
-    ) -> bytes:
-        """Compile units to LLVM bitcode without linking to executable."""
-        cg = self.codegen
-
-        cg.is_library_mode = True
-
-        # A bundled stdlib module and an injected source library both arrive as
-        # ordinary units and carry a provenance; neither is this library's to own, and
-        # the consumer holds its own copy of each (#594). `library_manifest.own_units`
-        # is the same question about the same field, asked of the manifest.
-        weak_units = frozenset(u.name for u in units if u.provenance is not None)
-
-        mod_ir: ir.Module = cg.build_module_multi_unit(units, weak_units=weak_units)
-
-        # The incremental consumer links this library's object beside other objects
-        # that define the same inline runtime functions (#1117).
-        from sushi_lang.backend.codegen_llvm import _set_linkonce_odr_on_inline_runtime
-        _set_linkonce_odr_on_inline_runtime(mod_ir)
-
-        # A perk impl may ship through the manifest and be overridden locally. weak_odr,
-        # not linkonce_odr: it must survive optimization while unreferenced in the library,
-        # and it lets the consumer's strong definition win at link time.
-        _set_weak_odr_on_perk_impls(mod_ir, cg.declaration_table(), units)
-
-        # An export-closure private function must resolve consumer call sites at link
-        # time, so promote it to external. A same-name consumer definition is CE5007.
-        for name in exported_private_functions:
-            fn = mod_ir.globals.get(name)
-            if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
-                fn.linkage = "external"
-
-        if debug:
-            _print_numbered(";; Library IR (pre-opt)", mod_ir)
-
-        llmod = llvm.parse_assembly(str(mod_ir))
-
-        # The stdlib `.bc` half of the same rule: the consumer links its own copy of
-        # every module it imports, so this one may not be a second strong definition.
-        from sushi_lang.backend.library_linkage import weaken_linked_symbols
-        weaken_linked_symbols(llmod, cg.stdlib.link_stdlib_modules(
-            llmod, cg.declaration_table()))
-
-        cg.optimizer.ensure_target(llmod, opt)
-        self._verify_and_optimize(llmod, opt, verify)
-
-        cg.module = llvm.parse_assembly(str(llmod))
-
-        return llmod.as_bitcode()
 
     def link_executable(
         self,
@@ -260,15 +146,6 @@ class LLVMDriver:
             raise RuntimeError(f"No bitcode files found for stdlib unit: {stdlib_unit}")
 
         return self._emit_object(llmod, opt)
-
-    def compile_library_to_object(self, lib_path: str, library_linker,
-                                  opt: str = "mem2reg") -> bytes:
-        """Compile a library .slib to an object file."""
-        from sushi_lang.backend.library_format import LibraryFormat
-
-        slib_path = library_linker.resolve_library(lib_path)
-        _, bitcode = LibraryFormat.read(slib_path)
-        return self._emit_object(llvm.parse_bitcode(bitcode), opt)
 
     def _emit_object(self, llmod: llvm.ModuleRef, opt: str) -> bytes:
         """Optimize a module that needs no verification, and emit its object."""

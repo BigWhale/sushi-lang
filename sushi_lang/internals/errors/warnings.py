@@ -35,7 +35,7 @@ _add(ErrorMessage("CW0002", Severity.WARNING,
 
 _add(ErrorMessage("CW0003", Severity.WARNING,
     "'{flag}' has no effect {reason}", Category.GENERAL,
-    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib (docs/design/dont-panic.md, ruling D13); `--dump-shir` and `--dump-slir` are not read by `--lib-info`. The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true."))
+    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib (docs/design/dont-panic.md, ruling D13); `--dump-shir` and `--dump-slir` are not read by `--lib-info`. The build goes on without the flag. These flags used to be ignored with no word, so a user could believe that a library had a version, or that its object was kept, when neither was true."))
 
 _add(ErrorMessage("CW0004", Severity.WARNING,
     "{subject} is marked dont_panic, but its body has no index to uncheck", Category.GENERAL,
@@ -63,13 +63,9 @@ _add(ErrorMessage("CW3001", Severity.WARNING,
     "duplicate use statement for unit '{unit}'", Category.UNIT,
     "A unit was already imported earlier in this file. The duplicate use statement has no effect."))
 
-# CW3505 (platform mismatch, WARNING) was deleted: it was a byte-for-byte duplicate of
-# CE3504 at warning severity, and a platform mismatch is not a warning -- the link
-# cannot succeed. The error, CE3504, is the survivor.
-
 _add(ErrorMessage("CW3002", Severity.WARNING,
     "'{name}' shadows the {kind} '{owner}' exports", Category.UNIT,
-    "A program's own declaration takes priority over a name that a library of any kind (source or binary) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, the library's own body keeps calling its own, and both declarations being public is no longer a clash at all -- CE3003 retired, and an unqualified name with two candidates is CE3012 at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program (CE3011). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The reason is the same for each library kind, so the warning is too (#1103): a source library's export is found in its unit, a binary library's export in its manifest, which lists every public function and template. A bundled stdlib module's export is a name of a unit only where a flat `use` reaches the module, directly or through a `public use`: behind an alias, or in a unit that does not import the module, a declaration of the same name shadows nothing and gets no warning. A stdlib constant or `var` is shadowed in the same way, with this warning; a source library's public constant taken again is the duplicate CE0105."))
+    "A program's own declaration takes priority over a name that a library or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, the library's own body keeps calling its own, and both declarations being public is no longer a clash at all -- CE3003 retired, and an unqualified name with two candidates is CE3012 at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program (CE3011). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. A library's export is found in its unit (#1103). A bundled stdlib module's export is a name of a unit only where a flat `use` reaches the module, directly or through a `public use`: behind an alias, or in a unit that does not import the module, a declaration of the same name shadows nothing and gets no warning. A stdlib constant or `var` is shadowed in the same way, with this warning; a source library's public constant taken again is the duplicate CE0105."))
 
 # CW3003 ("this library extends '{type}', a type it does not declare") was RETIRED by
 # epic #1251. It warned at `--lib` build time that an extension on a type the library
@@ -77,11 +73,6 @@ _add(ErrorMessage("CW3002", Severity.WARNING,
 # `docs/design/extension-visibility.md`, such an extension is visible only in the units
 # that import its unit, and a private one only in its own unit, so the claim does not
 # exist any more. The `foreign_extensions` key of the manifest went with it.
-
-_add(ErrorMessage("CW3506", Severity.WARNING,
-    "library perk implementation for '{type}' could not be loaded and was skipped",
-    Category.LIBRARY, "A perk implementation shipped by a library failed to deserialize. "
-                      "Methods it provides will be unavailable unless the consumer supplies its own."))
 
 # Documentation blocks (CW7001-CW7006, CE7001-CE7008)
 _add(ErrorMessage("CW7001", Severity.WARNING,

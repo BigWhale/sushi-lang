@@ -44,7 +44,7 @@ def test_a_file_with_no_directive_carries_no_lib_flags(tmp_path):
 
 @pytest.mark.parametrize("flag", [
     "-o", "--lib", "--lib-info", "--clean-cache", "--build-stdlib", "--cache-dir",
-    "--lib-kind", "--lib-version",
+    "--lib-version",
 ])
 def test_a_runner_owned_flag_is_refused(tmp_path, capsys, flag):
     meta = parse_test_metadata(_fixture(tmp_path, f"# LIB_FLAGS: {flag}\n"))

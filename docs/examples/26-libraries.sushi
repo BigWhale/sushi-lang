@@ -12,9 +12,8 @@
 #   mkdir -p /tmp/sushilib
 #   ./sushic --lib --lib-version 1.0.0 docs/examples/mathlib.sushi -o /tmp/sushilib/mathlib.slib
 #
-#   This makes one .slib file. The default kind is a SOURCE library: it carries
-#   the source text and the metadata, and the program that uses it compiles it.
-#   (--lib-kind binary ships LLVM bitcode instead.)
+#   This makes one .slib file. It carries the source text and the metadata,
+#   and the program that uses it compiles it.
 #
 # USING THE LIBRARY:
 #

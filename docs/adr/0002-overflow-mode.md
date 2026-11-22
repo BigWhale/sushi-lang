@@ -31,6 +31,6 @@ answers a bare `(T, T)`, and `MathError` is deleted. A checked operation such as
 
 ## Consequences
 
-The mode is in the object-cache key. A `.slib` keeps the mode that it was built with, and
-`--lib-info` shows it. The stdlib Sushi modules compile with the mode of the program. The
+The mode is in the object-cache key. The stdlib Sushi modules and the units of a `.slib`
+compile with the mode of the program. The
 test corpus runs once, in `trap` mode. A small set of fixtures builds with `--overflow=wrap`.

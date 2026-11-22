@@ -361,9 +361,8 @@ declarations(units, tables, shir, *,       # declarations, for the backend
 
 `lower_body` (`semantics/shir/lowering.py`) reads the AST body from `bindings.body`.
 `declarations` (`semantics/decl_table.py`) reads the units, the `SymbolTables`, the
-`LoweredProgram` of SHIR, and three lists that the analyzer keeps: the monomorphized
-extensions (`copies`), and the extension methods and the perk implementations that a
-library ships.
+`LoweredProgram` of SHIR, and the list of the monomorphized extensions (`copies`) that the
+analyzer keeps.
 
 Anything that needs a third entry point is a design smell and must be argued for in this
 document first.
@@ -384,14 +383,12 @@ declaration round of the backend reads, and no more:
 DeclTable
   units           : {str: UnitDecls}   # by unit name; a unit with no AST has no row
   copies          : [MethodDecl]       # each monomorphized extension; its home unit defines it
-  shipped_perks   : [MethodDecl]       # each method of a perk implementation that a library ships
-  shipped_methods : [MethodDecl]       # each extension method that a library ships
 
 UnitDecls
   functions    : [FunctionDecl]        # the written functions in source order, then the instances by name
   methods      : [MethodDecl]          # the extensions, then the methods of each perk implementation
   globals      : [GlobalDecl]          # each constant and each `var`, in source order
-  perk_symbols : [str]                 # the symbol of each perk method (`weak_odr` in a library)
+  perk_symbols : [str]                 # the symbol of each perk method
   stdlib_imports : [str]               # the stdlib module of each `use <...>`, as written, in order
   method_names : {str}                 # each method name that the unit calls or declares (R1, `extension-visibility.md`)
 
@@ -404,7 +401,7 @@ FunctionDecl
 
 MethodDecl
   name, symbol                         # the symbol of a call site: `extension_decl_symbol`
-  link_name  : str                     # the `link_symbol` of a binary library, else `symbol`
+  link_name  : str                     # `symbol` (a field of the retired binary kind)
   receiver   : Type | None             # None for a static
   by_pointer : bool                    # a `peek self` or a `poke self` receiver
   params     : [(str, Type)]
@@ -417,7 +414,7 @@ GlobalDecl
   data_name   : str                    # the name of the bytes of a string value
   ty          : Type | None
   is_var      : bool
-  link_symbol : str | None             # a `var` of a binary library
+  link_symbol : str | None             # None (a field of the retired binary kind)
   empty       : bool                   # a `var` whose initializer allocates nothing
   value       : ConstantValue | None   # the folded value of the initializer (9.5)
   loc         : Span
@@ -427,8 +424,8 @@ Five rules hold the table:
 
 - The builder folds the initializer of each constant and each `var` with the constant
   evaluator, as the unit of its scope reads it (9.5). The table holds the value, not the
-  expression. A `var` of a binary library, and a `var` whose initializer allocates nothing,
-  have no value: the backend gives them no initializer, or the zero value of the type.
+  expression. A `var` whose initializer allocates nothing has no value: the backend gives
+  it the zero value of the type.
 - The table keeps a fault for the backend. A global with no type, or with no value where the
   round needs one, is an internal error of the declaration round (8.2).
 - A record keeps the WRITTEN signature (`ret`, `err_type`, `written_channel`), because the
@@ -436,8 +433,7 @@ Five rules hold the table:
   signature of a library. A function record also keeps `resolved_result`, the interned
   `Result` of a spelled `Result@(T, E)` return; a method record has no such field, because
   an extension declaration has none.
-- The builder resolves a type that a shipped perk implementation writes and that the program
-  declares (an `UnknownType`, from the source text of a library) with `require_named_type`
+- The builder resolves a type that is still an `UnknownType` with `require_named_type`
   (`semantics/type_resolution.py`): a name with no declaration is the internal error CE0020.
   The builder also resolves a parameter type that writes an instance (`Box@(i32) b`, a
   `GenericTypeRef`) to the instance that the analysis interned, with its iterator items in
@@ -448,16 +444,14 @@ Five rules hold the table:
   derives none from a declaration.
 
 The readers: the declaration round of `codegen_llvm.py` (the functions, the methods, the
-globals and the body of each), `functions/` (each prototype), `driver.py` (the perk symbols of
-a library), `backend/slir/bodies.py` (the `SlirFunction` of a `body`), and the stdlib link set
+globals and the body of each), `functions/` (each prototype), `backend/slir/bodies.py` (the `SlirFunction` of a `body`), and the stdlib link set
 (`stdlib_linker.py`: the `stdlib_imports` and the `method_names` of each unit). No backend
 module reads the AST.
 
 The manifest of a library is not a reader of the table. It writes no LLVM, and it is a module
 of the compiler (`compiler/library_manifest.py`), not of the backend. It reads the
-declarations of the AST of each own unit, and it walks the BODY of each exported template for
-the names that the body reads and the types that it writes (the export closure, question 4 of
-6.1). It keeps the source text of each template body, so the `.slib` format does not change.
+declarations of the AST of each own unit. It keeps the source text of each template body, so
+the `.slib` format does not change.
 The table does not hold the closure: a second home of the closure walk in the builder would
 have no other reader.
 
@@ -2690,8 +2684,7 @@ gives each body that it finished, and that is not a template check (9.1), to the
 of its unit (`SlirStage`). The stage makes one `SlirFunction` from the body and its three
 side tables, and `SlirProgram` keeps the outcome of each body, keyed by the `DeclId` of the
 body. The symbol, the unit and the return type of the function are facts of its declaration
-(6.4). The unit is the declaring unit. A function that has none (a lifted lambda, the
-instance of a template of a binary library) goes into the module of the unit that holds its
+(6.4). The unit is the declaring unit. A function that has none (a lifted lambda) goes into the module of the unit that holds its
 body. The body of an extension method or of a static is a function like any other: its
 receiver is `_1`, with the convention of its `self` (8.3), its declared parameters come
 after it, and a static has no receiver. Its symbol is `extension_decl_symbol` (8.6), and
@@ -3460,32 +3453,11 @@ value is `Aggregate(AggClosure(ty), [FnRef(symbol)])`, with no environment (8.7)
 case. A generic function as a value names the instance that its position gives (7.3). The
 `Indirect` call of an `IteratorValue` walk has an iterator value as its operand (8.9).
 
-**A library callee.** A function, a method or a static of a binary
-library has no declaring unit in the build: its symbol is its `link_symbol`, from the
-manifest. The `link_symbol` is a fact of the callee row: `typecheck` reads the
-`link_symbol` of the signature or of the extension record and writes it into
-`ResolvedCall`, with no unit (`user_callee`, `passes/types/visit/user_callees.py`). SLIR
-lowering makes `Direct(link_symbol, name)` for a `Free`, a `Method` or a `Static` callee of
-such a row, and a function value of one is `Aggregate(AggClosure(ty), [FnRef(link_symbol)])`
-(`callee_symbol`, `slir/lower_symbols.py`). A perk method of a library implementation
-needs nothing: its perk symbol has no unit (7.6). The `.slib` format does not change
-(9.4). An instance of a template of a binary library is a row with no unit and no
-`link_symbol`: its body goes into the module of the unit that holds it (8.2), and its
-symbol has no unit prefix. A source library needs nothing, because its units are ordinary
-units of the build. The verifier finds the declared parameters of a library callee in the
-function table and in the extension table that the `libraries` step fills from the
-manifest, by the `link_symbol` of the row (8.13).
-
-A public constant of a binary library travels as source, and the consumer
-checks its initializer in the scope of the library unit. The export closure of the library
-walks the initializer of each public constant, so a private function that the value names
-travels with its signature and its link symbol, as a private function that a template body
-names does. The check of the initializer may name it, as a body of a library template may
-(`in_library_body`). The thunk of the constant then names the link symbol of the private
-function. A private constant that the value names travels as source, by the same
-walk. A private `var` or a private constant of a binary library that the consumer names
-is a name of the scope pass (`kept_constant_names`), so `typecheck` gives
-[CE3005](../error-catalog.md#ce3005) for it, and the scope pass gives no CE1001.
+**A library callee.** A library needs nothing, because its units are ordinary units of the
+build: a function, a method or a static of a library has a declaring unit, and its callee
+row is the row of any other unit. (A binary library once gave a callee row a `link_symbol`
+from its manifest, with no unit; that kind is retired, `docs/design/libraries.md`
+section 5.)
 
 ### 8.7 Rvalues
 
@@ -4382,12 +4354,7 @@ the `nom self` of its body, and its symbol is the symbol of `as` on that source 
 target after it (`conversion_symbol`). `as` is a reserved word, so no other method has the
 name. A `Direct` callee with no row is CE0158. A free function, a method or a static
 of the build, a conversion, a function of a registry stdlib module and a C function have a
-row. A `Direct` callee whose symbol is the `link_symbol` of a function, a method or a static
-of a binary library finds its row in the function table or in the extension
-table that the `libraries` step fills from the manifest (8.6). An instance of a
-template of a binary library has no unit: the flat view of the function table holds its
-row, and its symbol has no unit prefix. Each row has one symbol: its `link_symbol` when the
-`libraries` step gives it one, else the symbol of its name in its unit (`function_of`). A `Drop` of a
+row. Each row has one symbol: the symbol of its name in its unit (`function_of`). A `Drop` of a
 field, an element or a payload is the drop of a part, a `Drop` through a `Deref` is refused,
 and a `DropIfSet` of a place that is no `Local` is refused, so no drop is a shape that the
 verifier does not check. A projection of a `Global` is checked against the type
@@ -4448,8 +4415,7 @@ The duplicated walking and printing code is the smaller cost.
 
 ### 9.4 The `.slib` format does not change
 
-A source `.slib` ships Sushi text, and the consumer compiles it. A binary `.slib` ships
-LLVM bitcode and a manifest, and the backend still emits LLVM (section 3). Neither is
+A `.slib` ships Sushi text and a manifest, and the consumer compiles the text. It is not
 touched.
 
 Shipping **SLIR** in a `.slib` would be a backend-neutral binary format, and the header

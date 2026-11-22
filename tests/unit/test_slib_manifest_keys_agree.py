@@ -21,29 +21,23 @@ REPO = Path(__file__).resolve().parents[2]
 MANIFEST = "sushi_lang/compiler/library_manifest.py"
 TEMPLATES = "sushi_lang/semantics/library_templates.py"
 PIPELINE = "sushi_lang/compiler/pipeline.py"
-REGISTRATION = "sushi_lang/semantics/library_registration.py"
-REGISTRY = "sushi_lang/semantics/library_registry.py"
 LIB_INFO = "sushi_lang/compiler/lib_info.py"
-NAMESPACES = "sushi_lang/semantics/passes/namespaces.py"
 
 G = "LibraryManifestGenerator."
-R = "LibraryRegistration."
-Y = "LibraryRegistry."
 
 _DOCUMENTED = (TEMPLATES, "with_doc")
 
 WRITERS: dict[str, list[tuple[str, str]]] = {
-    "manifest": [(MANIFEST, G + "generate"), (PIPELINE, "_resolve_library_imports")],
-    "templates": [(MANIFEST, G + "_extract_templates"), (MANIFEST, G + "_closure_records")],
+    "manifest": [(MANIFEST, G + "generate")],
+    "templates": [(MANIFEST, G + "_extract_templates")],
     "function": [(MANIFEST, G + "_extract_public_functions"),
-                 (MANIFEST, G + "_closure_records"), (MANIFEST, G + "_generic_templates"),
+                 (MANIFEST, G + "_generic_templates"),
                  (TEMPLATES, "signature_record"), (TEMPLATES, "serialize_generic_function"),
                  _DOCUMENTED],
     "param": [(TEMPLATES, "signature_record")],
     "type_param": [(TEMPLATES, "_type_param_records")],
     "target_bound": [(TEMPLATES, "target_bound_records")],
-    "constant": [(MANIFEST, G + "_extract_public_bindings"),
-                 (MANIFEST, G + "_closure_records"), _DOCUMENTED],
+    "constant": [(MANIFEST, G + "_extract_public_bindings"), _DOCUMENTED],
     "struct": [(MANIFEST, G + "_extract_public_types"), (MANIFEST, G + "_struct_members"),
                _DOCUMENTED],
     "field": [(MANIFEST, G + "_struct_members"), _DOCUMENTED],
@@ -53,7 +47,6 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
     "generic_type": [(TEMPLATES, "serialize_generic_struct"),
                      (TEMPLATES, "serialize_generic_enum"),
                      (MANIFEST, G + "_generic_templates"), _DOCUMENTED],
-    "private_type": [(MANIFEST, G + "_closure_records")],
     "perk": [(TEMPLATES, "serialize_perk"), (MANIFEST, G + "_shipped_perks"), _DOCUMENTED],
     "perk_impl": [(TEMPLATES, "serialize_perk_impl"),
                   (TEMPLATES, "serialize_generic_perk_impl"),
@@ -71,11 +64,9 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
     "doc": [(TEMPLATES, "doc_record")],
     "example": [(TEMPLATES, "doc_record")],
     "reexport": [(MANIFEST, G + "_extract_reexports")],
-    "not_exported": [(MANIFEST, G + "_extract_not_exported")],
     "conversion": [(MANIFEST, G + "_extract_conversions"), _DOCUMENTED],
     "dont_panic": [(MANIFEST, G + "_extract_dont_panic")],
     "dependency": [(MANIFEST, G + "_extract_dependencies")],
-    "closure_summary": [(MANIFEST, G + "_closure_records")],
 }
 
 # (module, function) -> {variable: kind}. A tuple of kinds is a variable that holds a
@@ -83,47 +74,8 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
 # every string-key read of every function classified here; the other modules are read
 # only in the functions listed.
 READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
-    (REGISTRATION, R + "seed_perks"): {"record": "perk"},
-    (REGISTRATION, R + "_template_records"): {"manifest": "manifest"},
-    (REGISTRATION, R + "_build_registry"): {"manifest": "manifest"},
-    (REGISTRATION, R + "_library_file"): {"manifest": "manifest"},
-    (REGISTRATION, R + "_register_constants"): {
-        "manifest": "manifest", "templates": "templates"},
-    (REGISTRATION, R + "_register_one_constant"): {"record": "constant"},
-    (REGISTRATION, R + "_register_private_types"): {"record": "private_type"},
-    (REGISTRATION, R + "_register_perk_impls"): {"record": "perk_impl", "m": "method"},
-    (REGISTRATION, R + "_register_generic_perk_impls"): {
-        "record": "perk_impl", "manifest": "manifest"},
-    (REGISTRATION, R + "_record_public_types"): {
-        "manifest": "manifest", "record": ("struct", "enum")},
-    (REGISTRATION, R + "_register_extensions"): {"record": "extension"},
-    (REGISTRATION, R + "_register_conversions"): {"record": "conversion"},
-    (REGISTRATION, R + "_register_functions"): {
-        "manifest": "manifest", "record": "function"},
-    (REGISTRATION, R + "_register_generic_extensions"): {
-        "record": "extension", "manifest": "manifest"},
-    (REGISTRATION, R + "_register_generic_functions"): {
-        "record": "function", "manifest": "manifest", "rec_tp": "type_param"},
-    (REGISTRATION, R + "_register_generic_types"): {
-        "record": "generic_type", "manifest": "manifest"},
-    (REGISTRY, "manifest_reexports"): {},
-    (REGISTRY, "reexported_libraries"): {"record": "reexport"},
-    (REGISTRY, "manifest_dependencies"): {},
-    (REGISTRY, "manifest_conversions"): {},
-    (REGISTRY, "library_dependencies"): {"record": "dependency"},
-    (REGISTRY, "stdlib_dependencies"): {"record": "dependency"},
-    (NAMESPACES, "build_compiled_library_namespaces"): {"record": "dependency"},
-    (NAMESPACES, "_dependency_use"): {"record": "dependency"},
-    (REGISTRY, Y + "register_library"): {
-        "manifest": "manifest", "templates": "templates", "func_info": "function",
-        "record": "not_exported"},
-    (REGISTRY, Y + "_parse_structs"): {"struct_info": "struct", "f": "field"},
-    (REGISTRY, Y + "_parse_enums"): {"enum_info": "enum", "v": "variant"},
-    (REGISTRY, Y + "_parse_functions"): {"func_info": "function"},
-    (REGISTRY, "parse_signature"): {"func_info": ("function", "extension"), "p": "param"},
-    (REGISTRY, "_borrowed_return"): {"func_info": ("function", "extension")},
-    (TEMPLATES, "deserialize_perk_impl"): {"record": "perk_impl"},
-    (TEMPLATES, "deserialize_extension"): {"record": "extension"},
+    (PIPELINE, "_library_dependencies"): {"record": "dependency"},
+    (PIPELINE, "_recorded_versions"): {"record": "dependency"},
     (LIB_INFO, "_render_params"): {"param": "param"},
     (LIB_INFO, "_render_type_params"): {"tp": "type_param"},
     (LIB_INFO, "_render_signature"): {"func": ("function", "method", "extension")},
@@ -156,7 +108,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (LIB_INFO, "print_library_info"): {"metadata": "manifest"},
 }
 
-WHOLE_MODULE_READERS = (REGISTRATION, REGISTRY)
+WHOLE_MODULE_READERS: tuple[str, ...] = ()
 
 # `toolchain/src/slib_info.sushi`, by hand: the keys it reads, per record kind.
 SUSHI_READER: dict[str, set[str]] = {
@@ -165,7 +117,7 @@ SUSHI_READER: dict[str, set[str]] = {
                  "units", "unit_docs", "reexports", "public_functions",
                  "public_constants", "public_variables", "structs", "enums",
                  "templates", "conversions", "dont_panic",
-                 "dependencies", "compiler_digest", "data_layout", "link_libraries"},
+                 "dependencies"},
     "templates": {"generic_functions", "generic_structs", "generic_enums", "perks",
                   "perk_impls", "generic_perk_impls", "extensions", "generic_extensions"},
     "function": {"name", "params", "return_type", "error_type", "return_mode",
@@ -366,8 +318,8 @@ def test_the_sushi_reader_table_names_keys_the_reader_spells():
 
 
 # `check_manifest` reads the manifest through `MANIFEST_SCHEMA`: each row names a record
-# kind and a key. Two schema kinds are writer kinds under another name.
-SCHEMA_KIND_WRITER = {"helper": "function", "closure_constant": "constant"}
+# kind and a key. A schema kind that is a writer kind under another name is a row here.
+SCHEMA_KIND_WRITER: dict[str, str] = {}
 
 
 def test_every_schema_key_is_written():

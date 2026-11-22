@@ -102,8 +102,7 @@ function type with a channel.
 A bare function is the exception, not the default style. Use it only when the function is total
 over its inputs and will stay so (a combinator argument, a pure arithmetic helper). Write a
 channel for everything that can fail, or can gain a failure later. A public function keeps a
-channel when there is any doubt, because a channel added later breaks every caller and every
-binary `.slib`. The compiler does not enforce this; `docs/design/error-channel.md` carries the
+channel when there is any doubt, because a channel added later breaks every caller. The compiler does not enforce this; `docs/design/error-channel.md` carries the
 rule.
 
 **Only plain top-level `fn`s are referenceable.** Extension methods, perk methods, and FFI

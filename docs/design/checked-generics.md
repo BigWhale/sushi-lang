@@ -116,7 +116,7 @@ A template whose body is correct gives no diagnostic, also when nothing calls it
   parameter (`extend i32 pick@(U)`), a perk implementation on a generic target (`extend
   Box@(T) with P`) and on every array (`extend T[] with P`), and a pack template.
 - **Every unit of the program**, the units of a library at its own `--lib` build
-  included, in each library kind, and every bundled stdlib unit.
+  included, and every bundled stdlib unit.
 - **Not a consumed library unit.** Its own `--lib` build checked it. The consumer does
   not check the template again, so each copy that the consumer cuts takes the full check
   of a copy, not only the per-instance remainder of section 8. A library that an older

@@ -58,7 +58,7 @@ stay so (a checksum, a pure arithmetic or string helper, a path join), and a cha
 only force a dead `??` or `.realise` on every caller. Write a channel for everything else:
 I/O, parsing, allocation on a size that you get, and a function that can gain a failure
 later. Keep a channel on a public function when you are not sure: a channel that you add
-later changes the signature and breaks every caller and every binary library. The compiler
+later changes the signature and breaks every caller. The compiler
 does not enforce this rule. [The error channel](../design/error-channel.md) records the
 decision, and [Error handling](../error-handling.md) has the full text.
 

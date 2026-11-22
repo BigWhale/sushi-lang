@@ -681,9 +681,8 @@ class FunctionCollector:
         self.current_unit_name: Optional[str] = None
         self.refused = RefusedDeclarations()
         # Unit names that came from a source library. A consumer definition that
-        # collides with one of theirs SHADOWS it silently, which is the rule a binary
-        # library already follows (docs/design/libraries.md section 7). Without this,
-        # `--lib-kind` would change program semantics rather than just distribution.
+        # collides with one of theirs SHADOWS it silently (docs/design/libraries.md
+        # section 7).
         self.library_units: Set[str] = set()
         self.stdlib_reach = StdlibReach()
         # The bodies that name a type pack as one type (CE0147, #1167) or hold a
@@ -1096,23 +1095,6 @@ class FunctionCollector:
             reject_try_in_body(self.r, header.body, "an extension method")
 
         self._collect_for_target(header)
-
-    def refile_extension(self, ext: ExtendDef) -> bool:
-        """File one concrete `extend` declaration again, once its target type exists.
-
-        A binary library's concrete types enter the tables in the `libraries` step,
-        after this pass, so an extension a consumer writes on one finds no target here
-        and files nothing. The step calls this for it. The refusals ran already, so only
-        the filing runs again. A conversion is judged whole here, because the collect
-        pass could not resolve it. The answer is False when the declaration is refused
-        and leaves the AST.
-        """
-        if ext.is_conversion:
-            return collect_conversion(self, ext, refile=True) is not Filed.REFUSED
-        header = _read_extension_header(ext)
-        if header is not None:
-            self._collect_for_target(header)
-        return True
 
     def _reject_signature_faults(self, h: '_ExtensionHeader') -> None:
         """Every refusal the signature carries, whatever the target kind is."""

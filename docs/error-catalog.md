@@ -623,14 +623,6 @@ A variadic '...T' parameter must be the last parameter, a function may declare a
 
 Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods. A type pack `...Ts` is refused in the type-parameter list of a struct, an enum, an error type, an extension method and a static method: a pack has two halves, and only a free function has the parameter list for its value pack `...Ts name`. The caret is on the `...Ts`. When a method has a type pack and a value pack, the type pack is the one fault. The analysis stops after the refusal, so a written instance of the type or a call of the method adds no second diagnostic.
 
-### CE0116 {#ce0116}
-
-**Error** · function
-
-**Message:** `public function '{name}' is variadic and cannot appear in the public API of a binary library`
-
-A public native variadic function (`...T`) cannot be in a binary library: the binary path cannot describe the call, which collects the trailing arguments into a `T[]`. A source library can have one: the consumer compiles the unit of the library as its own, and the index marks the parameter `variadic` (protocol 2.10). The escape is `--lib-kind source`, or a `T[]` parameter in place of `...T`. A type pack (`...Ts`) is not refused: it ships as a template in both kinds. Until protocol 2.10 the code fired for a source library too.
-
 ### CE0117 {#ce0117}
 
 **Error** · function
@@ -883,7 +875,7 @@ A generic function, or an extension method that the compiler copies at the call 
 - `pass --dont-panic to allow the unchecked indexes of this build, or remove the marker`
 - `the library '{library}' asks for unchecked indexes; pass --dont-panic to consent`
 
-The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error [RE2020](#re2020). Only three kinds of unit may write it. A bundled stdlib unit needs no flag. A unit of a build that passes `--dont-panic` may write it. A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents. The message then names the library. A CONCRETE marked body of a binary library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. Pass `--dont-panic`, or remove the marker. See [the dont_panic design](design/dont-panic.md).
+The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error [RE2020](#re2020). Only three kinds of unit may write it. A bundled stdlib unit needs no flag. A unit of a build that passes `--dont-panic` may write it. A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents. The message then names the library. Pass `--dont-panic`, or remove the marker. See [the dont_panic design](design/dont-panic.md).
 
 ### CE0153 {#ce0153}
 
@@ -1124,7 +1116,7 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `an iterator has the methods 'clone' and the adapters 'map', 'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' and 'collect': walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has the method `.clone()`, which copies its cursor, and the adapters `map`, `filter`, `enumerate`, `zip`, `clone_each`, `fold`, `partition` and `collect`; every other method on an iterator is this error. `foreach` walks an iterator, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005). It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has the method `.clone()`, which copies its cursor, and the adapters `map`, `filter`, `enumerate`, `zip`, `clone_each`, `fold`, `partition` and `collect`; every other method on an iterator is this error. `foreach` walks an iterator, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2009 {#ce2009}
 
@@ -2653,7 +2645,7 @@ A required unit file could not be found at the expected location.
 
 **Message:** `cannot {verb} private {kind} '{name}' from unit '{current_unit}' ({kind} is defined in '{owner}')`
 
-A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one code answers for a function, a constant, a struct and an enum. A generic is no exception: a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. A binary library answers here too: the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{owner}` is then the library rather than a unit.
+A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one code answers for a function, a constant, a struct and an enum. A generic is no exception: a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused.
 
 ### CE3006 {#ce3006}
 
@@ -2679,7 +2671,7 @@ A program compiled without --lib is linked into an executable, and the linker ne
 
 **Message:** `linking failed: '{cc}' exited with status {status}`
 
-The C compiler used as the linker rejected the object file. Its own output is attached as a note. Each library of a `link` clause gets a note at the clause that asked for it, a library of a binary `.slib` gets a note that names the library, and the `-L` directories get a note. This is an environment condition, not a compiler bug: a library that the linker cannot find is not installed, or its directory needs `-L` ([FFI](ffi.md#linking-an-external-library)).
+The C compiler used as the linker rejected the object file. Its own output is attached as a note. Each library of a `link` clause gets a note at the clause that asked for it, and the `-L` directories get a note. This is an environment condition, not a compiler bug: a library that the linker cannot find is not installed, or its directory needs `-L` ([FFI](ffi.md#linking-an-external-library)).
 
 ### CE3009 {#ce3009}
 
@@ -2703,7 +2695,7 @@ A constraint is part of a signature: a consumer that calls a generic has to sati
 
 **Message:** `cannot declare {kind} '{name}': '{owner}' declares it too`
 
-A TYPE is one name for the whole program. Identity is nominal, so one name is one shape, and a source library's units and a bundled stdlib module are ordinary compilation units at the consumer: a struct or an enum that either of them declares is a name the consumer cannot declare again, even where the library keeps it private and the consumer cannot see it. This code refuses the declaration and names the unit that holds the name. A BINARY library holds the same rule: a concrete type it exports and a type it keeps PRIVATE are both refused with this code, because the library's bodies were compiled against its own layout, and the analysis stops after the refusal so no body is checked against the consumer's type. A function is not affected: a function carries the unit that declared it and each unit reads its own, so a consumer may declare a function beside a library's private one. Rename your type. See [the type-identity design](design/type-identity.md).
+A TYPE is one name for the whole program. Identity is nominal, so one name is one shape, and a source library's units and a bundled stdlib module are ordinary compilation units at the consumer: a struct or an enum that either of them declares is a name the consumer cannot declare again, even where the library keeps it private and the consumer cannot see it. This code refuses the declaration and names the unit that holds the name. A function is not affected: a function carries the unit that declared it and each unit reads its own, so a consumer may declare a function beside a library's private one. Rename your type. See [the type-identity design](design/type-identity.md).
 
 ### CE3012 {#ce3012}
 
@@ -2827,7 +2819,7 @@ Libraries cannot have a main() function. Remove it or compile as executable.
 
 **Message:** `library not found: '{lib}' (searched: {paths})`
 
-Library bitcode and manifest files not found in search paths.
+No .slib file of the library is in the search paths.
 
 ### CE3503 {#ce3503}
 
@@ -2836,14 +2828,6 @@ Library bitcode and manifest files not found in search paths.
 **Message:** `library '{lib}' accepts compiler {requires}, this is {current}`
 
 A source library is compiled by the CONSUMER's compiler, not the author's, so a library that built cleanly under one compiler can fail under a later one. Every .slib states `requires_compiler`; the default a build stamps is `~<major>.<minor>` of the building compiler, because pre-1.0 semver makes the minor the breaking unit. The escape, for an author testing a library forward against a new compiler, is --ignore-compiler-version. The check is skipped, never failed, when either version cannot be parsed.
-
-### CE3504 {#ce3504}
-
-**Error** · library
-
-**Message:** `platform mismatch: library compiled for '{lib_platform}', current platform is '{current_platform}'; rebuild the library on this host`
-
-A binary library holds machine code, so it is bound to the host that built it. The tag is `<os>_<arch>` (`darwin_arm64`, `linux_x86_64`), the same key that selects the `<sys/platform>` file. The OS alone was not enough: an arm64 library passed the check on x86_64, and the fault showed late, at the link. A tag that names no host (`unknown`, or the old OS-only tag `darwin` or `linux`) cannot be checked, so it is refused too. The fix is to build the library again on this host. When the tag is equal, the data layout must be equal too: a binary library records the LLVM data layout of the target that built it, and the consumer compares it with the layout of its own target. Today the host key fixes the layout, so a different layout comes from a library that was edited by hand or built by another toolchain; the check prepares `--target`. The message then shows each platform with its data layout, as `darwin_arm64 (data layout <layout>)`, and a library with no layout shows `none`. A source library is never checked: nothing in it is machine code.
 
 ### CE3505 {#ce3505}
 
@@ -2860,14 +2844,6 @@ A .slib records `library_version`. The value comes from `[package] version` in t
 **Message:** `corrupted library file '{path}': source section truncated (expected {expected} bytes, got {actual})`
 
 The container's sibling of [CE3510](#ce3510)/[CE3511](#ce3511) for the source section between the metadata and the bitcode. Each of the three codes names the section that is short, so it tells a reader where the file was cut.
-
-### CE3507 {#ce3507}
-
-**Error** · library
-
-**Message:** `failed to link library '{lib}': {reason}`
-
-LLVM bitcode linking failed for the specified library.
 
 ### CE3508 {#ce3508}
 
@@ -2907,7 +2883,7 @@ Library file is incomplete or corrupted.
 
 **Message:** `invalid library metadata in '{path}': {reason}`
 
-MessagePack decoding failed, the metadata schema is invalid, or the manifest states a kind that is not `source` or `binary`. A library of an older compiler can state a removed kind: build it again with this compiler.
+MessagePack decoding failed, the metadata schema is invalid, or the manifest states a kind that this compiler does not read. The binary kind is retired, and this compiler reads only a source library. A library of an older compiler can state a removed kind: build it again with this compiler.
 
 ### CE3513 {#ce3513}
 
@@ -2957,21 +2933,13 @@ A --lib build reads the nori.toml in the current directory for the library versi
 
 A library records every `use <lib/...>` that its units write, with the version of the library that its build found, and the consumer's build loads the whole graph. A library is identified by the `library_name` stamped into its `.slib`, so the graph holds ONE copy of each library: a body compiled against one version and linked against another is a wrong program with no diagnostic. When two paths of the graph reach two versions of one library -- a library was built against 0.1.0 and the consumer's search finds 0.2.0, or two imports find two files -- the build stops here. Each note names a version and the path that reached it: the consumer's `use`, or the library that recorded it. The escape is to rebuild the library that recorded the old version against the one that the search finds, or to put the version that it was built against first on SUSHI\_LIB\_PATH.
 
-### CE3520 {#ce3520}
-
-**Error** · library
-
-**Message:** `library '{lib}' was built by another compiler: its compiler {part} is '{built}', this compiler has '{current}'; build the library again with this compiler`
-
-A binary library holds bitcode, and the bitcode is bound to the compiler that made it. Before 1.0 the bitcode ABI (value layouts, calling conventions, mangling) changes often, also in a patch release. A binary library also carries its own copy of each stdlib module that it imports, as `weak_odr`, and LLVM takes all copies as equal: a library from another compiler can run an old stdlib with no message. So a binary library records a stamp, the exact compiler version and the compiler-source digest (the digest that the object cache uses), and the consumer accepts it only when both are equal to its own. The message names the part that is not equal, the version first. The fix is to build the library again with this compiler. `--ignore-compiler-version` does not stop this check; it is for `requires_compiler` ([CE3503](#ce3503)). A source library has no stamp: the consumer compiles its text.
-
 ### CE3521 {#ce3521}
 
 **Error** · library
 
 **Message:** `` `use <{use_path}>` loads the library '{lib}', but the file '{path}' is the library '{built}' ``
 
-A build stamps the name of a library into its `.slib`: the `library_name` is the stem of the output file (`-o <name>.slib`). A `use <lib/...>` names a library with the last part of its path, and the search finds the file of that name. So the two names are equal, unless a file was copied or renamed after its build. Such a file must not load under another name. It hides which library a build uses: its units have the name of the stamped library, not the name of the `use`. It also confuses the one-version rule: two files with one stamped name meet as two versions of one library ([CE3519](#ce3519)), and the text names a library that no `use` names. The consumer thus refuses every library of the graph whose stamped name is not the name of the `use` that loaded it: the consumer's own `use`, a `use` or a `public use` of a source library, and a `dependencies` or `reexports` record of a binary library. Both kinds are checked. The fix is to build the library again with the name of the `use`, or to write the `use` with the library's own name. `--lib-info` reads a file with no `use`, so it does not check this.
+A build stamps the name of a library into its `.slib`: the `library_name` is the stem of the output file (`-o <name>.slib`). A `use <lib/...>` names a library with the last part of its path, and the search finds the file of that name. So the two names are equal, unless a file was copied or renamed after its build. Such a file must not load under another name. It hides which library a build uses: its units have the name of the stamped library, not the name of the `use`. It also confuses the one-version rule: two files with one stamped name meet as two versions of one library ([CE3519](#ce3519)), and the text names a library that no `use` names. The consumer thus refuses every library of the graph whose stamped name is not the name of the `use` that loaded it: the consumer's own `use`, and a `use` or a `public use` of a library. The fix is to build the library again with the name of the `use`, or to write the `use` with the library's own name. `--lib-info` reads a file with no `use`, so it does not check this.
 
 ## CE4xxx: Perk errors {#ce4xxx}
 
@@ -3175,22 +3143,6 @@ A variadic `unsafe external` declaration (trailing `...`) must declare at least 
 
 Each trailing variadic argument to an external call must be C-representable: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), or ptr. Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary.
 
-### CE5006 {#ce5006}
-
-**Error** · ffi
-
-**Message:** `public generic '{name}' cannot be exported: it references un-shippable library symbol '{symbol}'`
-
-A public generic is shipped in a library (.slib) and monomorphized at the consumer. Library-private helpers it references ship automatically as part of the export closure (as templates if generic, as linkable signatures if concrete, with values for constants). Two classes of reference cannot cross the boundary: a symbol whose signature exposes a foreign 'ptr' (FFI is a private unit detail, see [CE5002](#ce5002)), and an 'unsafe external' namespace (foreign bindings cannot be re-declared at the consumer). Wrap the foreign detail behind a private helper with a C-ABI-free signature, or restructure the generic to avoid it.
-
-### CE5007 {#ce5007}
-
-**Error** · ffi
-
-**Message:** `library '{lib}' ships private symbol '{name}' which conflicts with a local definition`
-
-An imported library's exported generics depend on this private helper, which ships in the .slib export closure and must be registered at the consumer under its original name. A local symbol with the same name would silently change what the library's monomorphized bodies call. Rename the local symbol.
-
 ### CE5008 {#ce5008}
 
 **Error** · ffi
@@ -3237,7 +3189,7 @@ Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other gen
 
 **Message:** `external link-name '{symbol}' names a symbol this program defines`
 
-An `unsafe external` reaches OUT of the program: it may name a foreign symbol, never one this build defines. A program's units share one LLVM module and a linked library's module is merged into it, so a declaration and a definition of one name would UNIFY -- the declaration would then enter the program's own body with no ABI check, and code that may not call a library-PRIVATE body could run it. Rename the link-name, or call the Sushi function directly. The rule reads every symbol this build defines: the function and constant tables, the linked libraries, and the symbols the standard library GENERATES -- those last are in no semantic table, so the compiler reads the manifest the stdlib build writes beside its bitcode, plus a small reserved set for the ones the backend emits inline. A generated name is refused whether this program links the unit or not. A function or a constant is compared by the SYMBOL it emits, not by its Sushi name: `<unit>$<name>` (`main` alone has no prefix), or the `link_symbol` that a binary library's manifest records. A wrapper can have the name of the C function it calls, and a link name that spells an emitted symbol is refused. [CE5001](#ce5001) is the neighbouring rule for a built-in extern DECLARATION, which LLVM deduplicates when the signatures match.
+An `unsafe external` reaches OUT of the program: it may name a foreign symbol, never one this build defines. A program's units share one LLVM module and a linked library's module is merged into it, so a declaration and a definition of one name would UNIFY -- the declaration would then enter the program's own body with no ABI check, and code that may not call a library-PRIVATE body could run it. Rename the link-name, or call the Sushi function directly. The rule reads every symbol this build defines: the function and constant tables, the linked libraries, and the symbols the standard library GENERATES -- those last are in no semantic table, so the compiler reads the manifest the stdlib build writes beside its bitcode, plus a small reserved set for the ones the backend emits inline. A generated name is refused whether this program links the unit or not. A function or a constant is compared by the SYMBOL it emits, not by its Sushi name: `<unit>$<name>` (`main` alone has no prefix). A wrapper can have the name of the C function it calls, and a link name that spells an emitted symbol is refused. [CE5001](#ce5001) is the neighbouring rule for a built-in extern DECLARATION, which LLVM deduplicates when the signatures match.
 
 ### CE5014 {#ce5014}
 
@@ -3616,7 +3568,7 @@ Source file should end with a newline character.
 
 **Message:** `'{flag}' has no effect {reason}`
 
-The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib. The build goes on without the flag.
+The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib; `--dump-shir` and `--dump-slir` are not read by `--lib-info`. The build goes on without the flag.
 
 ### CW0004 {#cw0004}
 
@@ -3682,7 +3634,7 @@ A unit was already imported earlier in this file. The duplicate use statement ha
 
 **Message:** `'{name}' shadows the {kind} '{owner}' exports`
 
-A program's own declaration takes priority over a name that a library of any kind (source or binary) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, and the library's own body keeps calling its own. Both declarations may be public: an unqualified name with two candidates is [CE3012](#ce3012) at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program ([CE3011](#ce3011)). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The warning is the same for each library kind: a source library's export is found in its unit, a binary library's export in its manifest, which lists every public function and template. A bundled stdlib module's export is a name of a unit only where a flat `use` reaches the module, directly or through a `public use`: behind an alias, or in a unit that does not import the module, a declaration of the same name shadows nothing and gets no warning. A stdlib constant or `var` is shadowed in the same way, with this warning; a source library's public constant taken again is the duplicate [CE0105](#ce0105).
+A program's own declaration takes priority over a name that a library or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, and the library's own body keeps calling its own. Both declarations may be public: an unqualified name with two candidates is [CE3012](#ce3012) at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program ([CE3011](#ce3011)). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. A library's export is found in its unit. A bundled stdlib module's export is a name of a unit only where a flat `use` reaches the module, directly or through a `public use`: behind an alias, or in a unit that does not import the module, a declaration of the same name shadows nothing and gets no warning. A stdlib constant or `var` is shadowed in the same way, with this warning; a source library's public constant taken again is the duplicate [CE0105](#ce0105).
 
 ### CW3004 {#cw3004}
 
@@ -3715,14 +3667,6 @@ Behind `--warn-unused`, off by default. The unit writes no name the import bring
 **Message:** `'{name}' hides the public extension method that '{owner}' declares`
 
 This unit declares an extension method, and it imports a unit that declares a public extension method of the same name on the same type. That is legal. A call in this unit calls the method of this unit, and the other unit keeps calling its own. It is a warning because a reader of a call cannot see which of the two methods answers it. Rename the method of this unit to call the imported one, or keep it.
-
-### CW3506 {#cw3506}
-
-**Warning** · library
-
-**Message:** `library perk implementation for '{type}' could not be loaded and was skipped`
-
-A perk implementation shipped by a library failed to deserialize. Methods it provides will be unavailable unless the consumer supplies its own.
 
 ### CW5001 {#cw5001}
 

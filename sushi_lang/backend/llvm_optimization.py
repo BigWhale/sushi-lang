@@ -1,7 +1,6 @@
 """LLVM optimization pipeline and verification for the Sushi language compiler."""
 from __future__ import annotations
 
-import functools
 import typing
 from typing import Optional, Any, Callable, Dict, NamedTuple
 
@@ -107,14 +106,6 @@ def create_target_machine(target_triple: str | None = None, level: int = 2) -> l
         reloc = "pic"
 
     return target.create_target_machine(opt=level, reloc=reloc)
-
-
-@functools.cache
-def target_data_layout() -> str:
-    """The LLVM data layout string of the host target, the layout that codegen puts on
-    every module (`ensure_target`). A binary `.slib` records it, and the consumer compares
-    it with its own."""
-    return str(create_target_machine().target_data)
 
 
 class LLVMOptimizer:

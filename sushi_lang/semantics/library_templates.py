@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import (
-        DocBlock, FuncDef, PerkDef, StructDef, EnumDef, ExtendDef, ExtendWithDef, Program,
+        DocBlock, FuncDef, PerkDef, StructDef, EnumDef, ExtendDef, ExtendWithDef,
     )
 
 # The two tags that are singletons, and the only two that reach a record as their own
@@ -357,60 +357,8 @@ def serialize_generic_extension(ext: "ExtendDef", source_text: str) -> dict:
     return record
 
 
-def deserialize_extension(record: dict) -> "Program":
-    """Re-parse the source of an extension TEMPLATE record: one `extend` declaration."""
-    what = f"extension method '{record.get('type')} {record.get('name')}'"
-    program = parse_one_declaration(record.get("source") or "", what)
-    if len(program.extensions or []) + len(program.generic_extensions or []) != 1:
-        raise TemplateSourceError(f"the source of {what} is not an extension method")
-    return program
-
-
-class TemplateSourceError(ValueError):
-    """A manifest record's source that does not parse, or that is not one declaration."""
-
-
 # Every list of a `Program` that holds a declaration. A record's source is the slice of
 # ONE declaration, so it holds exactly one entry over all of them.
-_DECLARATION_LISTS = ("uses", "constants", "structs", "enums", "perks", "functions",
-                      "extensions", "generic_extensions", "perk_impls",
-                      "generic_perk_impls", "externals")
-
-
-def parse_one_declaration(source: str, what: str) -> "Program":
-    """Re-parse the source a manifest record carries, which must be ONE declaration.
-
-    The one reader of a record's source text. `what` names the record in the reason,
-    for example "generic function 'same'". A syntax error or a count other than one
-    raises `TemplateSourceError`, and the caller decides what the fault is: the text is
-    the library's and not the consumer's, so it is never reported at a consumer line.
-    """
-    from sushi_lang.internals.diagnostics import SushiError
-    from sushi_lang.internals.errors.registry import _fmt
-    from sushi_lang.internals.parser import parse_to_ast
-
-    try:
-        program, _tree = parse_to_ast(source)
-    except SushiError as e:
-        where = f"line {e.span.line}, column {e.span.col}: " if e.span else ""
-        text = _fmt(e.code, **e.params) if e.code else str(e)
-        raise TemplateSourceError(
-            f"the source of {what} does not parse ({where}{text})") from e
-    count = sum(len(getattr(program, name) or []) for name in _DECLARATION_LISTS)
-    if count != 1:
-        raise TemplateSourceError(
-            f"the source of {what} holds {count} declarations, expected exactly 1")
-    return program
-
-
-def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
-    """Reconstruct an ``ExtendWithDef`` from a manifest record by re-parsing."""
-    what = f"perk implementation '{record.get('type')} with {record.get('perk')}'"
-    program = parse_one_declaration(record.get("source") or "", what)
-    impls = program.perk_impls or []
-    if len(impls) != 1:
-        raise TemplateSourceError(f"the source of {what} is not a perk implementation")
-    return impls[0]
 
 
 def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
@@ -424,28 +372,3 @@ def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
         "source": slice_decl_source(perk, source_text),
         "methods": [method_record(m) for m in perk.methods],
     }, perk)
-
-
-def apply_template_bindings(body, bindings: dict) -> None:
-    """Rewrite a re-parsed template body's calls to the producer's symbols (D4).
-
-    A binary library has no `Unit` at the consumer, so a free name in a template
-    body cannot resolve through a scope. The producer resolved each one and wrote
-    the map down; this binds every named call the map covers to that symbol. The
-    symbol is registered as an alias key beside the record it names, and `$` lies
-    outside every user name's alphabet, so the rewritten callee can mean nothing
-    else. Only a CALL's callee is rewritten: the closure ships concrete private
-    FUNCTIONS in the map, and a bare reference to one is not expressible for a
-    library-private name.
-    """
-    from sushi_lang.semantics import ast as A
-    from sushi_lang.semantics.ast_walk import walk_nodes
-
-    def rebind_the_callee(node: A.Node) -> bool:
-        if isinstance(node, A.Call) and isinstance(node.callee, A.Name):
-            symbol = bindings.get(node.callee.id)
-            if symbol is not None:
-                node.callee.id = symbol
-        return True
-
-    walk_nodes(body, rebind_the_callee)

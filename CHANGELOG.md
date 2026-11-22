@@ -7,10 +7,9 @@ All notable changes to Sushi Lang will be documented in this file.
 ### Changed
 
 - **A source library can have a public native variadic function.** A public `...T` function
-  in a `--lib-kind source` library was CE0116, as in a binary library. Now only a binary
-  library refuses one. The consumer compiles the unit of a source library as its own, so it
-  calls the function with any count of trailing arguments or with a bloom `arr...`. The
-  index marks the parameter with the new field `variadic`, and its `type` is the element
+  in a source library was CE0116. Now the library can export one. The consumer compiles
+  the unit of a source library as its own, so it calls the function with any count of
+  trailing arguments or with a bloom `arr...`. The index marks the parameter with the new field `variadic`, and its `type` is the element
   type as written. Both halves of `--lib-info` print the parameter as `...T name`. The
   manifest protocol is `2.10`.
 
@@ -19,20 +18,10 @@ All notable changes to Sushi Lang will be documented in this file.
   that loaded it (the last part of the `use` path), with the new code CE3521. A copied or
   renamed `.slib` loaded under the name of the `use`, its units had the stamped name, and
   a copy beside its original met the one-version rule (CE3519) with confusing text. The
-  check covers both kinds and each load of the graph: the consumer's `use`, the `use` and
-  `public use` of a source library, and the dependency records of a binary library. The
-  message names the two names and the file. Build the library again with the name of the
-  `use`, or write the `use` with the library's own name.
-
-- **A binary `.slib` records the data layout of its target.** A binary library records
-  the LLVM data layout string of the target that built it (the new manifest field
-  `data_layout`, from the target machine of codegen). The consumer refuses a binary library
-  whose layout is not the layout of its own target, or that has no layout, with CE3504, and
-  each platform in the message shows its layout. Today the host key fixes the layout, so the
-  check guards a library that was edited by hand or built by another toolchain, and it
-  prepares `--target`. A source library has no layout and no check. `--lib-info` prints
-  `Data layout:` for a binary library. The manifest protocol is `2.9`. Build an older binary
-  library again.
+  check covers each load of the graph: the consumer's `use`, and the `use` and
+  `public use` of a source library. The message names the two names and the file. Build
+  the library again with the name of the `use`, or write the `use` with the library's
+  own name.
 
 - **A unit of a source library is checked one time, not on each build.** When the project
   cache holds the object of a source library unit (`lib/<name>/<unit>`) and the unit holds
@@ -46,44 +35,16 @@ All notable changes to Sushi Lang will be documented in this file.
   library units reused, M checked again`. `--lib` builds do not reuse. The test runner has a new
   directive, `EXPECT_COMPILER_STDOUT_CONTAINS`.
 
-- **A binary `.slib` is bound to the exact compiler that built it.** A binary library
-  records a compiler stamp: the exact compiler version (`compiler_version`) and the
-  compiler-source digest (the new manifest field `compiler_digest`, the digest of the object
-  cache). The consumer refuses a binary library when one part is not equal to its own, with
-  the new code CE3520, and the message names the two values of that part. Before 1.0 the
-  bitcode ABI and the bundled `weak_odr` stdlib change often, so a library of another
-  compiler could run an old stdlib with no message. Build the library again with this
-  compiler. `--ignore-compiler-version` does not stop the check. A source library has no
-  stamp. `--lib-info` prints `Compiler digest:` for a binary library. The manifest protocol
-  is `2.7`. The compiler-source digest now hashes the `*.sushi` files of the compiler too
-  (the Sushi stdlib included), so a stdlib change alone refuses an old binary library, and
-  it also changes the object-cache key.
-
-- **The hybrid library kind is removed.** A `.slib` is `source` (the default) or `binary`.
-  A hybrid library carried the source and the bitcode, but the consumer read only the
-  bitcode, and a foreign host refused it. `--lib-kind hybrid` is refused (an invalid
-  choice), and a `.slib` whose manifest states `hybrid` is refused by the consumer and by
-  `--lib-info` (CE3512, `unknown library kind 'hybrid'`): build it again as `source` or
-  `binary`. A manifest with no `kind` is a source library. The test runner has no
-  `BUILD_LIB_HYBRID` directive now.
+- **The compiler-source digest hashes the `*.sushi` files of the compiler too.** The
+  Sushi stdlib is included, so a change to a stdlib module alone changes the object-cache
+  key.
 
 - **A `.slib` is reproducible.** The manifest has no `compiled_at` field now, so two builds
-  of one source give a byte-equal file (checked with two `PYTHONHASHSEED` values). A
-  binary library that is built again with no change now rebuilds nothing at the consumer,
-  and the stdlib objects of the per-user cache are reused. Before, each rebuild of a binary
-  library rebuilt every unit of each consumer and added a new set of stdlib objects to the
-  per-user cache. `--lib-info` prints no `Compiled:` line. The manifest protocol is `2.6`.
+  of one source give a byte-equal file (checked with two `PYTHONHASHSEED` values).
+  `--lib-info` prints no `Compiled:` line. The manifest protocol is `2.6`.
 
-- **A binary `.slib` records the architecture of its host.** The `platform` field of a
-  binary or hybrid library is now the host key `<os>_<arch>` (`darwin_arm64`,
-  `linux_x86_64`), the same key that selects the `<sys/platform>` file. One function,
-  `host_key()` (`internals/host.py`), gives it. The consumer compares the field with the
-  host key, so a library of the same OS and another architecture is refused at load
-  (CE3504), not at the link. A library tagged `unknown` is refused too. An old binary or
-  hybrid library has the OS-only tag (`darwin`, `linux`) and is refused on every host:
-  build it again. A source library is not checked. The manifest protocol is `2.5`. The
-  test runner has a new directive, `LIB_MANIFEST_SET`, that sets one string field of a
-  built library's manifest.
+- **The test runner has a new directive, `LIB_MANIFEST_SET`.** It sets one string field
+  of the manifest of a built library.
 
 - **A bundled stdlib module is checked one time, not on each build.** The object of a
   Sushi-source stdlib module that holds no template copy goes to the per-user cache,
@@ -215,6 +176,19 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Removed
 
+- **The binary `.slib` kind and `--lib-kind`.** A `.slib` is now always a source library:
+  it holds the source text of the library and a manifest index, and the consumer compiles
+  the text. `--lib` builds a source library, and `--lib-kind` is an unknown flag. A
+  consumer refuses a `.slib` whose manifest states `kind: binary` with CE3512: build the
+  library again. The `libraries` semantic pass, the bitcode link of a library, the export
+  closure and the `libs/` part of the object cache are removed. The manifest has no
+  `compiler_digest`, `data_layout`, `link_libraries`, `overflow` and `not_exported` fields
+  now, and `--lib-info` prints no `Kind`, `Platform`, `Overflow`, `Compiler digest`,
+  `Data layout`, `Links` and `Bitcode` lines. The codes CE0116, CE3504, CE3507, CE3520,
+  CE5006, CE5007 and CW3506 are deleted. The test runner has no `BUILD_LIB_BINARY`
+  directive now. A source library with unit reuse builds as fast as a binary library did.
+  BREAKING.
+
 - **The `core/primitives` bitcode unit.** No call reached its `to_str` functions: the
   backend emits `to_str()` of a primitive at the call, with no import. `use
   <core/primitives>` is now `CE3006`, an unknown stdlib module. BREAKING.
@@ -243,9 +217,7 @@ All notable changes to Sushi Lang will be documented in this file.
   directory. A name is the name for `-l`: CE5017 refuses an empty name, a `/`, white space
   and a leading `-`, CE5018 refuses a file name (`libz.so`), and CE5019 refuses a name two
   times in one clause. When the linker cannot find a library, CE3008 has a note at each
-  clause that asked for it. A binary `.slib` records the libraries of its own clauses in the
-  new manifest field `link_libraries` (protocol 2.8), the consumer links them, and
-  `--lib-info` prints them as `Links:`. `link` stays an identifier everywhere else. The
+  clause that asked for it. `link` stays an identifier everywhere else. The
   `-lm` of the driver is now a library of the C runtime in the link plan (`m` on Linux), and
   `<math>` writes `link "m"`.
 

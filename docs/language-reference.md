@@ -531,7 +531,7 @@ type: `fn f() T` is bare and returns `T`.
 its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join),
 and a channel would only force a dead `.realise` or `??` on every caller. Write a channel
 for everything else. A public function keeps a channel when there is any doubt, because a
-channel added later changes the signature and breaks every caller and every binary `.slib`.
+channel added later changes the signature and breaks every caller.
 The compiler does not enforce this. The decision record is
 [The error channel is opt-in](design/error-channel.md).
 
@@ -1452,8 +1452,7 @@ Runtime Error RE2026: assertion failed at ./stats.sushi:2:5: mean() of an empty 
   and no allocation.
 - **The position** is the `assert` keyword. The file is named as a compile-time
   diagnostic names it: relative to the directory of the build, or the base name of a file
-  outside it. A generic function of a binary library is named by its template label,
-  `<template:lib:name>`, with the line in the slice that the library ships.
+  outside it.
 - **An assert is always on.** No flag turns it off, and its condition always runs, side
   effects included.
 - **`assert(false)` does not end the path.** A function that returns a value still needs
@@ -3606,8 +3605,7 @@ gives `sh.Vec` and `sh.area` alike. The rules:
   candidate.
 - `public use` takes no `as` ([`CE3016`](error-catalog.md#ce3016)): a re-export is of names, not of a namespace.
 - A `public use` that hands on nothing public warns ([`CW3005`](error-catalog.md#cw3005)).
-- Every kind of `.slib` carries a `public use`: a source library ships the statement as
-  text, a binary one ships a manifest record of it.
+- A `.slib` carries a `public use`: the library ships the statement as text.
 - A library's `use <lib/b>` LOADS `b` in the consumer's build, plain or public, because
   the library's body calls it: loading is transitive. VISIBILITY is not: a `public use
   <lib/b>` gives the consumer `b`'s public names, as if the consumer wrote `use <lib/b>`,

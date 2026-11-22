@@ -92,8 +92,8 @@ fn main() i32:
 
 The length of both payload sections, in one pass over the file. A version-5 container
 puts a length-prefixed source section between the metadata and the bitcode, so a reader
-steps over the source to reach the bitcode length. A source library records no bitcode,
-and a binary one no source.
+steps over the source to reach the bitcode length. A library records no bitcode: the
+bitcode section is empty.
 
 ```sushi
 use <toolchain/slib>

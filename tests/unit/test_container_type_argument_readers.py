@@ -1,10 +1,9 @@
-"""The container element readers read `generic_args`, and the one splitter reads a fn type.
+"""The container element readers read `generic_args`.
 
 A `List<T>` or a `HashMap<K, V>` instance carries its type arguments in
 `StructType.generic_args`. The readers used to cut the arguments out of the interned NAME,
 and a function type broke the cut: its parameter list holds a comma, and the `>` of its
-`->` arrow read as a closing bracket (#794). The one string splitter that is left serves
-the `.slib` manifest reader, where a string really is the input.
+`->` arrow read as a closing bracket (#794).
 """
 from types import SimpleNamespace
 
@@ -12,21 +11,10 @@ import pytest
 
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 from sushi_lang.semantics.generics.list import parse_list_types
-from sushi_lang.semantics.generics.type_strings import split_type_arguments
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.passes.collect.enums import EnumTable
 from sushi_lang.semantics.passes.collect.structs import StructTable
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, StructType
-
-
-@pytest.mark.parametrize("text, parts", [
-    ("string, fn(i32, i32) -> i32", ["string", "fn(i32, i32) -> i32"]),
-    ("fn(fn(i32) -> i32, i32) -> i32", ["fn(fn(i32) -> i32, i32) -> i32"]),
-    ("fn(i32) -> i32, i32", ["fn(i32) -> i32", "i32"]),
-    ("HashMap<string, List<i32>>, i32[]", ["HashMap<string, List<i32>>", "i32[]"]),
-])
-def test_the_splitter_reads_a_function_type_whole(text, parts):
-    assert split_type_arguments(text) == parts
 
 
 def _fn(params, ok):

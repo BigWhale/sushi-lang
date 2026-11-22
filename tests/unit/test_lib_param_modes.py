@@ -6,33 +6,6 @@ import struct
 import pytest
 
 from sushi_lang.backend.library_format import LibraryFormat
-from sushi_lang.semantics.type_resolution import parse_type_string
-from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType
-
-
-# The type-string parser learned peek and poke
-
-@pytest.mark.parametrize("text,mode,referent", [
-    ("peek string", BorrowMode.PEEK, BuiltinType.STRING),
-    ("poke i32", BorrowMode.POKE, BuiltinType.I32),
-])
-def test_parse_type_string_reads_a_reference_back(text, mode, referent):
-    ty = parse_type_string(text, {}, {})
-    assert isinstance(ty, ReferenceType)
-    assert ty.mutability is mode
-    assert ty.referenced_type == referent
-
-
-def test_a_reference_type_round_trips_through_its_string_form():
-    for mode in (BorrowMode.PEEK, BorrowMode.POKE):
-        original = ReferenceType(referenced_type=BuiltinType.STRING, mutability=mode)
-        assert parse_type_string(str(original), {}, {}) == original
-
-
-def test_a_dynamic_array_referent_round_trips():
-    ty = parse_type_string("peek i32[]", {}, {})
-    assert isinstance(ty, ReferenceType)
-    assert str(ty) == "peek i32[]"
 
 
 # A v2 library is rejected, not guessed at

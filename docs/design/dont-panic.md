@@ -11,8 +11,7 @@ build choices of section 11 are the state after the build.
   and a write alike. Nothing else changes.
 - The marker is legal in a bundled stdlib unit, and in any unit of a build that passes
   `--dont-panic`. Everywhere else it is an error.
-- A source library that uses the marker needs the consent of each consumer, the same flag.
-  So does a marked generic template of any library kind.
+- A library that uses the marker needs the consent of each consumer, the same flag.
 - A marker that removes no check is a warning (CW0004).
 - The stdlib names each marked function in one ratchet, with its reason and its benchmark.
 
@@ -67,8 +66,8 @@ two do not depend on each other. Rust has both.
 | **D6** | The marker does not propagate. A callee is checked. An instance of a marked template is marked, because it is the same body | 5.3 |
 | **D7** | The marker is legal in a bundled stdlib unit without a flag | 6.1 |
 | **D8** | The marker is legal in any unit of a build that passes `--dont-panic`. Without the flag, a user unit that writes it gets an error | 6.2 |
-| **D9** | A source library that writes the marker needs the consumer's `--dont-panic`. The error names the library and the flag. A concrete marked body of a binary library needs no consent. A marked generic template of any library kind needs it | 6.3 |
-| **D10** | Every `.slib` kind records its marked functions with their reasons. `--lib-info` lists them | 7 |
+| **D9** | A library that writes the marker needs the consumer's `--dont-panic`. The error names the library and the flag | 6.3 |
+| **D10** | A `.slib` records its marked functions with their reasons. `--lib-info` lists them | 7 |
 | **D11** | A build with `--dont-panic` prints no list of what it accepted | 7 |
 | **D12** | A marked function that holds no index to uncheck is a warning, always on | 8.1 |
 | **D13** | `--dont-panic` on a build that marks no user function gets the no-effect warning | 8.2 |
@@ -163,22 +162,14 @@ the consent of the consumer, because the consumer compiles the unchecked code. T
 names the library, so the consumer knows which code asks for the flag. A library author
 who uses the marker must state this in the documentation of the library.
 
-A binary library has this case only for a marked generic template:
-
-- A CONCRETE marked body is in the bitcode that the library ships. The consumer links
-  that bitcode, as it links a C library. The consumer does not need to consent.
-- A marked generic TEMPLATE ships as source in all library kinds. The consumer makes the
-  copies of the template, so the consumer compiles that source. The consumer must pass
-  the flag.
-
-The first draft of this section said that a binary library has no such case. That
-statement was wrong for a template.
+A binary library once linked a concrete marked body as bitcode, with no consent, and
+asked for consent only for a marked generic template. That kind is retired
+(`docs/design/libraries.md` section 5), so every marked body of a library needs the flag.
 
 ## 7. The manifest and `--lib-info` (D10, D11)
 
-Every `.slib` kind records its marked functions, each with its `because`: a source library
-as text, a binary library as a manifest record beside `reexports` and
-`conversions` (`compiler/library_manifest.py`). `--lib-info` lists them in both halves, the
+A `.slib` records its marked functions, each with its `because`, as a manifest record
+(`compiler/library_manifest.py`). `--lib-info` lists them in both halves, the
 Python fallback (`compiler/lib_info.py`) and the `slib-info` tool (`toolchain/src/`). A
 reviewer sees the unchecked code and its proof before the first build.
 
@@ -289,13 +280,12 @@ the `sushi-omakase-api` and `sushi-omakase-front` repositories.
 - **The marker words.** `dont_panic` is a reserved word (the terminal `DONT_PANIC`). The
   grammar accepts the marker in the three refused positions. It does this only so that
   the AST builder can name the position.
-- **The consent.** The marker of a source library needs the `--dont-panic` of the
-  consumer. A concrete marked body of a binary library does not need it. A
-  marked generic template of each library kind needs it (section 6.3). The library
+- **The consent.** The marker of a library needs the `--dont-panic` of the
+  consumer (section 6.3). The library
   author also builds the library with `--dont-panic`. For a test, the fixture directive
   `LIB_FLAGS` states this.
-- **The manifest.** The key `dont_panic` is a list of `{unit, name, reason}` records. All
-  library kinds have the key, and it is absent when the list is empty. The
+- **The manifest.** The key `dont_panic` is a list of `{unit, name, reason}` records. The key
+  is absent when the list is empty. The
   `sushi_lib_version` does not change, because an older reader ignores a key that it does
   not know. The `name` has three forms. A function or a template has its name. An
   extension method, a static and a perk implementation method have `Type.method`, with
@@ -313,7 +303,7 @@ the `sushi-omakase-api` and `sushi-omakase-front` repositories.
   closed: a `dont_panic` word outside a comment, a string or a doc block that it cannot
   name causes a failure. Its table is empty now.
 - **The fixture directive `LIB_FLAGS`** (`tests/TEST_METADATA_GUIDE.md`) gives flags to
-  each library build of a fixture. It refuses `--lib`, `--lib-kind` and `--lib-version`,
+  each library build of a fixture. It refuses `--lib` and `--lib-version`,
   because the runner writes these flags for each build.
 - **The toolchain programs** in `toolchain/src/` are user programs. If one of them marks a
   function, `toolchain/build.py` must pass the flag.

@@ -61,12 +61,12 @@ Each step has a runner test under `tests/unit/runner/`.
   lines are necessary (for example, a fix in the inline runtime), set the baseline to the
   new count in the same PR and give the reason in the PR text. A count below the baseline
   also fails: lower the baseline to the new count in the same PR, so that the gain stays.
-- **The library-reader gate** (`lib_reader_gate`): damaged copies of a source and a binary
-  library (truncated, bad magic, oversize length, a manifest with a missing field, an
-  unknown kind, another compiler stamp, another data layout) go through both `--lib-info`
+- **The library-reader gate** (`lib_reader_gate`): damaged copies of one source library
+  (truncated, bad magic, oversize length, a manifest with a missing field, an
+  unknown kind) go through both `--lib-info`
   halves and a consumer. Every case must print its code.
 - **The library-report gate** (`lib_info_report_gate`): a multi-payload variant and a
-  two-constraint generic in a source, a binary and a source library whose manifest states
+  two-constraint generic in a source library and in a source library whose manifest states
   no kind, through both halves and a consumer.
 - `--filter stdlib/slib/lib_reader/` selects the two library gates.
 - **The dead-code gate** (`stdlib_dead_code_gate`): the all-modules program and each
@@ -96,10 +96,9 @@ Each step has a runner test under `tests/unit/runner/`.
   `EXPECT_STDOUT_EXACT_BEFORE_REBUILD`; `REBUILD_FLAGS` adds flags to the second build
   alone); `COMPILE_TIMEOUT_SECONDS` (the limit of each compilation, default 30; `TIMEOUT_SECONDS`
   is the limit of the run alone); `RUN_IN_FIXTURE_DIR` (start `sushic` in a copy of
-  the fixture's directory); `BUILD_LIB: x.sushi` (a source `.slib` on `SUSHI_LIB_PATH`),
-  `BUILD_LIB_BINARY` (the same, built `--lib-kind binary`),
-  each with a `-> name.slib` and an `@ version` form, built in written order and required
-  to exit 0; `BUILD_LIB_WARNS: x.sushi [kind] -> CW1002` (a library that must build with
+  the fixture's directory); `BUILD_LIB: x.sushi` (a `.slib` on `SUSHI_LIB_PATH`),
+  with a `-> name.slib` and an `@ version` form, built in written order and required
+  to exit 0; `BUILD_LIB_WARNS: x.sushi -> CW1002` (a library that must build with
   exactly that set of warnings); `BUILD_LIB_AT: x.sushi -> path` (a `.slib` inside the
   copy); `LIB_MANIFEST_SET: <library> <key>=<value>` (set one top-level string field of a
   built library's manifest, for example a foreign `platform`); `STDLIB_MODULE: name=path`; `FIXTURE_CACHE_DIR: rel`; `FIXTURE_SUSHI_HOME: rel`

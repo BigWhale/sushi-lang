@@ -10,12 +10,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
 
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.param_modes import ParamMode
-from sushi_lang.semantics.type_resolution import parse_type_string, resolve_type_recursively
+from sushi_lang.semantics.type_resolution import resolve_type_recursively
 from sushi_lang.semantics.typesys import (
     BuiltinType,
     EnumType,
@@ -68,21 +67,6 @@ def test_type_substitutor_carries_the_metadata():
     before = _fn((TypeParameter(name="T"), STRING))
     after = TypeSubstitutor(None).substitute_type(before, {"T": I32})
     _assert_metadata_survived(before, after)
-
-
-# A manifest fn type: `str()` writes the marker, so reading it back must accept one. It
-# used to raise a CE0022 internal error on the parameter text `nom string`.
-
-@pytest.mark.parametrize("modes", [
-    (ParamMode.NOM,),
-    (ParamMode.BORROW,),
-])
-def test_a_manifest_fn_type_round_trips_its_modes(modes):
-    before = FunctionType(param_types=(STRING,), ok_type=I32,
-                          err_type=STDERROR, param_modes=modes)
-    after = parse_type_string(str(before), {}, {"StdError": STDERROR})
-    assert after.modes == modes
-    assert after == before
 
 
 # The static half. The round-trip tests above cover the five transformations that exist

@@ -1,7 +1,7 @@
 """The `namespaces` pass: bind one unit's namespaces, and refuse a misplaced import.
 
 `docs/design/unit-namespaces.md` section 3.2 fixes the position. A provider needs what
-`collect` and `libraries` produce and nothing later, and `ffi-clash` is the first step
+`collect` produces and nothing later, and `ffi-clash` is the first step
 that asks whether a name is already taken -- so the pass stands between the two.
 
 It answers five rules per unit: every import comes first (`CE3014`), an alias binds a
@@ -29,7 +29,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program, UseStatement
 from sushi_lang.semantics.ast_walk import declarations
-from sushi_lang.semantics.library_registry import library_unit
 from sushi_lang.semantics.namespaces import (
     GENERIC_UNIT_TYPES,
     ExternalNamespace,
@@ -43,10 +42,9 @@ from sushi_lang.semantics.namespaces import (
 )
 
 if TYPE_CHECKING:
-    # Type information only. None of the three reaches this pass again, so no cycle is
-    # being broken here: the guard keeps a pass the analyzer imports inside its own
-    # body from pulling the table graph in at run time.
-    from sushi_lang.semantics.library_registry import LibraryMetadata, LibraryRegistry
+    # Type information only. Neither reaches this pass again, so no cycle is being
+    # broken here: the guard keeps a pass the analyzer imports inside its own body from
+    # pulling the table graph in at run time.
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.units import Unit
 
@@ -62,9 +60,7 @@ _INNER_KINDS = frozenset({"field", "variant", "perk method", "external declarati
 
 
 def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
-                     units: Dict[str, Unit],
-                     library_registry: Optional[LibraryRegistry] = None
-                     ) -> NamespaceTable:
+                     units: Dict[str, Unit]) -> NamespaceTable:
     """Bind every namespace `unit` may write, and report what its imports get wrong."""
     # `Unit.ast` is optional, but the analyzer's loop skips a unit that has none, so
     # the pass never sees one. The cast says that and emits no code.
@@ -88,7 +84,7 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
     aliased: list[Tuple[UseStatement, Provider]] = []
 
     for use_stmt in program.uses or ():
-        provider = _provider_for(use_stmt, tables, units, library_registry, unit)
+        provider = _provider_for(use_stmt, tables, units, unit)
         alias = use_stmt.alias
         if use_stmt.is_public and alias is not None:
             # A re-export is of names and not of a namespace (Ruling 7, rule 1). The
@@ -108,64 +104,8 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
             er.emit(reporter, er.ERR.CW3004,
                     use_stmt.alias_span or use_stmt.loc, alias=alias)
 
-    table.scope = _scope_of(unit.name, flat, units, library_registry, aliased)
+    table.scope = _scope_of(unit.name, flat, units, aliased)
     return table
-
-
-def build_compiled_library_namespaces(tables: SymbolTables, *, units: Dict[str, Unit],
-                                      library_registry: Optional[LibraryRegistry]
-                                      ) -> Dict[str, NamespaceTable]:
-    """The table of each unit of each compiled library, keyed `lib/<library>/<unit>`.
-
-    A compiled library has no AST at the consumer, but a copy of one of its templates
-    is checked and emitted at the consumer. The names of the copy's body resolve in the
-    scope of the library unit that declares the template, never in the scope of the
-    unit that holds the copy (#1120). Each unit sees the units of its own library and
-    the `dependencies` records that name it in `units` (#1123); a record with no
-    `units` list is read for every unit.
-    """
-    from sushi_lang.semantics.library_registry import manifest_dependencies
-
-    found: Dict[str, NamespaceTable] = {}
-    if library_registry is None:
-        return found
-    for metadata in library_registry.get_all_libraries().values():
-        manifest = metadata.raw_manifest or {}
-        prefix = f"lib/{metadata.name}/"
-        own = tuple(_binary_library_units(metadata.name, library_registry))
-        flat: Dict[str, list[Tuple[UseStatement, Provider]]] = {u: [] for u in own}
-        for record in manifest_dependencies(manifest):
-            use_stmt = _dependency_use(record)
-            if use_stmt is None:
-                continue
-            provider = _provider_for(use_stmt, tables, units, library_registry)
-            writers = record.get("units")
-            for unit_name in own:
-                if writers is None or unit_name[len(prefix):] in writers:
-                    flat[unit_name].append((use_stmt, provider))
-        for unit_name in own:
-            scope = _scope_of(unit_name, flat[unit_name], units, library_registry)
-            table = NamespaceTable(library=metadata.name)
-            # The library's name is the unit of its private types' records.
-            table.scope = UnitScope(
-                unit=unit_name,
-                units=tuple(dict.fromkeys((*own, metadata.name, *scope.units))),
-                modules=scope.modules, generics=scope.generics, everything=False)
-            found[unit_name] = table
-    return found
-
-
-def _dependency_use(record: dict) -> Optional[UseStatement]:
-    """The `use` statement one manifest `dependencies` record stands for."""
-    path = record.get("path")
-    if not path:
-        return None
-    if record.get("kind") == "stdlib":
-        return UseStatement(loc=None, path=path, is_stdlib=True)
-    if record.get("kind") == "library":
-        return UseStatement(loc=None, path=path, is_library=True,
-                            library_name=record.get("library_name") or None)
-    return None
 
 
 class MethodInterfaceNamespace(UnitNamespace):
@@ -182,7 +122,6 @@ class MethodInterfaceNamespace(UnitNamespace):
 
 def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
               units: Dict[str, Unit],
-              library_registry: Optional[LibraryRegistry] = None,
               aliased: Iterable[Tuple[UseStatement, Provider]] = ()) -> UnitScope:
     """What this unit may write with no qualifier, from its FLAT imports alone.
 
@@ -208,18 +147,18 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
                 modules.append(reached.origin)
             elif reached.namespace_kind == "generic":
                 generics.extend(reached.members())
-        scoped_units.extend(_units_reached(use_stmt, provider, units, library_registry))
+        scoped_units.extend(_units_reached(use_stmt, provider, units))
     aliased_units: list[str] = []
     for use_stmt, provider in aliased:
-        aliased_units.extend(_units_reached(use_stmt, provider, units, library_registry))
+        aliased_units.extend(_units_reached(use_stmt, provider, units))
     return UnitScope(unit=unit_name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
                      generics=tuple(dict.fromkeys(generics)), everything=False,
                      aliased_units=tuple(dict.fromkeys(aliased_units)))
 
 
-def _units_reached(use_stmt: UseStatement, provider: Provider, units: Dict[str, Unit],
-                   library_registry: Optional[LibraryRegistry]) -> list[str]:
+def _units_reached(use_stmt: UseStatement, provider: Provider,
+                   units: Dict[str, Unit]) -> list[str]:
     """Every compilation unit one import reaches: the unit, and its `public use` chain.
 
     A LIBRARY import names the whole artifact, so it reaches every unit of the library.
@@ -229,36 +168,9 @@ def _units_reached(use_stmt: UseStatement, provider: Provider, units: Dict[str, 
         if reached.namespace_kind != "unit":
             continue
         found.append(reached.origin)
-        if reached.origin not in units:
-            # A compiled library's unit, reached through a re-export: its declarations
-            # are filed under `lib/<library>/<unit>`.
-            found.extend(_binary_library_units(reached.origin, library_registry))
     if use_stmt.is_library and provider.namespace_kind == "unit":
         found.extend(_library_units(provider.origin, units))
-        found.extend(_binary_library_units(provider.origin, library_registry))
     return found
-
-
-def _binary_library_units(origin: str,
-                          library_registry: Optional[LibraryRegistry]) -> Iterable[str]:
-    """Every unit of the binary library `origin` belongs to, under its `lib/` key.
-
-    A binary library's declarations register under `lib/<library>/<unit>` and the
-    import names the whole artifact, exactly as a source library's does -- so the
-    importing unit's flat scope holds every one of its units.
-    """
-    if library_registry is None:
-        return ()
-    # The origin is `<library>/<unit>` from the manifest provider, or the written
-    # `lib/<library>` path where the library exports no concrete function and the
-    # provider fell back to an empty namespace.
-    parts = origin.split("/")
-    lib_name = parts[1] if parts[0] == "lib" and len(parts) > 1 else parts[0]
-    metadata = library_registry.get_library(lib_name)
-    if metadata is None:
-        return ()
-    manifest_units = (metadata.raw_manifest or {}).get("units") or [lib_name]
-    return tuple(f"lib/{lib_name}/{u}" for u in manifest_units)
 
 
 def _library_units(unit_name: str, units: Dict[str, Unit]) -> Iterable[str]:
@@ -273,9 +185,7 @@ def _reject_use_below_declaration(reporter: Reporter, unit: Unit,
                                   program: Program) -> None:
     """CE3014: every import stands above the first declaration (section 2.1).
 
-    The span comes from the AST BUILDER, which is the only place source order survives:
-    a library's constants and private types are appended to a host unit's lists by the
-    `libraries` step above, and each carries a span from its own file.
+    The span comes from the AST BUILDER, which is the only place source order survives.
     """
     # A unit the consumer did not write is skipped for the reason the `docs` pass skips
     # one: only the author can move the line, and only the author's own build is where
@@ -354,7 +264,6 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
 
 
 def _provider_for(use_stmt: UseStatement, tables: SymbolTables, units: Dict[str, Unit],
-                  library_registry: Optional[LibraryRegistry],
                   host: Optional[Unit] = None,
                   visited: AbstractSet[str] = frozenset()) -> Provider:
     """What one `use` brings. A provider, never a written path (section 3.1).
@@ -363,13 +272,12 @@ def _provider_for(use_stmt: UseStatement, tables: SymbolTables, units: Dict[str,
     of re-exports builds a finite provider (Ruling 7, rule 2).
     """
     if use_stmt.is_library:
-        return _library_provider(use_stmt.path, tables, units, library_registry,
-                                 visited, library_name=use_stmt.library_name)
+        return _library_provider(use_stmt.path, tables, units, visited,
+                                 library_name=use_stmt.library_name)
     if use_stmt.is_stdlib:
-        return _stdlib_provider(use_stmt.path, tables, units, library_registry, visited)
+        return _stdlib_provider(use_stmt.path, tables, units, visited)
     return _unit_provider(_imported_unit(use_stmt.path, host, units), tables,
-                          units=units, library_registry=library_registry,
-                          visited=visited)
+                          units=units, visited=visited)
 
 
 def _imported_unit(path: str, host: Optional[Unit], units: Dict[str, Unit]) -> str:
@@ -392,7 +300,6 @@ def _imported_unit(path: str, host: Optional[Unit], units: Dict[str, Unit]) -> s
 def _unit_provider(unit_name: str, tables: SymbolTables,
                    homed: Optional[Dict[str, str]] = None, *,
                    units: Optional[Dict[str, Unit]] = None,
-                   library_registry: Optional[LibraryRegistry] = None,
                    visited: AbstractSet[str] = frozenset(),
                    generics: Tuple[Provider, ...] = ()) -> UnitNamespace:
     """A compilation unit's own declarations, from the collect pass's tables.
@@ -415,7 +322,7 @@ def _unit_provider(unit_name: str, tables: SymbolTables,
         constants=dict(tables.constants.by_unit.get(unit_name, {})),
         generics=dict(tables.generic_funcs.by_unit.get(unit_name, {})),
         others=others,
-        reexports=(*_reexports_of(unit_name, tables, units, library_registry, visited),
+        reexports=(*_reexports_of(unit_name, tables, units, visited),
                    *generics),
         hidden={name for _, name, is_public in declared if not is_public},
     )
@@ -423,14 +330,13 @@ def _unit_provider(unit_name: str, tables: SymbolTables,
 
 def _reexports_of(unit_name: str, tables: SymbolTables,
                   units: Optional[Dict[str, Unit]],
-                  library_registry: Optional[LibraryRegistry],
                   visited: AbstractSet[str]) -> Tuple[Provider, ...]:
     """The providers a unit's `public use` statements name, in written order.
 
     Read off the unit's own AST, so a source library's unit and a bundled stdlib module
     re-export exactly as a user unit does. A unit already on the chain contributes
-    nothing a second time, which is what makes a cycle terminate; a unit with no AST --
-    a binary library's -- has no statement to read, and `_binary_reexports` reads its records.
+    nothing a second time, which is what makes a cycle terminate; a unit with no AST has
+    no statement to read.
     """
     if units is None or unit_name in visited:
         return ()
@@ -440,14 +346,13 @@ def _reexports_of(unit_name: str, tables: SymbolTables,
         return ()
     chain = frozenset(visited) | {unit_name}
     return tuple(
-        _provider_for(use_stmt, tables, units, library_registry, unit, chain)
+        _provider_for(use_stmt, tables, units, unit, chain)
         for use_stmt in program.uses or ()
         if use_stmt.is_public and use_stmt.alias is None
     )
 
 
 def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
-                     library_registry: Optional[LibraryRegistry] = None,
                      visited: AbstractSet[str] = frozenset()) -> Provider:
     """One of the standard library's four shapes (section 4.3)."""
     from sushi_lang.semantics.stdlib_registry import (
@@ -466,8 +371,7 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
         # (`<math>`) hands on the names of its generator half the same way.
         generator_half = (() if module is None
                           else (StdlibNamespace(path, module, types=homed),))
-        return _unit_provider(path, tables, homed, units=units,
-                              library_registry=library_registry, visited=visited,
+        return _unit_provider(path, tables, homed, units=units, visited=visited,
                               generics=(*gated, *generator_half))
 
     if gated:
@@ -478,7 +382,7 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
         # 8.1): `<io/files>` hands on `<io/error>`, so `FileError` rides with `fd_*`.
         chain = frozenset(visited) | {path}
         reexports = tuple(
-            _stdlib_provider(other, tables, units, library_registry, chain)
+            _stdlib_provider(other, tables, units, chain)
             for other in getattr(module, "reexports", ()) if other not in chain)
         return StdlibNamespace(path, module, types=homed, reexports=reexports)
 
@@ -488,7 +392,6 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
 
 
 def _library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
-                      library_registry: Optional[LibraryRegistry],
                       visited: AbstractSet[str] = frozenset(),
                       library_name: Optional[str] = None) -> Provider:
     """One unit of a library. The namespace is the unit, never the library (section 8).
@@ -511,170 +414,9 @@ def _library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
     else:
         matched = _one_of(source_units, lambda name: name.rsplit("/", 1)[-1] == wanted)
     if matched is not None:
-        return _unit_provider(matched, tables, units=units,
-                              library_registry=library_registry, visited=visited)
-
-    provider = _binary_library_provider(path, tables, units, library_registry, visited,
-                                        library_name)
-    if provider is not None:
-        return provider
+        return _unit_provider(matched, tables, units=units, visited=visited)
 
     return UnitNamespace(path, functions={}, constants={})
-
-
-def _binary_library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
-                             library_registry: Optional[LibraryRegistry],
-                             visited: AbstractSet[str] = frozenset(),
-                             library_name: Optional[str] = None
-                             ) -> Optional[UnitNamespace]:
-    """A binary library has no AST: its records name their unit in the manifest.
-
-    The written path names the library in its first segment and the unit in its last,
-    so a registered library of that name answers alone; only a path that names none
-    falls back to scanning every loaded library for the unit.
-    """
-    if library_registry is None:
-        return None
-    wanted = path.rsplit("/", 1)[-1]
-    named = (library_registry.get_library(library_name) if library_name is not None
-             else None) or _named_library(path, library_registry)
-    candidates = ([named] if named is not None
-                  else list(library_registry.get_all_libraries().values()))
-    for metadata in candidates:
-        unit_name = _manifest_unit(metadata.raw_manifest or {}, wanted)
-        if unit_name is None:
-            continue
-        return _binary_unit_provider(metadata, unit_name, tables, units,
-                                     library_registry, visited)
-    return None
-
-
-def _named_library(path: str,
-                   library_registry: LibraryRegistry) -> Optional[LibraryMetadata]:
-    """The loaded library the written path names, by its first segment after `lib/`."""
-    parts = [part for part in path.split("/") if part]
-    if parts and parts[0] == "lib":
-        parts = parts[1:]
-    return library_registry.get_library(parts[0]) if parts else None
-
-
-def _binary_unit_provider(metadata: LibraryMetadata, unit_name: str,
-                          tables: SymbolTables, units: Optional[Dict[str, Unit]],
-                          library_registry: Optional[LibraryRegistry],
-                          visited: AbstractSet[str]) -> UnitNamespace:
-    """One unit of one binary library, from that library's manifest alone."""
-    manifest = metadata.raw_manifest or {}
-    records = manifest.get("public_functions", []) or []
-    functions = {
-        record["name"]: metadata.functions[record["name"]]
-        for record in records
-        if record.get("unit") == unit_name and record["name"] in metadata.functions
-    }
-    constants = {
-        record["name"]: sig
-        for record in manifest.get("public_constants", []) or []
-        if record.get("unit") == unit_name
-        and (sig := tables.constants.by_name.get(record["name"])) is not None
-    }
-    # A template is in the tables under the unit that declared it at the producer
-    # (#1163); a private one rides in the export closure and is no member of the unit.
-    templates = manifest.get("templates") or {}
-    key = library_unit(metadata.name, unit_name)
-    registered = tables.generic_funcs.by_unit.get(key, {})
-    generics = {
-        record["name"]: registered[record["name"]]
-        for record in templates.get("generic_functions", []) or []
-        if record.get("unit") == unit_name and not record.get("private")
-        and record["name"] in registered
-    }
-    others = _manifest_types(manifest, unit_name)
-    perks = tables.perks
-    others.update({
-        record["name"]: "perk"
-        for record in templates.get("perks", []) or []
-        if perks.library_units.get(record["name"]) == key
-        and getattr(perks.by_name.get(record["name"]), "is_public", False)
-    })
-    return UnitNamespace(
-        f"{metadata.name}/{unit_name}", functions=functions, constants=constants,
-        generics=generics, others=others,
-        reexports=_binary_reexports(metadata, unit_name, tables, units,
-                                    library_registry, visited),
-    )
-
-
-def _binary_reexports(metadata: LibraryMetadata, unit_name: str, tables: SymbolTables,
-                      units: Optional[Dict[str, Unit]],
-                      library_registry: Optional[LibraryRegistry],
-                      visited: AbstractSet[str]) -> Tuple[Provider, ...]:
-    """The providers one compiled unit's `public use` statements name (#585).
-
-    The manifest record IS the statement: a compiled library ships no text for this
-    pass to read, so `kind` says which of the three builders the written statement
-    would have reached, and each record composes exactly as `_reexports_of` composes a
-    source unit's. The chain and its visited set are the source unit's too -- a
-    compiled unit's key is the `lib/<library>/<unit>` name its declarations register
-    under -- so a re-export cycle inside a compiled library terminates the same way.
-    """
-    key = f"lib/{metadata.name}/{unit_name}"
-    if key in visited:
-        return ()
-    chain = frozenset(visited) | {key}
-    providers: list[Provider] = []
-    for record in metadata.reexports:
-        if record.get("unit") != unit_name:
-            continue
-        path = record.get("path") or ""
-        kind = record.get("kind")
-        if not path:
-            continue
-        if kind == "stdlib":
-            providers.append(_stdlib_provider(path, tables, units or {},
-                                              library_registry, chain))
-        elif kind == "library":
-            providers.append(_library_provider(path, tables, units or {},
-                                               library_registry, chain))
-        else:
-            providers.append(_binary_unit_provider(metadata, path, tables, units,
-                                                   library_registry, chain))
-    return tuple(providers)
-
-
-def _manifest_unit(manifest: dict, wanted: str) -> Optional[str]:
-    """Which of the library's units the import names: the match, or its only one.
-
-    The `units` index answers, not the record list: a façade unit whose every public
-    name is re-exported declares nothing of its own, so no record can name it (#585).
-    An older manifest with no index falls back to the units its records name.
-    """
-    names = [name for name in (manifest.get("units") or []) if name]
-    if not names:
-        names = sorted({record.get("unit")
-                        for record in manifest.get("public_functions", []) or []
-                        if record.get("unit")})
-    if wanted in names:
-        return wanted
-    return names[0] if len(names) == 1 else None
-
-
-def _manifest_types(manifest: dict, unit_name: str) -> Dict[str, str]:
-    """The struct and enum names one unit of a binary library publishes.
-
-    A generic type ships as a template record and not as a concrete one (#1163); a
-    private one ships there too, for the export closure, and is named in
-    `private_types`.
-    """
-    templates = manifest.get("templates") or {}
-    private = {record.get("name") for record in templates.get("private_types", []) or []
-               if record.get("unit") == unit_name}
-    records = [(kind, record)
-               for key, kind in (("structs", "struct"), ("enums", "enum"))
-               for record in (manifest.get(key, []) or [])]
-    records += [(kind, record)
-                for key, kind in (("generic_structs", "struct"), ("generic_enums", "enum"))
-                for record in (templates.get(key, []) or [])]
-    return {record["name"]: kind for kind, record in records
-            if record.get("unit") == unit_name and record["name"] not in private}
 
 
 def _one_of(items: Iterable[str], predicate: Callable[[str], bool]) -> Optional[str]:

@@ -1,5 +1,0 @@
-unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
-    fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
-
-public fn checksum(string s) u64:
-    return zlib.crc32(0, s, s.len() as u32)

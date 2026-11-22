@@ -67,7 +67,6 @@ ALLOWED = {
 REQUIRED = (
     ("functions/declarations.py", "emit_func_decl"),
     ("functions/declarations.py", "emit_extension_method_decl"),
-    ("codegen_llvm.py", "_declare_library_functions"),
     ("runtime/closures.py", "_env_prepended_signature"),
     ("slir/closures.py", "declare_lifted"),
     ("slir/emit.py", "_open"),

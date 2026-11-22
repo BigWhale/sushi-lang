@@ -64,25 +64,22 @@ type is [`CE5015`](error-catalog.md#ce5015), and a name that is no constant is [
 
 **The C symbol must be foreign.** An `unsafe external` reaches OUT of the program, so the
 name after `=` may not be one this build defines -- a function of any unit, a constant, a
-symbol a linked library brought in, its private ones included, or one the standard library
+symbol a library brought in, its private ones included, or one the standard library
 generates (`string_len`, `sushi_sin`, and about 145 more). That is **[CE5013](error-catalog.md#ce5013)**, and it names
 where the symbol is defined. A generated name is refused whether the program links that
 stdlib unit or not, so adding a `use` line never breaks a build that compiled before.
 
 The rule compares the SYMBOL that a function or a constant emits, not its Sushi name. A
 function or a constant `f` of the unit `geo/vec` emits `geo$vec$f` (`main` alone keeps its
-name), and a binary library's function emits the symbol its manifest records. So a wrapper
+name). So a wrapper
 may have the name of the C function it calls (`fn sin(f64 x) f64` beside `= "sin"`), and a
 user function named `getpid` does not break another unit's extern of `getpid`. A link name
 that spells an emitted symbol (`= "geo$vec$f"`) is still [`CE5013`](error-catalog.md#ce5013), and so is `user_main`,
 the symbol of the body of `main`. A monomorphized instance of a generic emits a symbol too,
-and the rule sees it: `ident@(i32)` of the unit `inst` emits `inst$ident__i32`, and an
-instance of a binary library's template emits `gen__i32` with no prefix. A private
-declaration that a binary library keeps emits the symbol of the unit that keeps it, and only
-that symbol is refused.
+and the rule sees it: `ident@(i32)` of the unit `inst` emits `inst$ident__i32`.
 
 The reason is that there is no link step left to keep the two apart. A program's units share
-one LLVM module and a linked library's module is merged into it, so a declaration and a
+one LLVM module, and the units of a library are units of the program, so a declaration and a
 definition of one name unify: the call enters the program's own body with the declared
 signature, unchecked. A library-*private* body could be run that way from consumer code, and
 with a mismatched signature the return value is read out of the wrong register. Two
@@ -648,11 +645,8 @@ fn main() i32:
 - **A library that the linker cannot find** is [`CE3008`](error-catalog.md#ce3008).
   The output of `cc` is a note, and each library of the program gets a note at the
   `link` clause that asked for it. A note also gives the `-L` directories.
-- **A library (`.slib`).** A binary library records the libraries of its own
-  clauses in its manifest (`link_libraries`), and its consumer links them.
-  `--lib-info` prints them as `Links: z`. The consumer of a source library
-  compiles its blocks, so it collects their clauses as the clauses of its own
-  units.
+- **A library (`.slib`).** The consumer of a library compiles its blocks, so it
+  collects their clauses as the clauses of its own units.
 
 pkg-config, a C struct by value, a C callback and rpath are not available yet.
 

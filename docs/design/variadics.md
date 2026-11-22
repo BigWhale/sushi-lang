@@ -70,11 +70,9 @@ fn main() i32:
 - [`CE0115`](../error-catalog.md#ce0115) — variadic parameter not allowed in a perk method or extension method;
   a type pack `...Ts` not allowed in the type-parameter list of a struct, an enum, an error type,
   an extension method or a static method.
-- [`CE0116`](../error-catalog.md#ce0116) — a public *native* variadic (`...T`) function cannot appear in the public API of a
-  BINARY `.slib`. A native variadic collects its trailing args into a runtime `T[]` inside one
-  concrete function, and the binary path cannot describe that call. A SOURCE library can have
-  one: the consumer compiles the unit as its own, and the index marks the parameter `variadic`
-  (protocol 2.10).
+- A library can export a public *native* variadic (`...T`) function: the consumer compiles the
+  unit as its own, and the index marks the parameter `variadic` (protocol 2.10). CE0116 refused
+  one in a binary `.slib`; it went away with the binary kind.
   This blocks only native `...T` (`is_variadic`); type packs (`...Ts`) ship as templates and are
   exportable (see "Cross-library packs" under the type-pack section below).
 - [`CE0120`](../error-catalog.md#ce0120) — a bloom argument `arr...` used somewhere illegal: into a non-variadic parameter, or
@@ -131,8 +129,6 @@ the call (see Semantics above).
 
 - **Generic variadics** (`...T` in a generic function).
 - **Variadics in perk / extension methods** (rejected with [`CE0115`](../error-catalog.md#ce0115)).
-- **Public export from a BINARY `.slib`** of a native variadic function — blocked with
-  [`CE0116`](../error-catalog.md#ce0116). A source library can export one (protocol 2.10).
 - **Pack forwarding** (`f(pack...)`, forwarding a parameter pack into another variadic) and **pack
   indexing** — bloom covers only a single `...T` array source, not `...Ts` packs.
 
@@ -228,10 +224,9 @@ fn main() i32:
   called, but the `expand` body can only count, hold and pass on the elements: a method, an
   operator or a hole on an element is refused at the template. Unconstrained forwarding and pack
   indexing are deferred.
-- **Cross-library packs**: a public `...Ts` pack ships in a `.slib` as an
-  instantiable template (`templates.generic_functions`) and is monomorphized at the consumer's call
-  sites, exactly like a regular cross-library generic. [CE0116](../error-catalog.md#ce0116) still blocks native `...T` export
-  from a binary library (a runtime array, not a template); a source library can export one.
+- **Cross-library packs**: a public `...Ts` pack ships in the source of a `.slib` and is
+  monomorphized at the consumer's call sites, exactly like a regular cross-library generic. A
+  library can export a native `...T` function too.
 - **Plain function definitions only**: perk methods and extension methods may not declare a value
   pack ([CE0115](../error-catalog.md#ce0115) applies to both native `...T` and type packs `...Ts`).
   A struct, an enum and an error type may not declare a type pack in their type-parameter list

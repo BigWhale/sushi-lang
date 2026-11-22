@@ -251,8 +251,7 @@ of `==` or `<` at the top level, and it is not a `HashMap` key, with an implemen
 not. A `Hashable` implementation also answers a direct `xs.hash()`.
 
 The rules of an array extension apply: `extend i32[] with P` is ONE array type, a nested
-target `extend T[][] with P` is **[CE2101](error-catalog.md#ce2101)**, and a library ships an array template in each
-library kind. `extend T[] with Drop` is **[CE4016](error-catalog.md#ce4016)**: no unit declares an array type.
+target `extend T[][] with P` is **[CE2101](error-catalog.md#ce2101)**, and a library ships an array template. `extend T[] with Drop` is **[CE4016](error-catalog.md#ce4016)**: no unit declares an array type.
 
 ## Generic Constraints
 

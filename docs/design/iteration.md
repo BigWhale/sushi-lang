@@ -327,7 +327,7 @@ typecheck pass settles a declared generic type before it names the instance.
 `IteratorType.peeks` is the mode: empty when every item is owned, one flag for the whole
 item, one flag per element for a tuple item. A diagnostic and an interned name show the
 item as written (`Iterator@(peek string)`, `Iterator<$Tuple<i32, peek string>>`), so a
-binary library's manifest carries the mode and `--lib-info` prints it.
+library's manifest carries the mode and `--lib-info` prints it.
 
 ### 10. An `Iterator@(T)` is a value
 

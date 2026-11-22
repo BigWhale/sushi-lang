@@ -576,9 +576,9 @@ it was bound to, and the `heap` field of `AggIterator` is the one answer that th
 reads. `peek Iterator@(T) | E` is
 legal: the `Result` owns the iterator in its `Ok`, and `??` gives the iterator to its holder.
 
-**Libraries.** A binary `.slib` records `return_mode: "peek"` on the record of the
-function, helper or extension (templates schema 11), and a consumer reads it. A source
-`.slib` carries the `peek` as text. `--lib-info` prints it.
+**Libraries.** A `.slib` records `return_mode: "peek"` on the record of the function or
+extension (templates schema 11), and `--lib-info` prints it. The consumer reads the `peek`
+from the source text, which it compiles.
 
 **Not in this design.** A user function that adapts a borrowed iterator (a `nom
 Iterator@(...)` parameter that takes a lent iterator): a function takes the container

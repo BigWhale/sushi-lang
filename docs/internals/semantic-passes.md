@@ -6,7 +6,7 @@ Detailed documentation of Sushi's multi-pass semantic analysis pipeline.
 
 ## Pass Overview
 
-There are 19 passes. The passes have NAMES, not numbers, because a number goes out of
+There are 18 passes. The passes have NAMES, not numbers, because a number goes out of
 order when a pass is inserted between two others.
 `SemanticAnalyzer.check()` (`semantics/semantic_analyzer.py`) is the code authority on the
 order; this list mirrors it. `_check_multi_file` runs that order, one call per stage,
@@ -18,7 +18,6 @@ each named for the stage it runs.
 | `docs` | check each doc block against its declaration ([CE7001](../error-catalog.md#ce7001)-[CE7008](../error-catalog.md#ce7008), [CW7001](../error-catalog.md#cw7001)), and its completeness under `--warn-missing-docs` ([CW7002](../error-catalog.md#cw7002)-[CW7006](../error-catalog.md#cw7006)) | `semantics/passes/docs.py` |
 | `unused` | under `--warn-unused`: a private declaration nothing in its unit reaches ([CW1004](../error-catalog.md#cw1004)), an import whose unit names nothing it brings ([CW3006](../error-catalog.md#cw3006)) | `semantics/unused.py` |
 | `externs` | extern signatures ([CE5003](../error-catalog.md#ce5003)), [`CW5001`](../error-catalog.md#cw5001), the `ptr` unit gate ([CE5009](../error-catalog.md#ce5009)), the `link` clauses ([CE5017](../error-catalog.md#ce5017)-[CE5019](../error-catalog.md#ce5019)) | `semantics/passes/types/externals.py` |
-| `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds ([CE3013](../error-catalog.md#ce3013), [CE3014](../error-catalog.md#ce3014), [CE3016](../error-catalog.md#ce3016), [CW3004](../error-catalog.md#cw3004), [CW3005](../error-catalog.md#cw3005)) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | fold each link name written as a string constant ([CE5015](../error-catalog.md#ce5015)), then reject an `unsafe external` that names a symbol this build defines ([CE5013](../error-catalog.md#ce5013)). Its instance half runs directly after `monomorphize` (see below) | `semantics/passes/types/externals.py` |
 | `entrypoint` | main's whole rule: it exists ([CE3007](../error-catalog.md#ce3007)), a library carries none ([CE3501](../error-catalog.md#ce3501)), it returns an integer ([CE0106](../error-catalog.md#ce0106)), and it takes `string[] args` or nothing ([CE0138](../error-catalog.md#ce0138)) | `semantics/semantic_analyzer.py` |
@@ -27,7 +26,7 @@ each named for the stage it runs.
 | `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
 | `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
-| `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)), or with a perk method that a binary library ships ([CE4007](../error-catalog.md#ce4007)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
+| `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, transitively; on the AST | `semantics/passes/effects.py` |
 | `scope` | scope and variable analysis; on the AST | `semantics/passes/scope.py` |
 | `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque; on SHIR, into `TypeckResults` | `semantics/passes/types/` |
@@ -126,8 +125,7 @@ Collect global definitions before analyzing function bodies.
    type (the home module, for a predefined target) is [`CE2519`](../error-catalog.md#ce2519); a second declaration of
    one pair is [`CE0101`](../error-catalog.md#ce0101). An accepted conversion is filed in `SymbolTables.conversions`,
    keyed by the pair of names; a refused one leaves the AST. A conversion is not filed in
-   the extension table, and a side that only a binary library declares is judged again
-   in the `libraries` step.
+   the extension table.
 
 ### One predicate for the channel
 
@@ -172,8 +170,7 @@ imports declare, so the declaring unit has to be collected already.
 
 A source library's units and a bundled Sushi-source stdlib module are injected as ordinary
 compilation units, and `build_dependency_graph` records the edge that an import of one
-creates. That is why a library unit comes first without being told to. A binary `.slib`
-matches no unit and adds no edge, because it has no unit to compile.
+creates. That is why a library unit comes first without being told to.
 
 The order also serves the two rules that read the perk table when an implementation is
 collected -- the perk exists ([`CE4003`](../error-catalog.md#ce4003)), and its marker lets this unit implement it
@@ -272,8 +269,7 @@ monomorphized instance exists only after `monomorphize`, so
 `SemanticAnalyzer._check_instance_clash` runs the second half directly after that pass
 (#1113). It reads the instance signatures through the same `_declaration_emitting`. The
 symbol of an instance takes its home unit: the unit that declared the generic
-(`<unit>$ident__i32`, or the prefix of a source library's unit), or no unit for the
-template of a binary library (`gen__i32`). `generics/synthesis.py` writes that home unit
+(`<unit>$ident__i32`, or the prefix of a source library's unit). `generics/synthesis.py` writes that home unit
 on the signature and on the body, and the back end's `declaring_unit` reads the same
 value from the body, so the two layers cannot disagree.
 
@@ -394,8 +390,7 @@ identity.
 ### Placement
 
 The pass runs immediately after `docs`, for the same reason: it must read the written
-declarations. The `libraries` step adds the constants of a binary library to a host unit,
-and `monomorphize` adds the instances.
+declarations. `monomorphize` adds the instances.
 
 Library units are skipped. The test runner's dead-code gate sets the hidden
 environment variable `SUSHI_STDLIB_DEAD_GATE=1`. When it is set, the pass also checks each
@@ -422,30 +417,6 @@ C ABI cannot carry.
   of the backend has every clause of the program.
 
 See `docs/ffi.md`.
-
-## The `libraries` pass: library symbol registration
-
-**File:** `semantics/library_registration.py` (`LibraryRegistration`; the analyzer calls `seed_perks` and `seed_generic_types` ahead of the collect loop, and `register` after it)
-
-Every symbol a linked `.slib` exports enters the same tables the consumer's own `collect`
-filled: structs, enums, functions, published constants, export-closure private helpers and
-constants, perk implementations, and generic templates.
-
-A constant is registered from SOURCE, whichever list it came from: it has no body to link,
-so the manifest carries the declaration's text and the consumer re-parses it. A clash with
-the consumer's own name is [`CE0105`](../error-catalog.md#ce0105) for a published constant -- the answer a source library
-gives for the same program -- and [`CE5007`](../error-catalog.md#ce5007) for a closure one, which may not be renamed
-because the library's own bodies call it.
-
-Placement is load-bearing at both ends. Perk DEFINITIONS are seeded BEFORE the `collect`
-loop, because perk-impl collection validates each impl against the visible definitions
-([`CE4003`](../error-catalog.md#ce4003)). Perk IMPLEMENTATIONS register here, after the consumer's own (local wins) and
-before `instantiate`, so the constraint validator sees them. Generic structs register
-before generic enums, because an enum payload may name a struct.
-
-A clash between a library's export-closure helper and a local name is [`CE5007`](../error-catalog.md#ce5007):
-local-wins would silently change what the library's monomorphized bodies call. See
-`docs/design/libraries.md`.
 
 ## The `namespaces` pass: what a unit may write behind a dot
 
@@ -487,9 +458,7 @@ that declares `origin`.
 
 Five rules:
 
-- [`CE3014`](../error-catalog.md#ce3014) -- a `use` below a declaration. The span comes from the AST builder, because
-  the `libraries` step above appends a library's constants and private types to a host
-  unit's lists and each carries a span from its own file.
+- [`CE3014`](../error-catalog.md#ce3014) -- a `use` below a declaration. The span comes from the AST builder.
 - [`CE3013`](../error-catalog.md#ce3013) -- the alias is already bound in this unit: another alias, an FFI namespace,
   or one of its own declarations. `_` is refused too, as the discard name.
 - [`CW3004`](../error-catalog.md#cw3004) -- the `as` reached no name. A warning, because a namespace is empty for
@@ -502,12 +471,11 @@ Five rules:
   privates too (so `u.hidden` is [CE3005](../error-catalog.md#ce3005) and not "no such name"), and the count here is
   of what the re-export can hand on.
 
-### Why it stands between `libraries` and `ffi-clash`
+### Why it stands between `externs` and `ffi-clash`
 
-A provider needs what `collect` and `libraries` produce and nothing later. `collect`
-fills a unit's own declarations, the FFI table and the registry modules; a BINARY
-library has no AST at all, so its declarations exist only once `libraries` has read the
-manifest. `ffi-clash` is the first step that asks whether a name is already taken, and
+A provider needs what `collect` produces and nothing later. `collect`
+fills a unit's own declarations, the FFI table and the registry modules; a library's
+units are ordinary units, so `collect` fills theirs too. `ffi-clash` is the first step that asks whether a name is already taken, and
 the first that has to ask it of ONE unit.
 
 ### Two seams, in order
@@ -1036,14 +1004,6 @@ extension table. It is the sanctioned way to replace a built-in. See
 A public method that a Sushi-source stdlib module declares on a built-in type is visible
 in every unit (R1 of `docs/design/extension-visibility.md`), so an extension of its name
 is [`CE2097`](../error-catalog.md#ce2097) too, with a note at the stdlib declaration.
-
-A perk implementation that a binary library ships is global too, and it has no
-written declaration in the build, so the check of a written implementation in the
-`typecheck` pass never meets it. The pass gives
-[`CE4007`](../error-catalog.md#ce4007) at an extension method of the name of one of its
-methods on the same type (`_reject_extensions_beside_shipped_perk_impls`), a template
-implementation included, with a note that names the implementation. A source library is
-compiled as a unit of the build, so the `typecheck` pass judges its implementation.
 
 The same pass then gives [`CW3007`](../error-catalog.md#cw3007) where a unit's own extension
 hides a public extension that the unit imports (C3, `hides_import` in
@@ -1608,7 +1568,7 @@ The checker does not raise. Each finding goes through the reporter as a register
 ```
 whole program, once:
 
-  collect → docs → unused → externs → libraries → namespaces → ffi-clash
+  collect → docs → unused → externs → namespaces → ffi-clash
      → entrypoint → instantiate → monomorphize → resolve → finite-types → derive
      → shadowing → effects
 
@@ -1630,14 +1590,13 @@ order.
 - `docs` needs `collect` (the merged unit table), and must run BEFORE `instantiate` and
   `monomorphize`, or one mistake in a generic's block is reported once per instantiation,
   and `--warn-missing-docs` demands a block on every monomorphized clone
-- `unused` needs `collect`, and runs before `libraries` and `monomorphize`, because it reads
+- `unused` needs `collect`, and runs before `monomorphize`, because it reads
   the WRITTEN declarations of each unit
-- `externs`, `libraries` and `entrypoint` need `collect` (the tables and the signatures)
-- `namespaces` needs `collect` (a unit's declarations, the FFI table, the registry) and
-  `libraries` (a binary library's declarations arrive from a manifest and nowhere else);
+- `externs` and `entrypoint` need `collect` (the tables and the signatures)
+- `namespaces` needs `collect` (a unit's declarations, the FFI table, the registry);
   `scope` and `typecheck` read the table it builds
-- `instantiate` needs `libraries` (a library template must be visible to instantiate at
-  the consumer)
+- `instantiate` needs `collect` (a library template is in a library unit, so it is
+  visible to instantiate at the consumer)
 - `monomorphize` needs `instantiate` (the set of instantiations to generate)
 - `resolve` needs `monomorphize` (every struct and enum a generic produced must exist)
 - `finite-types` needs `resolve` (the resolved field types), and STOPS the analysis on

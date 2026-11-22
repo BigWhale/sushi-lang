@@ -293,6 +293,10 @@ def reject_private_kept_call(
     ), loc)
 
 
+#: The kinds of a kept record that a bare name reads: a `const` and a unit `var`.
+KEPT_STORAGE_KINDS = frozenset({"constant", "variable"})
+
+
 def reject_private_kept(validator: 'TypeValidator', name: str, loc: Any,
                         *, kinds: AbstractSet[str]) -> bool:
     """Reject a MENTION of a name a library declares and keeps, of one of these kinds.

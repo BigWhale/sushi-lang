@@ -515,8 +515,7 @@ class PerkCollector:
         self.library_units: Set[str] = set()
         # Library impls a consumer replaced. Their bodies are real Sushi code in a real
         # unit, so unless they are dropped from that unit's AST the backend emits both
-        # and the method symbol is defined twice. (A binary library has no such problem:
-        # its body is weak_odr in the .slib object and the linker discards it.)
+        # and the method symbol is defined twice.
         self.shadowed_impls: List[ExtendWithDef] = []
         # The implementation methods that hold a misplaced `expand` (#1070): the
         # analysis stops after the collect pass.

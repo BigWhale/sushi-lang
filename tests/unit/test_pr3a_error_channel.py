@@ -53,7 +53,7 @@ def test_library_error_renders_through_the_reporter_path():
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.internals.diagnostics import SushiError
 
-    err = LibraryError("CE3504", lib_platform="linux", current_platform="darwin")
+    err = LibraryError("CE3502", lib="mathlib", paths="/nowhere")
     assert isinstance(err, SushiError)
-    assert err.code == "CE3504"
-    assert "platform mismatch" in err.message
+    assert err.code == "CE3502"
+    assert "library not found" in err.message

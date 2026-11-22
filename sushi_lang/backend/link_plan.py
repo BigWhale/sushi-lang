@@ -27,8 +27,8 @@ def runtime_libraries() -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class LinkInputs:
-    """What the program asks of the link: the requests of its `link` clauses and of its
-    binary libraries, and the directories of `-L`."""
+    """What the program asks of the link: the requests of its `link` clauses, and the
+    directories of `-L`."""
     requests: tuple[LinkRequest, ...] = ()
     search_dirs: tuple[Path, ...] = ()
 
@@ -98,9 +98,6 @@ def run_link(cc: str, plan: LinkPlan) -> None:
         if request.span is not None:
             error.note_at(f"the library '{request.library}' is asked for here",
                           request.span, request.filename)
-        elif request.by_library is not None:
-            error.note(f"the library '{request.library}' is asked for by the binary "
-                       f"library '{request.by_library}'")
     if plan.search_dirs:
         error.note("the directories of -L: "
                    + ", ".join(str(directory) for directory in plan.search_dirs))

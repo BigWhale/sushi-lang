@@ -1,7 +1,7 @@
 """The runner's library-reader gate (#977, #978, #967): a runner step, so these tests start
 the runner, the one exception to the rule that pytest never runs the Sushi compiler.
 
-A fixture cannot use `--lib-info`, and a damaged binary library cannot be a helper. The
+A fixture cannot use `--lib-info`, and a damaged library cannot be a helper. The
 gate builds a library, damages copies of it, and runs `--lib-info` in both halves (the
 `slib-info` tool it builds, and the Python fallback) and a consumer over each copy.
 `SUSHI_LIB_READER_GATE_TOOL_BIN` puts a tool of the test's own in place of the built one.

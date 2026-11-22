@@ -1,5 +1,5 @@
 """The C libraries that a program asks the linker for: one `LinkRequest` for each name of
-each `link` clause, and one for each name that a binary library's manifest records.
+each `link` clause.
 
 The `externs` pass makes the requests of every unit that has an AST, the bundled stdlib
 units and the units of a source library included. The back end makes the link plan from
@@ -18,12 +18,11 @@ _FILE_SUFFIXES = (".so", ".dylib", ".a")
 @dataclass(frozen=True)
 class LinkRequest:
     """One library name, and where it was asked for: a clause of the unit `unit`
-    (`span`, `filename`), or the manifest of the binary library `by_library`."""
+    (`span`, `filename`)."""
     library: str
     span: Optional[Span] = None
     filename: Optional[str] = None
     unit: Optional[str] = None
-    by_library: Optional[str] = None
 
 
 def invalid_reason(name: str) -> Optional[str]:
@@ -52,13 +51,6 @@ def library_of_file_name(name: str) -> Optional[str]:
     if stem.startswith("lib") and len(stem) > 3:
         stem = stem[3:]
     return None if stem == name else stem
-
-
-def manifest_requests(library: str, metadata: dict) -> list[LinkRequest]:
-    """The requests that the `link_libraries` field of the manifest of the binary
-    library `library` records."""
-    return [LinkRequest(name, by_library=library)
-            for name in metadata.get("link_libraries") or ()]
 
 
 def library_names(requests: Iterable[LinkRequest]) -> list[str]:

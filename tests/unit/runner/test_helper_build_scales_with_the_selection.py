@@ -24,7 +24,7 @@ FAKE_SUSHIC = textwrap.dedent("""\
     import os, sys, time
     from pathlib import Path
     log = Path({log!r})
-    source = Path(sys.argv[sys.argv.index("--lib-kind") + 2])
+    source = Path(sys.argv[sys.argv.index("--lib-version") + 2])
     name = source.stem
     (log / (name + ".start")).write_text("")
     if name == "broken_lib":

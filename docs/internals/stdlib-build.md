@@ -22,7 +22,7 @@ The stdlib has two halves. Neither uses the `.slib` format.
 | Aspect | Bitcode units | Sushi-source modules | User Libraries |
 |--------|---------------|----------------------|----------------|
 | Source | Python emitting LLVM IR | Sushi source code | Sushi source code |
-| Format | Raw `.bc` (LLVM bitcode) | `.sushi` files in the package | `.slib` (source text by default; bitcode for the `binary` kind) |
+| Format | Raw `.bc` (LLVM bitcode) | `.sushi` files in the package | `.slib` (source text and a manifest) |
 | Build tool | `sushi_stdlib/build.py` | none (compiled with the program) | `./sushic --lib` |
 | Metadata | Built into the compiler (`stdlib_registry.py`) | The declarations in the source | Embedded in the `.slib` file |
 | Freshness | Content-fingerprinted, auto-rebuilt by the compiler | In the unit cache key through the dependency graph | Compiled per invocation |

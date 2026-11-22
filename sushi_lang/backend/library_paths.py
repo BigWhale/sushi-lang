@@ -9,11 +9,10 @@ from sushi_lang.backend.library_errors import LibraryError
 
 
 class LibraryResolver:
-    """Finds `.slib` files on disk and caches their manifests."""
+    """Finds `.slib` files on disk."""
 
     def __init__(self):
         self.search_paths = self._get_search_paths()
-        self.loaded_libraries: dict[str, dict] = {}
 
     def _get_search_paths(self) -> list[Path]:
         """Get library search paths."""

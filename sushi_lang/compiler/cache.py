@@ -25,7 +25,6 @@ CACHE_DIR_NAME = "__sushi_cache__"
 LIBSRC_DIR = "libsrc"
 UNITS_DIR = "units"
 STDLIB_DIR = "stdlib"
-LIBS_DIR = "libs"
 REUSE_DIR = "reuse"
 
 _KEY_LEN = 12
@@ -57,7 +56,6 @@ class CacheManager:
         self.overflow = overflow
         self.cache_path = cache_dir or (project_root / CACHE_DIR_NAME)
         self.units_path = self.cache_path / UNITS_DIR
-        self.libs_path = self.cache_path / LIBS_DIR
         self.libsrc_path = self.cache_path / LIBSRC_DIR
         self._target_triple = default_triple()
 
@@ -107,7 +105,7 @@ class CacheManager:
         """Create the cache directory structure if it doesn't exist."""
         from sushi_lang.backend.driver import writing_output
 
-        for path in (self.units_path, self.libs_path, self.libsrc_path):
+        for path in (self.units_path, self.libsrc_path):
             with writing_output(path):
                 path.mkdir(parents=True, exist_ok=True)
 
@@ -126,10 +124,6 @@ class CacheManager:
             return self._object_path(self.stdlib_path, name, fingerprint)
         return self.user_stdlib_path / f"{name}.{fingerprint[:_KEY_LEN]}.o"
 
-    def lib_object_path(self, lib_name: str, fingerprint: str) -> Path:
-        """Cached .o path for a library."""
-        return self._object_path(self.libs_path, lib_name.replace("/", "_"), fingerprint)
-
     def library_source_dir(self, lib_name: str) -> Path:
         """Directory holding one source library's materialized units."""
         return self.libsrc_path / lib_name.replace("/", "_")
@@ -140,17 +134,11 @@ class CacheManager:
     def has_cached_stdlib(self, stdlib_unit: str, fingerprint: str) -> bool:
         return self.stdlib_object_path(stdlib_unit, fingerprint).exists()
 
-    def has_cached_lib(self, lib_name: str, fingerprint: str) -> bool:
-        return self.lib_object_path(lib_name, fingerprint).exists()
-
     def store_unit_object(self, unit_name: str, obj_bytes: bytes, fingerprint: str) -> Path:
         return self._store(self.unit_object_path(unit_name, fingerprint), obj_bytes)
 
     def store_stdlib_object(self, stdlib_unit: str, obj_bytes: bytes, fingerprint: str) -> Path:
         return self._store(self.stdlib_object_path(stdlib_unit, fingerprint), obj_bytes)
-
-    def store_lib_object(self, lib_name: str, obj_bytes: bytes, fingerprint: str) -> Path:
-        return self._store(self.lib_object_path(lib_name, fingerprint), obj_bytes)
 
     def _object_path(self, section: Path, name: str, fingerprint: str) -> Path:
         return section / f"{name}.{self.global_key}.{fingerprint[:_KEY_LEN]}.o"

@@ -277,21 +277,6 @@ def check_no_conflicts_with_regular_methods(
         perk_impl, _extensions_beside(resolved_type, perk_impl, tables), reporter)
 
 
-def reject_extensions_beside_shipped_impl(impl: ExtendWithDef, tables: 'SymbolTables',
-                                          reporter: Reporter, template: bool) -> None:
-    """CE4007 for an extension method beside a perk implementation a library ships (#1255).
-
-    A binary library ships its implementation as a manifest record, so no
-    written `extend ... with` in the build meets the check of a written one. Its methods
-    are visible in every unit all the same, so the extension method of that name on that
-    type can never be called, and the error stands at it. A `template` is judged as a
-    written template is, against every extension on its base.
-    """
-    existing = _existing_beside(impl, tables, template)
-    if existing is not None:
-        _reject_name_conflicts(impl, existing, reporter, shipped=True)
-
-
 def _existing_beside(impl: ExtendWithDef, tables: 'SymbolTables',
                      template: bool) -> Optional[dict]:
     """The extension methods that the perk methods of `impl` meet, by name."""

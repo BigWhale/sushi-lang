@@ -315,7 +315,7 @@ program that imports `relay` does not see `add`. To pass the public names on, `r
 writes `public use "guidelib"`. Then the importers of `relay` get the public names of
 `guidelib` as if `relay` declared them.
 
-### Compiled libraries
+### Library files (`.slib`)
 
 For genuine reuse you compile the library once into a `.slib` — a single file holding the
 library's source text plus the index the compiler needs for type information — and link it
@@ -344,10 +344,9 @@ answer() = 42
 
 !!! note "Sharing further afield"
     For distributing libraries beyond your own machine there is the **`nori`** packager and
-    the central **Omakase** repository at `omakase.lubica.net`. The default `.slib` holds
+    the central **Omakase** repository at `omakase.lubica.net`. A `.slib` holds
     source text, so it is portable, and its generic functions and types work in the
-    program that imports it. A `--lib-kind binary` library is not portable across
-    platforms ([`CE3504`](../error-catalog.md#ce3504)). A library has no transitive
+    program that imports it. A library has no transitive
     dependencies. See the
     [libraries guide](../libraries.md)
     for the details.

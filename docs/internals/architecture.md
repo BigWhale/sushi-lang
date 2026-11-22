@@ -50,7 +50,7 @@ compiled again. A single-file program, a library build (`--lib`), `--no-incremen
 | `semantics/generics/` | Instantiation (`instantiate/`), monomorphization (`monomorphize/`), the Result and Maybe interning, derived `hash` and `clone`, name mangling, type display |
 | `semantics/shir/` | SHIR, the tree IR of each body, and its lowering from the AST ([the SHIR reference](shir.md)) |
 | `semantics/slir/` | SLIR, the control-flow IR of each function, its lowering from SHIR and its verifier ([the SLIR reference](slir.md)) |
-| `backend/` | LLVM IR generation. `codegen_llvm.py` GENERATES a module; `driver.py` compiles, links and builds library bitcode |
+| `backend/` | LLVM IR generation. `codegen_llvm.py` GENERATES a module; `driver.py` compiles and links |
 | `backend/slir/` | The emitter of a `SlirFunction`: one LLVM function for each body |
 | `backend/expressions/` | The value halves of the operators, the casts, the integer constants and the enum variants; the memory helpers of the families; the stdlib call table |
 | `backend/types/` | The LLVM types (`core/`), and the code for arrays, primitives, structs and enums |
@@ -88,7 +88,7 @@ when a pass is inserted between two others. The docstring of `SemanticAnalyzer.c
 
 ```
 whole program, once:
-  collect -> docs -> unused -> externs -> libraries -> namespaces -> ffi-clash
+  collect -> docs -> unused -> externs -> namespaces -> ffi-clash
      -> entrypoint -> instantiate -> monomorphize -> resolve -> finite-types
      -> derive -> shadowing -> effects
 
@@ -102,7 +102,6 @@ then per unit, in one loop:
 | `docs` | doc blocks against their declarations (CE70xx, [CW7001](../error-catalog.md#cw7001)); completeness under `--warn-missing-docs` | `semantics/passes/docs.py` |
 | `unused` | under `--warn-unused`: dead private declarations ([CW1004](../error-catalog.md#cw1004)), unused imports ([CW3006](../error-catalog.md#cw3006)) | `semantics/unused.py` |
 | `externs` | extern signatures ([CE5003](../error-catalog.md#ce5003)) and the `ptr` unit gate ([CE5009](../error-catalog.md#ce5009)) | `semantics/passes/types/externals.py` |
-| `libraries` | the symbols of each linked `.slib` | `semantics/library_registration.py` |
 | `namespaces` | `use ... as`, `public use`, one scope per unit | `semantics/passes/namespaces.py` |
 | `ffi-clash` | an extern that names a symbol this build defines ([CE5013](../error-catalog.md#ce5013)) | `semantics/passes/types/externals.py` |
 | `entrypoint` | the rule for `main` ([CE3007](../error-catalog.md#ce3007), [CE3501](../error-catalog.md#ce3501), [CE0106](../error-catalog.md#ce0106), [CE0138](../error-catalog.md#ce0138)) | `semantics/semantic_analyzer.py` |
@@ -275,10 +274,8 @@ A stdlib module is one of two kinds:
   name is in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`) and in
   `_virtual_units` (`backend/stdlib_linker.py`).
 
-A `.slib` library has one of two kinds: source (the default) or binary. The
-pipeline injects the units of a source library as ordinary units, and the `libraries`
-pass registers the manifest symbols of a binary library. A library definition that a
-consumer can also hold gets `weak_odr` linkage (`backend/library_linkage.py`). See
+A `.slib` library holds the source of its units and a manifest. The pipeline injects
+the units of a library as ordinary units, and the consumer compiles them. See
 [Libraries](../libraries.md) and [Library Format](../library-format.md).
 
 **Toolchain tools.** A Sushi program that reads Sushi artefacts lives in `toolchain/`
@@ -310,8 +307,6 @@ __sushi_cache__/
     lib/mylib/mylib.<global key>.<fp>.o a unit of a SOURCE library
   stdlib/
     io_files.<global key>.<fp>.o        a bitcode stdlib module
-  libs/
-    mylib.<global key>.<fp>.o           a BINARY library's bitcode
   libsrc/
     mylib/                              the written-out units of a source library
 ```
@@ -337,7 +332,7 @@ blocks:
 - `HELD_EXTENSIONS` and `PROGRAM_INTERFACES`: the template copies this unit holds
   (generic function instances, generic-target extension copies, perk-implementation
   copies), and then the interface of every unit of the program.
-- `LIB_TEMPLATES`: the digest of each imported `.slib`.
+- `LIBRARY`: for a unit of a source library, the digest of its `.slib`.
 - `DROP_TYPES`: the whole-program set of types that implement `Drop`.
 
 Thus `--clean-cache` is never necessary for a correct build.
@@ -351,7 +346,6 @@ Thus `--clean-cache` is never necessary for a correct build.
 | a monomorphized generic function | the linkage of its visibility, in the module of the unit that declares the template, with the unit prefix in its symbol |
 | a constant | `internal`, read-only; each module has its own copy |
 | a unit variable (`var`) | defined once in the declaring unit's module; every other module declares it `external` |
-| a library definition that a consumer can also hold | `weak_odr` (`backend/library_linkage.py`, `backend/driver.py`) |
 | an inline runtime symbol (`GENERATED_INLINE_SYMBOLS` in `semantics/externs_manifest.py`) | `linkonce_odr` |
 | an out-of-line destroy or clone body (`backend/lifecycle.py`) | `linkonce_odr` |
 

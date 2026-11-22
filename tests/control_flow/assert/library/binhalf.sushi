@@ -1,3 +1,0 @@
-public fn bin_half(i32 n) i32:
-    assert(n % 2 == 0, "{n} is odd")
-    return n / 2

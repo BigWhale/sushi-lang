@@ -557,44 +557,27 @@ def print_library_info(library_path: Path, show_docs: bool = False,
                        color: str = "auto") -> int:
     """Print formatted metadata from a .slib library file. A fault raises its code."""
     opts = _Report(show_docs, should_colour(sys.stdout, color))
-    from sushi_lang.backend.library_format import LibraryFormat, check_manifest, library_kind
+    from sushi_lang.backend.library_format import LibraryFormat, check_manifest
     from sushi_lang.backend.library_errors import LibraryError
 
     if library_path.suffix != '.slib':
         raise LibraryError("CE3516", path=str(library_path))
-    metadata, source_size, bitcode_size = LibraryFormat.read_section_sizes(library_path)
+    metadata, source_size, _bitcode_size = LibraryFormat.read_section_sizes(library_path)
     check_manifest(metadata, str(library_path))
 
-    # A field the kind makes meaningless is not printed: a source library runs
-    # everywhere, so it has no platform, and it carries no bitcode to measure.
-    kind = library_kind(metadata)
     requires = metadata.get('requires_compiler', '')
 
     print(f"Library: {metadata['library_name']}")
     print(f"Version: {metadata['library_version']}")
-    print(f"Kind: {kind}")
-    if kind != 'source':
-        print(f"Platform: {metadata['platform']}")
-    if metadata.get('overflow'):
-        print(f"Overflow: {metadata['overflow']}")
     print(f"Compiler: {metadata['compiler_version']}")
-    if metadata.get('compiler_digest'):
-        print(f"Compiler digest: {metadata['compiler_digest']}")
-    if metadata.get('data_layout'):
-        print(f"Data layout: {metadata['data_layout']}")
     if requires:
         print(f"Requires compiler: {requires}")
-    if metadata.get('link_libraries'):
-        print(f"Links: {', '.join(metadata['link_libraries'])}")
     print(f"Protocol: {metadata['sushi_lib_version']}")
     print()
 
     for section in _SECTIONS:
         _print_section(section, metadata, opts)
 
-    if kind == 'source':
-        print(f"Source: {opts.p.dim}{source_size:,}{opts.p.reset} bytes")
-    else:
-        print(f"Bitcode: {opts.p.dim}{bitcode_size:,}{opts.p.reset} bytes")
+    print(f"Source: {opts.p.dim}{source_size:,}{opts.p.reset} bytes")
 
     return 0

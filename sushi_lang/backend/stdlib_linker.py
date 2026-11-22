@@ -11,17 +11,15 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.decl_table import DeclTable
 
 
-def linked_stdlib_paths(imports: Iterable[str], methods: AbstractSet[str],
-                        also: Iterable[str] = ()) -> list[str]:
+def linked_stdlib_paths(imports: Iterable[str], methods: AbstractSet[str]) -> list[str]:
     """Every stdlib module that a build links, each once, in a stable order.
 
-    Each stdlib module of `imports` (the `use <...>` of each unit, in order), the modules
-    in `also`, then the bitcode of each method of a built-in type in `methods`. Such a
+    Each stdlib module of `imports` (the `use <...>` of each unit, in order), then the bitcode of each method of a built-in type in `methods`. Such a
     method needs no import (`docs/design/extension-visibility.md` R1). A module under a
     directory in the list is left out: the directory links its bitcode.
     """
     from sushi_lang.semantics.stdlib_registry import builtin_type_method_bitcode
-    paths = dict.fromkeys([*imports, *also, *sorted(builtin_type_method_bitcode(methods))])
+    paths = dict.fromkeys([*imports, *sorted(builtin_type_method_bitcode(methods))])
     return [path for path in paths
             if not any("/".join(path.split("/")[:depth]) in paths
                        for depth in range(1, path.count("/") + 1))]
@@ -56,19 +54,13 @@ class StdlibLinker:
         else:
             return "unknown"
 
-    def link_stdlib_modules(self, llmod: llvm.ModuleRef, decls: DeclTable) -> set[str]:
+    def link_stdlib_modules(self, llmod: llvm.ModuleRef, decls: DeclTable) -> None:
         """Link the stdlib .bc files that the program of `decls` needs into one LLVM IR module.
 
         The whole build's units arrive together and each .bc is linked ONCE. The
         monolithic path gives every unit the SAME module, so linking per unit linked
         one module's globals twice as soon as two units named the same import (#493).
-
-        Answers the symbols the .bc files DEFINE. A library build weakens them, because
-        the consumer holds its own copy of every module it imports (`library_linkage`);
-        a program build has no second copy and ignores the answer.
         """
-        from sushi_lang.backend.library_linkage import defined_symbol_names
-
         seen: set[Path] = set()
         bc_files: list[Path] = []
         for unit_path in table_stdlib_paths(decls):
@@ -77,15 +69,11 @@ class StdlibLinker:
                     seen.add(bc_path)
                     bc_files.append(bc_path)
 
-        linked: set[str] = set()
         for bc_path in bc_files:
             with open(bc_path, 'rb') as f:
                 bc_data = f.read()
                 try:
                     stdlib_mod = llvm.parse_bitcode(bc_data)
-                    # Read the names BEFORE the link: `link_in` consumes the module
-                    # even under `preserve`, so this is the one moment they are there.
-                    linked |= defined_symbol_names(stdlib_mod)
                     llmod.link_in(stdlib_mod, preserve=True)
                 except Exception as e:
                     # A stdlib .bc is compiler-produced; if it will not link, the build
@@ -94,7 +82,6 @@ class StdlibLinker:
                     from sushi_lang.internals.errors import raise_internal_error
                     raise_internal_error(
                         "CE0007", detail=f"failed to link stdlib unit {bc_path}: {e}")
-        return linked
 
     # Virtual stdlib units that don't have .bc files (generic types emitted inline).
     # collections/iter is a bundled Sushi-SOURCE module (see stdlib_registry

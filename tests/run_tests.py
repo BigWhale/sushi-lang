@@ -17,9 +17,6 @@ from typing import Dict, List, Optional, Set, TextIO, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from sushi_lang.backend.llvm_optimization import target_data_layout  # noqa: E402
-from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint  # noqa: E402
-from sushi_lang.internals.host import host_key  # noqa: E402
 from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
 from sushi_lang.semantics.shir.lower_nodes import STRICT_VARIABLE  # noqa: E402
 from test_metadata import corpus_files  # noqa: E402
@@ -91,41 +88,6 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
         return False
 
 
-# Helper libraries that must ship as BINARY. Source is the default everywhere else, so
-# most of tests/libs/ exercises the source path end to end. These do not, because their
-# tests assert binary-path behaviour that source distribution deliberately removes:
-# private_closure_lib backs test_err_lib_private_clash, which expects CE5007 -- a clash
-# with an export-closure private. A source library has no export closure and namespaced
-# units, so that clash cannot happen (docs/design/libraries.md section 4.2).
-# kept_private_lib backs tests/libs/kept_private, which asserts the wording the BINARY
-# path gives a private the closure never shipped (#469). A source library ships its
-# units, so the name resolves there and a different code path answers.
-# mangle_closure_lib backs tests/namespaces/mangling/test_lib_link_symbol, which asserts
-# that a call into shipped bitcode uses the PRODUCER's symbol. A source library
-# recompiles and derives its own, so the field under test is never read.
-# twolib_bin backs tests/libs/multi_unit, the #494 shape: two units, each with a
-# private `helper`, shipped as one binary manifest. twolib_src is its source twin
-# and takes the default.
-# binary_api_lib backs tests/libs/binary_api, which pins the manifest arms the
-# `libraries` step reads at a consumer: a public struct and enum from the registry, a
-# concrete perk implementation, a constrained generic, a generic enum template and a
-# parameter pack. A source library reaches none of that code (#675).
-# private_generic_type_lib backs test_lib_binary_private_generic_type: a private generic
-# struct the closure ships under two manifest arms, which only the binary path reads.
-# generic_ext_bin_lib backs tests/libs/binary_generic_extension, which pins a CONSUMER's
-# own extension on a library's generic type. A source library's units are collected
-# beside the consumer's, so the base is in the tables either way and the seed under test
-# is never read (#728).
-# fs_user_bin_lib backs tests/libs/binary_stdlib_import: a unit that imports <io/fs>. A
-# source library ships its text and no manifest index, so the fault it pins (the
-# injected stdlib unit shipped as the library's own API, CE4001 at the consumer) is a
-# binary-path fault (#985).
-BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "var_bin_lib",
-                       "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
-                       "generic_perk_bin_lib", "binary_api_lib", "private_generic_type_lib",
-                       "generic_ext_bin_lib", "fs_user_bin_lib"}
-
-
 def helper_sources(helpers_dir: Path) -> List[Path]:
     """The entry point of each helper library under `helpers_dir`.
 
@@ -191,7 +153,6 @@ def _build_one_helper(sushic: Path, lib_file: Path, bin_dir: Path,
             # A .slib must state its own version (CE3505). These helpers are not
             # packages, so there is no nori.toml to read one from.
             [str(sushic), "--lib", "--lib-version", "0.0.0",
-             "--lib-kind", "binary" if name in BINARY_ONLY_HELPERS else "source",
              str(lib_file), "-o", str(bin_dir / f"{name}.slib")],
             cwd=project_root,
             capture_output=True,
@@ -713,11 +674,6 @@ def _write_bytes(path: Path, data: bytes) -> Path:
     return path
 
 
-def _half(source: Path) -> bytes:
-    raw = source.read_bytes()
-    return raw[:len(raw) // 2]
-
-
 def _half_payload(source: Path) -> bytes:
     """A copy cut in the middle of the sections after the metadata, so the metadata is whole."""
     raw = source.read_bytes()
@@ -758,10 +714,9 @@ def _write_edit(source: Path, case_dir: Path, edit) -> Path:
 # (case, expected code or None for a clean run, how the input is made). A maker takes
 # the directory of the built libraries and the case's own directory, and gives the path
 # the command reads. `--lib-info` runs each case in both halves.
-# The versions before the bare-function change: their signatures without `| E` meant
-# `| StdError`, so a reader must refuse them rather than read them as bare.
+# The version before the bare-function change: its signatures without `| E` meant
+# `| StdError`, so a reader must refuse it rather than read it as bare.
 _OLD_CONTAINER = 4
-_OLD_TEMPLATES = 7
 
 LIB_INFO_CASES = (
     ("a whole library", None, lambda libs, d: libs / "gate_lib.slib"),
@@ -795,53 +750,17 @@ LIB_INFO_CASES = (
         d / "gate_lib.slib", _container_version(libs / "gate_lib.slib", _OLD_CONTAINER))),
     ("a hybrid kind", "CE3512", lambda libs, d: _write_edit(
         libs / "gate_lib.slib", d, _put("hybrid", "kind"))),
-    ("a binary library cut to half", "CE3511", lambda libs, d: _write_bytes(
-        d / "gate_bin.slib", _half(libs / "gate_bin.slib"))),
-    ("a compiler digest that is a number", "CE3512", lambda libs, d: _write_edit(
-        libs / "gate_bin.slib", d, _put(7, "compiler_digest"))),
-    ("a data layout that is a number", "CE3512", lambda libs, d: _write_edit(
-        libs / "gate_bin.slib", d, _put(7, "data_layout"))),
-    ("another compiler version is printed, not refused", None, lambda libs, d: _write_edit(
-        libs / "gate_bin.slib", d, _put("0.0.1", "compiler_version"))),
 )
 
-def _append(text: str, *keys):
-    """An edit that appends `text` to the string at the end of a path of keys."""
-    def edit(meta):
-        node = meta
-        for key in keys[:-1]:
-            node = node[key]
-        node[keys[-1]] += text
-    return edit
-
-
-_SECOND_DECLARATION = "\npublic fn extra() i32:\n    return 0\n"
-
-# (case, expected code or None, the edit of the binary library's manifest). A consumer
-# that imports the edited library is compiled for each case.
+# (case, expected code or None, the edit of the library's manifest). A consumer that
+# imports the edited library is compiled for each case.
 CONSUMER_CASES = (
     ("a whole library", None, None),
-    ("an older templates schema", "CE3512", _put(_OLD_TEMPLATES, "templates", "version")),
     ("a generic function record with no name", "CE3512",
      _drop("templates", "generic_functions", 0, "name")),
     ("no library_name", "CE3512", _drop("library_name")),
     ("templates is a string", "CE3512", _put("x", "templates")),
-    ("a generic function source that does not parse", "CE3512",
-     _put("fn broken@(T)(T a T:\n", "templates", "generic_functions", 0, "source")),
-    ("a generic function source with two declarations", "CE3512",
-     _append(_SECOND_DECLARATION, "templates", "generic_functions", 0, "source")),
-    ("a generic struct source that does not parse", "CE3512",
-     _put("public struct Box@(T:\n", "templates", "generic_structs", 0, "source")),
-    ("a constant source with two declarations", "CE3512",
-     _append("\npublic const i32 OTHER = 1\n", "public_constants", 0, "source")),
-    ("a bare function record that states a channel", "CE3512",
-     _put(True, "public_functions", 0, "has_channel")),
     ("a hybrid kind", "CE3512", _put("hybrid", "kind")),
-    ("another compiler version", "CE3520", _put("0.0.1", "compiler_version")),
-    ("another compiler source digest", "CE3520", _put("0" * 64, "compiler_digest")),
-    ("no compiler source digest", "CE3520", _drop("compiler_digest")),
-    ("another data layout", "CE3504", _put("e-m:e-p:32:32-i64:64-n32-S128", "data_layout")),
-    ("no data layout", "CE3504", _drop("data_layout")),
 )
 
 
@@ -941,8 +860,8 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
                     fixtures_only: Optional[str] = None) -> ReaderGateResult:
     """Run `--lib-info` in both halves, and a consumer, over damaged `.slib` files.
 
-    A fixture cannot use `--lib-info`, and a damaged binary library cannot be a helper,
-    so the gate builds the libraries, damages copies of them, and reads each copy. The
+    A fixture cannot use `--lib-info`, and a damaged library cannot be a helper, so the
+    gate builds the library, damages copies of it, and reads each copy. The
     Sushi half is the `slib-info` tool built here from `toolchain/src/`; the Python half
     is the same command with SUSHI_TOOLCHAIN=off.
     """
@@ -962,13 +881,12 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
         libs.mkdir()
         (tmp / "gate_lib.sushi").write_text(_GATE_LIBRARY, encoding="utf-8")
         tool_bin = _gate_tool(project_root, tmp, result)
-        for kind, name in (("source", "gate_lib"), ("binary", "gate_bin")):
-            built = run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
-                         str(tmp / "gate_lib.sushi"), "-o", str(libs / f"{name}.slib"),
-                         "--cache-dir", cache], tmp, {})
-            if built.returncode != 0:
-                result.failures.append(f"the {kind} gate library does not build: "
-                                       f"{built.stderr.strip()[:200]}")
+        built = run([sushic, "--lib", "--lib-version", "1.0.0",
+                     str(tmp / "gate_lib.sushi"), "-o", str(libs / "gate_lib.slib"),
+                     "--cache-dir", cache], tmp, {})
+        if built.returncode != 0:
+            result.failures.append(f"the gate library does not build: "
+                                   f"{built.stderr.strip()[:200]}")
         if result.failures:
             result.duration = time.time() - start
             return result
@@ -989,11 +907,11 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
         for index, (case, code, edit) in enumerate(CONSUMER_CASES):
             case_dir = tmp / f"use_{index}"
             case_dir.mkdir()
-            raw = (libs / "gate_bin.slib").read_bytes()
-            (case_dir / "gate_bin.slib").write_bytes(
+            raw = (libs / "gate_lib.slib").read_bytes()
+            (case_dir / "gate_lib.slib").write_bytes(
                 raw if edit is None else _edited_slib(raw, edit))
             program = case_dir / "main.sushi"
-            program.write_text(_GATE_CONSUMER.format(name="gate_bin"), encoding="utf-8")
+            program.write_text(_GATE_CONSUMER.format(name="gate_lib"), encoding="utf-8")
             done = run([sushic, str(program), "-o", str(case_dir / "main"),
                         "--cache-dir", cache], case_dir, {"SUSHI_LIB_PATH": str(case_dir)})
             result.checks += 1
@@ -1264,78 +1182,32 @@ REPORT_LINES = (
 # A library whose manifest states no kind: the source library with its `kind` field
 # dropped. A manifest with no kind is a source library, in both halves and in the consumer.
 REPORT_UNSTATED = "unstated"
-REPORT_KINDS = ("source", "binary", REPORT_UNSTATED)
-# The report library is built in the mode that is not the default, and a kind that carries
-# bitcode prints that mode (docs/adr/0002-overflow-mode.md). A source library carries no
-# compiled code, so it prints no mode.
-REPORT_OVERFLOW = "--overflow=wrap"
-REPORT_OVERFLOW_LINE = "Overflow: wrap"
-# The lines of a library that holds compiled code: the overflow mode, the host key, the
-# compiler-source digest, the data layout and the libraries of its `link` clauses. A
-# source library prints none of them: the consumer reads its clauses in its source.
-REPORT_COMPILED_LINES = (REPORT_OVERFLOW_LINE, f"Platform: {host_key()}",
-                         f"Compiler digest: {compute_compiler_source_fingerprint()}",
-                         f"Data layout: {target_data_layout()}",
-                         "Links: z")
-# A binary library with no `link` clause prints no `Links:` line.
-_REPORT_NO_LINKS_LIBRARY = """\
-public fn answer() i32:
-    return 42
-"""
-REPORT_MODE_KINDS = ("binary",)
+REPORT_KINDS = ("source", REPORT_UNSTATED)
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
-# The consumer of each kind passes `--dont-panic` (D9). It instantiates the two marked
-# templates of `_REPORT_LIBRARY`, and every library kind ships a template as source, which
-# the consumer's build parses again.
+# The consumer passes `--dont-panic` (D9). It instantiates the two marked templates of
+# `_REPORT_LIBRARY`, and the consumer's build compiles the library's source.
 REPORT_CONSENT = ("--dont-panic",)
-
-
-def _check_no_links_line(sushic: str, tmp: Path, cache: str, tool_bin: str,
-                         result: ReaderGateResult) -> None:
-    """A binary library with no `link` clause: neither half prints a `Links:` line."""
-    plain_dir = tmp / "no_links"
-    plain_dir.mkdir()
-    (plain_dir / "plain_lib.sushi").write_text(_REPORT_NO_LINKS_LIBRARY, encoding="utf-8")
-    lib = plain_dir / "plain_lib.slib"
-    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", "binary",
-                       str(plain_dir / "plain_lib.sushi"), "-o", str(lib),
-                       "--cache-dir", cache], plain_dir, {})
-    result.checks += 1
-    if built.returncode != 0:
-        result.failures.append(f"the library with no clause does not build: "
-                               f"{built.stderr.strip()[:200]}")
-        return
-    for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
-                      ("python", {"SUSHI_TOOLCHAIN": "off"})):
-        done = _gate_run([sushic, "--lib-info", str(lib)], plain_dir, env)
-        result.checks += 1
-        if any(line.startswith("Links:") for line in done.stdout.splitlines()):
-            result.failures.append(f"--lib-info ({half}): a library with no `link` clause "
-                                   f"prints a Links line")
 
 
 @dataclass(frozen=True)
 class ReportCase:
     """One extra library of the report gate, and the whole line both halves must print.
 
-    `name` names the directory and the failures; `kind` is the `--lib-kind` of the build.
+    `name` names the directory and the failures.
     """
     name: str
-    kind: str
     library: str
     line: str
 
 
 # The extra report cases. Each is a POSITIVE check, so a tool that prints no report fails
-# each one time (the runner test derives its count from this table). A negative check,
-# such as "no `Links:` line" (`_check_no_links_line`), is not a row here: a silent tool
-# does not fail it.
+# each one time (the runner test derives its count from this table). A negative check is
+# not a row here: a silent tool does not fail it.
 #
-# A source library with a public native variadic function (`...T`). A binary library refuses
-# one (CE0116), so it is not in `_REPORT_LIBRARY`, which is built in every kind.
+# A library with a public native variadic function (`...T`).
 REPORT_EXTRA_CASES = (
-    ReportCase(name="variadic", kind="source",
+    ReportCase(name="variadic",
                library=("public fn total(string label, ...i32 nums) i32:\n"
                         "    println(label)\n"
                         "    return nums.len() as i32\n"),
@@ -1351,7 +1223,7 @@ def _check_report_case(case: ReportCase, sushic: str, tmp: Path, cache: str,
     source = case_dir / f"{case.name}_lib.sushi"
     source.write_text(case.library, encoding="utf-8")
     lib = case_dir / f"{case.name}_lib.slib"
-    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", case.kind,
+    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0",
                        str(source), "-o", str(lib), "--cache-dir", cache], case_dir, {})
     result.checks += 1
     if built.returncode != 0:
@@ -1372,10 +1244,10 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                          fixtures_only: Optional[str] = None) -> ReaderGateResult:
     """Read the `--lib-info` report of one library in both halves, and use the library.
 
-    A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY` in each kind,
-    asks both halves for its report and looks for each of `REPORT_LINES`, then compiles
-    and runs a consumer of each kind that binds both payloads of a variant and calls the
-    conversion of the library through `??`.
+    A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY`, once as it is
+    and once with no `kind` in its manifest, asks both halves for each report and looks
+    for each of `REPORT_LINES`, then compiles and runs a consumer of each that binds both
+    payloads of a variant and calls the conversion of the library through `??`.
     """
     result = ReaderGateResult(title="Library-report gate")
     if _gate_skip(result, filter_pattern, leaks_only, fixtures_only) is not None:
@@ -1392,9 +1264,7 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             kind_dir = tmp / kind
             kind_dir.mkdir()
             lib = kind_dir / "report_lib.slib"
-            read_as = "source" if kind == REPORT_UNSTATED else kind
-            built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", read_as,
-                               "--dont-panic", REPORT_OVERFLOW,
+            built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--dont-panic",
                                str(tmp / "report_lib.sushi"), "-o", str(lib),
                                "--cache-dir", cache], tmp, {})
             if built.returncode != 0:
@@ -1413,17 +1283,6 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                         result.failures.append(
                             f"--lib-info ({half}), {kind}: no line {expected!r} "
                             f"(exit {done.returncode})")
-                result.checks += 1
-                compiled = kind in REPORT_MODE_KINDS
-                wrong = [line for line in REPORT_COMPILED_LINES if (line in lines) != compiled]
-                wrong += [line for line in lines
-                          if line.startswith("Kind:") and line != f"Kind: {read_as}"]
-                if wrong:
-                    result.failures.append(
-                        f"--lib-info ({half}), {kind}: the line(s) "
-                        f"{', '.join(repr(line) for line in wrong)} are wrong for a "
-                        f"{read_as} library (the compiled lines "
-                        f"{'absent' if compiled else 'present'}, or a wrong Kind line)")
             program = kind_dir / "main.sushi"
             program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
             done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"), *REPORT_CONSENT,
@@ -1436,7 +1295,6 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             ran = _gate_run([str(kind_dir / "main")], kind_dir, {})
             if ran.stdout != REPORT_CONSUMER_STDOUT:
                 result.failures.append(f"a consumer, {kind}: printed {ran.stdout!r}")
-        _check_no_links_line(sushic, tmp, cache, tool_bin, result)
         for case in REPORT_EXTRA_CASES:
             _check_report_case(case, sushic, tmp, cache, tool_bin, result)
     result.duration = time.time() - start

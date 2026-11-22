@@ -148,15 +148,3 @@ class InstantiationCollector:
             function_collector.collect_from_perk_impl(perk_impl)
 
         return self.instantiations, self.function_instantiations
-
-    def collect_from_signatures(self, signatures) -> None:
-        """The instantiations a library's manifest signatures name (#543).
-
-        A `FuncSig` read from a binary `.slib` belongs to no unit, so `run` never sees
-        it; its return and parameters still name instantiations the consumer has to cut.
-        """
-        function_collector = self._build_function_collector()
-        for sig in signatures:
-            function_collector._reset_scope()
-            function_collector.collect_from_signature(
-                sig.ret_type, getattr(sig, "err_type", None), sig.params)

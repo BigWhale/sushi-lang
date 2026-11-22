@@ -45,7 +45,7 @@ class FunctionDeclarations:
         # Set linkage based on visibility:
         # - public functions: external linkage (accessible across units and for linking)
         # - private functions and the body of main: internal linkage
-        is_entry = fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False)
+        is_entry = fn.name == 'main'
         llvm_fn.linkage = 'external' if fn.is_public and not is_entry else 'internal'
 
         if is_entry:

@@ -248,7 +248,7 @@ fn main() i32:
     return 0
 ```
 
-**A bare function is the exception.** Use it seldom: only when the function is total over its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would only force a dead `.realise` or `??` on every caller. Write a channel for everything else. A public function keeps a channel when there is any doubt, because a channel added later changes the signature and breaks every caller and every binary `.slib`. The compiler does not enforce this. See [The error channel is opt-in](design/error-channel.md).
+**A bare function is the exception.** Use it seldom: only when the function is total over its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would only force a dead `.realise` or `??` on every caller. Write a channel for everything else. A public function keeps a channel when there is any doubt, because a channel added later changes the signature and breaks every caller. The compiler does not enforce this. See [The error channel is opt-in](design/error-channel.md).
 
 **Function syntax breakdown**:
 - `fn` keyword declares a function
@@ -2259,7 +2259,7 @@ library, and make the Sushi wrapper public:
 
 <!-- docs-sweep: skip (a library unit and its consumer, two files) -->
 ```sushi
-# zcheck.sushi, built with: ./sushic --lib --lib-version 1.0.0 --lib-kind binary zcheck.sushi
+# zcheck.sushi, built with: ./sushic --lib --lib-version 1.0.0 zcheck.sushi
 unsafe external "C" link "z" as zlib because "CRC-32 from zlib":
     fn crc32(u64 crc, string buf, u32 len) u64 = "crc32"
 
@@ -2278,10 +2278,8 @@ fn main() i32:
     return 0
 ```
 
-A binary library records its libraries in its manifest, and the consumer links them.
-`./sushic --lib-info zcheck.slib` shows them as `Links: z`. The consumer of a source
-library compiles the blocks of the library, so it reads the clauses there. In both kinds,
-the C library must be installed on the machine that links the consumer, and `-L` goes on
+The consumer compiles the blocks of the library, so it reads the clauses there. The C
+library must be installed on the machine that links the consumer, and `-L` goes on
 the build of the consumer. The details are in [Libraries](libraries.md#a-library-that-links-a-c-library).
 
 ### libm on Linux

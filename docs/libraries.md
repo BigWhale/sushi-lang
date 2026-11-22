@@ -6,10 +6,10 @@ Sushi supports compiling code to reusable libraries and linking them into progra
 
 **A `.slib` is Sushi source plus an index.** The consumer compiles that source as ordinary
 compilation units and caches the object files, so one library file works on every platform:
-text carries no target triple. Binary distribution stays available as an opt-in.
+text carries no target triple.
 
 > Contributor-level design: see [design/libraries.md](design/libraries.md) for how the
-> `.slib` container, manifest, and export-closure machinery work internally.
+> `.slib` container and the manifest work internally.
 
 ## Table of Contents
 
@@ -72,48 +72,31 @@ Every library states its own version. The value comes from the `nori.toml` in th
 directory when there is one, and from `--lib-version` otherwise; neither is **[CE3505](error-catalog.md#ce3505)**. See
 [Versions and Compatibility](#versions-and-compatibility).
 
-### Library Kinds
+### What a Library Exports
 
-`--lib-kind` chooses what the file carries. The default is `source`.
-
-| Kind | Ships | Portable | Notes |
-|--------|--------------------------|-----|--------------------------------------------|
-| `source` | unit source text | yes | the default; the consumer compiles it |
-| `binary` | LLVM bitcode | no | platform-bound (**[CE3504](error-catalog.md#ce3504)** elsewhere) |
-
-```bash
-# The default: one artifact for every platform
-./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib
-
-# The opt-in: compiled bitcode, for this platform only
-./sushic --lib --lib-kind binary --lib-version 1.0.0 mylib.sushi -o mylib.slib
-```
-
-Choose `binary` when you want to ship a library without shipping its source. Note what that
-does **not** buy: a generic cannot be pre-compiled, because monomorphization needs the
-consumer's concrete type arguments, so a binary library carries the source text of its
-generics in the index regardless. Binary distribution hides concrete bodies only.
-
-Every kind exports its PUBLIC extension methods, instance and static, and a private one
+A library exports its PUBLIC extension methods, instance and static, and a private one
 stays in the library ([CE3005](error-catalog.md#ce3005) at the consumer). A consumer calls
-`Vec.at(3, 4)` and `v.sum()` on a binary library's `Vec` as it does on a source
-library's. The rules of `docs/design/extension-visibility.md` apply as for a unit of the
+`Vec.at(3, 4)` and `v.sum()` on a library's `Vec` as it does on the `Vec` of a unit of
+its own program. The rules of `docs/design/extension-visibility.md` apply as for a unit of the
 program: a public extension on a type that the library unit declares travels with the
 type, and one on a type that it does not declare (`i32`, an array) is visible only in a
-unit that imports the library unit. A concrete method ships as a signature, and its body links from the bitcode.
-A template (`extend Box@(T)`, `extend Box@(i32)`, `extend T[]`, `pick@(U)`) ships as
-source, and the consumer makes its own copies. A method of an implementation of a
+unit that imports the library unit. The consumer compiles each method from the source of
+the library. The consumer makes its own copies of a template (`extend Box@(T)`,
+`extend Box@(i32)`, `extend T[]`, `pick@(U)`). A method of an implementation of a
 private perk ships as an ordinary method of the type: the contract stays hidden, and the
 method stays callable. A consumer that declares the same method on a type of the library
-hears [`CE0101`](error-catalog.md#ce0101), on every kind; one that declares the same
+hears [`CE0101`](error-catalog.md#ce0101); one that declares the same
 method on a type that the library does not declare wins in its own unit, with the warning
 [`CW3007`](error-catalog.md#cw3007).
 
-Every kind re-exports. A façade unit that says `public use` on each of the library's
-other units is the way to give a multi-unit library one namespace, and it works whichever
-kind you build: a source library ships the statement as text and the consumer's compiler
-reads it, a compiled one ships a `reexports` record per statement and the consumer
-composes the namespace from that. A `public use <io/fs>` hands the module on the same
+A library can export a public native variadic (`...T`). The consumer compiles the unit as
+its own, and calls the function with any count of trailing arguments or with a bloom
+`arr...`. `--lib-info` prints the parameter as it is written (`...i32 nums`).
+
+A library re-exports. A façade unit that says `public use` on each of the library's
+other units is the way to give a multi-unit library one namespace. The library ships the
+statement as text, and the consumer's compiler reads it. The manifest also has a
+`reexports` record for each statement, which `--lib-info` prints. A `public use <io/fs>` hands the module on the same
 way, and the consumer's build compiles the module on the strength of the record even
 where no unit of its own wrote the import. A `public use <lib/other>` hands on another
 library with the same rule: the consumer's build finds `other` on `SUSHI_LIB_PATH` as if
@@ -125,49 +108,39 @@ write. If `other` is not on the path, the consumer gets [CE3502](error-catalog.m
 
 A library function may carry the marker `dont_panic because "<reason>"`, which removes the
 bounds check of each `[]` in its body (see the
-[language reference](language-reference.md#unchecked-indexes-dont_panic)). Whether a
-consumer must consent depends on what the library ships:
+[language reference](language-reference.md#unchecked-indexes-dont_panic)). The consumer
+compiles the source text of the library, so the consumer accepts the unchecked code: a
+consumer of a library with a marked function must pass `--dont-panic`. This applies to a
+concrete function and to a generic template. Without the flag the build stops with
+[CE0152](error-catalog.md#ce0152), and the message names the library. Build the library
+itself with `--dont-panic` too.
 
-| What is marked | Ships as | The consumer must pass `--dont-panic` |
-|---|---|---|
-| A function, in a `source` library | text | yes |
-| A concrete function, in a `binary` library | bitcode | no |
-| A generic template, in a library of any kind | source text | yes |
-
-The consumer compiles source text, so the consumer accepts the unchecked code. Without the
-flag the build stops with [CE0152](error-catalog.md#ce0152), and the message names the
-library. A concrete body in a binary library is compiled already, as a C library's
-is, and needs no consent. A marked generic template ships as source in every kind, because
-the consumer makes the copies. Build the library itself with `--dont-panic` too.
-
-Every kind records its marked functions in the manifest, and `--lib-info` lists them (see
+A library records its marked functions in the manifest, and `--lib-info` lists them (see
 [Inspecting Libraries](#the---lib-info-flag)). A library author who marks a function says
 so in the library's documentation. A marked function in a library unit gets no
 [CW0004](error-catalog.md#cw0004) in a consumer's build.
 
 ### Library Dependencies
 
-A library that writes `use <lib/b>` depends on `b`. Two rules apply, the same for every
-kind of library:
+A library that writes `use <lib/b>` depends on `b`. Two rules apply:
 
 1. **Loading is transitive.** The library records each `use <lib/...>` of its own units,
    plain or public, in the manifest `dependencies`, with the name and the version of the
-   `b` that its build found. The consumer's build loads every library of that graph: a
-   source dependency is compiled with the program, and the bitcode of a compiled one is
-   linked once. So a library body always has what it calls, and the consumer does not
-   write `use <lib/b>` for a library it does not call itself. A stdlib module that a
-   compiled library uses is loaded the same way.
+   `b` that its build found. The consumer's build loads every library of that graph and
+   compiles it with the program. So a library body always has what it calls, and the
+   consumer does not write `use <lib/b>` for a library it does not call itself. A stdlib
+   module that a library uses is loaded the same way.
 2. **Visibility is not transitive.** A unit may write the names of what it imports
    itself, and of what a `public use` hands on. A plain `use <lib/b>` in a library loads
    `b` and gives the consumer no name of it: a bare `b_val()` at the consumer is [CE2008](error-catalog.md#ce2008)
    until the consumer writes `use <lib/b>`, or the library writes `public use <lib/b>`.
 
-Visibility is also PER UNIT, and it is the same for every kind of library. A library's
+Visibility is also PER UNIT. A library's
 public functions, constants, unit variables and types (concrete and generic) are names
 only in a unit of the consumer that imports the library itself, or that reaches it
 through a `public use` chain. If `main.sushi` writes `use <lib/a>` and `use "helper"`, a
 call of `a_val()` in `helper.sushi` is [CE2008](error-catalog.md#ce2008) until `helper.sushi` writes `use <lib/a>`
-too. A binary library follows the rule of a source library here.
+too.
 
 A generic template of a library is copied at the consumer, with the type arguments of
 the call. The body of the copy resolves its names in the scope of the library unit that
@@ -175,9 +148,9 @@ declares the template: the library's own declarations, and every library and std
 module that THAT unit uses, plain or public. So a template that calls `b_val()` works
 when its unit loads `b` with a plain `use <lib/b>`, and the consumer still cannot
 call `b_val()` itself. The copy works also when the unit that holds it does not import
-the library. A `use` in another unit of the same library does not count: each manifest
-`dependencies` record names the units that write it, so a binary library
-gives the same [CE2008](error-catalog.md#ce2008) as a source library (#1123).
+the library. A `use` in another unit of the same library does not count: the call gives
+[CE2008](error-catalog.md#ce2008) (#1123). Each manifest `dependencies` record names the
+units that write it.
 
 A library is identified by the `library_name` stamped into its `.slib`, not by the path
 that the search finds. One library that several paths reach -- the consumer and a
@@ -190,7 +163,7 @@ that needs it, for a plain `use` and for a `public use` alike.
 
 Two libraries that declare one public extension method on one type can be used in one
 program. A unit that imports both and calls the method gets [CE3023](error-catalog.md#ce3023) at the call, with
-a note for each library, for every kind: there is no qualified method call, so move the
+a note for each library: there is no qualified method call, so move the
 code that needs each method into a unit of its own.
 
 ### The library name is the name of the `use`
@@ -199,9 +172,8 @@ A build stamps the name of the library into its `.slib`: the `library_name` is t
 the output file, so `-o mylib.slib` makes the library `mylib`. A `use` names a library with
 the last part of its path: `use <lib/mylib>` and `use <lib/vendor/mylib>` both name
 `mylib`. The consumer refuses a file whose stamped name is not the name of the `use` that
-loaded it, with [CE3521](error-catalog.md#ce3521). This applies to both kinds, and to each load of the graph:
-the consumer's own `use`, a `use` or a `public use` in a source library, and a dependency
-record of a binary library.
+loaded it, with [CE3521](error-catalog.md#ce3521). This applies to each load of the graph:
+the consumer's own `use`, and a `use` or a `public use` in a library.
 
 So do not copy or rename a `.slib` file to load it under another name. Such a file hides
 which library a build uses, and two files with one stamped name meet as two versions of
@@ -244,15 +216,13 @@ public var i32 calls = 0
 and takes no `??` or `.realise`. A bare function is the exception, not the default style. It
 is correct here because the functions are pure arithmetic and will stay so. A PUBLIC function
 keeps a channel (`| E`) when there is any doubt: a channel added later changes the signature,
-and that breaks every caller and every binary `.slib`. The compiler does not enforce this.
+and that breaks every caller. The compiler does not enforce this.
 `docs/design/error-channel.md` carries the rule.
 
 A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
 is internal, and a consumer that calls it hears [`CE3005`](error-catalog.md#ce3005) exactly as it does for a concrete
-function. Only a public generic ships as a template, so on the binary path the symbol is
-not in the consumer's tables at all -- but the manifest names what the library declares and
-keeps, so the answer is [`CE3005`](error-catalog.md#ce3005) there too, naming the library instead of a unit. [`CE2008`](error-catalog.md#ce2008)
-is left for what it is for: a name that no unit and no linked library declares.
+function. [`CE2008`](error-catalog.md#ce2008) is left for what it is for: a name that no
+unit and no library declares.
 
 ### A library that links a C library
 
@@ -269,12 +239,8 @@ public fn checksum(string s) u64:
     return zlib.crc32(0, s, s.len() as u32)
 ```
 
-- **A binary library** records the libraries of its own clauses in its manifest
-  (`link_libraries`). `--lib-info` prints them as `Links: z`. The consumer links them, and
-  writes no `link` clause of its own. The libraries of a library that this library imports
-  are in the manifest of that library.
-- **A source library** records nothing. The consumer compiles the blocks of the library,
-  so it reads the clauses there. `--lib-info` prints no `Links:` line.
+- **The library** records nothing in its manifest. The consumer compiles the blocks of the
+  library, so it reads the clauses there, and writes no `link` clause of its own.
 - **The consumer's machine** must have the C library, because the consumer runs the link.
   When the library is outside the default directories, the consumer builds with
   `./sushic main.sushi -L <dir>`. A missing library is
@@ -320,11 +286,10 @@ Three consequences worth knowing:
   may not name a private perk ([`CE3010`](error-catalog.md#ce3010)). Privacy is worth nothing if the signature hands
   the type out anyway, so mark what the API returns and takes.
 - **A private declaration a template body needs still travels.** A public generic's body
-  may name a private type, constant or helper; the export closure ships them so the
-  consumer can monomorphize, and the consumer still cannot name them itself.
-- **A public constant is API, on both library kinds.** A constant has no body to link, so
-  the manifest carries the declaration's own source and the consumer registers it under
-  its own name. A consumer's own constant of that name is [`CE0105`](error-catalog.md#ce0105). (Between two ordinary
+  may name a private type, constant or helper. The library ships the whole unit as source,
+  so the consumer can monomorphize, and the consumer still cannot name them itself.
+- **A public constant is API.** A consumer's own constant of that name is
+  [`CE0105`](error-catalog.md#ce0105). (Between two ordinary
   units of one program, the unit's own constant wins with no diagnostic.)
 
 A consumer that writes a library-private name hears [`CE3005`](error-catalog.md#ce3005) -- "private struct 'Cursor',
@@ -350,8 +315,7 @@ fn main() i32:
 The compiler will:
 1. Search for `mathutils.slib` in the library search path
 2. Read the index and register the public declarations
-3. Compile the library's source units with the program (a source library), or link the
-   shipped bitcode (a binary library)
+3. Compile the library's source units with the program
 
 ### Multiple Libraries
 
@@ -422,7 +386,7 @@ use <lib/utils/strings>
 
 ### The `--lib-info` Flag
 
-Use `--lib-info` to display metadata from a compiled library:
+Use `--lib-info` to display the metadata of a library:
 
 ```bash
 ./sushic --lib-info mylib.slib
@@ -440,7 +404,6 @@ Example output, with `--docs`:
 ```
 Library: mylib
 Version: 1.0.0
-Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
 Protocol: 2.10
@@ -524,10 +487,9 @@ This is useful for:
   function of one name. The name is `name`
   for a function or a template, `Type.method` for an extension method, a static or a perk
   implementation method, and `Source as Target` for a conversion. The section is absent
-  when nothing is marked, and it is the same in every library kind
+  when nothing is marked
 - Seeing what a unit hands on: `Re-exports` prints one line per `public use`, as the
   statement was written, so a façade unit's whole surface reads off the report
-- Verifying platform compatibility
 - Understanding library dependencies
 
 ## Library Format
@@ -540,58 +502,17 @@ One file holds a MessagePack index next to a payload, framed by a fixed 52-byte 
 [Magic: 16 bytes] [Version: 4 bytes] [Flags: 4 bytes] [Kind: 4 bytes] [Reserved: 16 bytes]
 [Metadata Length: 8 bytes] [Metadata: MessagePack]
 [Source Length: 8 bytes]   [Source: MessagePack map, unit name -> source text]
-[Bitcode Length: 8 bytes]  [Bitcode: LLVM]
+[Bitcode Length: 8 bytes]  [Bitcode: empty]
 ```
 
-The `Kind` field states which payload is present, so a reader can branch before it unpacks
-anything. A source library has an empty bitcode section, a binary one an empty source
-section. See [Library Format](library-format.md) for the full
-specification.
+The source section holds the library. The bitcode section is empty. See
+[Library Format](library-format.md) for the full specification.
 
 ### Platform Compatibility
 
-**A source library is portable.** It carries text, and text has no target triple, so the
-same `.slib` builds on macOS and on Linux.
-
-**A binary library is not.** LLVM bitcode looks target-neutral and is not: it carries a
-target triple and a data layout, and the C ABI is already lowered into it. A binary
-library records the host that built it as `<os>_<arch>` (`darwin_arm64`,
-`linux_x86_64`), the same key that selects the `<sys/platform>` file. Loading a binary
-library built for another OS or another architecture is a hard error:
-
-```
-CE3504: platform mismatch: library compiled for 'linux_x86_64', current platform is 'darwin_arm64'; rebuild the library on this host
-```
-
-A tag that names no host is refused too: `unknown`, and the OS-only tag (`darwin`, `linux`)
-of a library from a compiler before the architecture was recorded. Build such a library
-again on this host.
-
-A binary library also records the LLVM data layout of the target that built it
-(`data_layout`: the size, the alignment and the byte order of each value). When the tag is
-equal and the layout is not the layout of this compiler's target, the error is the same
-code, and each platform shows its layout:
-
-```
-CE3504: platform mismatch: library compiled for 'darwin_arm64 (data layout e-m:e-p:32:32-i64:64-n32-S128)', current platform is 'darwin_arm64 (data layout e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32)'; rebuild the library on this host
-```
-
-Today the host key fixes the layout, so only a library that was edited by hand or built by
-another toolchain gets this error. A binary library with no layout is refused too.
-`--lib-info` prints the layout of a binary library as `Data layout: <layout>`.
-
-The check is skipped entirely for a source library, and `--lib-info` prints no `Platform`
-line for one, because the field means nothing there.
-
-### Overflow Mode
-
-A binary library records the overflow mode that it was built with
-(`--overflow=trap|wrap`, see [Integer Overflow](compiler-reference.md#integer-overflow)) in the
-manifest key `overflow`, and `--lib-info` prints it as `Overflow: wrap`. A library keeps
-its own mode: its compiled code does not change when a consumer builds with a different
-mode. A generic template of the library is monomorphized in the consumer, so it follows
-the mode of the consumer. A source library is compiled by the consumer, so all of its code
-follows the mode of the consumer, and its manifest has no `overflow` key.
+A library is portable. It carries text, and text has no target triple, so the same `.slib`
+builds on macOS and on Linux. The consumer compiles the library with its own overflow mode
+(`--overflow=trap|wrap`, see [Integer Overflow](compiler-reference.md#integer-overflow)).
 
 Portable as text is not the same as portable in behaviour. See Limitation #1 below.
 
@@ -636,44 +557,17 @@ confusing error deep inside library source you never wrote.
 The escape is `--ignore-compiler-version`, for an author testing a library forward against a
 new compiler. It is build-wide and obviously temporary, on purpose.
 
-### The compiler stamp of a binary library
-
-A binary library holds bitcode, and before 1.0 the bitcode ABI changes often, also in a
-patch release. A binary library also carries its own copy of each stdlib module that it
-imports. So a binary library works only with the exact compiler that built it. It records
-a stamp of two parts: the exact compiler version (`compiler_version`) and the
-compiler-source digest (`compiler_digest`, the digest that the object cache uses: every
-`*.py` and `*.sushi` file of the compiler, the Sushi stdlib included). The
-consumer accepts the library only when both parts are equal to its own. A mismatch is a
-hard error, and the message names the part that is not equal:
-
-```
-CE3520: library 'mylib' was built by another compiler: its compiler version is '0.17.0', this compiler has '0.17.1'; build the library again with this compiler
-```
-
-The fix is to build the library again with this compiler. `--ignore-compiler-version`
-does not stop this check. A source library has no stamp: the consumer compiles its text,
-and only `requires_compiler` applies. `--lib-info` prints the digest of a binary library
-as `Compiler digest: <digest>`.
-
 ### The format versions
 
 The file itself carries two more versions: the container version (`5`) and the templates
-schema version (`8`). A signature without `| E` is bare (`docs/design/error-channel.md`).
+schema version (`11`). A signature without `| E` is bare (`docs/design/error-channel.md`).
 Every function, helper and method record in the manifest states `has_channel`, and the field
-is required. A library of another version is refused: its container version is **[CE3509](error-catalog.md#ce3509)**,
-and the templates schema of a binary library is **[CE3512](error-catalog.md#ce3512)**. Rebuild the library
-with the current compiler. `docs/library-format.md` carries the rows.
+is required. A library of another container version is refused with
+**[CE3509](error-catalog.md#ce3509)**. A manifest of the wrong shape, or a manifest that
+states the retired `binary` kind, is **[CE3512](error-catalog.md#ce3512)**. Rebuild the
+library with the current compiler. `docs/library-format.md` carries the rows.
 
 ## Symbol Resolution
-
-### Two-Phase Linking
-
-Sushi uses a two-phase linking process to handle symbol conflicts:
-
-1. **Extract**: Parse all modules and build symbol tables
-2. **Resolve**: Deduplicate symbols using priority rules
-3. **Merge**: Build final module with resolved symbols
 
 ### Priority Rules
 
@@ -686,22 +580,14 @@ When the same symbol is defined in multiple places:
 | 3           | Standard library | Stdlib definitions             |
 | 4 (lowest)  | Runtime          | Runtime helper functions       |
 
-This means you can override library functions in your main program.
+This means you can override library functions in your main program. The consumer's call
+binds to the consumer's declaration, the library's own body keeps calling its own, and the
+build warns with [CW3002](error-catalog.md#cw3002).
 
 A symbol carries the unit that declared it -- `<unit>$<name>`, with every `/` in the unit
 name becoming `$` -- so two units may each declare a private `helper` without colliding
 (`docs/design/unit-namespaces.md` section 9). The priority table above is about a name two
 units both offer, not about a symbol two units both take.
-
-### Which Symbol a Binary Library's Body Calls
-
-A **source** library recompiles at the consumer, and its units are renamed to
-`lib/<library>/<unit>` on the way in, so the consumer derives every symbol itself. A
-**binary** library links: its bodies are in the shipped bitcode, and the symbols in them
-were named by the PRODUCER's compiler. The manifest records those names in `link_symbol`,
-one per record that has a symbol, and the binary path is the only reader. The manifest also
-records the declaring `unit` on every record, which is a different question and is answered
-for both kinds. `docs/library-format.md` carries the schema and the reasoning.
 
 ### Unused Library Functions
 
@@ -814,83 +700,9 @@ Current limitations of the library system:
    but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
    files. A library that binds a platform-specific C function through `unsafe external` still
    only builds where that function exists, and it cannot yet say so.
-2. **A binary library is platform-bound**: `--lib-kind binary` ships bitcode,
-   which is bound to the platform that produced it (**[CE3504](error-catalog.md#ce3504)**).
-3. **A public generic cannot reach FFI**: a public generic whose body (transitively)
-   references an `unsafe external` namespace, or a private helper whose signature exposes a
-   foreign `ptr`, cannot be exported (**[CE5006](error-catalog.md#ce5006)**; see also **[CE5002](error-catalog.md#ce5002)**). Wrap the foreign
-   detail behind a private helper with a C-ABI-free signature. This applies to every kind,
-   source included.
-4. **A public native variadic cannot be in a binary library**: a `...T` variadic collects
-   into a runtime `T[]` inside one concrete function, and the binary path cannot describe
-   that call, so a public one in a `--lib-kind binary` library is **[CE0116](error-catalog.md#ce0116)**. A source
-   library can have one: the consumer compiles the unit as its own, and calls it with any
-   count of trailing arguments or with a bloom `arr...`. `--lib-info` prints the parameter
-   as it is written (`...i32 nums`). A type pack (`...Ts`) exports as a template in both
-   kinds.
-5. **Generic instantiation across a BINARY boundary**: the notes below describe how generics
-   cross a `--lib-kind binary` library. A source library needs none of this machinery — its
-   generics are ordinary source in ordinary units, so they monomorphize exactly as they would
-   in a multi-file program. Regular generic *functions*, *variadic-generic pack* functions
-   (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib` boundaries.
-
-   The library producer ships a re-parsable source template in the `.slib` `templates`
-   section (templates version 9); the consumer re-parses it, registers it alongside its own
-   definitions, and monomorphizes it at consumer call sites using the standard `instantiate`/`monomorphize`
-   machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
-   ships as a template and is monomorphized per call site exactly like a regular generic. Perk
-   *definitions* are also shipped so consumers do not need to redeclare a perk contract that
-   originates in the library. Constraint re-checking uses [`CE4006`](error-catalog.md#ce4006) against the consumer's
-   perk-impl table.
-
-   **Perk implementations also ship**: a library's own `extend <ConcreteType> with <Perk>:`
-   block for a shipped perk crosses the boundary, so a
-   consumer can instantiate e.g. `pick_bigger@(T: Doubler)` at `i32` without writing
-   `extend i32 with Doubler` itself. The impl's bodies are not re-compiled at the consumer - its
-   signatures register for constraint checking and dispatch, the method symbols are declared, and
-   the definitions link from the library bitcode (where they carry weak linkage). Precedence:
-   a consumer's own impl of the same `(type, perk)` always wins, both semantically and at link
-   time; across multiple libraries shipping the same impl, the first registered wins; if a local
-   extension method on the target type already uses one of the impl's method names, the library
-   impl is skipped entirely (write your own `extend` to opt in, which surfaces the normal
-   [`CE4007`](error-catalog.md#ce4007) conflict diagnostics). Only impls of perks referenced by an exported generic's
-   constraints ship; impls of library-internal perks stay internal as contracts, and
-   their methods ship as ordinary extension methods (below). An impl of a predefined perk
-   (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) always ships. A shipped `Drop` makes the
-   type own a resource at the consumer: it moves, and scope exit calls the library's
-   compiled `drop()`. A consumer cannot add a `Drop` to a library type ([`CE4012`](error-catalog.md#ce4012)), so the
-   first precedence rule does not apply to `Drop`. A generic-target
-   implementation (`extend Box@(T) with Show`) ships as a template in
-   `templates.generic_perk_impls`, and the consumer makes a copy for each instantiation.
-
-   **Extension methods also ship**: a concrete extension method (instance or static) is a
-   signature record in `templates.extensions`, with the symbol that the library bitcode
-   defines. The consumer registers the method and declares the symbol. An extension
-   template is a source record in `templates.generic_extensions`, and the consumer makes
-   a copy for each instance and method that a call reaches. A template body may call a private function of the
-   library, through the export closure below.
-
-   **Private helpers ship automatically (the export closure)**: a public generic whose body
-   references library-private symbols exports: the producer walks the
-   transitive closure of everything the generic depends on and ships it: private *generic*
-   helpers as source templates (flagged `private`), private *concrete* helpers as signature
-   records (their definitions carry external linkage in the library bitcode and link at the
-   consumer), and *constants* with their source (the consumer needs the value for compile-time
-   evaluation). The manifest's `templates.closure_summary` lists what shipped, by kind. At the
-   consumer, a local symbol with the same name as a shipped private is an error (**[CE5007](error-catalog.md#ce5007)**,
-   not local-wins): shadowing it would silently change what the library's monomorphized bodies
-   call. A shipped private helper is callable by the library's own bodies and by nothing
-   else: consumer code that names one is [`CE3005`](error-catalog.md#ce3005), like any other private function. A shipped
-   private constant is the same: a consumer that reads it hears [`CE3005`](error-catalog.md#ce3005). None of this can arise on the source path: library units are namespaced, so
-   there is no shared namespace to clash in, and nothing has to be shipped ahead of need.
-
-   **A private the closure does not ship is named too.** The closure only walks what a
-   public *generic* needs, so a private a concrete function calls -- or one nothing public
-   calls -- ships nowhere. The manifest's `not_exported` key carries those names and their
-   kind, and nothing else: no signature, no body, no source. It is what lets the consumer
-   hear [`CE3005`](error-catalog.md#ce3005) for them. A name in that list is not shipped,
-   so it clashes with nothing: a consumer may declare a function of the same name and it is
-   the consumer's own.
+2. **A public signature cannot expose FFI**: a public function whose signature exposes a
+   foreign `ptr` cannot be in a library (**[CE5002](error-catalog.md#ce5002)**). Wrap the
+   foreign detail behind a private helper with a C-ABI-free signature.
 
 ## See Also
 

@@ -184,8 +184,6 @@ and the gate `tests/unit/test_call_signature_is_one.py` refuses a second rule:
 - The last position keeps the environment of a function value first:
   `(env, <params>, <answer slot>)`. So the type of a function value, its lifted lambda and
   the thunk of a named function agree, and a thunk forwards its parameters unchanged.
-- A binary `.slib` declares the functions of its manifest through the same
-  function, so the library and the consumer agree.
 - An indirect call outside SLIR (an iterator adapter, `map_err`) that has a value for a
   by-address position puts the value into a slot first, and reads an answer that moves by
   address from a slot (`emit_indirect_call`, `backend/runtime/closures.py`).
@@ -285,8 +283,7 @@ same way, right operand before place.
 
 An array element can be an array (ruling R1). The suffixes read from LEFT TO RIGHT: a
 suffix applies to the type on its left. The grammar says so with one left-recursive rule
-(`array_type` in `grammar.lark`), and `ArrayType.__str__`, `display_type` and
-`parse_type_string` all peel the LAST suffix.
+(`array_type` in `grammar.lark`), and `ArrayType.__str__` and `display_type` both peel the LAST suffix.
 
 | Written | Is | Layout |
 |---|---|---|
@@ -379,9 +376,7 @@ from its interned name (`List<i32[]>`). The name is a spelling, not a thing to p
 reader is `instance_type_arguments` (`semantics/generics/list.py`). It resolves each argument
 RECURSIVELY against the struct and enum tables at read time, because the monomorphize pass can
 leave a nested reference unresolved (`List<List<i32>>` holds a `GenericTypeRef`).
-`parse_list_types` and `parse_hashmap_types` call it. `split_type_arguments`
-(`semantics/generics/type_strings.py`) is the one splitter of a type STRING, the form that a
-library manifest carries.
+`parse_list_types` and `parse_hashmap_types` call it.
 
 One reader, not one per container: a hand-rolled reader that parses the interned name
 misses a case (an array element, `List@(T[])` or `HashMap@(K, V[])`), the element resolves to

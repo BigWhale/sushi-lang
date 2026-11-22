@@ -638,10 +638,10 @@ fixture file itself, because the one set of directives describes both steps.
 ```
 
 - Before each compilation, the runner builds the named file of the fixture's directory
-  as a SOURCE `.slib` (`--lib --lib-version 0.0.0 --lib-kind source`), and puts the
+  as a `.slib` (`--lib --lib-version 0.0.0`), and puts the
   directory that holds it first on `SUSHI_LIB_PATH`. The fixture imports it as
-  `use <lib/geolib>`. `BUILD_LIB_BINARY` builds a binary one.
-- The runner builds every `BUILD_LIB`, `BUILD_LIB_BINARY` and
+  `use <lib/geolib>`.
+- The runner builds every `BUILD_LIB` and
   `BUILD_LIB_WARNS` in the order the fixture writes them, whatever the directive, and
   then every `BUILD_LIB_AT` in written order. A library build has the same directory on its `SUSHI_LIB_PATH`, so
   a library may `use <lib/...>` a library built before it. Write a dependency above the
@@ -667,42 +667,25 @@ fixture file itself, because the one set of directives describes both steps.
 ```
 
 - The runner adds these flags to EVERY library build of the fixture: `BUILD_LIB`,
-  `BUILD_LIB_BINARY`, `BUILD_LIB_WARNS` and `BUILD_LIB_AT`. It does
+  `BUILD_LIB_WARNS` and `BUILD_LIB_AT`. It does
   not add them to the compilation of the fixture itself; that is `COMPILER_FLAGS`.
 - Several flags on one line, or repeat the directive.
 - A flag the runner owns is refused with a printed warning, as in `COMPILER_FLAGS`.
   `--lib` is refused here always, because the runner spells it for each library build.
-  `--lib-kind` and `--lib-version` are refused here too, for the same reason: use the
-  directive forms (`BUILD_LIB_BINARY`, `@ version`).
-
-#### BUILD_LIB_BINARY
-
-```sushi
-# BUILD_LIB_BINARY: geolib.sushi
-```
-
-- As `BUILD_LIB`, but the runner builds a BINARY `.slib` (`--lib-kind binary`). Use it
-  to test what a consumer does with a binary library: the manifest, the bitcode, a
-  generic template that the consumer monomorphizes.
-- The library goes to the same directory as a `BUILD_LIB` library, first on
-  `SUSHI_LIB_PATH`. The fixture imports it as `use <lib/geolib>`. Do not name one file
-  in both directives.
-- The build, the version, the rebuild and a failed build are as for `BUILD_LIB`. A
-  binary library is bound to the platform that built it; the runner builds it again for
-  each run, so the fixture stays portable.
-- There is no binary form of `BUILD_LIB_AT`; the `-> name.slib` form names the file in
-  the `SUSHI_LIB_PATH` directory.
+  `--lib-version` is refused here too, for the same reason: use the `@ version` form of
+  the directive.
 
 #### LIB_MANIFEST_SET
 
 ```sushi
-# BUILD_LIB_BINARY: geolib.sushi
+# BUILD_LIB: geolib.sushi
 # LIB_MANIFEST_SET: geolib platform=linux_riscv64
 ```
 
 - After the libraries of the fixture build, the runner sets one top-level string field of
   the manifest of `<library>.slib` in the `SUSHI_LIB_PATH` directory. Use it to state a
-  library that another host built (a foreign `platform`), which the runner cannot build.
+  manifest that the runner cannot build: a foreign `platform`, another `library_name`, or
+  an unknown `kind`.
 - The form is `<library> <key>=<value>`. `<library>` is the file name without `.slib`
   (the `-> name.slib` name, if the build gives one). The value is the text after `=`.
 - The runner writes the edit with the splice writer of the library-reader gate
@@ -716,17 +699,15 @@ fixture file itself, because the one set of directives describes both steps.
 ```sushi
 # BUILD_LIB_WARNS: geolib.sushi -> CW1001
 # BUILD_LIB_WARNS: other.sushi -> CW1002, CW1001
-# BUILD_LIB_WARNS: third.sushi binary -> CW1001
 ```
 
 - As `BUILD_LIB`, but the build must exit 1, and the SET of warning codes in its stderr
   must be equal to the named set (#1122). A missing code or a code that is not named
   fails the fixture, and so does a build that exits 0. Use it for a library that is
   correct and builds with a warning.
-- The library goes to the same directory as a `BUILD_LIB` library. It is a SOURCE
-  `.slib`, unless a kind word follows the source: `binary` (or `source`).
+- The library goes to the same directory as a `BUILD_LIB` library.
   It builds in written order with the other two directives.
-- The value is one source, an optional kind word, `->`, and one or more `CW` codes,
+- The value is one source, `->`, and one or more `CW` codes,
   comma or space separated. There is no `-> name.slib` form and no `@ version` form.
   Any other value fails the fixture.
 

@@ -3,7 +3,7 @@
 # entry unit's scope, so the other library's function is not in scope there, and the
 # build of the library refuses it (#1070).
 # BUILD_LIB: ldu_b.sushi
-# COMPILER_FLAGS: --lib --lib-version 0.0.0 --lib-kind source
+# COMPILER_FLAGS: --lib --lib-version 0.0.0
 # OUTPUT_PATH: ldu_pl.slib
 # EXPECT_ERROR_CODE: CE2008
 use "ldu_pl2"

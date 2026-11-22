@@ -155,13 +155,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     library.add_argument(
         "--lib",
         action="store_true",
-        help="Compile to library bitcode (no main() required)",
-    )
-    library.add_argument(
-        "--lib-kind",
-        choices=["source", "binary"],
-        help="How the library ships: source text or compiled bitcode "
-             "(default: source)",
+        help="Compile to a source library, a .slib file (no main() required)",
     )
     library.add_argument(
         "--lib-version",
@@ -227,7 +221,6 @@ _NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ..
      "with --lib-info: a report compiles no function"),
     ("dump_slir", "--dump-slir", lambda a: a.lib_info,
      "with --lib-info: a report compiles no function"),
-    ("lib_kind", "--lib-kind", lambda a: not a.lib, "without --lib"),
     ("lib_version", "--lib-version", lambda a: not a.lib, "without --lib"),
     ("keep_object", "--keep-object", lambda a: a.lib,
      "with --lib: a library build writes no object file"),
@@ -244,8 +237,6 @@ def _validate_args(args: argparse.Namespace, reporter: Reporter) -> None:
         if getattr(args, attr) and ignored(args):
             er.emit(reporter, er.ERR.CW0003, None, filename=COMMAND_LINE,
                     flag=flag, reason=reason)
-    if args.lib_kind is None:
-        args.lib_kind = "source"
     if args.overflow is None:
         args.overflow = OverflowMode.TRAP.value
 

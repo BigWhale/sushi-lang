@@ -1,4 +1,0 @@
-# A binary library ships this generic function as a slice of its source.
-
-public fn bin_same@(T: Eq)(T x, T y) ~:
-    assert(x == y, "the two values differ")

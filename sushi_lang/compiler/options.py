@@ -24,7 +24,6 @@ class BuildOptions:
     warn_missing_docs: bool
     warn_unused: bool
     lib: bool
-    lib_kind: str
     lib_version: Optional[str]
     write_ll: bool
     dump_ll: bool
@@ -49,7 +48,6 @@ class BuildOptions:
             warn_missing_docs=args.warn_missing_docs,
             warn_unused=args.warn_unused,
             lib=args.lib,
-            lib_kind=args.lib_kind,
             lib_version=args.lib_version,
             write_ll=args.write_ll,
             dump_ll=args.dump_ll,
