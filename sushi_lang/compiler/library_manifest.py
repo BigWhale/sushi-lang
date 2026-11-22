@@ -437,10 +437,7 @@ class LibraryManifestGenerator:
 
     def _generic_extension_templates(self, own: list['Unit'],
                                      private_types: set[str]) -> list[dict]:
-        """Every extension TEMPLATE of the library's own units on a public type.
-
-        A private template has its marker in the record.
-        """
+        """Every public extension TEMPLATE of the library's own units on a public type."""
         from sushi_lang.semantics.library_templates import serialize_generic_extension
 
         records: list[dict] = []
@@ -448,7 +445,7 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for ext in unit.ast.generic_extensions or []:
-                if _target_name(ext.target_type) in private_types:
+                if not ext.is_public or _target_name(ext.target_type) in private_types:
                     continue
                 record = serialize_generic_extension(ext)
                 record["unit"] = unit.name

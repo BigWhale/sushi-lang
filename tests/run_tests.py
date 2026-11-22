@@ -1149,10 +1149,9 @@ fn main() i32:
 # the fifth is a tuple, which neither half may print in its interned `$Tuple<...>` form, the
 # sixth and the seventh keep the `...` of a type pack (#1164), the eighth and the ninth
 # print the keyword `error` for a concrete and for a generic error type, the tenth is a
-# conversion, which the consumer calls through `??`, the next two put a bound in a
+# conversion, which the consumer calls through `??`, the next one puts a bound in a
 # target (#1070), the next two print the `public` marker of a static and of a template
-# that the consumer calls (docs/design/extension-visibility.md R9; the private
-# `clone_count` above prints none), and the last four are `dont_panic` declarations with
+# that the consumer calls (docs/design/extension-visibility.md R9), and the last four are `dont_panic` declarations with
 # their reasons (docs/design/dont-panic.md, D10), each after its unit: a function, a
 # static, a generic function and a method of a generic type. The two lines after them
 # print the mode of a borrowed return (#1229), on a function and on a template method.
@@ -1167,7 +1166,6 @@ REPORT_LINES = (
     "  error ReportFault:",
     "  error ReportDecode@(T):",
     "  extend ReportFault as ReportWrap",
-    "  extend Crate@(T: Clone) clone_count() i32",
     "  extend Crate@(T: Hashable) with Named:",
     "  public extend Colour static pick(i32[] codes) Colour",
     "  public extend Crate@(T) first_code(i32[] codes) i32",
@@ -1181,6 +1179,10 @@ REPORT_LINES = (
 # The prefixes of the lines that neither half may print: the container has no kind and
 # no bitcode section, and the manifest has no platform. A report that exits 0 is checked.
 REPORT_ABSENT = ("Kind:", "Platform:", "Bitcode:")
+# Whole lines of `_REPORT_LIBRARY` that neither half may print: the index lists only what a
+# consumer can see, so the private extension template `clone_count` does not print. A
+# report that exits 0 is checked.
+REPORT_ABSENT_LINES = ("  extend Crate@(T: Clone) clone_count() i32",)
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer passes `--dont-panic` (D9). It instantiates the two marked templates of
@@ -1312,6 +1314,10 @@ def _check_report(lib: Path, sushic: str, cache: str, tool_bin: str,
             stray = [line for line in lines if line.startswith(prefix)]
             if done.returncode == 0 and stray:
                 result.failures.append(f"--lib-info ({half}): printed {stray[0]!r}")
+        for absent in REPORT_ABSENT_LINES:
+            result.checks += 1
+            if done.returncode == 0 and absent in lines:
+                result.failures.append(f"--lib-info ({half}): printed {absent!r}")
     program = tmp / "main.sushi"
     program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
     done = _gate_run([sushic, str(program), "-o", str(tmp / "main"), *REPORT_CONSENT,

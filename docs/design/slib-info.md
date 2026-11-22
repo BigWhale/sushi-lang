@@ -151,7 +151,7 @@ above the first member, so one `pending` flag covers the owner and its members.
   record of its own, for the spacing of rule 2.
 - **Visibility.** The report lists only what a consumer can see: a public perk, an
   implementation of a public or predefined perk on a public type, a public generic type,
-  and a public extension on a public type (an extension template keeps its marker).
+  and a public extension or extension template on a public type.
 - **Perks.** The section lists each public perk of the library.
 - **Perk implementations.** The concrete implementations, then the generic-target
   templates, in one section: a reader who asks "what implements `Show`" wants one list, and
@@ -160,8 +160,8 @@ above the first member, so one `pending` flag covers the owner and its members.
   again, and never parses it from the source slice. `perk` is a reserved word, so the tool
   cannot bind the name of the contract to a variable called `perk`.
 - **Extension methods.** The concrete records, then the templates, in one section. Each
-  line starts with `public` when the record is public, as the declaration writes it
-  (`docs/design/extension-visibility.md` R9). The section of foreign extensions was
+  line starts with `public`, as the declaration writes it
+  (`docs/design/extension-visibility.md` R9), because a private extension does not print. The section of foreign extensions was
   retired with CW3003.
 - **Re-exports.** One record for each `public use`, printed as the statement that made it:
   a unit target is in quotes, and a stdlib or library target is in angle brackets. A library

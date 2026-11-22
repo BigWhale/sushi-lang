@@ -335,7 +335,7 @@ section. `--lib-info` reads the other keys.
     # A library ships whole units, so a generic in it is already there as ordinary
     # source -- but the index must answer without a parser.
     # The index lists only what a consumer can see: a public item on a public type,
-    # where a predefined perk is public (an extension TEMPLATE keeps its `public` marker).
+    # where a predefined perk is public.
     "templates": {                     # Instantiable cross-library templates
         # Public generic functions (incl. variadic packs).
         "generic_functions": [
@@ -419,10 +419,8 @@ section. `--lib-info` reads the other keys.
         # Extension TEMPLATES: a generic target (`Box@(T)`), a concrete-instance target
         # (`Box@(i32)`), an array target (`T[]`) and a method type parameter
         # (`pick@(U)`). A template names no instance, and the consumer makes one copy for each instance and method that a call reaches. Its
-        # body may call a private function of the library. A template on a private type
-        # is not listed; a private template is, with `"public": false`, and the consumer
-        # refuses a call of it from its own units (docs/design/extension-visibility.md
-        # R4 to R6). The whole key is absent when there is no record.
+        # body may call a private function of the library. Only a public template on a
+        # public type is listed. The whole key is absent when there is no record.
         "generic_extensions": [
             {
                 **EXTENSION,
