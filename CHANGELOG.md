@@ -6,6 +6,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **The `templates` index of a `.slib` lists what the library declares.** The rules that
+  chose what a binary library shipped are removed. `perks` has each perk of the library,
+  and `perk_impls` has each concrete implementation that the library writes, also of a
+  private perk and also when a method exposes a foreign `ptr`. The methods of an
+  implementation of a private perk are not in `extensions` now. `extensions` has an
+  extension on a private type too. `--lib-info` prints these records. The manifest keys
+  and the record shapes do not change.
+
 - **A source library can have a public native variadic function.** A public `...T` function
   in a source library was CE0116. Now the library can export one. The consumer compiles
   the unit of a source library as its own, so it calls the function with any count of

@@ -149,15 +149,15 @@ above the first member, so one `pending` flag covers the owner and its members.
 - **A method** of a perk or of an implementation. One printer for the contract and its
   implementations, so a method prints the same way in each position. Each method is a
   record of its own, for the spacing of rule 2.
-- **Perks.** The section lists the contracts that a consumer can be asked to satisfy: each
-  public perk, and each perk that an exported template names.
+- **Perks.** The section lists each perk that the library declares.
 - **Perk implementations.** The concrete implementations, then the generic-target
   templates, in one section: a reader who asks "what implements `Show`" wants one list, and
   `extend Box@(T) with Show` answers for each `Box`. The record of a generic-target
   template holds the base name and the parameters as written, so the tool builds the header
   again, and never parses it from the source slice. `perk` is a reserved word, so the tool
   cannot bind the name of the contract to a variable called `perk`.
-- **Extension methods.** The concrete records, then the templates, in one section. Each
+- **Extension methods.** Each extension method that the library declares: the concrete
+  records, then the templates, in one section. Each
   line starts with `public` when the record is public, as the declaration writes it
   (`docs/design/extension-visibility.md` R9). The section of foreign extensions was
   retired with CW3003.

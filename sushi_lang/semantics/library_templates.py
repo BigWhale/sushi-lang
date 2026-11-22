@@ -187,7 +187,7 @@ def serialize_generic_function(func: "FuncDef") -> dict:
 
 
 def serialize_generic_struct(struct: "StructDef") -> dict:
-    """Produce the manifest record for a single public generic struct."""
+    """Produce the manifest record for a single generic struct."""
     return with_doc({
         "name": struct.name,
         "type_params": _type_param_records(struct),
@@ -196,7 +196,7 @@ def serialize_generic_struct(struct: "StructDef") -> dict:
 
 
 def serialize_generic_enum(enum: "EnumDef") -> dict:
-    """Produce the manifest record for a single public generic enum."""
+    """Produce the manifest record for a single generic enum."""
     return with_doc({
         "name": enum.name,
         "is_error": enum.is_error,

@@ -504,10 +504,8 @@ _SECTIONS: tuple[_Section, ...] = (
              in_templates=True),
     _Section("Public Enums", ("enums",), _enum_line, members=("variants", _variant_line)),
     _Section("Generic Enums", ("generic_enums",), _generic_named("enum"), in_templates=True),
-    # Every public perk ships, plus any perk an exported template names (#543), so this
-    # section is the contracts a consumer can be asked to satisfy -- each with the
-    # method signatures that satisfying it means (#537). ONE method printer serves the
-    # contract and its implementations.
+    # Every perk the library declares, each with the method signatures that satisfying
+    # it means (#537). ONE method printer serves the contract and its implementations.
     _Section("Perks", ("perks",), _perk_line, in_templates=True,
              members=("methods", _method_line)),
     # Which types satisfy which contract: the concrete implementations, then the

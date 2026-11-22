@@ -1,4 +1,4 @@
-"""Binary library format (.slib) for Sushi libraries."""
+"""The .slib container: a header, the manifest and the source section."""
 from __future__ import annotations
 
 import errno

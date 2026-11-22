@@ -354,9 +354,8 @@ section. `--lib-info` reads the other keys.
         "generic_structs": [ ... ],
         "generic_enums": [ ... ],
 
-        # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
-        # names it), plus any perk an exported template names in a constraint
-        # or implements. Each method is a record: its signature, its
+        # Perk DEFINITIONS: every perk that the library's own units declare. Each
+        # method is a record: its signature, its
         # receiver mode when the contract declares `peek self` / `poke self`, and its
         # own block -- so `--lib-info` prints a contract as the methods that satisfy it.
         #
@@ -370,9 +369,9 @@ section. `--lib-info` reads the other keys.
             {"name": str, "unit": str, "methods": [METHOD], "doc": DOC}
         ],
 
-        # Concrete perk IMPLEMENTATIONS of those perks, and of every predefined
-        # perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`). The record carries the
-        # signature of each method.
+        # Concrete perk IMPLEMENTATIONS: every one that the library's own units write,
+        # of a perk of the library and of a predefined perk (`Drop`, `Hashable`, `Eq`,
+        # `Ord`, `Display`). The record carries the signature of each method.
         "perk_impls": [
             {
                 "type": str,           # Concrete target type name
@@ -398,12 +397,9 @@ section. `--lib-info` reads the other keys.
             }
         ],
 
-        # Extension methods, instance and static. A CONCRETE one is a signature
-        # record. The methods of an implementation of a perk that does not ship are records
-        # here too: the contract stays hidden, and each method is an ordinary method of
-        # the type. An extension on a private type that nothing ships is left out. A
-        # private extension ships with `"public": false`: a copy of a template of the
-        # library can call it, and the consumer refuses a call of it from its own units
+        # Extension methods, instance and static: every one that the library's own
+        # units declare. A CONCRETE one is a signature record. A private extension has
+        # `"public": false`, and the consumer refuses a call of it from its own units
         # (docs/design/extension-visibility.md R4 to R6). The whole key is absent when
         # there is no record.
         #
@@ -411,7 +407,7 @@ section. `--lib-info` reads the other keys.
         #       "type": str,           # The target, in the internal spelling: "Vec",
         #                              #   "i32", "i32[]", "Box<T>", "T[]"
         #       "name": str,
-        #       "public": bool,        # The `public` marker; True for a perk method
+        #       "public": bool,        # The `public` marker
         #       **SIG,
         #       "self_mode": str,      # "peek" | "poke", only when declared
         #       "static": bool,        # True, only for a static
