@@ -50,9 +50,9 @@ _add(ErrorMessage("CE3505", Severity.ERROR,
 _add(ErrorMessage("CE3506", Severity.ERROR,
     "corrupted library file '{path}': source section truncated (expected {expected} bytes, got {actual})",
     Category.LIBRARY,
-    "The container's sibling of CE3510/CE3511 for the source section that version 4 added "
-    "between the metadata and the bitcode. Three codes rather than one because the registry "
-    "text names which section is short, which is what tells a reader where the file was cut."))
+    "The container's sibling of CE3510 for the source section after the metadata. Two codes "
+    "rather than one because the registry text names which section is short, which is what "
+    "tells a reader where the file was cut."))
 
 # Binary library format errors (.slib)
 _add(ErrorMessage("CE3508", Severity.ERROR,
@@ -61,22 +61,18 @@ _add(ErrorMessage("CE3508", Severity.ERROR,
 
 _add(ErrorMessage("CE3509", Severity.ERROR,
     "unsupported library format version '{version}' in '{path}' (compiler supports version {supported})",
-    Category.LIBRARY, "Library was created with incompatible format version."))
+    Category.LIBRARY, "Library was created with incompatible format version. Version 6 "
+    "removed the bitcode section of version 5, so a library that an older compiler built "
+    "gives this error: build it again with this compiler."))
 
 _add(ErrorMessage("CE3510", Severity.ERROR,
     "corrupted library file '{path}': metadata section truncated (expected {expected} bytes, got {actual})",
     Category.LIBRARY, "Library file is incomplete or corrupted."))
 
-_add(ErrorMessage("CE3511", Severity.ERROR,
-    "corrupted library file '{path}': bitcode section truncated (expected {expected} bytes, got {actual})",
-    Category.LIBRARY, "Library file is incomplete or corrupted."))
-
 _add(ErrorMessage("CE3512", Severity.ERROR,
     "invalid library metadata in '{path}': {reason}",
-    Category.LIBRARY, "MessagePack decoding failed, the metadata schema is invalid, or the "
-    "manifest states a kind that this compiler does not read. The binary kind is retired, "
-    "and this compiler reads only a source library. A library of an older compiler can "
-    "state a removed kind: build it again with this compiler."))
+    Category.LIBRARY, "MessagePack decoding failed, or the metadata does not have the "
+    "shape of a manifest."))
 
 _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",

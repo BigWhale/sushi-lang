@@ -11,7 +11,6 @@ from pathlib import Path
 from sushi_lang.compiler.loader import (
     load_unit_recursively,
 )
-from sushi_lang.backend.library_format import library_kind
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.host import host_key
@@ -338,11 +337,6 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
                 continue
             loaded[name] = _Loaded(version, slib_path, wanted.origin)
             _check_expected(name, loaded[name], wanted)
-            if library_kind(metadata) != "source":
-                raise LibraryError(
-                    "CE3512", path=str(slib_path),
-                    reason="a binary library; this compiler reads only a source library "
-                           "(build the library again)")
             _check_library_compiler_version(metadata, wanted.path,
                                             ignore=ignore_compiler_version)
 
@@ -434,7 +428,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     from sushi_lang.compiler.fingerprint import compute_lib_fingerprint
     from sushi_lang.semantics.unit_reuse import label_library_file
 
-    _metadata, sources = LibraryFormat.read_source_only(slib_path)
+    _metadata, sources = LibraryFormat.read(slib_path)
     digest = compute_lib_fingerprint(slib_path)
     lib_name = metadata.get("library_name") or slib_path.stem
     version = metadata.get("library_version") or "unknown"

@@ -1,0 +1,69 @@
+# Container version 5 had a bitcode section after the source section. Version 6 has
+# no bitcode section, so each of the three readers refuses a version-5 file as
+# BadVersion(5), and does not read its sections. The fixture removes its directory.
+# EXPECT_STDOUT_EXACT: "BadVersion(5) BadVersion(5) BadVersion(5)\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/fs>
+use <toolchain/slib>
+
+const string ROOT = "/tmp/sushi_slib_container_5_is_refused"
+
+fn push_le(poke u8[] out, u64 value, i32 count) ~:
+    foreach(i in 0..count):
+        if (i < 8):
+            out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
+        else:
+            out.push(0)
+
+fn version_5_image() u8[]:
+    let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    push_le(poke out, 5, 4)
+    push_le(poke out, 0, 24)
+    push_le(poke out, 1, 8)
+    out.push(0x80)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 8)
+    return out
+
+fn write_file(string path, peek u8[] bytes) bool:
+    match open(path, FileMode.WriteB()):
+        Result.Ok(nom out) ->
+            out.write_bytes(bytes)
+            out.close()
+            return true
+        Result.Err(_) ->
+            return false
+
+fn fault(SlibError e) string:
+    match e:
+        SlibError.BadVersion(v) -> return "BadVersion({v})"
+        _ -> return "another SlibError"
+
+fn run_test() i32:
+    if (mkdir_all(ROOT, 0o755).is_err()):
+        return 1
+    let string path = "{ROOT}/old.slib"
+    let u8[] image = version_5_image()
+    if (not write_file(path, peek image)):
+        return 1
+    let string a = "Ok"
+    match read_metadata(path):
+        Result.Ok(_) -> a := "Ok"
+        Result.Err(e) -> a := fault(e)
+    let string b = "Ok"
+    match sizes(path):
+        Result.Ok(_) -> b := "Ok"
+        Result.Err(e) -> b := fault(e)
+    let string c = "Ok"
+    match read_library(path):
+        Result.Ok(_) -> c := "Ok"
+        Result.Err(e) -> c := fault(e)
+    println("{a} {b} {c}")
+    remove_all(ROOT)
+    return 0
+
+fn main() i32:
+    remove_all(ROOT)
+    return run_test()

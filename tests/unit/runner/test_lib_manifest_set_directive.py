@@ -1,7 +1,7 @@
 """`LIB_MANIFEST_SET` edits one string field of a built library's manifest, through the real runner.
 
-A fixture must be able to state a binary library that another host built (a foreign
-`platform`). The runner builds the library on this host, then sets the field in the file
+A fixture must be able to state a library that another compiler built (a foreign
+`compiler_version`). The runner builds the library on this host, then sets the field in the file
 with the splice writer of the library-reader gate. The test reads the manifest of the
 file that the consumer then reads, so a directive that the runner parses and ignores
 cannot pass.
@@ -48,18 +48,18 @@ def _record_manifests(monkeypatch) -> list[dict]:
 
 def test_the_directive_parses(tmp_path):
     meta = parse_test_metadata(_fixture(
-        tmp_path, "# BUILD_LIB: dep.sushi\n# LIB_MANIFEST_SET: dep platform=linux_riscv64\n"))
-    assert meta.lib_manifest_sets == [("dep", "platform", "linux_riscv64")]
+        tmp_path, "# BUILD_LIB: dep.sushi\n# LIB_MANIFEST_SET: dep compiler_version=0.0.1\n"))
+    assert meta.lib_manifest_sets == [("dep", "compiler_version", "0.0.1")]
     assert meta.libs_on_the_path
 
 
 def test_the_field_is_set_in_the_file_the_consumer_reads(tmp_path, monkeypatch):
     seen = _record_manifests(monkeypatch)
     result = run_single(_fixture(
-        tmp_path, "# BUILD_LIB: dep.sushi\n# LIB_MANIFEST_SET: dep platform=linux_riscv64\n"
+        tmp_path, "# BUILD_LIB: dep.sushi\n# LIB_MANIFEST_SET: dep compiler_version=0.0.1\n"
         + OUT_1))
     assert result.total_success, detail(result)
-    assert [m["platform"] for m in seen] == ["linux_riscv64"], seen
+    assert [m["compiler_version"] for m in seen] == ["0.0.1"], seen
     assert seen[0]["library_name"] == "dep"
 
 
@@ -67,12 +67,12 @@ def test_control_without_the_directive_the_field_is_the_host_value(tmp_path, mon
     seen = _record_manifests(monkeypatch)
     result = run_single(_fixture(tmp_path, "# BUILD_LIB: dep.sushi\n" + OUT_1))
     assert result.total_success, detail(result)
-    assert [m["platform"] for m in seen] != ["linux_riscv64"], seen
+    assert [m["compiler_version"] for m in seen] != ["0.0.1"], seen
 
 
 def test_a_library_that_no_build_wrote_fails_the_fixture(tmp_path):
     result = run_single(_fixture(
-        tmp_path, "# BUILD_LIB: dep.sushi\n# LIB_MANIFEST_SET: other platform=x\n" + OUT_1))
+        tmp_path, "# BUILD_LIB: dep.sushi\n# LIB_MANIFEST_SET: other compiler_version=x\n" + OUT_1))
     assert not result.total_success
     assert "LIB_MANIFEST_SET names other" in result.compilation_message, detail(result)
 

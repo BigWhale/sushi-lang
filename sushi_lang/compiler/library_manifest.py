@@ -163,7 +163,6 @@ class LibraryManifestGenerator:
                  library_version: str = "0.0.0",
                  source: dict[str, str] | None = None) -> None:
         """Generate .slib library file."""
-        from sushi_lang.internals.host import host_key
         from sushi_lang.internals.version import _get_versions
         from sushi_lang.backend.library_format import LibraryFormat
 
@@ -179,13 +178,11 @@ class LibraryManifestGenerator:
             return
 
         manifest = {
-            "sushi_lib_version": "2.10",
+            "sushi_lib_version": "3.0",
             "library_name": library_name,
             "library_version": library_version,
-            "kind": "source",
             "units": [unit.name for unit in own_units(units)],
             "requires_compiler": _requires_compiler(VERSION),
-            "platform": host_key(),
             "compiler_version": VERSION,
             "public_functions": public_functions,
             "public_constants": self._extract_public_bindings(units, variables=False),
@@ -223,7 +220,7 @@ class LibraryManifestGenerator:
         if unit_docs:
             manifest["unit_docs"] = unit_docs
 
-        LibraryFormat.write(output_path, manifest, b"", source=source)
+        LibraryFormat.write(output_path, manifest, source=source)
 
     def _extract_public_functions(self, units: list['Unit']) -> list[dict]:
         """Extract public function signatures from units."""
@@ -270,10 +267,8 @@ class LibraryManifestGenerator:
 
         `own_units` keeps a bundled stdlib module's declarations out, and an unmarked
         declaration is a decoder detail and not a promise. Each record carries the
-        declaration's SOURCE as well as its type (#487).
+        declaration's type (#487).
         """
-        from sushi_lang.semantics.library_templates import slice_decl_source
-
         constants = self.analyzer.tables.constants
         records = []
         for unit in own_units(units):
@@ -290,7 +285,6 @@ class LibraryManifestGenerator:
                     "name": decl.name,
                     "unit": unit.name,
                     "type": type_string(sig.const_type),
-                    "source": slice_decl_source(decl, self._source(unit)),
                 }
                 records.append(with_doc(record, decl))
         return records
@@ -377,8 +371,6 @@ class LibraryManifestGenerator:
 
     def _extract_templates(self, units: list['Unit']) -> dict:
         """Extract instantiable public generic templates (re-parsable source)."""
-        from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
-
         own = own_units(units)
         referenced_perks: set[str] = set()
         generic_functions, generic_structs, generic_enums = (
@@ -393,7 +385,6 @@ class LibraryManifestGenerator:
             own, shipped_perks | PREDEFINED_PERKS, template_keys)
 
         templates = {
-            "version": TEMPLATES_SCHEMA_VERSION,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,
@@ -426,8 +417,7 @@ class LibraryManifestGenerator:
         for unit in own:
             if unit.ast is None:
                 continue
-            source = self._source(unit)
-            rows: tuple[tuple[list[Any], Callable[[Any, str], dict], list[dict]], ...] = (
+            rows: tuple[tuple[list[Any], Callable[[Any], dict], list[dict]], ...] = (
                 ([f for f in unit.ast.functions if f.is_public and f.type_params],
                  serialize_generic_function, functions),
                 ([s for s in unit.ast.structs if s.type_params],
@@ -437,7 +427,7 @@ class LibraryManifestGenerator:
             )
             for decls, serialize, records in rows:
                 for decl in decls:
-                    record = serialize(decl, source)
+                    record = serialize(decl)
                     record["unit"] = unit.name
                     records.append(record)
                     referenced_perks.update(record.get("free_perks", []))
@@ -451,9 +441,8 @@ class LibraryManifestGenerator:
         for unit in own:
             if unit.ast is None:
                 continue
-            source = self._source(unit)
             for ext in unit.ast.generic_extensions or []:
-                record = serialize_generic_extension(ext, source)
+                record = serialize_generic_extension(ext)
                 record["unit"] = unit.name
                 records.append(record)
         return records
@@ -544,7 +533,7 @@ class LibraryManifestGenerator:
                 template_keys.add((base, impl.perk_name))
                 if self._impl_exposes_ptr(impl):
                     continue
-                record = serialize_generic_perk_impl(impl, self._source(unit))
+                record = serialize_generic_perk_impl(impl)
                 record["unit"] = unit.name
                 records.append(record)
                 referenced_perks.add(impl.perk_name)
@@ -571,7 +560,7 @@ class LibraryManifestGenerator:
                 if not (perk.is_public or perk.name in referenced_perks):
                     continue
                 seen.add(perk.name)
-                record = serialize_perk(perk, self._source(unit))
+                record = serialize_perk(perk)
                 record["unit"] = unit.name
                 perks.append(record)
         return perks, seen
@@ -607,7 +596,7 @@ class LibraryManifestGenerator:
                 if self._impl_exposes_ptr(impl):
                     continue
                 seen.add((type_name, impl.perk_name))
-                record = serialize_perk_impl(impl, self._source(unit))
+                record = serialize_perk_impl(impl)
                 record["unit"] = unit.name
                 records.append(record)
         return records

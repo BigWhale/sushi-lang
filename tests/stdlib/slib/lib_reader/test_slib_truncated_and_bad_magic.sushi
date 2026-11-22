@@ -1,11 +1,10 @@
 # Each reader checks the magic first, and compares each declared length with the size
 # of the file before it reads. A short file with a bad magic is BadMagic, not
-# Truncated. A file cut inside its bitcode is Truncated for read_library, which
-# compares every length; read_metadata reads only what the header declares, and sizes
-# reads the bitcode length without comparing it. A
+# Truncated. A file cut inside its source is Truncated for sizes and read_library, which
+# compare the source length; read_metadata reads only what the header declares. A
 # metadata length past the end of the file is Truncated, and nothing reads that many
 # bytes. The fixture removes its directory.
-# EXPECT_STDOUT_EXACT: "short: BadMagic BadMagic BadMagic\ncut: Ok Ok Truncated(Bitcode, 100, 10)\nlong: Truncated Truncated Truncated(Metadata, 1099511627776, 45)\n"
+# EXPECT_STDOUT_EXACT: "short: BadMagic BadMagic BadMagic\ncut: Ok Truncated Truncated(Source, 100, 10)\nlong: Truncated Truncated Truncated(Metadata, 1099511627776, 37)\n"
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 
@@ -19,21 +18,20 @@ fn push_le(poke u8[] out, u64 value, i32 count) ~:
     foreach(i in 0..count):
         out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
 
-fn image(u64 meta_len, u64 bitcode_len) u8[]:
+fn image(u64 meta_len, u64 source_len) u8[]:
     let u8[] meta = from([0x81])
     meta.push(0xac)
     meta.extend("library_name".to_bytes())
     meta.push(0xa4)
     meta.extend("demo".to_bytes())
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    push_le(poke out, 5, 4)
+    push_le(poke out, 6, 4)
     push_le(poke out, 0, 8)
     push_le(poke out, 0, 8)
     push_le(poke out, 0, 8)
     push_le(poke out, meta_len, 8)
     out.extend(meta)
-    push_le(poke out, 0, 8)
-    push_le(poke out, bitcode_len, 8)
+    push_le(poke out, source_len, 8)
     push_le(poke out, 0, 8)
     push_le(poke out, 0, 2)
     return out
@@ -57,7 +55,6 @@ fn section(SlibSection s) string:
     match s:
         SlibSection.Metadata() -> return "Metadata"
         SlibSection.Source() -> return "Source"
-        SlibSection.Bitcode() -> return "Bitcode"
 
 fn fault(SlibError e) string:
     match e:

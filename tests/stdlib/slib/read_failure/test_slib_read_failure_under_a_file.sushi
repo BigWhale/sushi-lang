@@ -2,7 +2,7 @@
 # I/O error of the open, not a missing file and not a truncated one. The condition
 # holds for root too, where a mode-000 file still opens. The fixture removes its
 # directory.
-# EXPECT_STDOUT_EXACT: "read_metadata: Io(InvalidInput)\nsizes: Io(InvalidInput)\nbitcode_size: Io(InvalidInput)\n"
+# EXPECT_STDOUT_EXACT: "read_metadata: Io(InvalidInput)\nsizes: Io(InvalidInput)\n"
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 
@@ -46,8 +46,5 @@ fn main() i32:
     match sizes(UNDER):
         Result.Ok(_) -> println("sizes: Ok")
         Result.Err(e) -> println("sizes: {show_err(e)}")
-    match bitcode_size(UNDER):
-        Result.Ok(_) -> println("bitcode_size: Ok")
-        Result.Err(e) -> println("bitcode_size: {show_err(e)}")
     remove_all(ROOT)
     return 0

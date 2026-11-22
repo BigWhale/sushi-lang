@@ -717,13 +717,13 @@ def _write_edit(source: Path, case_dir: Path, edit) -> Path:
 # The version before the bare-function change: its signatures without `| E` meant
 # `| StdError`, so a reader must refuse it rather than read it as bare.
 _OLD_CONTAINER = 4
+# The last version with a bitcode section after the source section.
+_BITCODE_CONTAINER = 5
 
 LIB_INFO_CASES = (
     ("a whole library", None, lambda libs, d: libs / "gate_lib.slib"),
     ("no library_name", "CE3512", lambda libs, d: _write_edit(
         libs / "gate_lib.slib", d, _drop("library_name"))),
-    ("no platform", "CE3512", lambda libs, d: _write_edit(
-        libs / "gate_lib.slib", d, _drop("platform"))),
     ("templates is a string", "CE3512", lambda libs, d: _write_edit(
         libs / "gate_lib.slib", d, _put("x", "templates"))),
     ("a function record with no name", "CE3512", lambda libs, d: _write_edit(
@@ -748,8 +748,8 @@ LIB_INFO_CASES = (
         libs / "gate_lib.slib", d / "gate_lib.slib")),
     ("an older container version", "CE3509", lambda libs, d: _write_bytes(
         d / "gate_lib.slib", _container_version(libs / "gate_lib.slib", _OLD_CONTAINER))),
-    ("a hybrid kind", "CE3512", lambda libs, d: _write_edit(
-        libs / "gate_lib.slib", d, _put("hybrid", "kind"))),
+    ("the container with a bitcode section", "CE3509", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _container_version(libs / "gate_lib.slib", _BITCODE_CONTAINER))),
 )
 
 # (case, expected code or None, the edit of the library's manifest). A consumer that
@@ -760,7 +760,6 @@ CONSUMER_CASES = (
      _drop("templates", "generic_functions", 0, "name")),
     ("no library_name", "CE3512", _drop("library_name")),
     ("templates is a string", "CE3512", _put("x", "templates")),
-    ("a hybrid kind", "CE3512", _put("hybrid", "kind")),
 )
 
 
@@ -1179,10 +1178,9 @@ REPORT_LINES = (
     "  fn front(i32[] xs) peek i32[]",
     "  public extend Crate@(T) value_view() peek T",
 )
-# A library whose manifest states no kind: the source library with its `kind` field
-# dropped. A manifest with no kind is a source library, in both halves and in the consumer.
-REPORT_UNSTATED = "unstated"
-REPORT_KINDS = ("source", REPORT_UNSTATED)
+# The prefixes of the lines that neither half may print: the container has no kind and
+# no bitcode section, and the manifest has no platform. A report that exits 0 is checked.
+REPORT_ABSENT = ("Kind:", "Platform:", "Bitcode:")
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer passes `--dont-panic` (D9). It instantiates the two marked templates of
@@ -1239,14 +1237,46 @@ def _check_report_case(case: ReportCase, sushic: str, tmp: Path, cache: str,
                                    f"{case.line!r} (exit {done.returncode})")
 
 
+def _check_report(lib: Path, sushic: str, cache: str, tool_bin: str,
+                  result: ReaderGateResult) -> None:
+    """Read the report of `lib` in both halves, then build and run its consumer."""
+    tmp = lib.parent
+    for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
+                      ("python", {"SUSHI_TOOLCHAIN": "off"})):
+        done = _gate_run([sushic, "--lib-info", str(lib)], tmp, env)
+        lines = done.stdout.splitlines()
+        for expected in REPORT_LINES:
+            result.checks += 1
+            if done.returncode != 0 or expected not in lines:
+                result.failures.append(f"--lib-info ({half}): no line {expected!r} "
+                                       f"(exit {done.returncode})")
+        for prefix in REPORT_ABSENT:
+            result.checks += 1
+            stray = [line for line in lines if line.startswith(prefix)]
+            if done.returncode == 0 and stray:
+                result.failures.append(f"--lib-info ({half}): printed {stray[0]!r}")
+    program = tmp / "main.sushi"
+    program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
+    done = _gate_run([sushic, str(program), "-o", str(tmp / "main"), *REPORT_CONSENT,
+                      "--cache-dir", cache], tmp, {"SUSHI_LIB_PATH": str(tmp)})
+    result.checks += 1
+    if done.returncode != 0:
+        result.failures.append(f"a consumer: exit {done.returncode}: "
+                               f"{done.stderr.strip()[:200]}")
+        return
+    ran = _gate_run([str(tmp / "main")], tmp, {})
+    if ran.stdout != REPORT_CONSUMER_STDOUT:
+        result.failures.append(f"a consumer: printed {ran.stdout!r}")
+
+
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
                          leaks_only: bool = False,
                          fixtures_only: Optional[str] = None) -> ReaderGateResult:
     """Read the `--lib-info` report of one library in both halves, and use the library.
 
-    A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY`, once as it is
-    and once with no `kind` in its manifest, asks both halves for each report and looks
-    for each of `REPORT_LINES`, then compiles and runs a consumer of each that binds both
+    A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY`, asks both
+    halves for its report, looks for each of `REPORT_LINES` and for no line that starts
+    with one of `REPORT_ABSENT`, then compiles and runs a consumer that binds both
     payloads of a variant and calls the conversion of the library through `??`.
     """
     result = ReaderGateResult(title="Library-report gate")
@@ -1260,41 +1290,16 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
         cache = str(tmp / "cache")
         tool_bin = _gate_tool(project_root, tmp, result)
         (tmp / "report_lib.sushi").write_text(_REPORT_LIBRARY, encoding="utf-8")
-        for kind in REPORT_KINDS:
-            kind_dir = tmp / kind
-            kind_dir.mkdir()
-            lib = kind_dir / "report_lib.slib"
-            built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--dont-panic",
-                               str(tmp / "report_lib.sushi"), "-o", str(lib),
-                               "--cache-dir", cache], tmp, {})
-            if built.returncode != 0:
-                result.failures.append(f"the {kind} report library does not build: "
-                                       f"{built.stderr.strip()[:200]}")
-                continue
-            if kind == REPORT_UNSTATED:
-                lib.write_bytes(_edited_slib(lib.read_bytes(), _drop("kind")))
-            for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
-                              ("python", {"SUSHI_TOOLCHAIN": "off"})):
-                done = _gate_run([sushic, "--lib-info", str(lib)], kind_dir, env)
-                lines = done.stdout.splitlines()
-                for expected in REPORT_LINES:
-                    result.checks += 1
-                    if done.returncode != 0 or expected not in lines:
-                        result.failures.append(
-                            f"--lib-info ({half}), {kind}: no line {expected!r} "
-                            f"(exit {done.returncode})")
-            program = kind_dir / "main.sushi"
-            program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
-            done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"), *REPORT_CONSENT,
-                              "--cache-dir", cache], kind_dir, {"SUSHI_LIB_PATH": str(kind_dir)})
-            result.checks += 1
-            if done.returncode != 0:
-                result.failures.append(f"a consumer, {kind}: exit {done.returncode}: "
-                                       f"{done.stderr.strip()[:200]}")
-                continue
-            ran = _gate_run([str(kind_dir / "main")], kind_dir, {})
-            if ran.stdout != REPORT_CONSUMER_STDOUT:
-                result.failures.append(f"a consumer, {kind}: printed {ran.stdout!r}")
+        (tmp / "report").mkdir()
+        lib = tmp / "report" / "report_lib.slib"
+        built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--dont-panic",
+                           str(tmp / "report_lib.sushi"), "-o", str(lib),
+                           "--cache-dir", cache], tmp, {})
+        if built.returncode != 0:
+            result.failures.append(f"the report library does not build: "
+                                   f"{built.stderr.strip()[:200]}")
+        else:
+            _check_report(lib, sushic, cache, tool_bin, result)
         for case in REPORT_EXTRA_CASES:
             _check_report_case(case, sushic, tmp, cache, tool_bin, result)
     result.duration = time.time() - start

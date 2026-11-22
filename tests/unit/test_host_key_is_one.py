@@ -1,8 +1,6 @@
 """The host has one name, `host_key()` (`sushi_lang/internals/host.py`).
 
-The key selects the `<sys/platform>` file and is the platform tag of a `.slib`. A binary
-library compiles that file into its bitcode, so the two must agree. A second place that
-reads the architecture of the host can spell it another way (`aarch64` for `arm64`), and
+A second place that reads the architecture of the host can spell it another way (`aarch64` for `arm64`), and
 then a library built on the host is refused on that host. This scan refuses a read of
 `platform.machine()` anywhere in `sushi_lang/` but `host.py`. It reads the Python source
 only and does not start the compiler.

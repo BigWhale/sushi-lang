@@ -165,7 +165,7 @@ def _type_param_records(node) -> List[dict]:
 def target_bound_records(node) -> List[dict]:
     """The bounds a target writes, for the report alone (#1070).
 
-    The source slice carries the bounds, and a consumer re-parses it. The report reads
+    The source section carries the bounds, and a consumer compiles it. The report reads
     this record, so a reader lists `List@(T: Clone)` without a parser. It is empty when
     no argument has a bound; otherwise it holds each parameter of the target in order.
     """
@@ -176,72 +176,31 @@ def target_bound_records(node) -> List[dict]:
             for param in params]
 
 
-def slice_decl_source(node, source_text: str) -> str:
-    """Slice the full, self-contained source text of one top-level declaration."""
-    loc = getattr(node, "loc", None)
-    name = getattr(node, "name", "<decl>")
-    if loc is None:
-        raise ValueError(
-            f"cannot slice source for '{name}': missing location span"
-        )
-
-    lines = source_text.splitlines(keepends=True)
-    n = len(lines)
-
-    start = loc.line - 1          # 0-based, inclusive
-    # end_line points at the line where the next token begins; the decl's own
-    # content ends on the previous line. Clamp to the file length for the final
-    # declaration (whose end_line can be one past EOF).
-    end = (loc.end_line - 1) if loc.end_line is not None else n
-    if end > n:
-        end = n
-    if end <= start:
-        end = start + 1
-
-    decl_lines = lines[start:end]
-
-    while decl_lines and decl_lines[-1].strip() == "":
-        decl_lines.pop()
-
-    if not decl_lines:
-        raise ValueError(
-            f"cannot slice source for '{name}': empty declaration range"
-        )
-
-    slice_text = "".join(decl_lines)
-    if not slice_text.endswith("\n"):
-        slice_text += "\n"
-    return slice_text
-
-
-def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
+def serialize_generic_function(func: "FuncDef") -> dict:
     """Produce the manifest record for a single public generic function."""
     return with_doc({
         "name": func.name,
         "type_params": _type_param_records(func),
         **signature_record(func),
-        "source": slice_decl_source(func, source_text),
         "free_perks": _free_perks_of(func),
     }, func)
 
 
-def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
+def serialize_generic_struct(struct: "StructDef") -> dict:
     """Produce the manifest record for a single public generic struct."""
     return with_doc({
         "name": struct.name,
         "type_params": _type_param_records(struct),
-        "source": slice_decl_source(struct, source_text),
         "free_perks": _free_perks_of(struct),
     }, struct)
 
 
-def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
+def serialize_generic_enum(enum: "EnumDef") -> dict:
     """Produce the manifest record for a single public generic enum."""
     return with_doc({
         "name": enum.name,
         "is_error": enum.is_error,
         "type_params": _type_param_records(enum),
-        "source": slice_decl_source(enum, source_text),
         "free_perks": _free_perks_of(enum),
     }, enum)
 
@@ -268,7 +227,7 @@ def method_record(method) -> dict:
     return with_doc(record, method)
 
 
-def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
+def serialize_perk_impl(impl: "ExtendWithDef") -> dict:
     """Produce the manifest record for one concrete perk IMPLEMENTATION."""
     from sushi_lang.semantics.passes.collect.perks import perk_type_name
 
@@ -276,25 +235,17 @@ def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
     return with_doc({
         "type": type_name,
         "perk": impl.perk_name,
-        "source": slice_decl_source(impl, source_text),
-        # A concrete copy is in the bitcode, so each method carries the symbol the
-        # consumer declares and links, beside the signature every method record has.
-        "methods": [
-            {**method_record(m), "symbol": impl_method_symbol(type_name, m.name)}
-            for m in impl.methods
-        ],
+        "methods": [method_record(m) for m in impl.methods],
     }, impl)
 
 
-def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
+def serialize_generic_perk_impl(impl: "ExtendWithDef") -> dict:
     """The manifest record for a GENERIC-target perk implementation: a template (#543).
 
-    `extend Box@(T) with Show` names no instantiation, so there is no symbol to declare
-    and link: it ships as source alone, and the consumer cuts one copy per instantiation
-    of `Box` it names, exactly as it does for its own template. `type` is the target's
-    BASE name and `type_args` the parameters as written, so a reader can list it without
-    a parser; `deserialize_perk_impl` reads the source back. An array template
-    (`extend T[] with P`, #699) has the array base and its element parameter.
+    `extend Box@(T) with Show` names no instantiation. `type` is the target's BASE name
+    and `type_args` the parameters as written, so a reader can list it without a parser.
+    An array template (`extend T[] with P`, #699) has the array base and its element
+    parameter.
     """
     from sushi_lang.semantics.passes.collect.perks import covering_base
     from sushi_lang.semantics.typesys import DynamicArrayType
@@ -306,9 +257,8 @@ def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict
         "type_args": [str(a) for a in type_args],
         "target_bounds": target_bound_records(impl),
         "perk": impl.perk_name,
-        "source": slice_decl_source(impl, source_text),
-        # No symbol: there is no copy to link. The signatures are written in the
-        # target's type parameters, exactly as the template's source spells them.
+        # The signatures are written in the target's type parameters, as the
+        # template's source spells them.
         "methods": [method_record(m) for m in impl.methods],
     }, impl)
 
@@ -330,10 +280,7 @@ def method_receiver_record(record: dict, method) -> dict:
 def serialize_extension(ext: "ExtendDef") -> dict:
     """The manifest record of one CONCRETE extension method: its target and signature.
 
-    The body is in the bitcode, so the record carries no source. The consumer builds
-    the method from the signature and declares the symbol that the library defines.
-    `public` is the marker: the consumer applies R4 to R6 of
-    `docs/design/extension-visibility.md` to the record and to the unit it names.
+    `public` is the marker that R4 to R6 of `docs/design/extension-visibility.md` read.
     """
     return with_doc(method_receiver_record({
         "type": type_string(ext.target_type),
@@ -343,25 +290,19 @@ def serialize_extension(ext: "ExtendDef") -> dict:
     }, ext), ext)
 
 
-def serialize_generic_extension(ext: "ExtendDef", source_text: str) -> dict:
-    """The manifest record of one extension TEMPLATE: the record, and its source.
+def serialize_generic_extension(ext: "ExtendDef") -> dict:
+    """The manifest record of one extension TEMPLATE: the record, and its type parameters.
 
     A generic target (`Box@(T)`, `Box@(i32)`), an array target (`T[]`) and a method
-    type parameter (`pick@(U)`) all name no single instance, so the consumer re-parses
-    the source and cuts a copy at each call that reaches it, as for its own template.
+    type parameter (`pick@(U)`) all name no single instance.
     """
     record = serialize_extension(ext)
     record["type_params"] = _type_param_records(ext)
     record["target_bounds"] = target_bound_records(ext)
-    record["source"] = slice_decl_source(ext, source_text)
     return record
 
 
-# Every list of a `Program` that holds a declaration. A record's source is the slice of
-# ONE declaration, so it holds exactly one entry over all of them.
-
-
-def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
+def serialize_perk(perk: "PerkDef") -> dict:
     """Produce the manifest record for a single perk DEFINITION (the contract).
 
     The methods travel as records (#537): a contract is what a consumer can be asked to
@@ -369,6 +310,5 @@ def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
     """
     return with_doc({
         "name": perk.name,
-        "source": slice_decl_source(perk, source_text),
         "methods": [method_record(m) for m in perk.methods],
     }, perk)

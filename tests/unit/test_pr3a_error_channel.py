@@ -26,7 +26,7 @@ def test_no_bare_except_in_sushi_lang():
     assert not offenders, f"bare `except:` found (narrow it): {offenders}"
 
 
-# CE3510 / CE3511 -- truncation, raised with a LITERAL code so the gate sees it
+# CE3510 -- truncation, raised with a LITERAL code so the gate sees it
 
 def test_truncated_metadata_section_is_ce3510():
     from sushi_lang.backend.library_errors import LibraryError
@@ -36,16 +36,6 @@ def test_truncated_metadata_section_is_ce3510():
     with pytest.raises(LibraryError) as exc:
         _read_bytes(stream, 100, "lib.slib", "metadata")
     assert exc.value.code == "CE3510"
-
-
-def test_truncated_bitcode_section_is_ce3511():
-    from sushi_lang.backend.library_errors import LibraryError
-    from sushi_lang.backend.library_format import _read_bytes
-
-    stream = io.BytesIO(b"short")
-    with pytest.raises(LibraryError) as exc:
-        _read_bytes(stream, 100, "lib.slib", "bitcode")
-    assert exc.value.code == "CE3511"
 
 
 def test_library_error_renders_through_the_reporter_path():

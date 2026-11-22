@@ -1583,54 +1583,31 @@ fn group_thousands(u64 n) string:
     return "{hs},{tail}"
 
 ##:
-Prints the whole report: the header, the sections, then the payload sizes.
-
-A field that the kind of the library makes meaningless does not print.
+Prints the whole report: the header, the sections, then the source size.
 
 - Parameter meta: The metadata map.
-- Parameter sizes: The lengths of the payload sections.
+- Parameter sizes: The length of the source section.
 - Parameter o: The options of the run.
 :##
 fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string libname = get_str(meta, "library_name")
     let string libver = get_str(meta, "library_version")
-    let string kind = library_kind(meta).realise("source")
-    let string plat = get_str(meta, "platform")
     let string comp = get_str(meta, "compiler_version")
-    let string digest = get_str(meta, "compiler_digest")
-    let string layout = get_str(meta, "data_layout")
     let string req = get_str(meta, "requires_compiler")
-    let string ovf = get_str(meta, "overflow")
     let string proto = get_str(meta, "sushi_lib_version")
-    let string links = join_at(meta, "link_libraries", ", ")
     println("Library: {libname}")
     println("Version: {libver}")
-    println("Kind: {kind}")
-    if (kind != "source"):
-        println("Platform: {plat}")
-    if (ovf != ""):
-        println("Overflow: {ovf}")
     println("Compiler: {comp}")
-    if (digest != ""):
-        println("Compiler digest: {digest}")
-    if (layout != ""):
-        println("Data layout: {layout}")
     if (req != ""):
         println("Requires compiler: {req}")
-    if (links != ""):
-        println("Links: {links}")
     println("Protocol: {proto}")
     println("")
     print_units(meta, o)
     print_reexports(meta, o)
     print_declarations_at(meta, o)
     print_dependencies(meta, o)
-    if (kind == "source"):
-        let string src = group_thousands(sizes.source)
-        println("Source: {o.dim}{src}{o.reset} bytes")
-    else:
-        let string bc = group_thousands(sizes.bitcode)
-        println("Bitcode: {o.dim}{bc}{o.reset} bytes")
+    let string src = group_thousands(sizes.source)
+    println("Source: {o.dim}{src}{o.reset} bytes")
 
 ##:
 Gives the words for an I/O error. The Python fallback gives the same words.
@@ -1675,7 +1652,7 @@ fn print_fault(string path, SlibError e) ~:
         SlibError.BadMagic() ->
             print_diagnostic("CE3508", "invalid library file '{path}': not a valid .slib file (bad magic)")
         SlibError.BadVersion(v) ->
-            print_diagnostic("CE3509", "unsupported library format version '{v}' in '{path}' (compiler supports version 4)")
+            print_diagnostic("CE3509", "unsupported library format version '{v}' in '{path}' (compiler supports version 6)")
         SlibError.Truncated(section, expected, actual) ->
             let string counts = "(expected {expected} bytes, got {actual})"
             match section:
@@ -1683,8 +1660,6 @@ fn print_fault(string path, SlibError e) ~:
                     print_diagnostic("CE3510", "corrupted library file '{path}': metadata section truncated {counts}")
                 SlibSection.Source() ->
                     print_diagnostic("CE3506", "corrupted library file '{path}': source section truncated {counts}")
-                SlibSection.Bitcode() ->
-                    print_diagnostic("CE3511", "corrupted library file '{path}': bitcode section truncated {counts}")
         SlibError.TooLarge(size) ->
             print_diagnostic("CE3513", "library file too large '{path}': {size} bytes exceeds maximum {SLIB_MAX_FILE_SIZE} bytes")
         SlibError.Decode(_) ->

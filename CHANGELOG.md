@@ -178,14 +178,17 @@ All notable changes to Sushi Lang will be documented in this file.
 
 - **The binary `.slib` kind and `--lib-kind`.** A `.slib` is now always a source library:
   it holds the source text of the library and a manifest index, and the consumer compiles
-  the text. `--lib` builds a source library, and `--lib-kind` is an unknown flag. A
-  consumer refuses a `.slib` whose manifest states `kind: binary` with CE3512: build the
-  library again. The `libraries` semantic pass, the bitcode link of a library, the export
-  closure and the `libs/` part of the object cache are removed. The manifest has no
-  `compiler_digest`, `data_layout`, `link_libraries`, `overflow` and `not_exported` fields
-  now, and `--lib-info` prints no `Kind`, `Platform`, `Overflow`, `Compiler digest`,
+  the text. `--lib` builds a source library, and `--lib-kind` is an unknown flag. The
+  container (version 6) has no bitcode section and no kind field now, so a `.slib` of an
+  older compiler gives CE3509: build the library again. The `libraries` semantic pass, the bitcode link of a library, the export
+  closure and the `libs/` part of the object cache are removed. The manifest (protocol
+  3.0) has no `kind`, `platform`, `compiler_digest`, `data_layout`, `link_libraries`,
+  `overflow`, `not_exported` and `templates.version` fields now, and no record carries a
+  `source` slice. `--lib-info` prints no `Kind`, `Platform`, `Overflow`, `Compiler digest`,
   `Data layout`, `Links` and `Bitcode` lines. The codes CE0116, CE3504, CE3507, CE3520,
-  CE5006, CE5007 and CW3506 are deleted. The test runner has no `BUILD_LIB_BINARY`
+  CE3511, CE5006, CE5007 and CW3506 are deleted. `<toolchain/slib>` has no
+  `bitcode_size`, no `SlibSection.Bitcode` and no `library_kind` now, and `SlibSizes` has
+  only the `source` field. The test runner has no `BUILD_LIB_BINARY`
   directive now. A source library with unit reuse builds as fast as a binary library did.
   BREAKING.
 
