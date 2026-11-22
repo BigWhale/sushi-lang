@@ -449,7 +449,7 @@ def _constructed_type(lw: BodyLowerer, found: Optional[bd.Resolution]) -> Option
     if isinstance(found, bd.TypeName):
         return found.name
     if (isinstance(found, bd.Function) and lw.lookup is not None
-            and lw.lookup.constructs_struct(lw.bindings.body, found.name)):
+            and lw.lookup.constructs_struct(found.name)):
         return found.name
     return None
 

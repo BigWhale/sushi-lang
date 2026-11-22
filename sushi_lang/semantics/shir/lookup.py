@@ -113,12 +113,11 @@ class DeclLookup:
         struct = self.structs.get(type_name) or self.generic_structs.get(type_name)
         return None if struct is None else tuple(name for name, _ty in struct.fields)
 
-    def constructs_struct(self, _body: object, name: str) -> bool:
+    def constructs_struct(self, name: str) -> bool:
         """True when the bare call `name(...)` constructs the struct `name`: a struct or a
         generic struct of the name, no concrete function of the unit, and no generic
         function in the scope of the unit, its own or an imported one. The rungs are those
-        of the call ladder of the typecheck pass, in its order (#1076). Every body of the
-        unit resolves in the scope of the unit, so `_body` changes nothing."""
+        of the call ladder of the typecheck pass, in its order (#1076)."""
         table = self.namespaces.get(self.unit)
         scope = None if table is None else table.scope
         if self.generic_funcs.lookup(name, self.unit, scope) is not None:
