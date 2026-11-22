@@ -1315,39 +1315,56 @@ def _check_no_links_line(sushic: str, tmp: Path, cache: str, tool_bin: str,
                                    f"prints a Links line")
 
 
+@dataclass(frozen=True)
+class ReportCase:
+    """One extra library of the report gate, and the whole line both halves must print.
+
+    `name` names the directory and the failures; `kind` is the `--lib-kind` of the build.
+    """
+    name: str
+    kind: str
+    library: str
+    line: str
+
+
+# The extra report cases. Each is a POSITIVE check, so a tool that prints no report fails
+# each one time (the runner test derives its count from this table). A negative check,
+# such as "no `Links:` line" (`_check_no_links_line`), is not a row here: a silent tool
+# does not fail it.
+#
 # A source library with a public native variadic function (`...T`). A binary library refuses
-# one (CE0116), so it is not in `_REPORT_LIBRARY`, which is built in every kind. Both halves
-# print the parameter as it is written.
-_REPORT_VARIADIC_LIBRARY = """\
-public fn total(string label, ...i32 nums) i32:
-    println(label)
-    return nums.len() as i32
-"""
-REPORT_VARIADIC_LINE = "  fn total(string label, ...i32 nums) i32"
+# one (CE0116), so it is not in `_REPORT_LIBRARY`, which is built in every kind.
+REPORT_EXTRA_CASES = (
+    ReportCase(name="variadic", kind="source",
+               library=("public fn total(string label, ...i32 nums) i32:\n"
+                        "    println(label)\n"
+                        "    return nums.len() as i32\n"),
+               line="  fn total(string label, ...i32 nums) i32"),
+)
 
 
-def _check_variadic_line(sushic: str, tmp: Path, cache: str, tool_bin: str,
-                         result: ReaderGateResult) -> None:
-    """A source library with a `...T` function: both halves print the `...` of it."""
-    var_dir = tmp / "variadic"
-    var_dir.mkdir()
-    (var_dir / "var_lib.sushi").write_text(_REPORT_VARIADIC_LIBRARY, encoding="utf-8")
-    lib = var_dir / "var_lib.slib"
-    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", "source",
-                       str(var_dir / "var_lib.sushi"), "-o", str(lib),
-                       "--cache-dir", cache], var_dir, {})
+def _check_report_case(case: ReportCase, sushic: str, tmp: Path, cache: str,
+                       tool_bin: str, result: ReaderGateResult) -> None:
+    """Build the library of one extra case; both halves must print its line."""
+    case_dir = tmp / f"case_{case.name}"
+    case_dir.mkdir()
+    source = case_dir / f"{case.name}_lib.sushi"
+    source.write_text(case.library, encoding="utf-8")
+    lib = case_dir / f"{case.name}_lib.slib"
+    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", case.kind,
+                       str(source), "-o", str(lib), "--cache-dir", cache], case_dir, {})
     result.checks += 1
     if built.returncode != 0:
-        result.failures.append(f"the variadic library does not build: "
+        result.failures.append(f"the {case.name} library does not build: "
                                f"{built.stderr.strip()[:200]}")
         return
     for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
                       ("python", {"SUSHI_TOOLCHAIN": "off"})):
-        done = _gate_run([sushic, "--lib-info", str(lib)], var_dir, env)
+        done = _gate_run([sushic, "--lib-info", str(lib)], case_dir, env)
         result.checks += 1
-        if done.returncode != 0 or REPORT_VARIADIC_LINE not in done.stdout.splitlines():
-            result.failures.append(f"--lib-info ({half}), variadic: no line "
-                                   f"{REPORT_VARIADIC_LINE!r} (exit {done.returncode})")
+        if done.returncode != 0 or case.line not in done.stdout.splitlines():
+            result.failures.append(f"--lib-info ({half}), {case.name}: no line "
+                                   f"{case.line!r} (exit {done.returncode})")
 
 
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
@@ -1420,7 +1437,8 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             if ran.stdout != REPORT_CONSUMER_STDOUT:
                 result.failures.append(f"a consumer, {kind}: printed {ran.stdout!r}")
         _check_no_links_line(sushic, tmp, cache, tool_bin, result)
-        _check_variadic_line(sushic, tmp, cache, tool_bin, result)
+        for case in REPORT_EXTRA_CASES:
+            _check_report_case(case, sushic, tmp, cache, tool_bin, result)
     result.duration = time.time() - start
     return result
 
