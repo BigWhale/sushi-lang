@@ -170,6 +170,10 @@ above the first member, so one `pending` flag covers the owner and its members.
 The report ends with the size of the source section, `Source: N bytes`. `group_thousands` writes a size with comma
 separators, as the Python `{n:,}` does.
 
+The container has no bitcode section, and the manifest has no kind and no platform. Thus
+the report prints no `Kind:`, `Platform:` or `Bitcode:` line, and the library-report gate
+refuses each of them in both halves (`REPORT_ABSENT`, `tests/run_tests.py`).
+
 ## 12. The command line and the colour decision
 
 `run_tool` reads the command line in one pass. A flag is a flag in each position, and the

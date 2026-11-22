@@ -562,7 +562,7 @@ def print_library_info(library_path: Path, show_docs: bool = False,
 
     if library_path.suffix != '.slib':
         raise LibraryError("CE3516", path=str(library_path))
-    metadata, source_size, _bitcode_size = LibraryFormat.read_section_sizes(library_path)
+    metadata, source_size = LibraryFormat.read_source_size(library_path)
     check_manifest(metadata, str(library_path))
 
     requires = metadata.get('requires_compiler', '')

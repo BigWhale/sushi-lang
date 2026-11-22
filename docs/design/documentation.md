@@ -799,21 +799,15 @@ One record deliberately does **not** carry the key:
   map, keyed by name. A parameter is not a symbol; it is part of one.
 
 The per-method record inside `serialize_perk_impl` carries a `doc` key too (**R3**), so a
-documented perk method survives the boundary. A perk DEFINITION has no
-methods array, so its methods' blocks travel only inside the source slice.
+documented perk method survives the boundary. A perk definition record carries a
+`methods` array too, built by `method_record`, so its methods' blocks travel the same way.
 
-### A generic's doc block does not travel for free
+### A generic's doc block travels in its record
 
-`slice_decl_source` takes `[loc.line, loc.end_line)`, and §4 keeps a doc block a **sibling**
-of its declaration rather than a child, precisely so that it does not move `loc`. The two
-facts compose: the slice starts at the declaration keyword, so the doc block is outside it.
-A generic's docs are lost unless the record carries them.
-
-State it as an invariant in both directions. The slice excludes the block; the record carries
-it. And the consumer's re-parse — `LibraryRegistration._collect_snippet` runs `parse_to_ast` over
-the slice — must tolerate a doc block should one ever land inside a
-slice, because a grammar that refused one there would turn a slicing bug into a parse failure
-at the consumer.
+The manifest carries no source slice of a declaration: the source section holds whole
+units, and `--lib-info` reads the records alone. So the record of a generic is the one
+place in the index that holds its doc block, and every serializer adds it through
+`with_doc`.
 
 ### Unit docs
 

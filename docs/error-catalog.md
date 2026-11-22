@@ -2843,7 +2843,7 @@ A .slib records `library_version`. The value comes from `[package] version` in t
 
 **Message:** `corrupted library file '{path}': source section truncated (expected {expected} bytes, got {actual})`
 
-The container's sibling of [CE3510](#ce3510)/[CE3511](#ce3511) for the source section between the metadata and the bitcode. Each of the three codes names the section that is short, so it tells a reader where the file was cut.
+The container's sibling of [CE3510](#ce3510) for the source section after the metadata. Each of the two codes names the section that is short, so it tells a reader where the file was cut.
 
 ### CE3508 {#ce3508}
 
@@ -2859,7 +2859,7 @@ File does not start with SUSHILIB magic bytes.
 
 **Message:** `unsupported library format version '{version}' in '{path}' (compiler supports version {supported})`
 
-Library was created with incompatible format version.
+Library was created with incompatible format version. Version 6 removed the bitcode section of version 5, so a library that an older compiler built gives this error: build it again with this compiler.
 
 ### CE3510 {#ce3510}
 
@@ -2869,21 +2869,13 @@ Library was created with incompatible format version.
 
 Library file is incomplete or corrupted.
 
-### CE3511 {#ce3511}
-
-**Error** · library
-
-**Message:** `corrupted library file '{path}': bitcode section truncated (expected {expected} bytes, got {actual})`
-
-Library file is incomplete or corrupted.
-
 ### CE3512 {#ce3512}
 
 **Error** · library
 
 **Message:** `invalid library metadata in '{path}': {reason}`
 
-MessagePack decoding failed, the metadata schema is invalid, or the manifest states a kind that this compiler does not read. The binary kind is retired, and this compiler reads only a source library. A library of an older compiler can state a removed kind: build it again with this compiler.
+MessagePack decoding failed, or the metadata does not have the shape of a manifest.
 
 ### CE3513 {#ce3513}
 

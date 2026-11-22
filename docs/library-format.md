@@ -27,11 +27,11 @@ works on every platform; the consumer compiles its units and caches the objects.
 │ MAGIC (16 bytes): 🍣SUSHILIB🍣 (UTF-8)                      │
 │   0xF0 0x9F 0x8D 0xA3 "SUSHILIB" 0xF0 0x9F 0x8D 0xA3        │
 ├─────────────────────────────────────────────────────────────┤
-│ VERSION (4 bytes): uint32 LE (current: 5)                   │
+│ VERSION (4 bytes): uint32 LE (current: 6)                   │
 ├─────────────────────────────────────────────────────────────┤
 │ FLAGS (4 bytes): uint32 LE (bit 0: source blob compressed)  │
 ├─────────────────────────────────────────────────────────────┤
-│ KIND (4 bytes): uint32 LE (1 source)                        │
+│ SPARE_2 (4 bytes): uint32 LE (reserved, must be 0)          │
 ├─────────────────────────────────────────────────────────────┤
 │ SPARE_3 (8 bytes): uint64 LE (reserved, must be 0)          │
 ├─────────────────────────────────────────────────────────────┤
@@ -44,10 +44,6 @@ works on every platform; the consumer compiles its units and caches the objects.
 │ SOURCE_LENGTH (8 bytes): uint64 LE                          │
 ├─────────────────────────────────────────────────────────────┤
 │ SOURCE_BLOB (S bytes): MessagePack map, unit name -> source │
-├─────────────────────────────────────────────────────────────┤
-│ BITCODE_LENGTH (8 bytes): uint64 LE                         │
-├─────────────────────────────────────────────────────────────┤
-│ BITCODE_BLOB (M bytes): empty                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,7 +51,7 @@ works on every platform; the consumer compiles its units and caches the objects.
 
 **Endianness:** Little-endian (matches x86-64/ARM64 targets)
 
-`BITCODE_LENGTH` is always zero: the bitcode section is empty.
+The source section is the last section. Nothing follows it.
 
 ## Field Details
 
@@ -73,12 +69,15 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 
 ### Version
 
-4-byte unsigned integer (little-endian). Current version: `5`.
+4-byte unsigned integer (little-endian). Current version: `6`.
 
-Used for forward compatibility checks. A reader accepts version 5 only; anything else is
+Used for forward compatibility checks. A reader accepts version 6 only; anything else is
 **[CE3509](error-catalog.md#ce3509)**. There is no upgrade shim, and none is planned: Sushi has no users in the wild,
 so a file of another version is rejected rather than read with a guess. Rebuild the
 library.
+
+Version 6 removed the bitcode section and the kind field of version 5. A library that an
+older compiler built is therefore CE3509.
 
 ### Flags
 
@@ -89,19 +88,11 @@ today. Nori archives are already `tar.gz`, so distribution is compressed regardl
 self-hosted reader would need an inflate written in Sushi. The metadata blob is never
 compressed whatever happens: it is the index, and every reader must take it cheaply.
 
-### Kind
-
-4-byte unsigned integer. A library writes `1`, the source kind. The manifest repeats the
-value as the `kind` string, so a reader can branch on the header before it unpacks any
-MessagePack. The `kind` string is optional: a manifest with no `kind` is a source library.
-A manifest that states another kind is refused by every reader with
-[CE3512](error-catalog.md#ce3512). This includes `binary` and `hybrid` from an older
-compiler, which are retired kinds. Build the library again.
-
 ### Reserved Fields
 
-16 bytes of reserved space (SPARE_3 and SPARE_4) for future extensions, such as checksums
-or additional section offsets. Both must be zero in version 5.
+20 bytes of reserved space (SPARE_2, SPARE_3 and SPARE_4) for future extensions, such as
+checksums or additional section offsets. A writer writes zeros, and a reader does not
+check them. SPARE_2 was the KIND field before version 6.
 
 ### Metadata Section
 
@@ -117,12 +108,6 @@ with the rest.
 
 **Preceded by:** 8-byte length field (uint64 LE)
 
-### Bitcode Section
-
-The bitcode section is empty. Its 8-byte length field is zero.
-
-**Preceded by:** 8-byte length field (uint64 LE)
-
 ## Metadata Schema
 
 The manifest is an **index, not the authority**. Everything a library contains must be
@@ -134,10 +119,9 @@ section. `--lib-info` reads the other keys.
 
 ```python
 {
-    "sushi_lib_version": "2.10",       # Protocol version
+    "sushi_lib_version": "3.0",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
-    "kind": str,                       # "source", matching KIND; no kind is source
     "units": [str],                    # Unit names present in the source section
                                        #   The library's OWN units, and every index
                                        #   below reads the same filter: a
@@ -149,9 +133,6 @@ section. `--lib-info` reads the other keys.
                                        #   build must load, not what this library
                                        #   declares.
     "requires_compiler": str,          # Compiler constraint, e.g. "~0.11" ("" if unknown)
-    "platform": str,                   # The host key <os>_<arch> of the machine that
-                                       #   built the file: "darwin_arm64",
-                                       #   "linux_x86_64". No reader checks it
     "compiler_version": str,           # Exactly which compiler built the file
 
     # The three lists below carry only CONCRETE declarations that the library MARKS
@@ -184,13 +165,13 @@ section. `--lib-info` reads the other keys.
 
     # A SIGNATURE is four keys, built by one function (`signature_record`) so the
     # concrete record and the generic record cannot drift apart.
-    # `has_channel` is REQUIRED on every function, helper and method record (templates
-    # schema 8): a reader never guesses a channel from an absent key. It is true when
+    # `has_channel` is REQUIRED on every function, helper and method record: a reader
+    # never guesses a channel from an absent key. It is true when
     # the declaration writes `| E` or returns an explicit `Result@(T, E)`, and false
     # when the callable is bare (`docs/design/error-channel.md`). There is no default
     # error type. `error_type` is present only when the declaration writes `| E`; an
     # explicit `Result@(T, E)` return carries its arms in `return_type`. `return_mode`
-    # is present only for a borrowed return, `peek T` (templates schema 11, #1229):
+    # is present only for a borrowed return, `peek T` (#1229):
     # `return_type` holds `T`, and the consumer reads the source set from the
     # parameters (`docs/design/borrow-model.md` section 10h).
     #
@@ -199,7 +180,7 @@ section. `--lib-info` reads the other keys.
     #                   "is_pack": bool,    # Present (true) for `...Ts args` alone
     #                   "variadic": bool}], # Present (true) for a native `...T` alone;
     #                                       #   `type` is then `T`, not the `T[]` of the
-    #                                       #   body. Since protocol 2.10
+    #                                       #   body
     #       "return_type": str,
     #       "has_channel": bool,       # Required: does a call answer a Result
     #       "error_type": str,         # If the declaration says `| E`
@@ -223,7 +204,6 @@ section. `--lib-info` reads the other keys.
             "name": str,
             "unit": str,               # The unit that declared it
             "type": str,
-            "source": str,             # The whole `public const ...` declaration
             "doc": DOC                 # If documented
         }
     ],
@@ -235,7 +215,6 @@ section. `--lib-info` reads the other keys.
             "name": str,
             "unit": str,
             "type": str,
-            "source": str,             # The whole `public var ...` declaration
             "doc": DOC                 # If documented
         }
     ],
@@ -354,15 +333,9 @@ section. `--lib-info` reads the other keys.
     ],
 
     # A library ships whole units, so a generic in it is already there as ordinary
-    # source -- but the index must answer without a parser, and a template's own doc
-    # block stands OUTSIDE its source slice, so the record is the only place it can
-    # travel.
+    # source -- but the index must answer without a parser.
     "templates": {                     # Instantiable cross-library templates
-        "version": 11,                 # Templates schema version. The one
-                                       #   constant is `TEMPLATES_SCHEMA_VERSION`
-                                       #   in `backend/library_format.py`
-
-        # Public generic functions (incl. variadic packs), as source slices.
+        # Public generic functions (incl. variadic packs).
         "generic_functions": [
             {
                 "name": str,
@@ -370,7 +343,6 @@ section. `--lib-info` reads the other keys.
                 "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
                 **SIG,                 # A template's signature, so its `- Parameter`
                                        #   tags name something a report can print
-                "source": str,         # Self-contained, re-parsable decl text
                 "free_perks": [str],   # Perk names from type-param bounds
                 "doc": DOC             # If documented
             }
@@ -395,37 +367,33 @@ section. `--lib-info` reads the other keys.
         #       "doc": DOC             # If documented
         #   }
         "perks": [
-            {"name": str, "unit": str, "source": str, "methods": [METHOD], "doc": DOC}
+            {"name": str, "unit": str, "methods": [METHOD], "doc": DOC}
         ],
 
         # Concrete perk IMPLEMENTATIONS of those perks, and of every predefined
         # perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`). The record carries the
-        # source and the signature of each method, with the symbol of the method.
+        # signature of each method.
         "perk_impls": [
             {
                 "type": str,           # Concrete target type name
                 "perk": str,
                 "unit": str,           # The unit that declared it
-                "source": str,         # The whole `extend T with P:` block
-                "methods": [{**METHOD, "symbol": str}],
+                "methods": [METHOD],
                 "doc": DOC             # If documented
             }
         ],
 
         # Generic-target perk IMPLEMENTATIONS: `extend Box@(T) with Show`
-        # is a TEMPLATE. It names no instantiation, so there is no symbol: it ships as
-        # source alone, and the consumer cuts one copy per instantiation of `Box` it
-        # names, exactly as for its own template. The
-        # library's monomorphized copies are NOT in `perk_impls` -- a copy's source
-        # slice is the template's, and shipping it re-parsed to `Box@(T)`.
+        # is a TEMPLATE. It names no instantiation, and the consumer cuts one copy per
+        # instantiation of `Box` it names, exactly as for its own template. The
+        # library's monomorphized copies are NOT in `perk_impls`.
         "generic_perk_impls": [
             {
                 "type": str,           # The target's BASE name: "Box"
                 "type_args": [str],    # The target's parameters as written: ["T"]
                 "perk": str,
                 "unit": str,           # The unit that declared it
-                "source": str,         # The whole `extend Box@(T) with P:` block
-                "methods": [METHOD],   # Written in the target's parameters; no symbol
+                "methods": [METHOD],   # Written in the target's parameters
                 "doc": DOC             # If documented
             }
         ],
@@ -454,16 +422,14 @@ section. `--lib-info` reads the other keys.
 
         # Extension TEMPLATES: a generic target (`Box@(T)`), a concrete-instance target
         # (`Box@(i32)`), an array target (`T[]`) and a method type parameter
-        # (`pick@(U)`). A template names no instance, so it ships as source, and the
-        # consumer makes one copy for each instance and method that a call reaches. Its
+        # (`pick@(U)`). A template names no instance, and the consumer makes one copy for each instance and method that a call reaches. Its
         # body may call a private function of the library. The whole key is absent when
         # there is no record.
         "generic_extensions": [
             {
                 **EXTENSION,
-                "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
+                "type_params": [{"name": str, "constraints": [str], "is_pack": bool}]
                                        # The method's own type parameters
-                "source": str          # The whole `extend ...` declaration
             }
         ]
     }
@@ -495,10 +461,9 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | [CE3505](error-catalog.md#ce3505) | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | [CE3506](error-catalog.md#ce3506) | Source section truncated |
 | [CE3508](error-catalog.md#ce3508) | Invalid magic bytes (not a valid `.slib` file) |
-| [CE3509](error-catalog.md#ce3509) | Unsupported format version (a container other than version 5) |
+| [CE3509](error-catalog.md#ce3509) | Unsupported format version (a container other than version 6) |
 | [CE3510](error-catalog.md#ce3510) | Metadata section truncated |
-| [CE3511](error-catalog.md#ce3511) | Bitcode section truncated |
-| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type (`MANIFEST_SCHEMA`), a variant with `has_data` has no `data_types`, a function or method record has no `has_channel`, a `kind` that is not `source` (`unknown library kind '<kind>'`), or the retired `binary` kind (`a binary library; this compiler reads only a source library (build the library again)`) |
+| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type (`MANIFEST_SCHEMA`), a variant with `has_data` has no `data_types`, or a function or method record has no `has_channel` |
 | [CE3513](error-catalog.md#ce3513) | File exceeds maximum size (1GB) |
 | [CE3515](error-catalog.md#ce3515) | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
@@ -524,7 +489,7 @@ Library: mylib
 Version: 1.0.0
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.10
+Protocol: 3.0
 
 Units (1):
   mylib
@@ -573,35 +538,32 @@ open or of a read is [CE3515](error-catalog.md#ce3515).
 1. Read and validate the 16-byte magic ([CE3508](error-catalog.md#ce3508))
 2. Refuse a file larger than 1 GiB ([CE3513](error-catalog.md#ce3513)), before any section is read
 3. Read the 4-byte version, reject it if unsupported ([CE3509](error-catalog.md#ce3509))
-4. Read the 4-byte flags and 4-byte kind, skip 16 bytes of reserved fields
+4. Read the 4-byte flags, skip 20 bytes of reserved fields
 5. Read the 8-byte metadata length
 6. Read the metadata blob, deserialize it with MessagePack ([CE3512](error-catalog.md#ce3512))
 7. Read the 8-byte source length
 8. Read the source blob, deserialize it with MessagePack
-9. Read the 8-byte bitcode length (zero)
 
 After the read, the consumer and `--lib-info` check the manifest against `MANIFEST_SCHEMA`
 (`check_manifest`, [CE3512](error-catalog.md#ce3512)).
 
 Each declared section length is checked against the bytes that are left in the file BEFORE the
-read. A length that is too long is a truncation: [CE3510](error-catalog.md#ce3510) (metadata), [CE3506](error-catalog.md#ce3506) (source) or [CE3511](error-catalog.md#ce3511)
-(bitcode).
+read. A length that is too long is a truncation: [CE3510](error-catalog.md#ce3510) (metadata) or [CE3506](error-catalog.md#ce3506) (source).
 
-A reader that wants only part of this stops early: `read_metadata_only` stops after step 6,
-`read_source_only` after step 8, and `read_section_sizes` reports both payload lengths
-without keeping either blob.
+`read` does every step. A reader that wants only part of this stops early:
+`read_metadata_only` stops after step 6, and `read_source_size` reports the source length
+after step 7 without keeping the blob.
 
 ### Writing
 
 1. Write 16-byte magic
-2. Write 4-byte version (5)
-3. Write 4-byte flags (0), then 4-byte kind
-4. Write 16 bytes of zeros (reserved)
+2. Write 4-byte version (6)
+3. Write 4-byte flags (0)
+4. Write 20 bytes of zeros (reserved)
 5. Serialize metadata to MessagePack
 6. Write 8-byte metadata length, then the metadata blob
 7. Serialize the unit source map to MessagePack
 8. Write 8-byte source length, then the source blob
-9. Write 8-byte bitcode length (zero); the bitcode section is empty
 
 ## See Also
 

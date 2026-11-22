@@ -1,6 +1,6 @@
 # A directory opens, and its first read fails with EISDIR. Each reader answers the
 # I/O error of that read, not a truncated file.
-# EXPECT_STDOUT_EXACT: "read_metadata: Io(IsDirectory)\nsizes: Io(IsDirectory)\nbitcode_size: Io(IsDirectory)\n"
+# EXPECT_STDOUT_EXACT: "read_metadata: Io(IsDirectory)\nsizes: Io(IsDirectory)\n"
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 
@@ -33,8 +33,5 @@ fn main() i32:
     match sizes(DIR):
         Result.Ok(_) -> println("sizes: Ok")
         Result.Err(e) -> println("sizes: {show_err(e)}")
-    match bitcode_size(DIR):
-        Result.Ok(_) -> println("bitcode_size: Ok")
-        Result.Err(e) -> println("bitcode_size: {show_err(e)}")
     remove_all(ROOT)
     return 0

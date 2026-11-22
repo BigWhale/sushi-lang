@@ -36,9 +36,10 @@ puts them in the unit table as ordinary units. Source libraries use the same mec
   generics as source slices. It is removed with no backward compatibility (2026-11-22).
   The reason is in [Rejected alternatives](#rejected-alternatives).
 
-`./sushic --lib` builds a source library, and there is no flag to select a kind. A
-manifest that states `binary` or `hybrid` (from an older compiler) is refused with
-[CE3512](../error-catalog.md#ce3512). Build such a library again with this compiler.
+`./sushic --lib` builds a source library, and there is no flag to select a kind. The
+container has no kind field and no bitcode section since VERSION 6, so a library from an
+older compiler is refused with [CE3509](../error-catalog.md#ce3509). Build such a library
+again with this compiler.
 
 ### Why bitcode is not portable
 
@@ -48,7 +49,7 @@ rules differ between x86-64 SysV, AArch64 and Windows x64. Apple removed App Sto
 bitcode submission in Xcode 14 for the same reason. For our purposes bitcode is as
 platform-bound as an object file.
 
-## 2. The container (VERSION 5)
+## 2. The container (VERSION 6)
 
 `sushi_lang/backend/library_format.py` defines `LibraryFormat`, a flat binary
 container — no LLVM in it, no linking logic, just framing. The fixed header is 52 bytes.
@@ -56,38 +57,36 @@ A file of any other version is refused ([CE3509](../error-catalog.md#ce3509)):
 
 ```
 MAGIC (16B) 🍣SUSHILIB🍣
-VERSION       (u32 LE) = 5
+VERSION       (u32 LE) = 6
 FLAGS         (u32 LE)   bit 0 = source section compressed
-KIND          (u32 LE)   1 = source (2, the binary kind, and 3, the hybrid kind, are retired)
+SPARE_2       (u32 LE)   zero (the KIND field before VERSION 6)
 SPARE_3       (u64 LE)   zero
 SPARE_4       (u64 LE)   zero
 METADATA_LENGTH (u64 LE) | METADATA_BLOB (msgpack dict)
 SOURCE_LENGTH   (u64 LE) | SOURCE_BLOB   (msgpack map: unit name -> source text)
-BITCODE_LENGTH  (u64 LE) | BITCODE_BLOB  (always empty)
 ```
 
-The bitcode section is always empty: `BITCODE_LENGTH` is zero. The header `KIND` mirrors
-the manifest `kind`; no reader reads it.
+The source section is the last section. VERSION 6 removed the bitcode section and the
+KIND field of VERSION 5.
 
-Entry points: `write()`, `read()`, `read_metadata_only()`, `read_source_only()` so the
-consumer can take the index and the source, and `read_section_sizes()` so `--lib-info`
-can report how big each section is without holding it.
+Entry points: `write()`, `read()` so the consumer can take the index and the source,
+`read_metadata_only()`, and `read_source_size()` so `--lib-info` can report how big the
+source section is without holding it.
 
 Integrity is checked strictly in order, one code per failure mode, all in
 `sushi_lang/internals/errors/library.py`:
 
 - **[CE3508](../error-catalog.md#ce3508)** — bad magic (not a `.slib` at all)
-- **[CE3509](../error-catalog.md#ce3509)** — version mismatch. The reader accepts `VERSION == 5` only. There is no
+- **[CE3509](../error-catalog.md#ce3509)** — version mismatch. The reader accepts `VERSION == 6` only. There is no
   backward-compat shim and none is needed: Sushi has no users in the wild, so an
   older `.slib` is rejected, not upgraded.
-- **[CE3510](../error-catalog.md#ce3510)** / **[CE3506](../error-catalog.md#ce3506)** / **[CE3511](../error-catalog.md#ce3511)** — the metadata, source or bitcode section is
+- **[CE3510](../error-catalog.md#ce3510)** / **[CE3506](../error-catalog.md#ce3506)** — the metadata or the source section is
   truncated (`f.read(n)` returned fewer bytes than the length prefix promised). One
   code per section rather than one shared code: the text names which section is short,
   which is what tells a reader where the file was cut.
 - **[CE3512](../error-catalog.md#ce3512)** — the metadata is not valid MessagePack, or it does not have the shape
   that `MANIFEST_SCHEMA` (`backend/library_format.py`) states: a field is missing or has
-  the wrong type, or the manifest states a kind that this compiler does not read
-  (`binary`, `hybrid`).
+  the wrong type.
 - **[CE3513](../error-catalog.md#ce3513)** — total file size exceeds the 1 GiB sanity limit
 - **[CE3515](../error-catalog.md#ce3515)** — the operating system refuses to open or to read the file (a missing file,
   a directory, no read permission, an I/O failure)
@@ -124,16 +123,14 @@ index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.10"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"3.0"`. A protocol string, unrelated to `VERSION`. 3.0 removed `kind`, `platform`, the `templates.version` and the `source` slice of every record |
 | `library_name` | from the output filename; see §6.4 |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
-| `kind` | `"source"`, matching the `KIND` header field. Optional: a manifest with no `kind` is a source library. Any other value is [CE3512](../error-catalog.md#ce3512) in every reader; `library_kind` (`backend/library_format.py`) and its Sushi twin (`toolchain/slib.sushi`) are the one answer |
 | `units` | ordered unit names present in the source section |
 | `compiler_version` | exactly which compiler built the file. Informational: the consumer compiles the source, so only `requires_compiler` is checked |
-| `platform` | the host key `<os>_<arch>` (`darwin_arm64`), from `host_key()`. Informational: a source library is not platform-bound |
 | `public_functions`, `public_constants`, `public_variables`, `structs`, `enums` | the index |
-| `templates` | the generic functions, structs and enums, the perks, the perk implementations and the extension methods, as re-parsable source slices (`semantics/library_templates.py`). It carries its own `version` (`TEMPLATES_SCHEMA_VERSION`, `11`). It is redundant -- the generics are in the source section as well -- but it is what lets `--lib-info` list a library's generic functions without parsing anything. The consumer does not read it |
+| `templates` | the generic functions, structs and enums, the perks, the perk implementations and the extension methods, as records (`semantics/library_templates.py`). It is redundant -- the generics are in the source section as well -- but it is what lets `--lib-info` list a library's generic functions without parsing anything. The consumer does not read it |
 | `conversions` | one record per public conversion `extend A as B:` (`source`, `target`, `unit`). Absent when the library declares no conversion |
 | `reexports` | one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports |
 | `dependencies` | one record per stdlib module the build uses (`kind: "stdlib"`) and per `use <lib/...>` of the library's own units, plain or public (`kind: "library"`, with the `library_name` and the `library_version` that the build found). `--lib-info` lists them (#1120). Each record names in `units` the library's own units that write the `use` (#1123) |
@@ -402,8 +399,7 @@ names neither file's `use`. A warning was not enough: the load is wrong, not onl
 | Public function exposes `ptr` in its own signature | **[CE5002](../error-catalog.md#ce5002)** | `ptr` cannot appear in any public library signature |
 | Public `fn` (non-library, ordinary unit boundary) exposes `ptr` | **[CE5008](../error-catalog.md#ce5008)** | the general unit-boundary form of the same rule; [CE5002](../error-catalog.md#ce5002) is its library-specific sibling |
 | An `unsafe external "C"` link-name == a symbol this build defines | **[CE5013](../error-catalog.md#ce5013)** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. The rule reads the func table and the constant table. A GENERATED stdlib symbol is in neither, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
-| Container version is not 5 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild |
-| The manifest states a kind other than `source` | **[CE3512](../error-catalog.md#ce3512)** | the binary and the hybrid kinds are retired (§1). Build the library again |
+| Container version is not 6 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild. A library of an older compiler has version 5 or lower (§1). Build the library again |
 | `requires_compiler` not satisfied | **[CE3503](../error-catalog.md#ce3503)** | see §6.2; the escape is `--ignore-compiler-version` |
 | The `library_name` of the file is not the name of the `use` that loaded it | **[CE3521](../error-catalog.md#ce3521)** | see §6.4; a copied or renamed file hides which library a build uses. Build the library again under the name of the `use`, or write the `use` with the library's own name |
 | Two versions of one library in one build | **[CE3519](../error-catalog.md#ce3519)** | one library has one version in a build |
@@ -413,9 +409,9 @@ names neither file's `use`. A warning was not enough: the load is wrong, not onl
 
 | File | Responsibility |
 |---|---|
-| `sushi_lang/backend/library_format.py` | The `.slib` byte container: magic/version/flags/kind/length framing, msgpack (de)serialization, `MANIFEST_SCHEMA`, `library_kind`. No LLVM, no linking, no path resolution. |
+| `sushi_lang/backend/library_format.py` | The `.slib` byte container: magic/version/flags/length framing, msgpack (de)serialization, `MANIFEST_SCHEMA`. No LLVM, no linking, no path resolution. |
 | `sushi_lang/compiler/library_manifest.py` | `LibraryManifestGenerator` — the **producer**. Builds every manifest section, and refuses a public `ptr` signature ([CE5002](../error-catalog.md#ce5002)). |
-| `sushi_lang/semantics/library_templates.py` | The source slices of the `templates` index: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_perk_impl`, `serialize_extension`, `slice_decl_source` (the line-span slicing algorithm), and `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `extension_decl_symbol`). |
+| `sushi_lang/semantics/library_templates.py` | The records of the `templates` index: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_perk_impl`, `serialize_extension`, and `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `extension_decl_symbol`). |
 | `sushi_lang/backend/library_errors.py` | `LibraryError(SushiError)` — the one exception type every `.slib` read/resolve failure raises, rendered through the normal reporter. |
 | `sushi_lang/backend/library_paths.py` | `LibraryResolver` — filesystem discovery only (`SUSHI_LIB_PATH`, project deps, Nori bento, cwd) and manifest caching (`loaded_libraries`). Deliberately *not* a linker. |
 | `semver` (under `sushi_lang/internals/`) | `Version` + constraint matching. Shared by the library-load path and the Nori resolver (§6.3). |

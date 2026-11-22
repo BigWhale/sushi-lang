@@ -1,9 +1,8 @@
 # read_library reads a whole library that the compiler built: the manifest has the
-# shape of a manifest, and the lengths of the payload sections come back. A source
-# library carries source and no bitcode.
+# shape of a manifest, and the length of the source section comes back.
 # RUN_IN_FIXTURE_DIR
 # BUILD_LIB_AT: demo.sushi -> demo.slib
-# EXPECT_STDOUT_EXACT: "demo source true 0\n"
+# EXPECT_STDOUT_EXACT: "demo true\n"
 # EXPECT_NO_LEAKS: true
 
 use <encoding/msgpack>
@@ -13,8 +12,7 @@ fn main() i32:
     match read_library("demo.slib"):
         Result.Ok(library) ->
             let string name = map_get_str(library.metadata, "library_name").realise("?")
-            let string kind = map_get_str(library.metadata, "kind").realise("?")
-            println("{name} {kind} {library.sizes.source > 0} {library.sizes.bitcode}")
+            println("{name} {library.sizes.source > 0}")
         Result.Err(_) ->
             println("a fault")
     return 0

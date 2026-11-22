@@ -15,30 +15,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.library_errors import LibraryError
 
 
-# Header KIND values. A source library carries no bitcode, and a binary one carries no
-# source. The manifest's `kind` field is the authority; the header mirrors it so a reader
-# can branch before it unpacks any MessagePack. The value 3 was the hybrid kind. It is
-# retired, and it is not given again.
-KIND_SOURCE = 1
-KIND_BINARY = 2
-
-KIND_BY_NAME = {"source": KIND_SOURCE, "binary": KIND_BINARY}
-
-
-def library_kind(metadata: dict, path: str = "") -> str:
-    """The kind of a library: `source` or `binary`. A manifest with no `kind` is source.
-
-    Each reader of the manifest `kind` asks this, so that all of them take one path for one
-    manifest. Any other value is CE3512.
-    """
-    kind = metadata.get("kind", "source")
-    if kind not in KIND_BY_NAME:
-        from sushi_lang.backend.library_errors import LibraryError
-
-        raise LibraryError("CE3512", path=path, reason=f"unknown library kind '{kind}'")
-    return kind
-
-
 # The words for an OS error, one row per IoError variant the Sushi reader can answer.
 # toolchain/src/slib_info.sushi (`io_cause`) prints the same words for the same errno.
 _OS_ERROR_WORDS = {
@@ -77,17 +53,15 @@ def _file_size(f: BinaryIO) -> Optional[int]:
 
 
 def _truncated(section: str, path: str, expected: int, actual: int) -> LibraryError:
-    """The truncation error of one section."""
+    """The truncation error of one section: `metadata` or `source`."""
     from sushi_lang.backend.library_errors import LibraryError
 
-    # Three literal codes, not a variable one: the registry-completeness gate
+    # Two literal codes, not a variable one: the registry-completeness gate
     # (test_error_registry.py) only sees string-literal codes, and a code it cannot see
     # is a code it cannot prove is registered.
     if section == "metadata":
         return LibraryError("CE3510", path=path, expected=expected, actual=actual)
-    if section == "source":
-        return LibraryError("CE3506", path=path, expected=expected, actual=actual)
-    return LibraryError("CE3511", path=path, expected=expected, actual=actual)
+    return LibraryError("CE3506", path=path, expected=expected, actual=actual)
 
 
 def _check_fits(f: BinaryIO, size: int, path: str, section: str) -> None:
@@ -148,7 +122,7 @@ def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
 
 
 def _read_source_section(f: BinaryIO, path: str) -> Dict[str, str]:
-    """Read the source section that sits between the metadata and the bitcode."""
+    """Read the source section that comes after the metadata."""
     from sushi_lang.backend.library_errors import LibraryError
 
     src_len = struct.unpack("<Q", _read_bytes(f, 8, path, "source"))[0]
@@ -161,33 +135,11 @@ def _read_source_section(f: BinaryIO, path: str) -> Dict[str, str]:
         raise LibraryError("CE3512", path=path, reason=str(e)) from e
 
 
-def _skip_source_section(f: BinaryIO, path: str) -> int:
-    """Step over the source section and give its length, without reading it.
-
-    `read()` wants the bitcode and `--lib-info` wants the lengths, and both must step
-    over the source to reach the bitcode field. The length is checked against the file
-    (CE3506) and the section is skipped with a seek: only `read_source_only` reads it.
-    """
+def _source_length(f: BinaryIO, path: str) -> int:
+    """The length of the source section, checked against the file (CE3506), not read."""
     src_len = struct.unpack("<Q", _read_bytes(f, 8, path, "source"))[0]
     _check_fits(f, src_len, path, "source")
-    f.seek(src_len, os.SEEK_CUR)
     return src_len
-
-
-# The templates schema this compiler writes and reads, beside the container's own
-# VERSION: the producer (`library_manifest.py`) and the consumer's CE3512 gate import it
-# from here. 5: every record carries its unit and a source-shipped template its
-# `bindings` (D4). 6: every public perk ships, and a generic-target perk implementation
-# ships as a template (#543). 7: every perk method record carries its signature and
-# receiver mode (#537). 8: every function, helper and method record states `has_channel`,
-# because a signature without `| E` is bare and no longer means `| StdError`
-# (docs/design/error-channel.md). 9: an `enum` row and a `generic_type` record of a
-# generic enum state `is_error` (docs/design/error-conversion.md section 8.1), and the
-# manifest lists its `conversions` (section 8.2). 10: every extension record states
-# `public`, a concrete one names the symbol of its unit, and the manifest has no
-# `foreign_extensions` (docs/design/extension-visibility.md section 6). 11: a function,
-# helper or extension record with a borrowed return states `return_mode` (#1229).
-TEMPLATES_SCHEMA_VERSION = 11
 
 
 # The shape of a manifest: one row per field a reader relies on, as (record kind, key,
@@ -200,10 +152,8 @@ TEMPLATES_SCHEMA_VERSION = 11
 MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "library_name", "str", "yes"),
     ("manifest", "library_version", "str", "yes"),
-    ("manifest", "platform", "str", "yes"),
     ("manifest", "compiler_version", "str", "yes"),
     ("manifest", "sushi_lib_version", "str", "yes"),
-    ("manifest", "kind", "str", "no"),
     ("manifest", "requires_compiler", "str", "no"),
     ("manifest", "units", "strs", "no"),
     ("manifest", "unit_docs", "{}doc", "no"),
@@ -232,7 +182,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("function", "has_channel", "bool", "yes"),
     ("function", "error_type", "str", "no"),
     ("function", "return_mode", "str", "no"),
-    ("function", "source", "str", "no"),
     ("function", "unit", "str", "no"),
     ("function", "doc", "@doc", "no"),
     ("param", "name", "str", "yes"),
@@ -245,7 +194,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("type_param", "is_pack", "bool", "no"),
     ("constant", "name", "str", "yes"),
     ("constant", "type", "str", "yes"),
-    ("constant", "source", "str", "no"),
     ("constant", "doc", "@doc", "no"),
     ("struct", "name", "str", "yes"),
     ("struct", "fields", "[]field", "yes"),
@@ -266,18 +214,15 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("variant", "data_types", "strs", "has_data"),
     ("variant", "doc", "@doc", "no"),
     ("generic_type", "name", "str", "yes"),
-    ("generic_type", "source", "str", "no"),
     ("generic_type", "type_params", "[]type_param", "no"),
     ("generic_type", "is_error", "bool", "no"),
     ("generic_type", "doc", "@doc", "no"),
     ("perk", "name", "str", "yes"),
-    ("perk", "source", "str", "no"),
     ("perk", "methods", "[]method", "no"),
     ("perk", "doc", "@doc", "no"),
     ("perk_impl", "type", "str", "yes"),
     ("perk_impl", "perk", "str", "yes"),
     ("perk_impl", "type_args", "strs", "no"),
-    ("perk_impl", "source", "str", "no"),
     ("perk_impl", "methods", "[]method", "no"),
     ("perk_impl", "doc", "@doc", "no"),
     ("method", "name", "str", "yes"),
@@ -299,7 +244,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("extension", "error_type", "str", "no"),
     ("extension", "return_mode", "str", "no"),
     ("extension", "unit", "str", "no"),
-    ("extension", "source", "str", "no"),
     ("extension", "doc", "@doc", "no"),
     ("conversion", "source", "str", "yes"),
     ("conversion", "target", "str", "yes"),
@@ -343,7 +287,6 @@ def check_manifest(metadata: object, path: str) -> None:
              else "the metadata is not a map")
     if fault is not None:
         raise LibraryError("CE3512", path=path, reason=fault)
-    library_kind(metadata, path)
 
 
 def _record_fault(record: dict, kind: str, where: str) -> Optional[str]:
@@ -404,8 +347,11 @@ class LibraryFormat:
     # 5: a signature without `| E` is bare (docs/design/error-channel.md). A v4
     #    library's bitcode answers a Result from every such function, so CE3509
     #    rejects it rather than call it with the wrong ABI.
-    VERSION = 5
-    FIXED_HEADER_SIZE = 52  # 16 (magic) + 4 (version) + 4 (flags) + 4 (kind) + 16 (spares) + 8 (meta_len)
+    # 6: the binary kind is retired. The bitcode section is gone, and the KIND field
+    #    is a spare again. A v5 file has a bitcode length after the source, so CE3509
+    #    rejects it.
+    VERSION = 6
+    FIXED_HEADER_SIZE = 52  # 16 (magic) + 4 (version) + 4 (flags) + 20 (spares) + 8 (meta_len)
     MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB sanity limit
 
     # FLAGS bit 0 marks the source section as compressed. Always written as zero:
@@ -414,12 +360,11 @@ class LibraryFormat:
     FLAG_SOURCE_COMPRESSED = 1 << 0
 
     @staticmethod
-    def write(output_path: Path, metadata: dict, bitcode: bytes,
+    def write(output_path: Path, metadata: dict,
               source: Optional[Dict[str, str]] = None) -> None:
-        """Write .slib file with metadata, optional unit source, and bitcode."""
+        """Write .slib file with metadata and the unit source."""
         metadata_blob = msgpack.packb(metadata, use_bin_type=True)
         source_blob = msgpack.packb(source, use_bin_type=True) if source else b""
-        kind = KIND_BY_NAME[library_kind(metadata, str(output_path))]
 
         from sushi_lang.backend.driver import writing_output
 
@@ -428,7 +373,7 @@ class LibraryFormat:
 
             f.write(struct.pack("<I", LibraryFormat.VERSION))
             f.write(struct.pack("<I", 0))     # FLAGS
-            f.write(struct.pack("<I", kind))  # KIND
+            f.write(struct.pack("<I", 0))     # SPARE_2
             f.write(struct.pack("<Q", 0))     # SPARE_3
             f.write(struct.pack("<Q", 0))     # SPARE_4
 
@@ -438,47 +383,26 @@ class LibraryFormat:
             f.write(struct.pack("<Q", len(source_blob)))
             f.write(source_blob)
 
-            f.write(struct.pack("<Q", len(bitcode)))
-            f.write(bitcode)
-
     @staticmethod
-    def read(library_path: Path) -> Tuple[dict, bytes]:
-        """Read .slib file and return (metadata, bitcode)."""
-        path = str(library_path)
-
-        with _open_for_read(library_path) as f:
-            metadata = _read_header_and_metadata(f, path)
-            _skip_source_section(f, path)
-
-            bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
-            bitcode = _read_bytes(f, bc_len, path, "bitcode")
-
-        return metadata, bitcode
-
-    @staticmethod
-    def read_source_only(library_path: Path) -> Tuple[dict, Dict[str, str]]:
-        """Read (metadata, unit source) without touching the bitcode section."""
+    def read(library_path: Path) -> Tuple[dict, Dict[str, str]]:
+        """Read .slib file and return (metadata, unit source)."""
         path = str(library_path)
         with _open_for_read(library_path) as f:
             metadata = _read_header_and_metadata(f, path)
             return metadata, _read_source_section(f, path)
 
     @staticmethod
-    def read_section_sizes(library_path: Path) -> Tuple[dict, int, int]:
-        """Read (metadata, source length, bitcode length), keeping neither payload.
+    def read_source_size(library_path: Path) -> Tuple[dict, int]:
+        """Read (metadata, source length), and do not keep the source.
 
-        The `--lib-info` report states how big each section is, and nothing more, so it
-        never pays to hold a whole library in memory. The bitcode LENGTH FIELD is what
-        it reports -- the Sushi reader `sizes` reads that same field and stops, and
-        the two must agree byte for byte.
+        The `--lib-info` report states how big the source section is, and nothing more,
+        so it never holds a whole library in memory. The Sushi reader `sizes` reads the
+        same length field, and the two must agree byte for byte.
         """
         path = str(library_path)
         with _open_for_read(library_path) as f:
             metadata = _read_header_and_metadata(f, path)
-            source_len = _skip_source_section(f, path)
-            bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
-            _check_fits(f, bc_len, path, "bitcode")
-            return metadata, source_len, bc_len
+            return metadata, _source_length(f, path)
 
     @staticmethod
     def read_metadata_only(library_path: Path) -> dict:

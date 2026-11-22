@@ -1,6 +1,6 @@
 # A variant record must hold data_types when its has_data field is true, and can leave
 # it out when has_data is false. read_library gives the path of the missing field, as
-# the Python reader does. Each file is a whole container with empty payload sections.
+# the Python reader does. Each file is a whole container with an empty source section.
 # The fixture removes its directory.
 # EXPECT_STDOUT_EXACT: "Invalid(missing required field 'enums[0].variants[0].data_types')\nOk\n"
 # EXPECT_NO_LEAKS: true
@@ -53,11 +53,11 @@ fn manifest(u8 has_data) u8[]:
 
 fn image(peek u8[] meta) u8[]:
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    push_le(poke out, 5, 4)
+    push_le(poke out, 6, 4)
     push_le(poke out, 0, 24)
     push_le(poke out, meta.len() as u64, 8)
     out.extend(meta)
-    push_le(poke out, 0, 16)
+    push_le(poke out, 0, 8)
     return out
 
 fn write_image(string path, peek u8[] meta) bool:

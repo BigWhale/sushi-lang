@@ -2,8 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A `.slib` reader, written in Sushi: `read_metadata`, `sizes` and `bitcode_size` for the
-metadata and the section lengths, and `read_library` and `check_manifest` for a whole
+A `.slib` reader, written in Sushi: `read_metadata` and `sizes` for the metadata and the
+source length, and `read_library` and `check_manifest` for a whole
 library whose manifest shape is checked. It mirrors the Python reader of `--lib-info`.
 
 ## Import
@@ -18,12 +18,12 @@ fn main() i32:
 ## Overview
 
 `toolchain/slib` is a **Sushi-source** standard-library module. It reads the fixed
-52-byte little-endian header and the MessagePack metadata map of a version-5 `.slib`
+52-byte little-endian header and the MessagePack metadata map of a version-6 `.slib`
 library (see [Library Format](../../library-format.md)). The metadata comes back as a
 [`MsgValue`](../encoding/msgpack.md) tree. The reader stops after the metadata blob; it
-reads the length of a payload section, never the payload. A container of another version
-is `SlibError.BadVersion`. A version-4 library is refused, because its records do not say
-which callables are bare.
+reads the length of the source section, never the source. A container of another version
+is `SlibError.BadVersion`. A version-5 library is refused, because it has a bitcode
+section after the source.
 
 The module imports `<io/fs>`, `<encoding/msgpack>` and `<collections/strings>`. It
 re-exports `<io/error>` (`public use`), so
@@ -36,7 +36,7 @@ carries.
 public error SlibError:
     Io(IoError)                         # the open or a read failed; the IoError names the cause
     BadMagic()                          # the 16 magic bytes do not match
-    BadVersion(u32)                     # header version is not 5
+    BadVersion(u32)                     # header version is not 6
     Truncated(SlibSection, u64, u64)    # the section, the bytes it needs, the bytes left
     TooLarge(u64)                       # the file is larger than 1 GiB; the file size
     Decode(MpError)                     # the metadata blob does not decode
@@ -45,15 +45,13 @@ public error SlibError:
 public enum SlibSection:
     Metadata()          # the header and the metadata blob
     Source()            # the source section and its length field
-    Bitcode()           # the bitcode section and its length field
 
 public struct SlibSizes:
     u64 source          # the length of the source section
-    u64 bitcode         # the length of the bitcode section
 
 public struct SlibLibrary:
     MsgValue metadata   # the manifest, with its shape checked
-    SlibSizes sizes     # the lengths of the two payload sections
+    SlibSizes sizes     # the length of the source section
 ```
 
 Every function answers the one `SlibError`. The readers walk one header, so a damaged
@@ -64,7 +62,7 @@ file gives the same fault from each of them. `e.text()` gives one stable line fo
 
 ### `read_metadata(string path) MsgValue | SlibError`
 
-Read the metadata map of a `.slib` file. The four spare header fields are read and not
+Read the metadata map of a `.slib` file. The spare header fields are read and not
 validated, the same as the Python reader.
 
 ```sushi
@@ -90,10 +88,9 @@ fn main() i32:
 
 ### `sizes(string path) SlibSizes | SlibError`
 
-The length of both payload sections, in one pass over the file. A version-5 container
-puts a length-prefixed source section between the metadata and the bitcode, so a reader
-steps over the source to reach the bitcode length. A library records no bitcode: the
-bitcode section is empty.
+The length of the source section, in one pass over the file. The reader steps over the
+metadata blob, reads the 8-byte source length, and compares it with what is left of the
+file.
 
 ```sushi
 use <toolchain/slib>
@@ -101,20 +98,15 @@ use <toolchain/slib>
 fn main() i32:
     match sizes("mylib.slib"):
         Result.Ok(sizes) ->
-            println("source {sizes.source}, bitcode {sizes.bitcode}")
+            println("source {sizes.source}")
         Result.Err(_) ->
             println("read error")
     return 0
 ```
 
-### `bitcode_size(string path) u64 | SlibError`
-
-The `bitcode` field of `sizes`, on its own. The reader reads only the two 8-byte
-length fields, never a payload.
-
 ### `read_library(string path) SlibLibrary | SlibError`
 
-Read a whole library: the manifest and the lengths of both payload sections. The checks
+Read a whole library: the manifest and the length of the source section. The checks
 are the ones the Python reader of `sushic --lib-info` makes, in the same order, so both
 halves of the command report the same fault for a damaged file: the magic first, then the
 1 GiB limit, then each declared length against what is left of the file, before any bytes
@@ -126,7 +118,7 @@ use <toolchain/slib>
 fn describe(string path) string:
     match read_library(path):
         Result.Ok(library) ->
-            return "source {library.sizes.source}, bitcode {library.sizes.bitcode}"
+            return "source {library.sizes.source}"
         Result.Err(SlibError.Truncated(_, need, have)) ->
             return "truncated: needs {need} bytes, has {have}"
         Result.Err(SlibError.Invalid(reason)) ->
@@ -195,16 +187,14 @@ and `sushic --lib-info` then delegates to the binary. See `toolchain/README.md`,
 
 ## Limitations
 
-- Read-only. The module reads the header, the metadata and the two section lengths, and
-  never a payload. Writing a `.slib` is done by the compiler (`sushic --lib`).
+- Read-only. The module reads the header, the metadata and the source length, and never
+  the source. Writing a `.slib` is done by the compiler (`sushic --lib`).
 - No typed manifest structs: consumers walk the `MsgValue` tree with the accessors of
   `<encoding/msgpack>` (`map_get`, `map_get_str`, `map_get_bool`, `map_index`).
 - A declared length is compared with the size of the file before any bytes are read. A
   metadata length larger than the rest of the file is `SlibError.Truncated(...)` from
   every reader. Every reader refuses a file larger than 1 GiB (`SLIB_MAX_FILE_SIZE`) with
   `SlibError.TooLarge(size)`.
-- `sizes` and `bitcode_size` do not compare the bitcode length with the file;
-  `read_library` does.
 
 ## See also
 

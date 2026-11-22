@@ -406,7 +406,7 @@ Library: mylib
 Version: 1.0.0
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.10
+Protocol: 3.0
 
 Units (1):
   mylib
@@ -496,16 +496,15 @@ This is useful for:
 
 ### The `.slib` Container
 
-One file holds a MessagePack index next to a payload, framed by a fixed 52-byte header:
+One file holds a MessagePack index next to the source, framed by a fixed 52-byte header:
 
 ```
-[Magic: 16 bytes] [Version: 4 bytes] [Flags: 4 bytes] [Kind: 4 bytes] [Reserved: 16 bytes]
+[Magic: 16 bytes] [Version: 4 bytes] [Flags: 4 bytes] [Reserved: 20 bytes]
 [Metadata Length: 8 bytes] [Metadata: MessagePack]
 [Source Length: 8 bytes]   [Source: MessagePack map, unit name -> source text]
-[Bitcode Length: 8 bytes]  [Bitcode: empty]
 ```
 
-The source section holds the library. The bitcode section is empty. See
+The source section holds the library, and it is the last section. See
 [Library Format](library-format.md) for the full specification.
 
 ### Platform Compatibility
@@ -559,13 +558,14 @@ new compiler. It is build-wide and obviously temporary, on purpose.
 
 ### The format versions
 
-The file itself carries two more versions: the container version (`5`) and the templates
-schema version (`11`). A signature without `| E` is bare (`docs/design/error-channel.md`).
-Every function, helper and method record in the manifest states `has_channel`, and the field
-is required. A library of another container version is refused with
-**[CE3509](error-catalog.md#ce3509)**. A manifest of the wrong shape, or a manifest that
-states the retired `binary` kind, is **[CE3512](error-catalog.md#ce3512)**. Rebuild the
-library with the current compiler. `docs/library-format.md` carries the rows.
+The file itself carries two more versions: the container version (`6`) and the manifest
+protocol (`sushi_lib_version`, `3.0`). A signature without `| E` is bare
+(`docs/design/error-channel.md`). Every function, helper and method record in the manifest
+states `has_channel`, and the field is required. A library of another container version is
+refused with **[CE3509](error-catalog.md#ce3509)**. A library that an older compiler built
+has container version 5 or lower, so it is CE3509. A manifest of the wrong shape is
+**[CE3512](error-catalog.md#ce3512)**. Rebuild the library with the current compiler.
+`docs/library-format.md` carries the rows.
 
 ## Symbol Resolution
 
