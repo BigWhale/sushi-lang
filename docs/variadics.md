@@ -68,9 +68,9 @@ Key properties:
   not copied.
 
 Native variadics are allowed only in **plain function definitions** — not perk or extension
-methods (**[CE0115](error-catalog.md#ce0115)**) — and are **not** exportable through a `.slib` public API (**[CE0116](error-catalog.md#ce0116)**), because
-a single concrete runtime function carrying an array ABI has no template to monomorphize at a
-consumer.
+methods (**[CE0115](error-catalog.md#ce0115)**) — and are **not** exportable through the public API of a binary `.slib` (**[CE0116](error-catalog.md#ce0116)**), because
+the binary path cannot describe a single concrete runtime function that carries an array ABI. A
+source library can export one: the consumer compiles the unit as its own.
 
 ## Spread forwarding (bloom)
 
@@ -291,8 +291,9 @@ The perk must be `public`: a private perk in the constraint of a public function
 consumer still supplies its own `extend <type> with Render` implementation for each type it
 instantiates the pack with. See the [Libraries guide](libraries.md) for the full template mechanism.
 
-> Native `...T` cannot cross a library boundary (it is a single concrete runtime function with an
-> array ABI, not a template) — that is the `...T` vs `...Ts` distinction, enforced by **[CE0116](error-catalog.md#ce0116)**.
+> Native `...T` cannot cross a BINARY library boundary (it is a single concrete runtime function with
+> an array ABI, not a template) — that is the `...T` vs `...Ts` distinction, enforced by
+> **[CE0116](error-catalog.md#ce0116)**. A source library can export a `...T` function.
 
 ## Extern variadics
 
@@ -320,7 +321,7 @@ unsafe external "C" as libc because "formatted output":
 | --- | --- |
 | **[CE0114](error-catalog.md#ce0114)** | `...T` must be last, at most one per function; element type must not be a reference (a dynamic-array element `...T[]` is allowed); also rejected in generic functions |
 | **[CE0115](error-catalog.md#ce0115)** | a variadic parameter (`...T` or `...Ts`) is not allowed in a perk or extension method; a type pack `...Ts` is not allowed on a struct, an enum, an error type, an extension method or a static method |
-| **[CE0116](error-catalog.md#ce0116)** | a public *native* `...T` function cannot be exported through a `.slib` public API (does not apply to `...Ts` packs) |
+| **[CE0116](error-catalog.md#ce0116)** | a public *native* `...T` function cannot be exported through the public API of a binary `.slib` (a source library can export one; does not apply to `...Ts` packs) |
 | **[CE0117](error-catalog.md#ce0117)** | a type-pack `...Ts` must be the last type parameter; at most one pack per function |
 | **[CE0118](error-catalog.md#ce0118)** | cannot mix a type-pack `...Ts` with a native `...T` in the same function |
 | **[CE0119](error-catalog.md#ce0119)** | an `expand` outside the value pack of its own function: in a lambda body, in a body with no pack, or over a name that is not the value pack. Judged on the written body; the analysis stops after it |
@@ -340,6 +341,6 @@ unsafe external "C" as libc because "formatted output":
   bloom any other expression (a call result, a field access, an inline literal).
 - **No pack forwarding** (`g(pack...)`) and **no pack indexing** (`args.0`). A bloom spreads one
   `...T` array, not a `...Ts` pack.
-- **Native `...T` is not exportable** via `.slib` ([CE0116](error-catalog.md#ce0116)); `...Ts` packs are.
+- **Native `...T` is not exportable** via a binary `.slib` ([CE0116](error-catalog.md#ce0116)); a source library and `...Ts` packs are.
 
 The deeper design rationale lives in the [Variadics design note](design/variadics.md).

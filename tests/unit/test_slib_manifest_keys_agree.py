@@ -170,7 +170,7 @@ SUSHI_READER: dict[str, set[str]] = {
                   "perk_impls", "generic_perk_impls", "extensions", "generic_extensions"},
     "function": {"name", "params", "return_type", "error_type", "return_mode",
                  "type_params", "doc"},
-    "param": {"name", "type", "mode"},
+    "param": {"name", "type", "mode", "variadic"},
     "type_param": {"name", "constraints"},
     "constant": {"name", "type", "doc"},
     "struct": {"name", "fields", "is_generic", "type_params", "doc"},

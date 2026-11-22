@@ -255,6 +255,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("param", "type", "str", "yes"),
     ("param", "mode", "str", "no"),
     ("param", "is_pack", "bool", "no"),
+    ("param", "variadic", "bool", "no"),
     ("type_param", "name", "str", "yes"),
     ("type_param", "constraints", "strs", "no"),
     ("type_param", "is_pack", "bool", "no"),

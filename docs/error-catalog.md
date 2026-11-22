@@ -627,9 +627,9 @@ Variadic parameters are only permitted in plain function definitions, not in per
 
 **Error** · function
 
-**Message:** `public function '{name}' is variadic and cannot appear in a library public API`
+**Message:** `public function '{name}' is variadic and cannot appear in the public API of a binary library`
 
-Native variadic functions cannot be exported through a .slib public API (the library format does not record the variadic flag).
+A public native variadic function (`...T`) cannot be in a binary library: the binary path cannot describe the call, which collects the trailing arguments into a `T[]`. A source library can have one: the consumer compiles the unit of the library as its own, and the index marks the parameter `variadic` (protocol 2.10). The escape is `--lib-kind source`, or a `T[]` parameter in place of `...T`. A type pack (`...Ts`) is not refused: it ships as a template in both kinds. Until protocol 2.10 the code fired for a source library too.
 
 ### CE0117 {#ce0117}
 

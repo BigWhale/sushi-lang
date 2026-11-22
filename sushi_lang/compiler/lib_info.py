@@ -53,7 +53,7 @@ def _render_params(params: list, self_mode: str | None = None) -> str:
     rendered = [f"{self_mode} self"] if self_mode else []
     for param in params:
         mode = "nom " if param.get("mode") == "nom" else ""
-        pack = "..." if param.get("is_pack") else ""
+        pack = "..." if param.get("is_pack") or param.get("variadic") else ""
         rendered.append(f"{mode}{pack}{_surface(param['type'])} {param['name']}")
     return ", ".join(rendered)
 

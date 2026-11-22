@@ -1315,6 +1315,41 @@ def _check_no_links_line(sushic: str, tmp: Path, cache: str, tool_bin: str,
                                    f"prints a Links line")
 
 
+# A source library with a public native variadic function (`...T`). A binary library refuses
+# one (CE0116), so it is not in `_REPORT_LIBRARY`, which is built in every kind. Both halves
+# print the parameter as it is written.
+_REPORT_VARIADIC_LIBRARY = """\
+public fn total(string label, ...i32 nums) i32:
+    println(label)
+    return nums.len() as i32
+"""
+REPORT_VARIADIC_LINE = "  fn total(string label, ...i32 nums) i32"
+
+
+def _check_variadic_line(sushic: str, tmp: Path, cache: str, tool_bin: str,
+                         result: ReaderGateResult) -> None:
+    """A source library with a `...T` function: both halves print the `...` of it."""
+    var_dir = tmp / "variadic"
+    var_dir.mkdir()
+    (var_dir / "var_lib.sushi").write_text(_REPORT_VARIADIC_LIBRARY, encoding="utf-8")
+    lib = var_dir / "var_lib.slib"
+    built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", "source",
+                       str(var_dir / "var_lib.sushi"), "-o", str(lib),
+                       "--cache-dir", cache], var_dir, {})
+    result.checks += 1
+    if built.returncode != 0:
+        result.failures.append(f"the variadic library does not build: "
+                               f"{built.stderr.strip()[:200]}")
+        return
+    for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
+                      ("python", {"SUSHI_TOOLCHAIN": "off"})):
+        done = _gate_run([sushic, "--lib-info", str(lib)], var_dir, env)
+        result.checks += 1
+        if done.returncode != 0 or REPORT_VARIADIC_LINE not in done.stdout.splitlines():
+            result.failures.append(f"--lib-info ({half}), variadic: no line "
+                                   f"{REPORT_VARIADIC_LINE!r} (exit {done.returncode})")
+
+
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
                          leaks_only: bool = False,
                          fixtures_only: Optional[str] = None) -> ReaderGateResult:
@@ -1385,6 +1420,7 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
             if ran.stdout != REPORT_CONSUMER_STDOUT:
                 result.failures.append(f"a consumer, {kind}: printed {ran.stdout!r}")
         _check_no_links_line(sushic, tmp, cache, tool_bin, result)
+        _check_variadic_line(sushic, tmp, cache, tool_bin, result)
     result.duration = time.time() - start
     return result
 

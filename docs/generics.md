@@ -1140,7 +1140,7 @@ let Box@(bool) b3 = Box(value: true)
 | A generic function value where nothing solves its type (`map(xs, identity)`) | [`CE2060`](error-catalog.md#ce2060), [`CE2093`](error-catalog.md#ce2093) |
 | No pack forwarding (`g(pack...)`) and no pack indexing; a value pack is not a tuple, so neither `(args...)` nor a tuple bloom exists | [`CE2060`](error-catalog.md#ce2060) |
 | No variadic parameter in a perk method or an extension method | [`CE0115`](error-catalog.md#ce0115) |
-| A native `...T` function cannot be exported through a `.slib` (a pack can) | [`CE0116`](error-catalog.md#ce0116) |
+| A native `...T` function cannot be exported through a binary `.slib` (a source library and a pack can) | [`CE0116`](error-catalog.md#ce0116) |
 | A partially concrete target (`extend Pair@(i32, U)`) | [`CE2098`](error-catalog.md#ce2098) |
 | A template and a concrete target for one method name | [`CE0101`](error-catalog.md#ce0101) |
 | A static on an array target | [`CE2104`](error-catalog.md#ce2104) |

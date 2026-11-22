@@ -635,7 +635,7 @@ fn render_param_list(MsgValue ps, nom string out) string:
                 let string mode = ""
                 if (declared == "nom"):
                     mode := "nom "
-                if (get_bool(p, "is_pack")):
+                if (get_bool(p, "is_pack") or get_bool(p, "variadic")):
                     mode := "{mode}..."
                 parts.push("{mode}{t} {pn}")
             return ", ".join(parts)
