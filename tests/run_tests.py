@@ -1149,10 +1149,9 @@ fn main() i32:
 # the fifth is a tuple, which neither half may print in its interned `$Tuple<...>` form, the
 # sixth and the seventh keep the `...` of a type pack (#1164), the eighth and the ninth
 # print the keyword `error` for a concrete and for a generic error type, the tenth is a
-# conversion, which the consumer calls through `??`, the next two put a bound in a
+# conversion, which the consumer calls through `??`, the next one puts a bound in a
 # target (#1070), the next two print the `public` marker of a static and of a template
-# that the consumer calls (docs/design/extension-visibility.md R9; the private
-# `clone_count` above prints none), and the last four are `dont_panic` declarations with
+# that the consumer calls (docs/design/extension-visibility.md R9), and the last four are `dont_panic` declarations with
 # their reasons (docs/design/dont-panic.md, D10), each after its unit: a function, a
 # static, a generic function and a method of a generic type. The two lines after them
 # print the mode of a borrowed return (#1229), on a function and on a template method.
@@ -1167,7 +1166,6 @@ REPORT_LINES = (
     "  error ReportFault:",
     "  error ReportDecode@(T):",
     "  extend ReportFault as ReportWrap",
-    "  extend Crate@(T: Clone) clone_count() i32",
     "  extend Crate@(T: Hashable) with Named:",
     "  public extend Colour static pick(i32[] codes) Colour",
     "  public extend Crate@(T) first_code(i32[] codes) i32",
@@ -1181,6 +1179,10 @@ REPORT_LINES = (
 # The prefixes of the lines that neither half may print: the container has no kind and
 # no bitcode section, and the manifest has no platform. A report that exits 0 is checked.
 REPORT_ABSENT = ("Kind:", "Platform:", "Bitcode:")
+# Whole lines of `_REPORT_LIBRARY` that neither half may print: the index lists only what a
+# consumer can see, so the private extension template `clone_count` does not print. A
+# report that exits 0 is checked.
+REPORT_ABSENT_LINES = ("  extend Crate@(T: Clone) clone_count() i32",)
 REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer passes `--dont-panic` (D9). It instantiates the two marked templates of
@@ -1192,11 +1194,15 @@ REPORT_CONSENT = ("--dont-panic",)
 class ReportCase:
     """One extra library of the report gate, and the whole line both halves must print.
 
-    `name` names the directory and the failures.
+    `name` names the directory and the failures. `also` holds more whole lines that both
+    halves must print; a case with a missing line fails one time for each half. `absent`
+    holds whole lines that neither half may print; each one that prints is a failure.
     """
     name: str
     library: str
     line: str
+    also: tuple[str, ...] = ()
+    absent: tuple[str, ...] = ()
 
 
 # The extra report cases. Each is a POSITIVE check, so a tool that prints no report fails
@@ -1210,6 +1216,52 @@ REPORT_EXTRA_CASES = (
                         "    println(label)\n"
                         "    return nums.len() as i32\n"),
                line="  fn total(string label, ...i32 nums) i32"),
+    # The index lists only what a consumer can see: a private perk, its implementation,
+    # a private generic struct, an extension on a private type and a private extension
+    # do not print. A public perk and its implementation print.
+    ReportCase(name="visibility",
+               library=("perk Folded:\n"
+                        "    fn folds() i32\n"
+                        "\n"
+                        "public perk Shown:\n"
+                        "    fn show() string\n"
+                        "\n"
+                        "public struct Towel:\n"
+                        "    i32 size\n"
+                        "\n"
+                        "struct Hidden:\n"
+                        "    i32 n\n"
+                        "\n"
+                        "struct Bag@(T):\n"
+                        "    T item\n"
+                        "\n"
+                        "extend Towel with Folded:\n"
+                        "    fn folds() i32:\n"
+                        "        return 2\n"
+                        "\n"
+                        "extend Towel with Shown:\n"
+                        "    fn show() string:\n"
+                        "        return \"towel\"\n"
+                        "\n"
+                        "extend Hidden twice() i32:\n"
+                        "    return self.n * 2\n"
+                        "\n"
+                        "extend Towel inner() i32:\n"
+                        "    return self.size\n"
+                        "\n"
+                        "public extend Towel size2() i32:\n"
+                        "    return self.size * 2\n"
+                        "\n"
+                        "public fn make() i32:\n"
+                        "    let Bag@(i32) b = Bag(1)\n"
+                        "    let Hidden h = Hidden(3)\n"
+                        "    let Towel t = Towel(1)\n"
+                        "    return b.item + h.twice() + t.folds() + t.inner()\n"),
+               line="  perk Shown:",
+               also=("  extend Towel with Shown:", "  public extend Towel size2() i32"),
+               absent=("  perk Folded:", "  extend Towel with Folded:",
+                       "  public extend Towel folds() i32", "  struct Bag@(T):",
+                       "  extend Hidden twice() i32", "  extend Towel inner() i32")),
 )
 
 
@@ -1231,10 +1283,17 @@ def _check_report_case(case: ReportCase, sushic: str, tmp: Path, cache: str,
     for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
                       ("python", {"SUSHI_TOOLCHAIN": "off"})):
         done = _gate_run([sushic, "--lib-info", str(lib)], case_dir, env)
+        lines = done.stdout.splitlines()
         result.checks += 1
-        if done.returncode != 0 or case.line not in done.stdout.splitlines():
+        missing = [line for line in (case.line, *case.also) if line not in lines]
+        if done.returncode != 0 or missing:
+            shown = missing[0] if missing else case.line
             result.failures.append(f"--lib-info ({half}), {case.name}: no line "
-                                   f"{case.line!r} (exit {done.returncode})")
+                                   f"{shown!r} (exit {done.returncode})")
+        for line in case.absent:
+            result.checks += 1
+            if done.returncode == 0 and line in lines:
+                result.failures.append(f"--lib-info ({half}), {case.name}: printed {line!r}")
 
 
 def _check_report(lib: Path, sushic: str, cache: str, tool_bin: str,
@@ -1255,6 +1314,10 @@ def _check_report(lib: Path, sushic: str, cache: str, tool_bin: str,
             stray = [line for line in lines if line.startswith(prefix)]
             if done.returncode == 0 and stray:
                 result.failures.append(f"--lib-info ({half}): printed {stray[0]!r}")
+        for absent in REPORT_ABSENT_LINES:
+            result.checks += 1
+            if done.returncode == 0 and absent in lines:
+                result.failures.append(f"--lib-info ({half}): printed {absent!r}")
     program = tmp / "main.sushi"
     program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
     done = _gate_run([sushic, str(program), "-o", str(tmp / "main"), *REPORT_CONSENT,

@@ -54,7 +54,7 @@ _add(ErrorMessage("CE3506", Severity.ERROR,
     "rather than one because the registry text names which section is short, which is what "
     "tells a reader where the file was cut."))
 
-# Binary library format errors (.slib)
+# .slib container errors
 _add(ErrorMessage("CE3508", Severity.ERROR,
     "invalid library file '{path}': not a valid .slib file (bad magic)",
     Category.LIBRARY, "File does not start with SUSHILIB magic bytes."))
@@ -159,5 +159,5 @@ _add(ErrorMessage("CE3521", Severity.ERROR,
 # and a consumer reading records rather than text would have seen the unit's own names
 # and missed the ones it handed on, silently. The manifest carries a `reexports` list
 # now -- one record per statement, keyed by the unit that wrote it -- and the consumer
-# composes the namespace from it, so a compiled library re-exports exactly as a source
-# one does. `docs/design/unit-namespaces.md` section 8.1, rule 3.
+# composes the namespace from it, so a library re-exports exactly as a unit of the
+# consumer does. `docs/design/unit-namespaces.md` section 8.1, rule 3.

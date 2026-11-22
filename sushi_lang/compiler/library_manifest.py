@@ -11,24 +11,11 @@ from sushi_lang.semantics.library_templates import (
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from sushi_lang.semantics.ast import Program, VarDef
 from sushi_lang.semantics.ast_walk import bodied_with_owner, is_written
-from sushi_lang.semantics.generics.contracts import CONTRACTS
 from sushi_lang.semantics.passes.collect.dont_panic import marked_name
-from sushi_lang.semantics.passes.collect.perks import PerkCollector
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
-
-
-# The predefined perks whose implementation overrides a derived method.
-OVERRIDABLE_PREDEFINED_PERKS = frozenset({PerkCollector.HASHABLE_PERK, *CONTRACTS})
-
-# Every perk the compiler predefines. A library ships its implementations of them
-# although it declares none of them: an override the consumer's derived methods must
-# read, and a `Drop` that puts the type in the consumer's Drop set (#1118). An
-# implementation of one is never an ordinary method of its type, so it never travels
-# as an extension record.
-PREDEFINED_PERKS = OVERRIDABLE_PREDEFINED_PERKS | {PerkCollector.DROP_PERK}
 
 
 def own_units(units: list['Unit']) -> list['Unit']:
@@ -124,10 +111,19 @@ def resolve_library_version(explicit: str | None, library_name: str) -> str:
     return chosen
 
 
-def _extension_target_name(target_type) -> str | None:
-    """The declared type name an extension target names: the element of an array."""
-    element = getattr(target_type, "base_type", None)
-    return getattr(element if element is not None else target_type, "name", None)
+def _target_name(target_type) -> str | None:
+    """The declared type name that a target names: the base of a generic, the element of
+    an array."""
+    while getattr(target_type, "base_type", None) is not None:
+        target_type = target_type.base_type
+    return (getattr(target_type, "base_name", None)
+            or getattr(target_type, "name", None))
+
+
+def _private_perk_names(own: list['Unit']) -> set[str]:
+    """The perks that the library's own units declare without `public`."""
+    return {perk.name for unit in own if unit.ast is not None
+            for perk in unit.ast.perks if not perk.is_public}
 
 
 def _marked_declarations(program: Program) -> Iterator[tuple[str, str]]:
@@ -337,6 +333,16 @@ class LibraryManifestGenerator:
                 }, ext))
         return records
 
+    def _kept_type_names(self, own: list['Unit']) -> set[str]:
+        """The private types of the library."""
+        kept: set[str] = set()
+        for unit in own:
+            if unit.ast is None:
+                continue
+            for decls in (unit.ast.structs, unit.ast.enums):
+                kept.update(d.name for d in decls if not d.is_public)
+        return kept
+
     def _struct_members(self, struct_def) -> dict:
         return {"fields": [
             with_doc({"name": f.name, "type": type_string(f.ty)}, f)
@@ -370,39 +376,36 @@ class LibraryManifestGenerator:
         return docs
 
     def _extract_templates(self, units: list['Unit']) -> dict:
-        """Extract instantiable public generic templates (re-parsable source)."""
+        """The index of the public generics, perks and methods of the library.
+
+        An item is in the index only when a consumer can see it: a private perk, an
+        implementation of one, and a method of a private type are not.
+        """
         own = own_units(units)
-        referenced_perks: set[str] = set()
-        generic_functions, generic_structs, generic_enums = (
-            self._generic_templates(own, referenced_perks))
-        generic_extensions = self._generic_extension_templates(own)
-
-        generic_perk_impls, template_keys = self._generic_perk_impl_templates(
-            own, referenced_perks)
-        perks, shipped_perks = self._shipped_perks(own, referenced_perks)
-        # The consumer knows every predefined contract already.
-        perk_impls = self._concrete_perk_impls(
-            own, shipped_perks | PREDEFINED_PERKS, template_keys)
-
+        private_types = self._kept_type_names(own)
+        private_perks = _private_perk_names(own)
+        generic_functions, generic_structs, generic_enums = self._generic_templates(own)
         templates = {
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,
-            "perks": perks,
-            "perk_impls": perk_impls,
-            "generic_perk_impls": generic_perk_impls,
+            "perks": self._declared_perks(own),
+            "perk_impls": self._concrete_perk_impls(own, private_types, private_perks),
+            "generic_perk_impls": self._generic_perk_impl_templates(
+                own, private_types, private_perks),
         }
         # Absent when the library declares no extension method, so a library without
         # one grows by nothing.
-        extensions = self._concrete_extensions(own, shipped_perks, template_keys)
+        extensions = self._concrete_extensions(own, private_types)
         if extensions:
             templates["extensions"] = extensions
+        generic_extensions = self._generic_extension_templates(own, private_types)
         if generic_extensions:
             templates["generic_extensions"] = generic_extensions
         return templates
 
-    def _generic_templates(self, own: list['Unit'], referenced_perks: set[str]):
-        """The public generic functions and every generic struct and enum, as templates.
+    def _generic_templates(self, own: list['Unit']):
+        """The public generic functions, structs and enums, as templates.
 
         Every record names the unit that declared it, in the declaration order, unit by
         unit.
@@ -420,9 +423,9 @@ class LibraryManifestGenerator:
             rows: tuple[tuple[list[Any], Callable[[Any], dict], list[dict]], ...] = (
                 ([f for f in unit.ast.functions if f.is_public and f.type_params],
                  serialize_generic_function, functions),
-                ([s for s in unit.ast.structs if s.type_params],
+                ([s for s in unit.ast.structs if s.is_public and s.type_params],
                  serialize_generic_struct, structs),
-                ([e for e in unit.ast.enums if e.type_params],
+                ([e for e in unit.ast.enums if e.is_public and e.type_params],
                  serialize_generic_enum, enums),
             )
             for decls, serialize, records in rows:
@@ -430,11 +433,11 @@ class LibraryManifestGenerator:
                     record = serialize(decl)
                     record["unit"] = unit.name
                     records.append(record)
-                    referenced_perks.update(record.get("free_perks", []))
         return functions, structs, enums
 
-    def _generic_extension_templates(self, own: list['Unit']) -> list[dict]:
-        """Every extension TEMPLATE of the library's own units."""
+    def _generic_extension_templates(self, own: list['Unit'],
+                                     private_types: set[str]) -> list[dict]:
+        """Every public extension TEMPLATE of the library's own units on a public type."""
         from sushi_lang.semantics.library_templates import serialize_generic_extension
 
         records: list[dict] = []
@@ -442,172 +445,97 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for ext in unit.ast.generic_extensions or []:
+                if not ext.is_public or _target_name(ext.target_type) in private_types:
+                    continue
                 record = serialize_generic_extension(ext)
                 record["unit"] = unit.name
                 records.append(record)
         return records
 
     def _concrete_extensions(self, own: list['Unit'],
-                             shipped_perks: set[str],
-                             template_keys: set[tuple[str, str]]) -> list[dict]:
-        """Every CONCRETE extension method a consumer can reach, as a signature record.
+                             private_types: set[str]) -> list[dict]:
+        """Every public CONCRETE extension method of the library on a public type."""
+        from sushi_lang.semantics.library_templates import serialize_extension
 
-        An extension on a private type is left out: no consumer can name the type.
-
-        A private extension ships with its marker: a copy of a template of the library
-        can call it, and the consumer refuses a call of it from its own units (R4).
-
-        The methods of an implementation of a perk that does not ship travel here too.
-        The perk hides its CONTRACT, and the methods stay callable
-        (`docs/design/visibility.md`); the consumer has no contract to register them
-        under, so each one is an ordinary method of the type.
-        """
-        from sushi_lang.semantics.library_templates import method_record, serialize_extension
-        from sushi_lang.semantics.passes.collect.perks import perk_type_name
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-
-        kept = self._kept_type_names(own)
         records: list[dict] = []
         for unit in own:
             if unit.ast is None:
                 continue
             for ext in unit.ast.extensions:
-                # A conversion is no method of its source (ruling P6); it ships in
-                # the manifest's `conversions` list.
-                if ext.is_conversion or _extension_target_name(ext.target_type) in kept:
+                # A conversion is no method of its source (ruling P6); it is in the
+                # manifest's `conversions` list.
+                if (ext.is_conversion or not ext.is_public
+                        or _target_name(ext.target_type) in private_types):
                     continue
                 record = serialize_extension(ext)
                 record["unit"] = unit.name
                 records.append(record)
-            for impl in unit.ast.perk_impls:
-                if (impl.perk_name in shipped_perks
-                        or impl.perk_name in PREDEFINED_PERKS
-                        or isinstance(impl.target_type, GenericTypeRef)
-                        or getattr(impl, "is_synthesized", False)):
-                    continue
-                type_name = perk_type_name(impl.target_type)
-                if type_name is None or type_name in kept:
-                    continue
-                base_name = getattr(impl.target_type, "generic_base", None) or type_name
-                if (base_name, impl.perk_name) in template_keys:
-                    continue
-                for method in impl.methods:
-                    records.append({
-                        **method_record(method),
-                        "type": type_name,
-                        "unit": unit.name,
-                        # A perk method is callable wherever its type is (R8).
-                        "public": True,
-                    })
         return records
 
-    def _kept_type_names(self, own: list['Unit']) -> set[str]:
-        """The private types of the library."""
-        kept: set[str] = set()
-        for unit in own:
-            if unit.ast is None:
-                continue
-            for decls in (unit.ast.structs, unit.ast.enums):
-                kept.update(d.name for d in decls if not d.is_public)
-        return kept
-
-    def _generic_perk_impl_templates(self, own: list['Unit'], referenced_perks: set[str]):
-        """Every generic-target perk implementation, as a TEMPLATE (#543).
-
-        The collect pass filed it in `generic_perk_impls`; what `perk_impls` holds for
-        it are the monomorphized copies, which the consumer cuts for itself from this
-        source. The keys name those copies, so the concrete index can leave them out.
-        """
+    def _generic_perk_impl_templates(self, own: list['Unit'], private_types: set[str],
+                                     private_perks: set[str]) -> list[dict]:
+        """Every generic-target implementation of a public perk on a public type (#543)."""
         from sushi_lang.semantics.library_templates import serialize_generic_perk_impl
         from sushi_lang.semantics.passes.collect.perks import covering_base
 
         records: list[dict] = []
-        template_keys: set[tuple[str, str]] = set()
         for unit in own:
             if unit.ast is None:
                 continue
             for impl in getattr(unit.ast, "generic_perk_impls", None) or []:
                 base = covering_base(impl.target_type)
-                if base is None:
-                    continue
-                template_keys.add((base, impl.perk_name))
-                if self._impl_exposes_ptr(impl):
+                if (base is None or base in private_types
+                        or impl.perk_name in private_perks):
                     continue
                 record = serialize_generic_perk_impl(impl)
                 record["unit"] = unit.name
                 records.append(record)
-                referenced_perks.add(impl.perk_name)
-        return records, template_keys
+        return records
 
-    def _shipped_perks(self, own: list['Unit'],
-                       referenced_perks: set[str]) -> tuple[list[dict], set[str]]:
-        """Every PUBLIC perk, and every perk a template names.
-
-        A public perk is part of the API whether or not a generic constraint names it
-        (#543 -- a contract a consumer could not name was a contract whose
-        implementation could not be registered).
-        """
+    def _declared_perks(self, own: list['Unit']) -> list[dict]:
+        """Every public perk DEFINITION of the library's own units."""
         from sushi_lang.semantics.library_templates import serialize_perk
 
-        perks: list[dict] = []
-        seen: set[str] = set()
+        records: list[dict] = []
         for unit in own:
             if unit.ast is None:
                 continue
             for perk in unit.ast.perks:
-                if perk.name in seen:
+                if not perk.is_public:
                     continue
-                if not (perk.is_public or perk.name in referenced_perks):
-                    continue
-                seen.add(perk.name)
                 record = serialize_perk(perk)
-                record["unit"] = unit.name
-                perks.append(record)
-        return perks, seen
-
-    def _concrete_perk_impls(self, own: list['Unit'], shipped_perks: set[str],
-                             template_keys: set[tuple[str, str]]) -> list[dict]:
-        """Every concrete implementation of a shipped perk, once per (type, perk)."""
-        from sushi_lang.semantics.library_templates import serialize_perk_impl
-        from sushi_lang.semantics.passes.collect.perks import perk_type_name, covering_base
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-
-        records: list[dict] = []
-        seen: set[tuple[str, str]] = set()
-        for unit in own:
-            if unit.ast is None:
-                continue
-            for impl in unit.ast.perk_impls:
-                if impl.perk_name not in shipped_perks:
-                    continue
-                if isinstance(impl.target_type, GenericTypeRef):
-                    continue
-                type_name = perk_type_name(impl.target_type)
-                if type_name is None or (type_name, impl.perk_name) in seen:
-                    continue
-                # A monomorphized copy of a template is an ordinary implementation by
-                # design, and its source slice is the TEMPLATE's: shipping it as a
-                # concrete record re-parsed to `Box@(T)` at the consumer (#543). The
-                # template ships instead, and the consumer cuts its own copies.
-                base_name = (covering_base(impl.target_type)
-                             or getattr(impl.target_type, "generic_base", None) or type_name)
-                if (base_name, impl.perk_name) in template_keys:
-                    continue
-                if self._impl_exposes_ptr(impl):
-                    continue
-                seen.add((type_name, impl.perk_name))
-                record = serialize_perk_impl(impl)
                 record["unit"] = unit.name
                 records.append(record)
         return records
 
-    def _impl_exposes_ptr(self, impl) -> bool:
-        """Whether a perk implementation's methods expose a foreign `ptr`."""
-        return any(
-            contains_foreign_ptr(m.ret)
-            or any(contains_foreign_ptr(p.ty) for p in m.params)
-            for m in impl.methods
-        )
+    def _concrete_perk_impls(self, own: list['Unit'], private_types: set[str],
+                             private_perks: set[str]) -> list[dict]:
+        """Every written concrete implementation of a public perk on a public type.
+
+        A predefined perk is public.
+
+        A monomorphized copy of a generic-target implementation joins `perk_impls`, and
+        it is not written: its template is in `generic_perk_impls`.
+        """
+        from sushi_lang.semantics.library_templates import serialize_perk_impl
+        from sushi_lang.semantics.passes.collect.perks import perk_type_name
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+
+        records: list[dict] = []
+        for unit in own:
+            if unit.ast is None:
+                continue
+            for impl in unit.ast.perk_impls:
+                if not is_written(impl) or isinstance(impl.target_type, GenericTypeRef):
+                    continue
+                if (perk_type_name(impl.target_type) is None
+                        or impl.perk_name in private_perks
+                        or _target_name(impl.target_type) in private_types):
+                    continue
+                record = serialize_perk_impl(impl)
+                record["unit"] = unit.name
+                records.append(record)
+        return records
 
     def _extract_reexports(self, units: list['Unit']) -> list[dict]:
         """What each own unit RE-EXPORTS: one record per `public use` (#585).

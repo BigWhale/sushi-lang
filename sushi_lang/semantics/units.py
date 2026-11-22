@@ -76,7 +76,7 @@ class Unit:
 
         # Only include source file dependencies (not stdlib or library imports)
         # Stdlib imports are handled by stdlib_linker
-        # Library imports are handled by library_linker
+        # A library unit comes from its .slib, not from a source file of the build
         self.dependencies = [
             use_stmt.path for use_stmt in self.ast.uses
             if not use_stmt.is_stdlib and not use_stmt.is_library

@@ -47,7 +47,7 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
     "generic_type": [(TEMPLATES, "serialize_generic_struct"),
                      (TEMPLATES, "serialize_generic_enum"),
                      (MANIFEST, G + "_generic_templates"), _DOCUMENTED],
-    "perk": [(TEMPLATES, "serialize_perk"), (MANIFEST, G + "_shipped_perks"), _DOCUMENTED],
+    "perk": [(TEMPLATES, "serialize_perk"), (MANIFEST, G + "_declared_perks"), _DOCUMENTED],
     "perk_impl": [(TEMPLATES, "serialize_perk_impl"),
                   (TEMPLATES, "serialize_generic_perk_impl"),
                   (MANIFEST, G + "_generic_perk_impl_templates"),

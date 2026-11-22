@@ -66,7 +66,7 @@ Use `--lib` to compile source files into a library instead of an executable:
 
 This writes one `.slib` file containing:
 - the complete source text of every unit in the library
-- a MessagePack index of everything it declares, which `--lib-info` and the consumer read
+- a MessagePack index of everything a consumer can see, which `--lib-info` and the consumer read
 
 Every library states its own version. The value comes from the `nori.toml` in the current
 directory when there is one, and from `--lib-version` otherwise; neither is **[CE3505](error-catalog.md#ce3505)**. See

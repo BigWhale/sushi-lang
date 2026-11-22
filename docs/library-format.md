@@ -334,6 +334,8 @@ section. `--lib-info` reads the other keys.
 
     # A library ships whole units, so a generic in it is already there as ordinary
     # source -- but the index must answer without a parser.
+    # The index lists only what a consumer can see: a public item on a public type,
+    # where a predefined perk is public.
     "templates": {                     # Instantiable cross-library templates
         # Public generic functions (incl. variadic packs).
         "generic_functions": [
@@ -348,15 +350,14 @@ section. `--lib-info` reads the other keys.
             }
         ],
 
-        # Generic structs/enums, same record shape MINUS the signature: neither declares
+        # Public generic structs/enums, same record shape MINUS the signature: neither declares
         # parameters. A generic enum declared with `error` also carries
         # `"is_error": true`, so each instance at the consumer is an error type.
         "generic_structs": [ ... ],
         "generic_enums": [ ... ],
 
-        # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
-        # names it), plus any perk an exported template names in a constraint
-        # or implements. Each method is a record: its signature, its
+        # Perk DEFINITIONS: every public perk of the library. Each
+        # method is a record: its signature, its
         # receiver mode when the contract declares `peek self` / `poke self`, and its
         # own block -- so `--lib-info` prints a contract as the methods that satisfy it.
         #
@@ -370,9 +371,9 @@ section. `--lib-info` reads the other keys.
             {"name": str, "unit": str, "methods": [METHOD], "doc": DOC}
         ],
 
-        # Concrete perk IMPLEMENTATIONS of those perks, and of every predefined
-        # perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`). The record carries the
-        # signature of each method.
+        # Concrete perk IMPLEMENTATIONS that the library's own units write, of a public
+        # perk or a predefined perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) on a
+        # public type. The record carries the signature of each method.
         "perk_impls": [
             {
                 "type": str,           # Concrete target type name
@@ -398,20 +399,15 @@ section. `--lib-info` reads the other keys.
             }
         ],
 
-        # Extension methods, instance and static. A CONCRETE one is a signature
-        # record. The methods of an implementation of a perk that does not ship are records
-        # here too: the contract stays hidden, and each method is an ordinary method of
-        # the type. An extension on a private type that nothing ships is left out. A
-        # private extension ships with `"public": false`: a copy of a template of the
-        # library can call it, and the consumer refuses a call of it from its own units
-        # (docs/design/extension-visibility.md R4 to R6). The whole key is absent when
-        # there is no record.
+        # Extension methods, instance and static: every PUBLIC one on a public type.
+        # A CONCRETE one is a signature record. The whole key is absent when there is
+        # no record.
         #
         #   EXTENSION = {
         #       "type": str,           # The target, in the internal spelling: "Vec",
         #                              #   "i32", "i32[]", "Box<T>", "T[]"
         #       "name": str,
-        #       "public": bool,        # The `public` marker; True for a perk method
+        #       "public": bool,        # The `public` marker
         #       **SIG,
         #       "self_mode": str,      # "peek" | "poke", only when declared
         #       "static": bool,        # True, only for a static
@@ -423,8 +419,8 @@ section. `--lib-info` reads the other keys.
         # Extension TEMPLATES: a generic target (`Box@(T)`), a concrete-instance target
         # (`Box@(i32)`), an array target (`T[]`) and a method type parameter
         # (`pick@(U)`). A template names no instance, and the consumer makes one copy for each instance and method that a call reaches. Its
-        # body may call a private function of the library. The whole key is absent when
-        # there is no record.
+        # body may call a private function of the library. Only a public template on a
+        # public type is listed. The whole key is absent when there is no record.
         "generic_extensions": [
             {
                 **EXTENSION,
