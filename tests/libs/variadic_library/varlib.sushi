@@ -1,11 +1,9 @@
-##: Adds every number. :##
 public fn varlib_total(...i32 nums) i32:
     let i32 sum = 0
     foreach(n in nums.iter()):
         sum := sum + n
     return sum
 
-##: Joins every word after a prefix. :##
 public fn varlib_join(string prefix, ...string words) string:
     let string text = prefix.clone()
     foreach(w in words.iter()):
