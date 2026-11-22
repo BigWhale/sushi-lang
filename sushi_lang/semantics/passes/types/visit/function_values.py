@@ -130,8 +130,7 @@ def _generic(validator: TypeValidator, node: e.GlobalRef, template: GenericFuncD
 def _value(validator: TypeValidator, node: e.GlobalRef, sig: FuncSig, decl: DeclId,
            type_args: tuple[Type, ...] = ()) -> Optional[Type]:
     """The callee row and the type of the value. A function value of a named function captures
-    nothing, so the value owns nothing. A private function of a binary library has its own
-    link symbol. A variadic function has no function type (CE2093, decision E6), and a `!`
+    nothing, so the value owns nothing. A variadic function has no function type (CE2093, decision E6), and a `!`
     function is no value (CE0163, docs/design/never-return.md)."""
     if any(param.is_variadic for param in sig.params):
         er.emit(validator.reporter, er.ERR.CE2093, node.loc, name=validator.decl_name(node.decl),

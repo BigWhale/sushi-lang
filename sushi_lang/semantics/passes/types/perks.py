@@ -367,12 +367,8 @@ def validate_unreached_header(tables, impl: ExtendWithDef, reporter: Reporter) -
 
 
 def _reject_name_conflicts(perk_impl: ExtendWithDef, existing_methods: dict,
-                           reporter: Reporter, shipped: bool = False) -> bool:
-    """One CE4007 for each perk method that an extension method of one name meets.
-
-    A `shipped` implementation has no source in the build, so the error stands at the
-    extension method, and a prose note names the implementation (#1255).
-    """
+                           reporter: Reporter) -> bool:
+    """One CE4007 for each perk method that an extension method of one name meets."""
     conflicts = {m.name for m in perk_impl.methods} & set(existing_methods)
     if not conflicts:
         return True
@@ -380,15 +376,6 @@ def _reject_name_conflicts(perk_impl: ExtendWithDef, existing_methods: dict,
     for method in perk_impl.methods:
         if method.name in conflicts:
             existing = existing_methods[method.name]
-            if shipped:
-                from sushi_lang.semantics.generics.type_display import display_type
-                er.emit_with(reporter, er.ERR.CE4007, existing.name_span or existing.loc,
-                             filename=getattr(existing, "filename", None),
-                             method=method.name, perk=perk_impl.perk_name).note(
-                    f"a compiled library implements '{perk_impl.perk_name}' for "
-                    f"'{display_type(perk_impl.target_type)}', and its method "
-                    f"'{method.name}' is visible in every unit").emit()
-                continue
             # Relational: the perk method is only a conflict BECAUSE the extension
             # exists. Point at it -- the table already carries its span.
             diag = er.emit_with(reporter, er.ERR.CE4007, method.loc,

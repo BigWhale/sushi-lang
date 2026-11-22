@@ -89,8 +89,7 @@ def extension_receiver_name(target_type: Optional['Type']) -> str:
     """The receiver text an extension declaration's symbol is built from.
 
     ONE rule for the backend that declares the method and the manifest that names the
-    symbol a binary library defines: a builtin spells its keyword, anything else its
-    interned name.
+    symbol: a builtin spells its keyword, anything else its interned name.
     """
     from sushi_lang.semantics.typesys import BuiltinType
 

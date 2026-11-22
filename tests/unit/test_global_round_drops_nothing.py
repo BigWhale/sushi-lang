@@ -33,7 +33,7 @@ def _codegen() -> SimpleNamespace:
 def _const(ty=BuiltinType.I32) -> GlobalDecl:
     """A record whose initializer has no folded value."""
     return GlobalDecl(name="F", unit="u", symbol="u$F", data_name="u$.str_data.F", ty=ty,
-                      is_var=False, link_symbol=None, empty=False, value=None, loc=SPAN)
+                      is_var=False, empty=False, value=None, loc=SPAN)
 
 
 NO_VALUE = {"detail": "a constant with no value reached the backend"}

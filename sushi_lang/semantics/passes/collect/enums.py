@@ -152,7 +152,7 @@ class EnumCollector:
             "enum", structs=self.structs, generic_structs=self.generic_structs,
             enums=self.enums, generic_enums=self.generic_enums,
         ), library_clash=lambda n, at: self._reject_library_clash(n, at, word),
-                visibility=self.visibility, generic=bool(type_params)):
+                generic=bool(type_params)):
             return
 
         if reject_type_pack_param(self.r, type_params_raw, name_span, f"an {word}"):

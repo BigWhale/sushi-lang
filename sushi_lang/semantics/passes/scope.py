@@ -1,7 +1,7 @@
 from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import (TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterator, List, Mapping,
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Mapping,
                     Optional, Set, Tuple)
 
 from sushi_lang.internals.report import Reporter, Span
@@ -19,7 +19,6 @@ from sushi_lang.semantics.generics.monomorphize.unroll import (
     WrittenLet, written_binder, written_let,
 )
 from sushi_lang.semantics.name_ladder import BareName, classify
-from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.passes.scope_bindings import DECLARED_ANSWERS, BindingsWriter
@@ -72,7 +71,7 @@ class VariableInfo:
 class ScopeAnalyzer:
     """The scope pass: scope and variable usage analysis."""
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None, function_tables: tuple[Any, ...] = (), unit_namespaces: Optional[Mapping[str, 'NamespaceTable']] = None) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None, function_tables: tuple[Any, ...] = (), unit_namespaces: Optional[Mapping[str, 'NamespaceTable']] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
@@ -87,12 +86,8 @@ class ScopeAnalyzer:
         from sushi_lang.semantics.namespaces import externals_only
         self.namespaces = (namespaces if namespaces is not None
                            else externals_only(self.external_table))
-        # Every unit's table, for a body that resolves in a compiled library's (#1120).
+        # Every unit's table, for the help line that names an import.
         self.unit_namespaces = unit_namespaces
-        # A constant a binary library declares and keeps. It resolves to nothing here,
-        # and "no such name" is the wrong word for a declaration the library has: the
-        # type pass says whose it is (CE3005) once this pass lets the name through.
-        self.kept_constants: AbstractSet[str] = kept_constants or frozenset()
         self.visibility = visibility
         self.scopes: List[Dict[str, VariableInfo]] = []
         # The copies of each written `expand`-body `let` in this body, collected until
@@ -310,17 +305,11 @@ class ScopeAnalyzer:
         return self._is_bound_local(name)
 
     def is_constant(self, name: str) -> bool:
-        """A `const` or a unit `var` this unit may write, plus a binary library's kept one.
-
-        A constant a BINARY library declares and keeps resolves to nothing here, and "no
-        such name" is the wrong word for a declaration the library has: the typecheck
-        pass says whose it is (CE3005) once this pass lets the name through.
+        """A `const` or a unit `var` this unit may write.
 
         Section 6: a constant of a unit this one did NOT import is not a name here, so
         the walk that would have called it a global says CE1001 instead.
         """
-        if name in self.kept_constants:
-            return True
         return self.constants.lookup(name, self.namespaces.scope.unit,
                                      self.namespaces.scope) is not None
 
@@ -514,20 +503,17 @@ class ScopeAnalyzer:
 
     def _check_constant(self, const: ConstDef) -> None:
         """Check a constant definition - validate the value expression."""
-        with in_body_scope(self, "namespaces", const, self.unit_namespaces), \
-                self._bindings_of(const):
+        with self._bindings_of(const):
             self._check_expression(const.value)
 
     def _check_function(self, func: FuncDef) -> None:
-        """Check a function definition, in the scope its names resolve in."""
-        with in_body_scope(self, "namespaces", func, self.unit_namespaces), \
-                self._reports_of(func), self._bindings_of(func):
+        """Check a function definition."""
+        with self._reports_of(func), self._bindings_of(func):
             self._check_function_body(func)
 
     def _check_function_body(self, func: FuncDef) -> None:
-        # Whose body this is: the file its spans belong to (#471), and whether it is
-        # one of many copies of one source (#648). One seam, set on every entry, so an
-        # ordinary body clears what a transplanted or copied one set.
+        # Whether this body is one of many copies of one source (#648). One seam, set
+        # on every entry, so an ordinary body clears what a copied one set.
         self.reporter.enter_body(func)
         self._push_scope()
         self._pack_names = func.pack_names
@@ -548,9 +534,8 @@ class ScopeAnalyzer:
         self._pop_scope()
 
     def _check_extension_method(self, ext: ExtendDef) -> None:
-        """Check an extension method definition, in the scope its names resolve in."""
-        with in_body_scope(self, "namespaces", ext, self.unit_namespaces), \
-                self._reports_of(ext), self._bindings_of(ext, receiver=True):
+        """Check an extension method definition."""
+        with self._reports_of(ext), self._bindings_of(ext, receiver=True):
             self._check_extension_body(ext)
 
     def _check_extension_body(self, ext: ExtendDef) -> None:
@@ -589,8 +574,7 @@ class ScopeAnalyzer:
         for param in method.params:
             self._declare_variable(param, param.name, param.name_span, kind="parameter")
 
-        with in_body_scope(self, "namespaces", method, self.unit_namespaces):
-            self._check_block(method.body)
+        self._check_block(method.body)
         self._pop_scope()
 
     def _check_block(self, block: Block) -> None:

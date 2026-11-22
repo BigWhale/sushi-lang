@@ -395,7 +395,7 @@ other module does (gate: `tests/unit/test_result_tables_have_one_writer.py`).
 
 The answer classes are in `typeck.py`:
 
-- `ResolvedCall` (`callee`, `type_args`, `unit`, `link_symbol`, `tail`): the callee with
+- `ResolvedCall` (`callee`, `type_args`, `unit`, `tail`, `never_returns`): the callee with
   the type arguments of a generic callee, the unit that declares it, and the variadic
   `Tail`.
 - `Tail` (`position`, `ty`, `convention`): the variadic tail of a call.

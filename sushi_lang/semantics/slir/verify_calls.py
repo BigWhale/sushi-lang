@@ -76,16 +76,15 @@ def _perk_params(perk_impls: Optional[PerkImplementationTable], symbol: str,
 
 def function_of(funcs: FunctionTable, symbol: str, name: str) -> Optional[FuncSig]:
     """The free function `name` whose symbol is `symbol`: of the unit of that symbol, or of
-    the flat view (an instance of a template of a binary library has no unit). Each row has
-    one symbol: its `link_symbol` when the `libraries` step gives it one, else the symbol of
-    its name in its unit."""
+    the flat view (a declaration with no unit). Each row has one symbol: the symbol of its
+    name in its unit."""
     rows: list[tuple[Optional[str], Optional[FuncSig]]] = [
         (unit, own.get(name)) for unit, own in funcs.by_unit.items()]
     rows.append((None, funcs.by_name.get(name)))
     for unit, sig in rows:
         if sig is None or (unit is None and sig.unit_name is not None):
             continue
-        if symbol == (sig.link_symbol or function_symbol(name, unit)):
+        if symbol == function_symbol(name, unit):
             return sig
     return None
 
@@ -94,8 +93,8 @@ def extension_of(extensions: ExtensionTable, symbol: str,
                  method: str) -> Optional[ExtensionMethod]:
     """The extension method or static `method` whose symbol is `symbol`."""
     for record in extensions.signatures_named(method):
-        if symbol in (record.link_symbol, method_symbol(
-                record.target_type, method, record.unit_name, record.method_type_args)):
+        if symbol == method_symbol(
+                record.target_type, method, record.unit_name, record.method_type_args):
             return record
     return None
 
@@ -107,12 +106,9 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
                     ) -> Optional[DeclaredParams]:
     """The declared parameters of the function that `callee` names. A free function is the
     function of its name in the unit whose symbol is the symbol of the callee; the name of a
-    pack instance has a dot too. An instance of a template of a binary library has no unit, and
-    the flat view holds it. A method or a static has the written name `<type>.<method>`:
+    pack instance has a dot too. A declaration with no unit is in the flat view. A method or a static has the written name `<type>.<method>`:
     it is the extension of that name whose symbol is the symbol of the callee, else the method of
     the perk implementation of that symbol, and an instance method has its receiver first. A
-    function, a method or a static of a binary library is the row whose
-    `link_symbol` is the symbol of the callee, as the `libraries` step files it. A
     conversion `<source>.as` has one `Owned` parameter. A function of a registry stdlib module is the row of its
     module, and each of its parameters borrows. A C function is the declaration of `externals`
     whose link name is the symbol of the callee: each parameter has the convention of its

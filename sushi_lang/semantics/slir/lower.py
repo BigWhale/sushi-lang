@@ -41,9 +41,8 @@ body is lowered again with what the walks found, until a walk finds nothing new.
 The symbol, the unit and the return type of the function are facts of its declaration (ir.md
 6.4); the body of an extension method or of a static takes the symbol of the method
 (`extension_decl_symbol`), the body of a perk method the perk symbol, and its receiver is
-`_1`. The unit is the declaring unit; a function that has none (a lifted lambda, the
-instance of a template of a binary library) goes into the module of the unit that holds its
-body.
+`_1`. The unit is the declaring unit; a function that has none (a lifted lambda) goes into
+the module of the unit that holds its body.
 """
 from __future__ import annotations
 

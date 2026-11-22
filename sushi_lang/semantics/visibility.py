@@ -313,9 +313,9 @@ def reject_private_cross_unit_use(
     `verb` overrides the kind's own verb for a position the kind cannot know: a function
     taken as a value is not called (`VALUE_VERB`).
 
-    `in_library_body` is the one caller-side escape: a library body transplanted into the
-    consumer's compile may call the library's own privates, and the code the user wrote may
-    not (#468).
+    `in_library_body` is the one caller-side escape: a library body in the consumer's
+    compile may call the library's own privates, and the code the user wrote may not
+    (#468).
 
     `table` is the second escape: a unit that declared this name ITSELF has already been
     told that its declaration lost, so telling it the name is private somewhere else is
@@ -414,9 +414,7 @@ def warn_shadowed_export(
     """CW3002: a consumer declaration takes the name of a function or a constant that a
     library or a stdlib module exports.
 
-    The one emitter for every library kind (#1103). The collect pass calls it for a
-    source library, and the `libraries` step calls it for a binary
-    library. A manifest record has no span, so its warning has no note.
+    The one emitter (#1103). The collect pass calls it for a source library.
     """
     diagnostic = er.emit_with(reporter, er.ERR.CW3002, name_span, filename=filename,
                               name=name, kind=kind, owner=owner)

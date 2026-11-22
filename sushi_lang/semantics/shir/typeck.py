@@ -50,14 +50,12 @@ class Tail:
 class ResolvedCall:
     """The callee of a call, with the type arguments of a generic function or method and,
     for a free function or an extension method, the name of the unit that declares it (C5).
-    SLIR lowering makes the symbol of a free function from it. A function, a method or a
-    static of a binary library has no unit: its symbol is the `link_symbol` of
-    the manifest (ir.md 8.6, S26). A callee with a variadic tail has its `Tail`. A callee
+    SLIR lowering makes the symbol of a free function from it (ir.md 8.6). A callee with a
+    variadic tail has its `Tail`. A callee
     with a `!` return never returns (docs/design/never-return.md)."""
     callee: Callee
     type_args: tuple[Type, ...] = ()
     unit: Optional[str] = None
-    link_symbol: Optional[str] = None
     tail: Optional[Tail] = None
     never_returns: bool = False
 

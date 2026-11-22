@@ -38,22 +38,16 @@ class Filed(Enum):
     UNRESOLVED = "unresolved"  # a side names no type yet; a later step or CE2001 answers
 
 
-def collect_conversion(collector: 'FunctionCollector', ext: ExtendDef, *,
-                       refile: bool = False) -> Filed:
-    """Judge one conversion and file it. The answer says whether it stays in the AST.
-
-    `refile` is the second call, from the `libraries` step, for a conversion whose
-    types only a binary library declares: the body was judged on the first call.
-    """
+def collect_conversion(collector: 'FunctionCollector', ext: ExtendDef) -> Filed:
+    """Judge one conversion and file it. The answer says whether it stays in the AST."""
     # The body is bare (C7), and the grammar has no place for a `| E`.
-    if not refile:
-        check_dont_panic(collector, ext)
-        reject_try_in_body(collector.r, ext.body, "a conversion",
-                           help_text="a conversion is bare, so handle the Result in "
-                                     "the body (match, .realise(default))")
-        if reject_misplaced_expands(collector.r, ext.body, frozenset(),
-                                    ext.target_type_span or ext.name_span):
-            collector.refused_pack_bodies.append("conversion")
+    check_dont_panic(collector, ext)
+    reject_try_in_body(collector.r, ext.body, "a conversion",
+                       help_text="a conversion is bare, so handle the Result in "
+                                 "the body (match, .realise(default))")
+    if reject_misplaced_expands(collector.r, ext.body, frozenset(),
+                                ext.target_type_span or ext.name_span):
+        collector.refused_pack_bodies.append("conversion")
 
     source = _side(collector, ext.target_type, "source", ext.target_type_span)
     target = _side(collector, ext.ret, "target", ext.ret_span)

@@ -26,7 +26,6 @@ from .perks import (
     check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
     validate_perk_implementation,
 )
-from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.shir.ids import ShirId
 
 
@@ -126,11 +125,6 @@ def _leave_body(self) -> None:
     self.in_synthesized_body = False
 
 
-def unit_tables(self):
-    """Every unit's namespace table, for a body that resolves in another unit's (#1120)."""
-    return getattr(getattr(self, "tables", None), "namespaces", None)
-
-
 def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozenset()) -> None:
     """CE0140, then CE0107, for the SHIR body of one function or method, and the faults
     of a borrowed return of its declaration. `uncovered` holds the matches of the body
@@ -151,18 +145,11 @@ def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozen
 
 def validate_function(self, func: FuncDef) -> None:
     """Validate the header of a function, then walk its SHIR body (`check_body`)."""
-    with in_body_scope(self, "namespaces", func, unit_tables(self)):
-        _validate_function_body(self, func)
-
-
-def _validate_function_body(self, func: FuncDef) -> None:
     self.current_function = func
-    self.in_library_body = (self.in_library_unit
-                            or bool(getattr(func, "is_library_template", False)))
+    self.in_library_body = self.in_library_unit
     self.in_synthesized_body = bool(getattr(func, "is_synthesized", False))
-    # And whose body it is: the file its spans belong to (#471), and whether it is one
-    # of many copies of one source (#648). Set on every entry, so an ordinary body
-    # clears what a transplanted or copied one set.
+    # Whether this body is one of many copies of one source (#648). Set on every
+    # entry, so an ordinary body clears what a copied one set.
     self.reporter.enter_body(func)
     header = self.errors_offered()
     _enter_body(self, func, func.name, "function", func.ret, func.err_type,
@@ -201,8 +188,7 @@ def _validate_target_type(self, target_type, span, synthesized: bool) -> None:
     copy: it is checked in its home unit, but its type arguments were written at the
     call site and that site's own unit validated them (#1064), so the copy names nothing.
     """
-    # An extension body is never a transplanted library body, so what a previously
-    # validated function set must not colour this diagnostic (#471).
+    # What a previously validated function set must not colour this diagnostic.
     self.reporter.leave_body()
     self.in_synthesized_body = synthesized
     validate_type_name(self, target_type, span)
@@ -235,14 +221,8 @@ def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
     An extension method and a perk-implementation method differ in one thing only: where
     the target type comes from -- the declaration itself, or the `extend X with P` header.
     """
-    with in_body_scope(self, "namespaces", method, unit_tables(self)):
-        _validate_method_statements(self, target_type, method, synthesized)
-
-
-def _validate_method_statements(self, target_type, method, synthesized: bool) -> None:
     self.current_function = None
-    self.in_library_body = (self.in_library_unit
-                            or bool(getattr(method, "is_library_template", False)))
+    self.in_library_body = self.in_library_unit
     self.in_synthesized_body = synthesized
     # Whether this body is one of many copies of one source: a perk-implementation
     # method cut per instantiation is (#800); an extension method never is.

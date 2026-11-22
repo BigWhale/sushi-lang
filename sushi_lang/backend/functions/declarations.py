@@ -77,8 +77,7 @@ class FunctionDeclarations:
     def emit_extension_method_decl(self, ext: 'MethodDecl') -> ir.Function:
         """Create LLVM function prototype for extension method.
 
-        The method is filed under the symbol its call site names. A method that a
-        binary library ships keeps the name its bitcode gave it (`link_name`).
+        The method is filed under the symbol its call site names.
         """
         param_types = []
         param_names = []
@@ -102,7 +101,7 @@ class FunctionDeclarations:
 
         func_type = call_signature(declared_return_ll(self.codegen, ext),
                                    param_types).function_type
-        llvm_fn = ir.Function(self.codegen.module, func_type, name=ext.link_name)
+        llvm_fn = ir.Function(self.codegen.module, func_type, name=ext.symbol)
 
         for i, name in enumerate(param_names):
             if i < len(llvm_fn.args):

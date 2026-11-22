@@ -59,7 +59,6 @@ class MethodDecl:
     """An extension method, a static, or a method of a perk implementation."""
     name: str
     symbol: str
-    link_name: str
     receiver: Optional[Type]
     by_pointer: bool
     params: tuple[tuple[str, Type], ...]
@@ -79,7 +78,6 @@ class GlobalDecl:
     data_name: str
     ty: Optional[Type]
     is_var: bool
-    link_symbol: Optional[str]
     empty: bool
     value: Optional[ConstantValue]
     loc: Optional[Span]
@@ -168,7 +166,7 @@ class _Builder:
         symbol = extension_decl_symbol(ext, unit_name)
         receiver = ext.target_type if ext.target_type and not ext.is_static else None
         return MethodDecl(
-            name=ext.name, symbol=symbol, link_name=ext.link_symbol or symbol,
+            name=ext.name, symbol=symbol,
             receiver=receiver, by_pointer=_by_pointer(receiver, ext.self_mode),
             params=self.typed_params(ext.name, ext.params), ret=ext.ret, err_type=ext.err_type,
             written_channel=ext.written_channel, home_unit=ext.home_unit, body=self.body(ext))
@@ -181,7 +179,7 @@ class _Builder:
         symbol = method_symbol(target, method.name, None)
         receiver = target if target else None
         return MethodDecl(
-            name=method.name, symbol=symbol, link_name=symbol, receiver=receiver,
+            name=method.name, symbol=symbol, receiver=receiver,
             by_pointer=_by_pointer(receiver, method.self_mode), params=params, ret=ret,
             err_type=err_type, written_channel=method.written_channel, home_unit=None,
             body=body)
@@ -225,24 +223,20 @@ class _Builder:
         return ty
 
     def global_of(self, const: ConstDef, unit_name: str) -> GlobalDecl:
-        """A constant or a `var`, with the folded value of its initializer (Q5). A compiled
-        library's declaration is a name of the library unit, and its initializer reads that
-        unit's scope (#1120)."""
-        unit = const.scope_unit or unit_name
-        sig = self.tables.constants.record_of(const, unit)
+        """A constant or a `var`, with the folded value of its initializer (Q5)."""
+        sig = self.tables.constants.record_of(const, unit_name)
         ty = None if sig is None else sig.const_type
         is_var = isinstance(const, VarDef)
-        link_symbol = const.link_symbol if isinstance(const, VarDef) else None
         empty = is_var and allocates_nothing(const.value)
         # A library constant's copy takes the symbol of the unit that declared it, so its
         # bytes never take the name of a function in the unit that holds the copy (#1101).
-        data_unit = unit if is_var else (const.home_unit or unit)
-        folds = link_symbol is None and not empty
+        data_unit = unit_name if is_var else (const.home_unit or unit_name)
         return GlobalDecl(
-            name=const.name, unit=unit, symbol=global_symbol(const, unit),
+            name=const.name, unit=unit_name, symbol=global_symbol(const, unit_name),
             data_name=mangle_unit_symbol(data_unit, f".str_data.{const.name}"), ty=ty,
-            is_var=is_var, link_symbol=link_symbol, empty=empty,
-            value=self.folded(const, ty, unit) if folds and ty is not None else None,
+            is_var=is_var, empty=empty,
+            value=(self.folded(const, ty, unit_name)
+                   if not empty and ty is not None else None),
             loc=const.loc)
 
     def folded(self, const: ConstDef, ty: Type, unit: str) -> Optional[ConstantValue]:

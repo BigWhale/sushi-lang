@@ -1,9 +1,8 @@
-"""The SLIR verifier over a callee of a binary library (docs/design/ir.md 8.6, 8.13).
+"""The SLIR verifier over a callee of a library unit (docs/design/ir.md 8.6, 8.13).
 
-A function, a method or a static of such a library has no declaring unit in the build: its
-symbol is its `link_symbol`, and the `libraries` step files it in the function table or in
-the extension table with that symbol. The verifier finds the declared parameters of a
-`Direct` library callee there. Each test calls a Python function over data and does not run
+A function, a method or a static of a library has the symbol of its name in its library
+unit (`lib/<library>/<unit>`). The verifier finds the declared parameters of a `Direct`
+library callee by that symbol. Each test calls a Python function over data and does not run
 the compiler.
 """
 from __future__ import annotations
@@ -12,6 +11,7 @@ import pytest
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect.functions import (
     ExtensionMethod, ExtensionTable, FuncSig, FunctionTable, Param)
@@ -29,44 +29,43 @@ BAD = Span(7, 5, 7, 20)
 OWNED, GUARANTEED = Convention.OWNED, Convention.GUARANTEED
 I32, STRING, BLANK = BuiltinType.I32, BuiltinType.STRING, BuiltinType.BLANK
 CRATE = StructType(name="Crate", fields=(("weight", I32),))
-UNIT = "lib/lc_bin/lc_callee_lib"
+UNIT = "lib/lc_src/lc_callee_lib"
+SHOUT = function_symbol("shout", UNIT)
 
 
 def _library_tables() -> tuple[FunctionTable, ExtensionTable]:
     funcs, extensions = FunctionTable(), ExtensionTable()
     funcs.declare("shout", FuncSig("shout", params=[Param("s", STRING, None, None, 0,
                                                           is_nom=True)],
-                                   unit_name=UNIT, link_symbol="lc_callee_lib$shout"))
+                                   unit_name=UNIT))
     weight = [Param("weight", I32, None, None, 0)]
-    extensions.add_method(ExtensionMethod(CRATE, "heavy", params=[], unit_name=UNIT,
-                                          link_symbol="lc_callee_lib$Crate_heavy"))
+    extensions.add_method(ExtensionMethod(CRATE, "heavy", params=[], unit_name=UNIT))
     extensions.add_method(ExtensionMethod(CRATE, "of", params=weight, unit_name=UNIT,
-                                          is_static=True,
-                                          link_symbol="lc_callee_lib$Crate_of"))
+                                          is_static=True))
     return funcs, extensions
 
 
-def test_a_function_of_a_library_is_found_by_its_link_symbol():
+def test_a_function_of_a_library_is_found_by_its_unit_symbol():
     funcs, extensions = _library_tables()
-    assert declared_params(funcs, extensions, st.Direct("lc_callee_lib$shout", "shout")) \
+    assert declared_params(funcs, extensions, st.Direct(SHOUT, "shout")) \
         == DeclaredParams((OWNED,))
     assert declared_params(funcs, extensions, st.Direct("other$shout", "shout")) is None
 
 
-def test_a_method_and_a_static_of_a_library_are_found_by_their_link_symbol():
+def test_a_method_and_a_static_of_a_library_are_found_by_their_unit_symbol():
     funcs, extensions = _library_tables()
     assert declared_params(funcs, extensions,
-                           st.Direct("lc_callee_lib$Crate_heavy", "Crate.heavy")) \
+                           st.Direct(method_symbol(CRATE, "heavy", UNIT), "Crate.heavy")) \
         == DeclaredParams((GUARANTEED,))
     assert declared_params(funcs, extensions,
-                           st.Direct("lc_callee_lib$Crate_of", "Crate.of")) \
+                           st.Direct(method_symbol(CRATE, "of", UNIT), "Crate.of")) \
         == DeclaredParams((GUARANTEED,))
     assert declared_params(funcs, extensions,
                            st.Direct("other$Crate_of", "Crate.of")) is None
 
 
-def test_an_instance_of_a_template_of_a_binary_library_is_found_with_no_unit():
-    """The instance has no declaring unit in the build, so its symbol has no unit prefix."""
+def test_a_function_with_no_unit_is_found_in_the_flat_view():
+    """A declaration with no unit has a symbol with no unit prefix."""
     funcs, extensions = FunctionTable(), ExtensionTable()
     funcs.declare("only_id__i32", FuncSig("only_id__i32", params=[Param("x", I32, None, None,
                                                                         0)]))
@@ -78,7 +77,7 @@ def test_an_instance_of_a_template_of_a_binary_library_is_found_with_no_unit():
 
 def test_a_call_of_a_library_function_with_a_wrong_argument_count_is_refused():
     funcs, extensions = _library_tables()
-    call = st.Call(p.Local(LocalId(1)), st.Direct("lc_callee_lib$shout", "shout"), (), BAD)
+    call = st.Call(p.Local(LocalId(1)), st.Direct(SHOUT, "shout"), (), BAD)
     block = SlirBlock(BlockId(0), (call,), tm.Return(BAD))
     function = SlirFunction("unit$probe", "probe", "unit", (),
                             (SlirLocal(LocalId(0), BLANK, None, None),
@@ -90,10 +89,3 @@ def test_a_call_of_a_library_function_with_a_wrong_argument_count_is_refused():
     assert caught.value.code == "CE0158"
     assert caught.value.params["rule"] == CONVENTIONS
     assert "has 0 arguments, and @shout declares 1" in caught.value.params["detail"]
-
-
-def test_a_function_with_a_link_symbol_is_found_by_that_symbol_alone():
-    """One symbol for each row: the link symbol of a library function, never its unit symbol."""
-    funcs, extensions = _library_tables()
-    assert declared_params(funcs, extensions,
-                           st.Direct(function_symbol("shout", UNIT), "shout")) is None

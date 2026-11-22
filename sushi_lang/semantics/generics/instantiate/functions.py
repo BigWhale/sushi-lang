@@ -143,11 +143,9 @@ class FunctionCollector:
     def collect_from_signature(self, ret, err_type, params, ret_span=None) -> None:
         """The instantiations a signature names: the return, the Result it answers, the parameters.
 
-        ONE walk for a unit's `FuncDef` and a library's `FuncSig` (#543): a binary
-        library's `fn make_box(i32 v) Box@(i32)` reaches the consumer as a manifest record
-        and no unit walk ever sees it, so `Box<i32>` was never interned and the backend
-        answered CE0020. A function with a channel answers `Result<T, E>`, so that wrapper
-        is recorded too; a bare one answers its return alone.
+        ONE walk for every signature (#543). A function with a channel answers
+        `Result<T, E>`, so that wrapper is recorded too; a bare one answers its return
+        alone.
         """
         if ret is not None:
             self._collect_from_type(ret, ret_span)

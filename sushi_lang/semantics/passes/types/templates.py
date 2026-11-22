@@ -172,7 +172,6 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     # template for the mute. Its target is then validated as a written type, which is the
     # R1 check of the target against the bounds of its base.
     header.home_unit = None
-    header.scope_unit = None
     header.template_id = None
     _settle(scope, marks, [header])
     checker = _checker(check, opaque)

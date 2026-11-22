@@ -208,9 +208,7 @@ class UnitManager:
         rather than stored, because injection happens after the units are loaded.
 
         It used to be a hand-patch in the collect loop instead: library units pulled to
-        the front, because the order could not say why they belonged there. An import a
-        binary `.slib` answers matches no unit and adds no edge, which is right -- a
-        binary library has no unit to compile.
+        the front, because the order could not say why they belonged there.
         """
         graph = {unit.name: list(unit.dependencies) for unit in self.units.values()}
         for unit in self.units.values():

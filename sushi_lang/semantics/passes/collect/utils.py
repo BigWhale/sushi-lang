@@ -12,7 +12,6 @@ from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import Param as CollectedParam
-    from sushi_lang.semantics.visibility import DeclOrigin, VisibilityTable
 
 
 class TypeNameTable(Protocol):
@@ -153,45 +152,23 @@ def param_from_node(p: Param, idx: int) -> 'CollectedParam':
 
 def note_first_declaration(builder: Any, spans: dict, name: str,
                            what: str = "first defined here",
-                           files: Optional[dict] = None,
-                           library: Optional['DeclOrigin'] = None) -> Any:
+                           files: Optional[dict] = None) -> Any:
     """Attach the ORIGINAL declaration's location to a duplicate-declaration error.
 
     `files` answers which unit that declaration was in. The current unit is not the
     answer: the note points at a table entry, and the entry may have been made while
-    another unit was being collected (#473). `library` is the declaration a BINARY
-    library shipped: the note names its `.slib` (#972). That rule comes first, because
-    the span of a shipped template indexes into its manifest slice, not into a file.
+    another unit was being collected (#473).
     """
-    if library is not None and library.filename is not None:
-        return builder.note(f"declared by the library {library.filename}")
     prev = spans.get(name)
     if prev is not None:
         return builder.note_at(what, prev, files.get(name) if files else None)
     return builder.note("defined by the compiler")
 
 
-def shipped_type_origin(table: Optional['VisibilityTable'],
-                        name: str) -> Optional['DeclOrigin']:
-    """The record of a type name whose declaration came with a file and no span.
-
-    That is a binary library's type: its `.slib` is the one location there is. A
-    predefined type has no record, and a declaration in source carries its span.
-    """
-    if table is None:
-        return None
-    for kind in ("struct", "enum"):
-        origin = table.origin(kind, name)
-        if origin is not None and origin.filename is not None and origin.name_span is None:
-            return origin
-    return None
-
-
 def reject_duplicate_type_name(
     reporter, kind: str, name: str, name_span: Optional[Span],
     rules: Sequence[TakenName],
     library_clash: Optional[Callable[[str, Optional[Span]], bool]] = None,
-    visibility: Optional['VisibilityTable'] = None,
     generic: bool = False,
 ) -> bool:
     """A TYPE name is one per program: refuse the second declaration of it.
@@ -200,8 +177,7 @@ def reject_duplicate_type_name(
     caller lists them, and the first that holds the name answers with its own code and
     its own note. `library_clash` is the CE3011 arm: a source library's PRIVATE type
     took the name, which is a different fault from the plain duplicate, and it is asked
-    once, before the arms, exactly when some table holds the name. `visibility`
-    names the binary library that holds a name the tables carry with no span. In one
+    once, before the arms, exactly when some table holds the name. In one
     unit, source order decides first (`unit_names.py`), so a clash that reaches here
     between a struct and an enum is one between two units.
     """
@@ -221,7 +197,6 @@ def reject_duplicate_type_name(
                              kind=type_kind_word(kind, generic), word=kind,
                              other=other),
                 rule.table.spans, name, what=what, files=rule.table.files,
-                library=shipped_type_origin(visibility, name),
             ).emit()
             return True
     return False

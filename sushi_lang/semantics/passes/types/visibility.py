@@ -2,13 +2,13 @@
 
 The rule itself lives in `semantics/visibility.py`, which answers for every kind of
 declaration. This module is the pass's adapter: it holds the two things only a use site
-knows -- the validator it is running inside, and that a transplanted library body is
+knows -- the validator it is running inside, and that a library body is
 allowed to call its own library's privates (#468). A call and a bare constant read ask
 the same two questions, so they ask them here.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AbstractSet, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.namespaces import (
@@ -36,8 +36,7 @@ __all__ = ["built_in_generic_unreachable", "calling_unit", "extension_reaches",
            "reject_ambiguous_extension", "reject_ambiguous_name",
            "reject_unreachable_extension",
            "reject_out_of_scope_perk", "reject_out_of_scope_type",
-           "reject_private_call", "reject_private_kept",
-           "reject_private_kept_call", "reject_private_name",
+           "reject_private_call", "reject_private_name",
            "reject_private_type", "type_is_contested", "type_name_is_contested",
            "name_was_refused", "reject_undefined_function"]
 
@@ -121,18 +120,14 @@ def reject_out_of_scope_perk(validator: 'TypeValidator', name: str, loc: Any) ->
     """CE4003: a perk some unit declares and THIS unit cannot name (#1124).
 
     One rule for every perk position -- an implementation, a constraint, a pack
-    constraint -- and the scope is the one the other names read. A perk that a compiled
-    library ships has no visibility record, so its `lib/<library>/<unit>` key is asked
-    instead. A predefined perk has neither, and is in every scope.
+    constraint -- and the scope is the one the other names read. A predefined perk has no
+    visibility record, and is in every scope.
     """
     if getattr(validator, "in_synthesized_body", False) or validator.in_library_unit:
         return False
     declarer = _unreachable_declarer(validator, ("perk",), name)
     if declarer is None:
-        library_unit = validator.perk_table.library_units.get(name)
-        if library_unit is None or validator.scope.holds_unit(library_unit):
-            return False
-        declarer = library_unit
+        return False
     er.emit_with(validator.reporter, er.ERR.CE4003, loc, perk=name) \
         .help(import_help(declarer, tables=_unit_tables(validator))).emit()
     return True
@@ -169,16 +164,6 @@ def out_of_scope_help(validator: 'TypeValidator', kind: str,
                 return import_help(origin.unit_name, tables=_unit_tables(validator))
     if kind != "function":
         return None
-    # A compiled library's function has no visibility record: its unit-keyed entry
-    # says which library unit declares it (#1120).
-    tables = _unit_tables(validator) or {}
-    for by_unit in (validator.func_table.by_unit, validator.generic_func_table.by_unit):
-        for unit_name, declared in by_unit.items():
-            sig = declared.get(name)
-            if (sig is not None and getattr(sig, "is_public", False)
-                    and getattr(tables.get(unit_name), "library", None) is not None
-                    and not validator.scope.holds_unit(unit_name)):
-                return import_help(unit_name, tables=tables)
     found = validator.func_table.lookup_stdlib_by_name(name)
     if found is not None and not validator.scope.holds_module(found[0]):
         return import_help(found[0], stdlib=True)
@@ -279,43 +264,6 @@ def reject_private_call(validator: 'TypeValidator', kind: str, sig: Any, loc: An
     return _reject(validator, origin_of(kind, sig), loc)
 
 
-def reject_private_kept_call(
-    validator: 'TypeValidator', name: str, loc: Any,
-    *, library: str, kind: Optional[str],
-) -> bool:
-    """Reject a call to a name a LIBRARY declares and does not export (#469).
-
-    No signature travels with a kept name, so there is no record to read: the manifest
-    says which kind it was and that the library kept it, and that is the whole origin.
-    """
-    return _reject(validator, DeclOrigin(
-        kind=kind or "function", name=name, unit_name=library, is_public=False,
-    ), loc)
-
-
-#: The kinds of a kept record that a bare name reads: a `const` and a unit `var`.
-KEPT_STORAGE_KINDS = frozenset({"constant", "variable"})
-
-
-def reject_private_kept(validator: 'TypeValidator', name: str, loc: Any,
-                        *, kinds: AbstractSet[str]) -> bool:
-    """Reject a MENTION of a name a library declares and keeps, of one of these kinds.
-
-    The call site has its own entry above, because a call knows the name is a callee.
-    Every other position -- a type name, a bare constant read -- looks the name up and
-    finds nothing, so it has to ask the manifest before it says "unknown".
-    """
-    kept = validator.library_not_exported.get(name)
-    if kept is None:
-        return False
-    library, kind = kept
-    if kind not in kinds:
-        return False
-    return _reject(validator, DeclOrigin(
-        kind=kind, name=name, unit_name=library, is_public=False,
-    ), loc)
-
-
 def reject_private_name(validator: 'TypeValidator', kind: str, record: Any,
                         loc: Any, *, verb: Optional[str] = None) -> bool:
     """Reject a bare mention of another unit's private declaration (a constant).
@@ -356,12 +304,8 @@ def reject_private_type(validator: 'TypeValidator', name: str, loc: Any) -> bool
 
 
 def calling_unit(validator: 'TypeValidator') -> Optional[str]:
-    """The unit whose code is being validated, for the method rule.
-
-    A copy of a compiled library's template is checked in a unit of the consumer and
-    reads the scope of the library unit that declares it (#1120). Its calls are that
-    unit's calls, so the scope says which unit asks.
-    """
+    """The unit whose code is being validated, for the method rule: the unit of the
+    scope, else the current unit."""
     unit = getattr(validator.scope, "unit", None)
     return unit if unit is not None else validator.current_unit_name
 
@@ -370,8 +314,8 @@ def extension_reaches(validator: 'TypeValidator', records: list, receiver_type: 
                       ) -> list[tuple[Any, MethodReach]]:
     """What each extension record is to the unit being validated.
 
-    A transplanted library body may call its library's private methods, as it may call
-    its private functions (#468).
+    A library body may call its library's private methods, as it may call its private
+    functions (#468).
     """
     asker = calling_unit(validator)
     escape = bool(getattr(validator, "in_library_body", False))
@@ -391,8 +335,7 @@ def _method_name(receiver_type: Any, method_name: str) -> str:
 
 
 def _note_declared(validator: 'TypeValidator', diagnostic, record: Any, at: str):
-    """A note at a declaration, or a prose note where a record has no span: a compiled
-    library ships a signature and no source."""
+    """A note at a declaration, or a prose note where a record has no span."""
     if record.name_span is not None and record.filename is not None:
         return diagnostic.note_at(at, record.name_span, record.filename)
     tables = _unit_tables(validator) or {}
@@ -448,13 +391,9 @@ def reject_ambiguous_extension(validator: 'TypeValidator', receiver_type: Any,
 def reject_undefined_function(validator: 'TypeValidator', name: str, loc: Span) -> None:
     """CE2008 for a name that no function of the unit's scope takes.
 
-    A name that a library keeps is refused as kept (#469), and a name that the unit
-    declared under another kind was refused at its declaration (#1102).
+    A name that the unit declared under another kind was refused at its declaration
+    (#1102).
     """
-    kept = validator.library_not_exported.get(name)
-    if kept is not None and reject_private_kept_call(validator, name, loc, library=kept[0],
-                                                     kind=kept[1]):
-        return
     if name_was_refused(validator, name):
         return
     diag = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=name)

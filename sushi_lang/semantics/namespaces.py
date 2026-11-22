@@ -25,9 +25,8 @@ set, and both halves of the answer read it: `lookup`/`members` for the dot, and 
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import (AbstractSet, Any, Dict, Iterable, Iterator, Mapping, Optional,
+from typing import (AbstractSet, Any, Dict, Iterable, Mapping, Optional,
                     Tuple, TypeVar)
 
 from sushi_lang.internals.report import Span
@@ -63,8 +62,8 @@ class UnitScope:
     compilation unit, a registry stdlib module, and the built-in generic an import
     activates. A declaration that belongs to no unit -- a monomorphized instance, a
     lifted lambda, every synthesized type -- is in scope everywhere, which is the
-    escape `visibility._permitted` takes for the same reason. A compiled library's
-    declaration belongs to its `lib/<library>/<unit>`, as a source library's does.
+    escape `visibility._permitted` takes for the same reason. A library's declaration
+    belongs to its `lib/<library>/<unit>`.
 
     `units` is a TUPLE in `use` order, so which declaration answers is decided the same
     way twice. A name two imports offer is `CE3012` at the use, and the reader that has a
@@ -291,10 +290,7 @@ class ExternalNamespace(Provider):
 class UnitNamespace(Provider):
     """One unit's own declarations, from whichever producer collected them.
 
-    The three views are handed in rather than read out of a `SymbolTables`, because a
-    BINARY library has no AST at all: its records arrive from a manifest, and the
-    manifest names the unit of every one of them. Both producers hand the same three
-    mappings to this one provider.
+    The three views are handed in rather than read out of a `SymbolTables`.
 
     `others` carries the kinds a qualified form cannot reach yet -- a struct, an enum
     and a perk. They are members, so an alias over a unit that declares only those is
@@ -302,8 +298,7 @@ class UnitNamespace(Provider):
     phase that lifts it).
 
     `reexports` is what the unit's `public use` statements name (section 8.1), built by
-    the pass from the unit's own AST -- or, for a compiled library's unit, which has no
-    AST at all, from the manifest's `reexports` record of the same statement (#585).
+    the pass from the unit's own AST.
     `hidden` is the subset of `others` the unit declares without `public`; a function or
     a constant carries its own marker.
     """
@@ -479,41 +474,6 @@ class NamespaceTable:
             binding = self.lookup(alias, name)
             return None if binding is None else binding.record
         return constants.lookup(written, scope=self.scope)
-
-
-def body_namespaces(node: Any,
-                    tables: Optional[Mapping[str, NamespaceTable]]) -> Optional[NamespaceTable]:
-    """The table that the names of one body resolve in, when it is not its unit's.
-
-    A copy of a compiled library's template, and a constant that a compiled library
-    ships, land in a unit of the consumer and carry `scope_unit`: the library unit whose
-    declarations and imports the body names (#1120). Every other node answers None, and
-    its unit's own table holds.
-    """
-    unit = getattr(node, "scope_unit", None)
-    if unit is None or tables is None:
-        return None
-    return tables.get(unit)
-
-
-@contextmanager
-def in_body_scope(holder: Any, attr: str, node: Any,
-                  tables: Optional[Mapping[str, NamespaceTable]], *,
-                  as_scope: bool = False) -> Iterator[None]:
-    """Read one body in the table `body_namespaces` gives, then restore the holder.
-
-    `attr` is the holder's field: a `NamespaceTable`, or its `UnitScope` (`as_scope`).
-    """
-    table = body_namespaces(node, tables)
-    if table is None:
-        yield
-        return
-    saved = getattr(holder, attr)
-    setattr(holder, attr, table.scope if as_scope else table)
-    try:
-        yield
-    finally:
-        setattr(holder, attr, saved)
 
 
 def suggest_member(members: Iterable[str], written: str) -> Optional[str]:
