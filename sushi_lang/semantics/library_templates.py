@@ -127,9 +127,13 @@ def signature_record(func: "FuncDef | ExtendDef") -> dict:
         #
         # `is_pack` is written for the parameter that takes a type pack (`...Ts args`)
         # alone: its type string is the pack's bare name, and the report needs the `...`.
+        # `variadic` is written for a native `...T` parameter alone (a source library):
+        # its type string is the element type `T` as written, not the `T[]` of the body.
         "params": [
-            {"name": p.name, "type": type_string(p.ty), "mode": param_mode(p).value,
-             **({"is_pack": True} if p.is_pack else {})}
+            {"name": p.name, "type": type_string(p.ty.base_type if p.is_variadic else p.ty),
+             "mode": param_mode(p).value,
+             **({"is_pack": True} if p.is_pack else {}),
+             **({"variadic": True} if p.is_variadic else {})}
             for p in func.params
         ],
         "return_type": type_string(func.ret),

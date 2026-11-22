@@ -443,7 +443,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.9
+Protocol: 2.10
 
 Units (1):
   mylib
@@ -821,10 +821,13 @@ Current limitations of the library system:
    foreign `ptr`, cannot be exported (**[CE5006](error-catalog.md#ce5006)**; see also **[CE5002](error-catalog.md#ce5002)**). Wrap the foreign
    detail behind a private helper with a C-ABI-free signature. This applies to every kind,
    source included.
-4. **A public native variadic cannot be exported**: a `...T` variadic collects into a runtime
-   `T[]` inside one concrete function, so there is no template to monomorphize and public
-   export is **[CE0116](error-catalog.md#ce0116)**. A type pack (`...Ts`) is different: it exports as a template. This
-   applies to every kind, source included.
+4. **A public native variadic cannot be in a binary library**: a `...T` variadic collects
+   into a runtime `T[]` inside one concrete function, and the binary path cannot describe
+   that call, so a public one in a `--lib-kind binary` library is **[CE0116](error-catalog.md#ce0116)**. A source
+   library can have one: the consumer compiles the unit as its own, and calls it with any
+   count of trailing arguments or with a bloom `arr...`. `--lib-info` prints the parameter
+   as it is written (`...i32 nums`). A type pack (`...Ts`) exports as a template in both
+   kinds.
 5. **Generic instantiation across a BINARY boundary**: the notes below describe how generics
    cross a `--lib-kind binary` library. A source library needs none of this machinery — its
    generics are ordinary source in ordinary units, so they monomorphize exactly as they would

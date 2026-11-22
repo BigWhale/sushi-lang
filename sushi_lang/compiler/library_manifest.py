@@ -253,7 +253,7 @@ class LibraryManifestGenerator:
         # The public API is extracted FIRST, because that is what can reject the library
         # (CE0116, CE5002). A rejected build writes no container at all, and the pipeline
         # turns the reporter's state into the exit code (#436).
-        public_functions = self._extract_public_functions(units)
+        public_functions = self._extract_public_functions(units, kind)
         if self.analyzer.reporter.has_errors:
             return
 
@@ -262,7 +262,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.9",
+            "sushi_lib_version": "2.10",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -334,8 +334,12 @@ class LibraryManifestGenerator:
 
         LibraryFormat.write(output_path, manifest, bitcode, source=source)
 
-    def _extract_public_functions(self, units: list['Unit']) -> list[dict]:
-        """Extract public function signatures from units."""
+    def _extract_public_functions(self, units: list['Unit'], kind: str) -> list[dict]:
+        """Extract public function signatures from units.
+
+        `kind` is the kind of the library (`generate`); CE0116 is a rule of the binary
+        kind alone.
+        """
         import sushi_lang.internals.errors as er
 
         public_funcs = []
@@ -353,16 +357,19 @@ class LibraryManifestGenerator:
                 if func.type_params:
                     continue
 
-                # CE0116. A v1 native `...T` collects its trailing args into a runtime T[]
-                # in ONE concrete function, so there is no template to monomorphize at the
-                # consumer. A v2 pack `...Ts` carries type_params and left through the
-                # template route above. The discriminator is is_variadic vs is_pack, NOT
-                # the `...` spelling they share.
+                # CE0116, the binary kind alone. A v1 native `...T` collects its trailing
+                # args into a runtime T[] in ONE concrete function, and the binary path
+                # cannot describe that call. A source library ships the unit as
+                # text, so the consumer compiles the function and its calls like its own;
+                # the record marks the parameter `variadic`. A v2 pack `...Ts` carries
+                # type_params and left through the template route above. The
+                # discriminator is is_variadic vs is_pack, NOT the `...` spelling they
+                # share.
                 # A rejection emits and moves on. `generate()` writes nothing once the
                 # reporter holds an error, so the partial list this returns is discarded,
                 # and every bad export is named in one build instead of one per build.
                 # Raising here reached the top-level guard as a spurious CE0000 (#436).
-                if any(getattr(p, "is_variadic", False) for p in func.params):
+                if kind == "binary" and any(p.is_variadic for p in func.params):
                     er.emit(self.analyzer.reporter, er.ERR.CE0116,
                             getattr(func, "name_span", None) or func.loc, name=func.name)
                     continue

@@ -6,6 +6,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A source library can have a public native variadic function.** A public `...T` function
+  in a `--lib-kind source` library was CE0116, as in a binary library. Now only a binary
+  library refuses one. The consumer compiles the unit of a source library as its own, so it
+  calls the function with any count of trailing arguments or with a bloom `arr...`. The
+  index marks the parameter with the new field `variadic`, and its `type` is the element
+  type as written. Both halves of `--lib-info` print the parameter as `...T name`. The
+  manifest protocol is `2.10`.
+
 - **A `.slib` loads only under its own name.** The consumer refuses a library whose
   `library_name` (the stem of the output file of its build) is not the name of the `use`
   that loaded it (the last part of the `use` path), with the new code CE3521. A copied or

@@ -146,7 +146,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.9",        # Protocol version
+    "sushi_lib_version": "2.10",       # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary", matching KIND; no kind is source
@@ -235,7 +235,12 @@ is the authority, and the index is a cache of it.
     #
     #   SIG = {
     #       "params": [{"name": str, "type": str, "mode": str,
-    #                   "is_pack": bool}],  # Present (true) for `...Ts args` alone
+    #                   "is_pack": bool,    # Present (true) for `...Ts args` alone
+    #                   "variadic": bool}], # Present (true) for a native `...T` alone;
+    #                                       #   `type` is then `T`, not the `T[]` of the
+    #                                       #   body. Only a source library writes it: a
+    #                                       #   binary library refuses `...T` (CE0116).
+    #                                       #   Since protocol 2.10
     #       "return_type": str,
     #       "has_channel": bool,       # Required: does a call answer a Result
     #       "error_type": str,         # If the declaration says `| E`
@@ -704,7 +709,7 @@ Version: 1.0.0
 Kind: source
 Compiler: 0.17.0
 Requires compiler: ~0.14
-Protocol: 2.9
+Protocol: 2.10
 
 Units (1):
   mylib

@@ -72,8 +72,8 @@ _add(ErrorMessage("CE0115", Severity.ERROR,
     Category.FUNC, "Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods. A type pack '...Ts' is refused in the type-parameter list of a struct, an enum, an error type, an extension method and a static method: a pack has two halves, and only a free function has the parameter list for its value pack '...Ts name'. The caret is on the '...Ts'. When a method has a type pack and a value pack, the type pack is the one fault. The analysis stops after the refusal, so a written instance of the type or a call of the method adds no second diagnostic."))
 
 _add(ErrorMessage("CE0116", Severity.ERROR,
-    "public function '{name}' is variadic and cannot appear in a library public API",
-    Category.FUNC, "Native variadic functions cannot be exported through a .slib public API in v1 (the variadic flag is not serialized into the library format)."))
+    "public function '{name}' is variadic and cannot appear in the public API of a binary library",
+    Category.FUNC, "A public native variadic function ('...T') cannot be in a binary library: the binary path cannot describe the call, which collects the trailing arguments into a 'T[]'. A source library can have one: the consumer compiles the unit of the library as its own, and the index marks the parameter 'variadic' (protocol 2.10). The escape is '--lib-kind source', or a 'T[]' parameter in place of '...T'. A type pack ('...Ts') is not refused: it ships as a template in both kinds. Until protocol 2.10 the code fired for a source library too."))
 
 _add(ErrorMessage("CE0117", Severity.ERROR,
     "{message}",

@@ -136,7 +136,7 @@ authority, and the index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.9"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"2.10"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
 | `library_name` | from the output filename |
 | `library_version` | see §6 |
 | `requires_compiler` | see §6 |
@@ -450,13 +450,15 @@ the spelled channel is the Err arm, an explicit `Result@(T, E)` return is not wr
 again, and a signature with neither is bare: the call yields the value. Two checks gate the
 record, both raising and aborting the `.slib` write (no partial artifact):
 
-- **[CE0116](../error-catalog.md#ce0116)** — a native `...T` variadic function cannot appear here. The registry
-  gives the reason as a serialization gap: the variadic flag is not written into the
-  library format. (A type-pack `...Ts` function is unaffected — it carries
-  `type_params` and is filtered into `generic_functions` before this check is reached;
-  the discriminator is `is_pack` vs `is_variadic`, not the shared `...` spelling.)
-  This check fires on the source path too, because the producer builds the index for
-  every kind (§9).
+- **[CE0116](../error-catalog.md#ce0116)** — a native `...T` variadic function cannot appear here in a
+  BINARY library. The binary path cannot describe the call, which collects the trailing
+  arguments into a `T[]`. A SOURCE library can have one (protocol 2.10): the consumer
+  compiles the unit as its own, and the record marks the parameter with `"variadic":
+  true`; its `type` is the element type `T` as written, not the `T[]` of the body. The
+  `kind` of `generate()` is the one answer, and `_extract_public_functions` reads it.
+  (A type-pack `...Ts` function is unaffected — it carries `type_params` and is
+  filtered into `generic_functions` before this check is reached; the discriminator is
+  `is_pack` vs `is_variadic`, not the shared `...` spelling.)
 - **[CE5002](../error-catalog.md#ce5002)** — a public function whose signature (param or return, recursively
   including inside `Result`/`Maybe`) exposes a foreign `ptr` cannot appear in a public
   API at all. FFI is a private unit detail (`contains_foreign_ptr`, shared with the
@@ -713,7 +715,7 @@ A `nom self` receiver is a receiver mode like `peek self` and `poke self`: a met
 record carries it in `self_mode`.
 
 **Not at the boundary:** a consuming variadic — a public v1 `...T` cannot ship in a binary
-library ([CE0116](../error-catalog.md#ce0116), §5.1).
+library (a source library can have one) ([CE0116](../error-catalog.md#ce0116), §5.1).
 
 ### 5.7 Two link paths
 
@@ -783,7 +785,8 @@ source library prints no `Links:` line: its consumer reads the clauses in its so
   (`isinstance(impl.target_type, GenericTypeRef)` in `library_manifest.py`). They ship as
   TEMPLATES instead (`_generic_perk_impl_templates`), and the
   consumer instantiates them like any other template.
-- **v1 native `...T` variadics** as public functions — [CE0116](../error-catalog.md#ce0116), §5.1.
+- **v1 native `...T` variadics** as public functions of a BINARY library —
+  [CE0116](../error-catalog.md#ce0116), §5.1. A source library can have one.
 - **The NAMES of a plain `use` of another library** — if library A's source does a plain
   `use <lib/b>`, the consumer's build loads B (A's `dependencies` record says so), and a
   consumer of A still needs its own `use <lib/b>` to write a name of B. A `public use
@@ -996,7 +999,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | Public `fn` (non-library, ordinary unit boundary) exposes `ptr` | **[CE5008](../error-catalog.md#ce5008)** | the general unit-boundary form of the same rule; [CE5002](../error-catalog.md#ce5002) is its library-specific sibling |
 | A template snippet fails to re-parse (**binary**) | perk-impl: **[CW3506](../error-catalog.md#cw3506)** (skip); generic fn/type/constant: **[CE3512](../error-catalog.md#ce3512)**, and the build stops | never let a malformed shipped snippet crash or pollute the consumer's own build, and never report it at the consumer's `use` line |
 | A **source** library unit fails to compile | the real diagnostic, plus a `note` naming the library and the `use` that pulled it in (§4.4) | the consumer must never see a bare error about code they did not write |
-| Public native `...T` variadic function | **[CE0116](../error-catalog.md#ce0116)** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
+| Public native `...T` variadic function (**binary**) | **[CE0116](../error-catalog.md#ce0116)** | the binary path cannot describe the call, which collects the trailing arguments into a `T[]`. A source library can have one: the record marks the parameter `variadic` (protocol 2.10) — see §5.1 and §9 |
 | Platform or data layout mismatch (**binary**) | **[CE3504](../error-catalog.md#ce3504)** | bitcode is platform-specific, and it is lowered against one data layout (§6.5); caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
 | An `unsafe external "C"` link-name == a symbol this build defines | **[CE5013](../error-catalog.md#ce5013)** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step. A GENERATED stdlib symbol is in none of those, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
 | Container version is not 5 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild |
@@ -1037,14 +1040,18 @@ The manifest producer runs for every kind, so some of its checks reach a
 generics are in the source section as whole units. It is also the reason `--lib-info` can
 list a source library's generic functions at all, so it earns its place; §3 says so.
 
-**[CE5006](../error-catalog.md#ce5006) and [CE0116](../error-catalog.md#ce0116) fire on the source path.** Both checks live in the manifest producer --
-[CE5006](../error-catalog.md#ce5006) in the export-closure walk `_extract_templates` drives, [CE0116](../error-catalog.md#ce0116) in
-`_extract_public_functions` -- and the producer builds the index for every kind. So a source
-library that exports a generic touching an `unsafe external` namespace is rejected, and so is
-one that exports a public `...T` variadic.
+**[CE5006](../error-catalog.md#ce5006) fires on the source path.** The check lives in the export-closure walk that
+`_extract_templates` drives, and the producer builds the index for every kind. So a source
+library that exports a generic touching an `unsafe external` namespace is rejected. The
+same walk refuses a public generic that calls a PRIVATE `...T` function (CE5006 too), in
+every kind.
 
-For [CE0116](../error-catalog.md#ce0116) that is right for a reason that has nothing to do with kind: the index cannot
-describe a native variadic signature, and the index ships in every kind.
+**[CE0116](../error-catalog.md#ce0116) fires on the binary path alone** (protocol 2.10). `_extract_public_functions`
+reads the `kind` of `generate()`. A source library writes the function into the index, and
+the record marks the `...T` parameter `variadic`, so `--lib-info` prints it as written. The
+consumer does not read the index of a source library to call the function: it compiles the
+unit as its own. Until protocol 2.10 the check fired for every kind, because the index could
+not describe the signature.
 
 For [CE5006](../error-catalog.md#ce5006) it is questionable. The rule exists because a binary library ships a *slice* of
 its source and the consumer never sees the `unsafe external` block. A source library ships
