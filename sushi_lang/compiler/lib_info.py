@@ -504,7 +504,7 @@ _SECTIONS: tuple[_Section, ...] = (
              in_templates=True),
     _Section("Public Enums", ("enums",), _enum_line, members=("variants", _variant_line)),
     _Section("Generic Enums", ("generic_enums",), _generic_named("enum"), in_templates=True),
-    # Every perk the library declares, each with the method signatures that satisfying
+    # Every public perk of the library, each with the method signatures that satisfying
     # it means (#537). ONE method printer serves the contract and its implementations.
     _Section("Perks", ("perks",), _perk_line, in_templates=True,
              members=("methods", _method_line)),

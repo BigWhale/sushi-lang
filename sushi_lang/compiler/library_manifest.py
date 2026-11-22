@@ -111,6 +111,21 @@ def resolve_library_version(explicit: str | None, library_name: str) -> str:
     return chosen
 
 
+def _target_name(target_type) -> str | None:
+    """The declared type name that a target names: the base of a generic, the element of
+    an array."""
+    while getattr(target_type, "base_type", None) is not None:
+        target_type = target_type.base_type
+    return (getattr(target_type, "base_name", None)
+            or getattr(target_type, "name", None))
+
+
+def _private_perk_names(own: list['Unit']) -> set[str]:
+    """The perks that the library's own units declare without `public`."""
+    return {perk.name for unit in own if unit.ast is not None
+            for perk in unit.ast.perks if not perk.is_public}
+
+
 def _marked_declarations(program: Program) -> Iterator[tuple[str, str]]:
     """`(name, reason)` for each written `dont_panic` declaration of one unit."""
     for _kind, decl, owner in bodied_with_owner(program):
@@ -361,29 +376,36 @@ class LibraryManifestGenerator:
         return docs
 
     def _extract_templates(self, units: list['Unit']) -> dict:
-        """The index of the generics, the perks and the methods that the library declares."""
+        """The index of the public generics, perks and methods of the library.
+
+        An item is in the index only when a consumer can see it: a private perk, an
+        implementation of one, and a method of a private type are not.
+        """
         own = own_units(units)
+        private_types = self._kept_type_names(own)
+        private_perks = _private_perk_names(own)
         generic_functions, generic_structs, generic_enums = self._generic_templates(own)
         templates = {
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,
-            "perks": self._shipped_perks(own),
-            "perk_impls": self._concrete_perk_impls(own),
-            "generic_perk_impls": self._generic_perk_impl_templates(own),
+            "perks": self._declared_perks(own),
+            "perk_impls": self._concrete_perk_impls(own, private_types, private_perks),
+            "generic_perk_impls": self._generic_perk_impl_templates(
+                own, private_types, private_perks),
         }
         # Absent when the library declares no extension method, so a library without
         # one grows by nothing.
-        extensions = self._concrete_extensions(own)
+        extensions = self._concrete_extensions(own, private_types)
         if extensions:
             templates["extensions"] = extensions
-        generic_extensions = self._generic_extension_templates(own)
+        generic_extensions = self._generic_extension_templates(own, private_types)
         if generic_extensions:
             templates["generic_extensions"] = generic_extensions
         return templates
 
     def _generic_templates(self, own: list['Unit']):
-        """The public generic functions and every generic struct and enum, as templates.
+        """The public generic functions, structs and enums, as templates.
 
         Every record names the unit that declared it, in the declaration order, unit by
         unit.
@@ -401,9 +423,9 @@ class LibraryManifestGenerator:
             rows: tuple[tuple[list[Any], Callable[[Any], dict], list[dict]], ...] = (
                 ([f for f in unit.ast.functions if f.is_public and f.type_params],
                  serialize_generic_function, functions),
-                ([s for s in unit.ast.structs if s.type_params],
+                ([s for s in unit.ast.structs if s.is_public and s.type_params],
                  serialize_generic_struct, structs),
-                ([e for e in unit.ast.enums if e.type_params],
+                ([e for e in unit.ast.enums if e.is_public and e.type_params],
                  serialize_generic_enum, enums),
             )
             for decls, serialize, records in rows:
@@ -413,8 +435,12 @@ class LibraryManifestGenerator:
                     records.append(record)
         return functions, structs, enums
 
-    def _generic_extension_templates(self, own: list['Unit']) -> list[dict]:
-        """Every extension TEMPLATE of the library's own units."""
+    def _generic_extension_templates(self, own: list['Unit'],
+                                     private_types: set[str]) -> list[dict]:
+        """Every extension TEMPLATE of the library's own units on a public type.
+
+        A private template has its marker in the record.
+        """
         from sushi_lang.semantics.library_templates import serialize_generic_extension
 
         records: list[dict] = []
@@ -422,16 +448,16 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for ext in unit.ast.generic_extensions or []:
+                if _target_name(ext.target_type) in private_types:
+                    continue
                 record = serialize_generic_extension(ext)
                 record["unit"] = unit.name
                 records.append(record)
         return records
 
-    def _concrete_extensions(self, own: list['Unit']) -> list[dict]:
-        """Every CONCRETE extension method of the library's own units.
-
-        A private extension has its marker in the record.
-        """
+    def _concrete_extensions(self, own: list['Unit'],
+                             private_types: set[str]) -> list[dict]:
+        """Every public CONCRETE extension method of the library on a public type."""
         from sushi_lang.semantics.library_templates import serialize_extension
 
         records: list[dict] = []
@@ -441,15 +467,17 @@ class LibraryManifestGenerator:
             for ext in unit.ast.extensions:
                 # A conversion is no method of its source (ruling P6); it is in the
                 # manifest's `conversions` list.
-                if ext.is_conversion:
+                if (ext.is_conversion or not ext.is_public
+                        or _target_name(ext.target_type) in private_types):
                     continue
                 record = serialize_extension(ext)
                 record["unit"] = unit.name
                 records.append(record)
         return records
 
-    def _generic_perk_impl_templates(self, own: list['Unit']) -> list[dict]:
-        """Every generic-target perk implementation, as a TEMPLATE (#543)."""
+    def _generic_perk_impl_templates(self, own: list['Unit'], private_types: set[str],
+                                     private_perks: set[str]) -> list[dict]:
+        """Every generic-target implementation of a public perk on a public type (#543)."""
         from sushi_lang.semantics.library_templates import serialize_generic_perk_impl
         from sushi_lang.semantics.passes.collect.perks import covering_base
 
@@ -458,15 +486,17 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for impl in getattr(unit.ast, "generic_perk_impls", None) or []:
-                if covering_base(impl.target_type) is None:
+                base = covering_base(impl.target_type)
+                if (base is None or base in private_types
+                        or impl.perk_name in private_perks):
                     continue
                 record = serialize_generic_perk_impl(impl)
                 record["unit"] = unit.name
                 records.append(record)
         return records
 
-    def _shipped_perks(self, own: list['Unit']) -> list[dict]:
-        """Every perk DEFINITION of the library's own units."""
+    def _declared_perks(self, own: list['Unit']) -> list[dict]:
+        """Every public perk DEFINITION of the library's own units."""
         from sushi_lang.semantics.library_templates import serialize_perk
 
         records: list[dict] = []
@@ -474,13 +504,18 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for perk in unit.ast.perks:
+                if not perk.is_public:
+                    continue
                 record = serialize_perk(perk)
                 record["unit"] = unit.name
                 records.append(record)
         return records
 
-    def _concrete_perk_impls(self, own: list['Unit']) -> list[dict]:
-        """Every concrete perk implementation that the library's own units write.
+    def _concrete_perk_impls(self, own: list['Unit'], private_types: set[str],
+                             private_perks: set[str]) -> list[dict]:
+        """Every written concrete implementation of a public perk on a public type.
+
+        A predefined perk is public.
 
         A monomorphized copy of a generic-target implementation joins `perk_impls`, and
         it is not written: its template is in `generic_perk_impls`.
@@ -496,7 +531,9 @@ class LibraryManifestGenerator:
             for impl in unit.ast.perk_impls:
                 if not is_written(impl) or isinstance(impl.target_type, GenericTypeRef):
                     continue
-                if perk_type_name(impl.target_type) is None:
+                if (perk_type_name(impl.target_type) is None
+                        or impl.perk_name in private_perks
+                        or _target_name(impl.target_type) in private_types):
                     continue
                 record = serialize_perk_impl(impl)
                 record["unit"] = unit.name
