@@ -209,6 +209,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **`--lib-info` lists a perk implementation on a concrete instance of a generic type.**
+  `extend Box@(string) with Describe:` was in no list of the `templates` index, so the
+  report did not show it. Now `perk_impls` has it, with the instance as its target, when
+  the perk, the generic type and each type argument are public. A built-in type argument
+  is public. The record shape does not change.
 - **A `break` or a `continue` in a lambda that stands inside a loop is refused.** It is
   now `CE1003` at the `break` or the `continue`, as in a lambda with no loop around it. A
   lambda body starts with no loop, as a function body does. Before, the compiler stopped

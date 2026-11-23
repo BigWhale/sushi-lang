@@ -512,25 +512,27 @@ class LibraryManifestGenerator:
                              private_perks: set[str]) -> list[dict]:
         """Every written concrete implementation of a public perk on a public type.
 
-        A predefined perk is public.
+        A predefined perk is public. A target that is an instance of a generic type,
+        `Box@(string)`, is public when its base and each type argument are public.
 
         A monomorphized copy of a generic-target implementation joins `perk_impls`, and
         it is not written: its template is in `generic_perk_impls`.
         """
         from sushi_lang.semantics.library_templates import serialize_perk_impl
         from sushi_lang.semantics.passes.collect.perks import perk_type_name
-        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_predicates import first_private_name
 
         records: list[dict] = []
         for unit in own:
             if unit.ast is None:
                 continue
-            for impl in unit.ast.perk_impls:
-                if not is_written(impl) or isinstance(impl.target_type, GenericTypeRef):
+            for impl in (*unit.ast.perk_impls, *self.analyzer.unreached_perk_impls(unit)):
+                if not is_written(impl):
                     continue
                 if (perk_type_name(impl.target_type) is None
                         or impl.perk_name in private_perks
-                        or _target_name(impl.target_type) in private_types):
+                        or first_private_name(impl.target_type,
+                                              private_types.__contains__) is not None):
                     continue
                 record = serialize_perk_impl(impl)
                 record["unit"] = unit.name

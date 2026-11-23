@@ -1209,6 +1209,14 @@ class SemanticAnalyzer:
                 validate_unreached_header(self.tables, impl, unit_reporter)
             self._merge_unit(unit_reporter)
 
+    def unreached_perk_impls(self, unit: Unit) -> list[ExtendWithDef]:
+        """The written implementations of `unit` whose `@(...)` target no unit names.
+
+        The drop (#698) took them out of the unit's AST, but each one is still a written
+        declaration: the library index lists it.
+        """
+        return [impl for home, impl in self._unreached_perk_impls if home is unit]
+
     def _names_no_instance(self, impl) -> bool:
         """The `@(...)` target of a perk implementation names no interned instance."""
         from sushi_lang.semantics.generics.types import GenericTypeRef

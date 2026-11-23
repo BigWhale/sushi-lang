@@ -1262,6 +1262,36 @@ REPORT_EXTRA_CASES = (
                absent=("  perk Folded:", "  extend Towel with Folded:",
                        "  public extend Towel folds() i32", "  struct Bag@(T):",
                        "  extend Hidden twice() i32", "  extend Towel inner() i32")),
+    # An implementation on a concrete instance of a generic type prints when the perk,
+    # the generic type and each type argument are public. A private perk on an instance,
+    # or an instance with a private type argument, does not print.
+    ReportCase(name="instance_impl",
+               library=("public struct Box@(T):\n"
+                        "    T value\n"
+                        "\n"
+                        "public perk Describe:\n"
+                        "    fn describe() string\n"
+                        "\n"
+                        "perk Count:\n"
+                        "    fn count() i32\n"
+                        "\n"
+                        "struct Hidden:\n"
+                        "    i32 n\n"
+                        "\n"
+                        "extend Box@(string) with Describe:\n"
+                        "    fn describe() string:\n"
+                        "        return self.value.clone()\n"
+                        "\n"
+                        "extend Box@(i32) with Count:\n"
+                        "    fn count() i32:\n"
+                        "        return self.value\n"
+                        "\n"
+                        "extend Box@(Hidden) with Describe:\n"
+                        "    fn describe() string:\n"
+                        "        return \"hidden\"\n"),
+               line="  extend Box@(string) with Describe:",
+               absent=("  extend Box@(i32) with Count:",
+                       "  extend Box@(Hidden) with Describe:")),
 )
 
 
