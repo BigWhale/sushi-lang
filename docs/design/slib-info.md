@@ -150,8 +150,9 @@ above the first member, so one `pending` flag covers the owner and its members.
   implementations, so a method prints the same way in each position. Each method is a
   record of its own, for the spacing of rule 2.
 - **Visibility.** The report lists only what a consumer can see: a public perk, an
-  implementation of a public or predefined perk on a public type, a public generic type,
-  and a public extension or extension template on a public type.
+  implementation of a public or predefined perk on a public type (an instance such as
+  `Box@(string)` is public when its base and each type argument are public), a public
+  generic type, and a public extension or extension template on a public type.
 - **Perks.** The section lists each public perk of the library.
 - **Perk implementations.** The concrete implementations, then the generic-target
   templates, in one section: a reader who asks "what implements `Show`" wants one list, and

@@ -373,10 +373,13 @@ section. `--lib-info` reads the other keys.
 
         # Concrete perk IMPLEMENTATIONS that the library's own units write, of a public
         # perk or a predefined perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) on a
-        # public type. The record carries the signature of each method.
+        # public type. An instance of a generic type, `Box@(string)`, is public when its
+        # base and each type argument are public. The record carries the signature of
+        # each method.
         "perk_impls": [
             {
-                "type": str,           # Concrete target type name
+                "type": str,           # Concrete target type name: "Box<string>" for
+                                       #   an instance
                 "perk": str,
                 "unit": str,           # The unit that declared it
                 "methods": [METHOD],
