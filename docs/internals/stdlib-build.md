@@ -7,30 +7,43 @@ they are linked, and the stdlib modules that are written in Sushi.
 
 ## Overview
 
-The stdlib has two halves. Neither uses the `.slib` format.
+The code that a Sushi program runs, other than its own, comes from three layers. None of
+them uses the `.slib` format.
 
-- **Bitcode units.** A set of Python modules emits LLVM IR directly (with llvmlite). The IR
-  is compiled ahead of time into one `.bc` file for each unit and platform.
-- **Sushi-source modules.** Fifteen modules are written in Sushi, under
-  `sushi_stdlib/src_sushi/`: `collections/iter`, `compression/zlib`, `encoding/msgpack`,
-  `io/buf`, `io/contracts`, `io/error`, `io/fs`, `io/path`, `net/dns`, `net/error`,
-  `net/ip`, `net/tcp`, `net/udp`, `net/url` and `toolchain/slib`. The compiler injects each
-  one as an ordinary compilation unit when a program imports it
-  (`semantics/stdlib_registry.py`, `SOURCE_STDLIB_MODULES`). Most of them call the bitcode
-  units underneath (for example `io/fs` over `io/files`, `net/tcp` over `net/socket`).
+| Layer | What it is | Can it be Sushi? |
+|---|---|---|
+| A. The runtime | The IR that the backend emits into every program: interpolation, `print`, runtime errors, `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)`, `Result@(T, E)`, clone, drop, hash and bounds checks. No `use` reaches it | No. It is the compiler's own definition of the value layouts ([Generic Types](#generic-types)) |
+| B. The Sushi-source modules | Stdlib modules written in Sushi, under `sushi_stdlib/src_sushi/` | They are Sushi |
+| C. The bitcode units | Python generators that emit LLVM IR (with llvmlite), compiled ahead of time into one `.bc` file for each unit and platform | Yes. They move to layer B one unit at a time |
 
-| Aspect | Bitcode units | Sushi-source modules | User Libraries |
+"The stdlib in Sushi" means layers B and C. Layer A stays in the compiler.
+
+- **Sushi-source modules (layer B).** 27 modules, and `<sys/platform>`, which has one file
+  for each host ([Per-platform source modules](#per-platform-source-modules)). The list is
+  `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`). The compiler injects each one as
+  an ordinary compilation unit when a program imports it. A module that calls C declares an
+  `unsafe external` block (for example `math`, `time`, `sys/process`), and a module can sit
+  on a bitcode unit (for example `io/fs` over `io/files`, `net/tcp` over `net/socket`).
+- **Bitcode units (layer C).** Three units are left: `collections/strings`, `io/files` and
+  `net/socket` (`STDLIB_BITCODE_UNITS` in `build.py`). `collections/strings` has two halves:
+  the built-in string methods in the bitcode, and `collections/strings.sushi` in layer B.
+  `tests/stdlib_python_lines.baseline` holds the count of Python lines under
+  `sushi_stdlib/src/`; the test runner fails when the count goes up or goes down without a
+  change of the baseline.
+
+| Aspect | Bitcode units | Sushi-source modules | User libraries |
 |--------|---------------|----------------------|----------------|
 | Source | Python emitting LLVM IR | Sushi source code | Sushi source code |
 | Format | Raw `.bc` (LLVM bitcode) | `.sushi` files in the package | `.slib` (source text and a manifest) |
 | Build tool | `sushi_stdlib/build.py` | none (compiled with the program) | `./sushic --lib` |
 | Metadata | Built into the compiler (`stdlib_registry.py`) | The declarations in the source | Embedded in the `.slib` file |
-| Freshness | Content-fingerprinted, auto-rebuilt by the compiler | In the unit cache key through the dependency graph | Compiled per invocation |
+| Freshness | Content-fingerprinted, auto-rebuilt by the compiler | In the unit cache key through the dependency graph | In the unit cache key through the dependency graph |
+| Reuse on a warm build | The `.bc` is linked | The object is in the per-user cache, and the body passes are skipped | The object is in the project cache, and the body passes are skipped |
 
-Raw LLVM IR gives the bitcode units access to constructs the Sushi language itself doesn't
-expose (raw libc externs, manual struct layout for `string`/`Result`/`Maybe`, etc.),
-and lets generic containers (`List@(T)`, `HashMap@(K, V)`) be emitted inline per
-instantiation instead of precompiled for every possible type argument.
+The reuse of a Sushi-source module and of a library unit has one predicate,
+`UnitReuse.is_reused` (`semantics/unit_reuse.py`). A reused unit is still parsed and
+collected, because the program reads its interface. A unit with a template copy is not
+reused. The rules are in [Semantic passes](semantic-passes.md#reuse-of-a-bundled-stdlib-unit-or-a-source-library-unit-the-skip-the-replay-the-fall-back).
 
 ## Directory Structure
 
@@ -61,9 +74,9 @@ sushi_lang/sushi_stdlib/
 
 No bitcode unit holds the methods of the primitive types. The backend emits `to_str()` of
 a primitive at the call (`backend/types/display.py`), and the code of the primitive
-methods (`backend/types/primitives/`) is not a stdlib generator. `build.py` does not
-remove a `.bc` that no row makes, so a `dist/` from an older build can keep a `.bc` that
-no row makes; remove it by hand.
+methods (`backend/types/primitives/`) is not a stdlib generator. After a build, `build.py`
+deletes each `.bc` that no row makes, and each empty directory (`prune_stale_bitcode`,
+#1324). The linker finds the units on disk, so a `.bc` of a removed row must not stay.
 
 `dist/` is a build-artifact directory, not tracked in git. Only the platform(s) you've
 actually built on will have a subdirectory; on a fresh checkout `dist/` may be empty
@@ -172,8 +185,9 @@ At compile time, `backend/stdlib_linker.py` (`StdlibLinker`) resolves each `use
 links them into the output module. Some unit names are *virtual*
 (`StdlibLinker._virtual_units`): they resolve to no `.bc` file. `collections/hashmap` is
 virtual because the HashMap is emitted inline for each instantiation. Every Sushi-source
-module (the fifteen names in the Overview) is virtual too, because it is compiled as an
-ordinary unit of the program.
+module (layer B in the Overview) is virtual too, because it is compiled as an ordinary unit
+of the program. `collections/strings` is the one exception: it is not virtual, because its
+bitcode half must link.
 
 Module *metadata* (which functions a unit exposes, their signatures, validators) is
 registered separately in `semantics/stdlib_registry.py`'s `StdlibRegistry.KNOWN_MODULES`
@@ -214,7 +228,10 @@ A module written in Sushi (the usual choice when the module can be written in Su
    ([Per-platform source modules](#per-platform-source-modules)).
 3. Add the module name to `StdlibLinker._virtual_units` (`backend/stdlib_linker.py`).
 
-A bitcode unit (for code that needs raw IR, for example a libc extern or a manual layout):
+A bitcode unit. Do not add a new one: a new stdlib function is written in Sushi, because the
+FFI reaches C (`docs/ffi.md`). The Python line ratchet (`tests/stdlib_python_lines.baseline`)
+refuses new generator code without a change of the baseline and a written reason. The steps,
+for a change to a unit that is left:
 
 1. Write the generator: a package/module under `src/` with `generate_module_ir()`.
 2. Add one `StdlibBitcodeUnit(unit, generator)` row to `STDLIB_BITCODE_UNITS` in
