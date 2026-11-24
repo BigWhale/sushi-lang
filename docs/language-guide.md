@@ -833,11 +833,11 @@ required. Write in it the guards that keep every index in range:
 <!-- docs-sweep: error CE0152 -->
 ```sushi
 fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
-    let i32 n = hay.size()
-    let i32 m = needle.size()
-    let i32 i = 0
+    let i64 n = hay.size()
+    let i64 m = needle.size()
+    let i64 i = 0
     while (i + m <= n):
-        let i32 j = 0
+        let i64 j = 0
         while (j < m and hay[i + j] == needle[j]):
             j := j + 1
         if (j == m):
