@@ -1,0 +1,7 @@
+# A bare `[]` in a position with no `T[]` has no element type to take (#1345): CE2111,
+# not the internal error CE0000.
+# EXPECT_ERROR_CODE: CE2111
+
+fn main() i32:
+    println([].len())
+    return 0

@@ -1,0 +1,12 @@
+# A bare `[]` in a `let` of a `T[]` takes the `T[]` of its position, as `from([])` does
+# (#1345). It was the internal error CE0000.
+# EXPECT_STDOUT_EXACT: "0 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string[] names = []
+    names.push("Mostly Harmless")
+    let i32[] empty = []
+    println("{empty.len()} {names.len()}")
+    return 0

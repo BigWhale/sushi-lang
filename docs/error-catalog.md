@@ -1821,7 +1821,7 @@ An extension names a type that the extension table can key on: a primitive, an a
 
 **Message:** `cannot infer the element type of an empty {form}`
 
-An empty `from([])` or a `new()` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return. A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. Declare the array first: `let i32[] xs = from([])`, then use `xs`.
+An empty `from([])`, a `new()` or a bare `[]` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return. A bare `[]` takes a `T[]` position only; a `T[N]` position refuses it with [CE2011](#ce2011), because a fixed array holds at least one element. A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. Declare the array first: `let i32[] xs = from([])`, then use `xs`.
 
 ### CE2112 {#ce2112}
 

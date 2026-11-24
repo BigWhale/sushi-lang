@@ -289,15 +289,19 @@ let i32[5] fixed = [1, 2, 3, 4, 5]
 let i32[] dynamic = from([1, 2, 3])
 let string[] empty = new()
 let u8[] none = from([])
+let i32[] bare = []
 ```
 
-An empty `from([])` and a `new()` spell no element type of their own: each takes the type
+An empty `from([])`, a `new()` and a bare `[]` spell no element type of their own: each takes the type
 of its position -- a `let`, a struct field, a `Result.Ok` payload, a parameter, a
 `.realise()` default, an extension's bare `return`. So `make().realise(from([]))` and
 `return from([])` in an `extend S empty() u8[]` both mean `u8[]`. A position with no type
 -- a method receiver, an index base, a `println` argument -- gives no element type, and
 the empty literal there is [`CE2111`](error-catalog.md#ce2111). Declare the array first (`let i32[] xs = from([])`)
-and use the name.
+and use the name. A bare `[]` is the one literal that becomes a `T[]`: a literal with
+elements is a fixed array, and `let i32[] xs = [1, 2]` is
+[`CE2002`](error-catalog.md#ce2002). A fixed array holds at least one element, so a bare
+`[]` in a `T[N]` position is [`CE2011`](error-catalog.md#ce2011).
 
 **Nested arrays:** an array element can be an array. The suffixes read from LEFT TO RIGHT:
 a suffix applies to the type on its left.
