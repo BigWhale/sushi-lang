@@ -209,6 +209,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A bare `[]` takes the `T[]` of its position.** `let string[] names = []` and
+  `walk(".").realise([])` gave the internal error CE0000. Now a bare `[]` is an empty
+  dynamic array, as `from([])` and `new()` are: in a `let`, an argument, a return or a
+  `.realise()` default. A `T[N]` position refuses it with CE2011, because a fixed array
+  holds at least one element. A position with no type gives CE2111.
 - **`--lib-info` lists a perk implementation on a concrete instance of a generic type.**
   `extend Box@(string) with Describe:` was in no list of the `templates` index, so the
   report did not show it. Now `perk_impls` has it, with the instance as its target, when

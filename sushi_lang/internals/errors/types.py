@@ -444,7 +444,7 @@ _add(ErrorMessage("CE2109", Severity.ERROR,
 
 _add(ErrorMessage("CE2111", Severity.ERROR,
     "cannot infer the element type of an empty {form}",
-    Category.TYPE, "An empty `from([])` or a `new()` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return (#544). A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. It reached the backend with no stamp, and the backend answered the internal error CE0042 with the note that says the fault is in the compiler (#868); `new()` did the same until #889. Declare the array first: `let i32[] xs = from([])`, then use `xs`."))
+    Category.TYPE, "An empty `from([])`, a `new()` or a bare `[]` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return (#544). A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. It reached the backend with no stamp, and the backend answered the internal error CE0042 with the note that says the fault is in the compiler (#868); `new()` did the same until #889, and a bare `[]` was the internal error CE0000 until #1345. A bare `[]` takes a `T[]` position only: a fixed array holds at least one element, so a `T[N]` position refuses it with CE2011. Declare the array first: `let i32[] xs = from([])`, then use `xs`."))
 
 _add(ErrorMessage("CE2113", Severity.ERROR,
     "a string is immutable: `s[i]` reads a byte and cannot be written",

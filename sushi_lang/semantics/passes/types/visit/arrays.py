@@ -8,9 +8,9 @@ CE2020, CE2125). An element whose type is not the type of the first is CE2013; w
 rows of a nested literal do not agree, each row is first measured against the row type of
 its position, and a short row is CE2011. A fixed literal answers `T[N]`, where `T` is the
 type of its first element and `N` the count of its slots, which must be readable (CE2017,
-CE2019). A dynamic literal answers `T[]` when its elements agree. An empty `from([])` and a
-`new()` answer the `T[]` of their position (#544); a position with no `T[]` is CE2111,
-which names the written form.
+CE2019). A dynamic literal answers `T[]` when its elements agree. An empty `from([])`, a
+`new()` and a bare `[]` answer the `T[]` of their position (#544, #1345); a bare `[]` in a
+`T[N]` position is CE2011, and any other position is CE2111, which names the written form.
 
 An `Index` reads an element of a `T[N]` or a `T[]`, or a `u8` of a `string`. The index is
 an index position, of any integer type (CE2121). A base of another type is CE2114. An index of a fixed array that
@@ -70,12 +70,17 @@ def check_array_init(validator: TypeValidator, node: e.ArrayInit,
 
 def _empty(validator: TypeValidator, node: e.ArrayInit,
            position: Optional[Type]) -> Optional[Type]:
-    """`from([])` and `new()` take the `T[]` of their position (#544)."""
-    if isinstance(node.kind, e.Dynamic) and isinstance(position, DynamicArrayType):
+    """`from([])`, `new()` and a bare `[]` take the `T[]` of their position (#544, #1345).
+    A `T[N]` position holds at least one element, so a bare `[]` there is CE2011."""
+    if isinstance(position, DynamicArrayType):
         return position
-    if not isinstance(node.kind, e.Dynamic):
-        visit.unhandled(validator, node)
-    form = "new()" if node.kind.new else "from([])"
+    if isinstance(node.kind, e.Fixed) and isinstance(position, ArrayType):
+        er.emit(validator.reporter, er.ERR.CE2011, node.loc, got=0, expected=position.size)
+        return None
+    if isinstance(node.kind, e.Fixed):
+        form = "[]"
+    else:
+        form = "new()" if node.kind.new else "from([])"
     er.emit(validator.reporter, er.ERR.CE2111, node.loc, form=form)
     return None
 

@@ -268,9 +268,9 @@ def _reaches_storage(validator: TypeValidator, expr: e.ShirExpr) -> bool:
 def _reject_literal_size(validator: TypeValidator, value: e.ShirExpr, declared: Type,
                          span: Span) -> bool:
     """CE2011 at `span` for a fixed literal that a `let` or a constant declares with
-    another size."""
+    another size. The arm of an empty `[]` reports its own size."""
     return (isinstance(value, e.ArrayInit) and isinstance(value.kind, e.Fixed)
-            and isinstance(declared, ArrayType)
+            and bool(value.runs) and isinstance(declared, ArrayType)
             and reject_wrong_size(validator, value, declared, span))
 
 

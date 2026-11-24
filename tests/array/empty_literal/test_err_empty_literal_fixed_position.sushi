@@ -1,0 +1,8 @@
+# A fixed array holds at least one element, so a bare `[]` in a `T[N]` position is
+# refused (#1345), not the internal error CE0000.
+# EXPECT_ERROR_CODE: CE2011
+
+fn main() i32:
+    let i32[3] xs = []
+    println(xs.len())
+    return 0
