@@ -45,7 +45,7 @@ fn main() -> i32 {
     StorageDead(_6)
     StorageDead(_5)
     StorageLive(_9)
-    _9 = call @<io/files>.exists(const "slir_stdlib_no_such_file" @guaranteed)
+    _9 = call @<io/files>.is_dir(const "slir_stdlib_no_such_file" @guaranteed)
     StorageLive(_10)
     _10 = call builtin interp@(f64, string, u8, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy _4 @guaranteed)
     StorageLive(_11)

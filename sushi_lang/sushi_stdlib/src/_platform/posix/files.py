@@ -18,11 +18,6 @@ def declare_lstat(module: ir.Module, name: str = "lstat") -> ir.Function:
     return declare_libc(module, "lstat", name)
 
 
-def declare_access(module: ir.Module) -> ir.Function:
-    """Declare POSIX access() syscall."""
-    return declare_libc(module, "access")
-
-
 def declare_unlink(module: ir.Module) -> ir.Function:
     """Declare POSIX unlink() syscall."""
     return declare_libc(module, "unlink")

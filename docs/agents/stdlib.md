@@ -33,8 +33,8 @@ home is reached through a `public use` (#586)**: `<io/contracts>` re-exports `<i
 `<net/handle>`, `<net/ip>` and `<io/contracts>`; `<net/udp>` re-exports `<net/error>`,
 `<net/handle>` and `<net/ip>` (every address that leaves the net modules is an `IpAddr`:
 `peer_ip()` answers `IpAddr | NetError`, `Datagram.peer()` parses the field); `<net/dns>` and `<net/ip>` re-export `<net/error>`;
-the registry module `<io/files>` re-exports `<io/error>` (`REEXPORTS` in
-`files_funcs.py`). So `use <io/fs>` alone writes `| IoError`, `IoError.NotFound`,
+`<io/files>` re-exports `<io/error>` (`public use` in its Sushi half; `REEXPORTS` in
+`files_funcs.py` for the registry half). So `use <io/fs>` alone writes `| IoError`, `IoError.NotFound`,
 `SeekFrom.Start` and `FileError.NotFound`, `fs.IoError` holds behind the alias, and
 `use <net/tcp>` alone matches `IoError` from a read. `<sys/env>` and `<sys/process>` stay
 their own homes. `<sys/process>` re-exports `<io/error>` (`public use` in its Sushi half),
@@ -153,12 +153,22 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   `SpawnFailed`; a failure of `fseek`, `ftell` or `fread` on a capture stream stops with
   RE2026 (an `assert` in the module). An own `exit`, `getpid`, `getuid`, `chdir` or
   `getcwd` beside a flat `use <sys/process>` gets CW3002.
+- **`<io/files>` has TWO halves while it moves to Sushi source**: the registry rows
+  (`FILES_SIGNATURES`, `src/io/files_funcs.py`) are the `.bc` unit, and
+  `src_sushi/io/files.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`) holds
+  the functions that moved. They call the C library through an `unsafe external` block.
+  The Sushi half has `exists` now. A `use <io/files>` gives both halves: the namespace
+  provider adds the registry half to the unit (`_stdlib_provider`, `passes/namespaces.py`).
+  To move one function: delete its `FILES_SIGNATURES` row and its generator, and add a
+  `public fn` with a doc block to `files.sushi`. An own function with the name of a moved
+  function, beside a flat `use <io/files>`, gets CW3002. `TWO_HALF_MODULES` in
+  `tests/unit/test_stdlib_build_is_one_table.py` names the module.
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,
   `split_whitespace`, `chars`, the `trim_*_matches` pair, `StringBuilder`). A new string method
   goes in the Sushi half; `TWO_HALF_MODULES` in `tests/unit/test_stdlib_build_is_one_table.py`
-  names it. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
+  names it and `<io/files>`. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
 - Sushi-source modules go in `src_sushi/` + one `SOURCE_STDLIB_MODULES` entry + one
   `_virtual_units` entry; they are injected as ordinary units and need `public fn` on
   concrete exports and `public extend` on API methods. A module that declares methods on a

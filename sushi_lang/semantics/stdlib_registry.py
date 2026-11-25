@@ -49,6 +49,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "io/buf": _SRC_SUSHI_ROOT / "io" / "buf.sushi",
     "io/contracts": _SRC_SUSHI_ROOT / "io" / "contracts.sushi",
     "io/error": _SRC_SUSHI_ROOT / "io" / "error.sushi",
+    "io/files": _SRC_SUSHI_ROOT / "io" / "files.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
     "math": _SRC_SUSHI_ROOT / "math.sushi",

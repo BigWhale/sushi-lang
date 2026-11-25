@@ -16,7 +16,7 @@ fn main() i32:
     let u8 lo = a.min(3)
     let i32 hi = (7).max(2)
     let i32 removed = f.remove("slir_stdlib_no_such_file").realise(9)
-    let bool found = f.exists("slir_stdlib_no_such_file")
+    let bool found = f.is_dir("slir_stdlib_no_such_file")
     println("{r} {lo} {hi}")
     println("{removed} {found}")
     return 0

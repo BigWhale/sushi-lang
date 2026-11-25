@@ -101,6 +101,11 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `stat()` into a `FileStat` struct, recursive `walk`, `mkdir_all`,
   `remove_all`. Builds on `io/files` and `io/path`; the first source module
   that exports a `public struct`.
+- `io/files` (`src_sushi/io/files.sushi`) — the Sushi half of `<io/files>`, a
+  module with TWO halves while it moves to Sushi source: `exists` calls the C
+  library through an `unsafe external` block, and the other functions are the
+  `.bc` unit of the same name. It is not in `_virtual_units`, because it has a
+  `.bc`.
 - `text/ascii` (`src_sushi/text/ascii.sushi`) — ASCII byte classes and case
   maps, as extension methods on `u8`. The first source module that exports
   methods on a primitive type and no free function.

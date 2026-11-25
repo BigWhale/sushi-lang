@@ -6,13 +6,13 @@
 use <io/files>
 
 fn probe(string path) bool:
-    return exists(path)
+    return is_file(path)
 
 fn main() i32:
-    println("literal:{exists('rr_no_such_file_literal.txt')}")
+    println("literal:{is_file('rr_no_such_file_literal.txt')}")
     let string stem = "rr_no_such"
     let string heap = "{stem}_file_heap.txt"
-    println("heap:{exists(heap)}")
+    println("heap:{is_file(heap)}")
     println("param:{probe(heap)}")
     println("heap again:{is_dir(heap)}")
     let i32 count = 0

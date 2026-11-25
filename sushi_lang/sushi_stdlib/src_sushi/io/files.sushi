@@ -1,0 +1,34 @@
+##:
+io/files -- the Sushi half of the path utilities and the descriptor layer.
+
+`<io/files>` has two halves. The functions of this file call the C library through an
+`unsafe external` block. The other functions of the module are the `.bc` unit of the same
+name. A `use <io/files>` gives both halves.
+
+This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileError`.
+:##
+
+public use <io/error>
+
+unsafe external "C" as libc because "the path queries of the C library":
+    fn access(string path, i32 mode) i32 = "access"
+
+##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
+const i32 F_OK = 0
+
+##:
+Tells if a path exists.
+
+The function follows a symbolic link: a link to a missing target gives `false`.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path exists. A path that cannot be examined gives `false`.
+- Example:
+  ```sushi
+  if (exists("/")):
+      println("root exists")
+  ```
+  This prints `root exists`.
+:##
+public fn exists(string path) bool:
+    return libc.access(path, F_OK) == 0

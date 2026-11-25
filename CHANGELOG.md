@@ -6,6 +6,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`exists` of `<io/files>` is Sushi source.** `<io/files>` now has two halves: the
+  Sushi half `src_sushi/io/files.sushi` and the `.bc` unit. A `use <io/files>` gives both.
+  `exists(path)` calls `access()` of the C library and keeps its signature and its
+  answer. An own `exists` in a unit with a flat `use <io/files>` now gets CW3002.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each

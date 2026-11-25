@@ -51,7 +51,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     # Files and descriptors
     "stat": _c("int", "const char*", "struct stat*"),
     "lstat": _c("int", "const char*", "struct stat*"),
-    "access": _c("int", "const char*", "int"),
     "unlink": _c("int", "const char*"),
     "rename": _c("int", "const char*", "const char*"),
     "open": _c("int", "const char*", "int", var_arg=True),

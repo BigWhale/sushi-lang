@@ -1,4 +1,4 @@
-"""The one-syscall wrappers of <io/files>: exists, remove, rmdir, mkdir, rename.
+"""The one-syscall wrappers of <io/files>: remove, rmdir, mkdir, rename.
 
 Each exported body is one zero-on-success libc call. The frame around the
 call -- Result.Ok(0), or errno mapped into the FileError -- is written once,
@@ -17,7 +17,6 @@ from sushi_lang.sushi_stdlib.src.results import emit_ok_result
 def generate_ir(module: ir.Module) -> None:
     """Generate LLVM IR for the syscall wrappers."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    generate_exists(module)
     _generate_int_syscall(module, "sushi_io_files_remove", "declare_unlink", [i8_ptr])
     _generate_int_syscall(module, "sushi_io_files_rmdir", "declare_rmdir", [i8_ptr])
     _generate_int_syscall(module, "sushi_io_files_mkdir", "declare_mkdir", [i8_ptr, i32])
@@ -57,22 +56,3 @@ def _generate_int_syscall(module: ir.Module, sushi_name: str, declare_name: str,
     builder.position_at_end(success_bb)
     builder.ret(emit_ok_result(builder, result_type, zero, 4))
 
-
-def generate_exists(module: ir.Module) -> None:
-    """Generate sushi_io_files_exists(string path) -> i8.
-
-    A bare predicate, not a Result: access() answering "no" is the answer,
-    whatever errno says.
-    """
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    platform_files = get_platform_module('files')
-    access_func = platform_files.declare_access(module)
-
-    # The path arrives already marshalled as a C string, and the CALLER frees it (#292).
-    func = ir.Function(module, ir.FunctionType(i8, [i8_ptr]), name="sushi_io_files_exists")
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    f_ok = ir.Constant(i32, 0)
-    result = builder.call(access_func, [func.args[0], f_ok], name="access_result")
-    exists = builder.icmp_signed("==", result, ir.Constant(i32, 0), name="exists")
-    builder.ret(builder.zext(exists, i8, name="result"))
