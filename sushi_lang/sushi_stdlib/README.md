@@ -102,7 +102,8 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `remove_all`. Builds on `io/files` and `io/path`; the first source module
   that exports a `public struct`.
 - `io/files` (`src_sushi/io/files.sushi`) — the Sushi half of `<io/files>`, a
-  module with TWO halves while it moves to Sushi source: `exists` calls the C
+  module with TWO halves while it moves to Sushi source: `exists`, `remove`, `rmdir`, `mkdir`
+  and `rename` call the C
   library through an `unsafe external` block, and the other functions are the
   `.bc` unit of the same name. It is not in `_virtual_units`, because it has a
   `.bc`.

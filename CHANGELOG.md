@@ -11,6 +11,11 @@ All notable changes to Sushi Lang will be documented in this file.
   `exists(path)` calls `access()` of the C library and keeps its signature and its
   answer. An own `exists` in a unit with a flat `use <io/files>` now gets CW3002.
 
+- **`remove`, `rmdir`, `mkdir` and `rename` of `<io/files>` are Sushi source.** Each one
+  calls its C function (`unlink`, `rmdir`, `mkdir`, `rename`) and keeps its signature,
+  its `Result.Ok(0)` and its `FileError` variants (`FileError.from_errno`). An own
+  function with one of these names in a unit with a flat `use <io/files>` now gets CW3002.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each

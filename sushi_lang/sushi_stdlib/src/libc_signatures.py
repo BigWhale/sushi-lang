@@ -51,8 +51,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     # Files and descriptors
     "stat": _c("int", "const char*", "struct stat*"),
     "lstat": _c("int", "const char*", "struct stat*"),
-    "unlink": _c("int", "const char*"),
-    "rename": _c("int", "const char*", "const char*"),
     "open": _c("int", "const char*", "int", var_arg=True),
     "read": _c("ssize_t", "int", "void*", "size_t"),
     "write": _c("ssize_t", "int", "const void*", "size_t"),
@@ -62,8 +60,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "isatty": _c("int", "int"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),
-    "mkdir": _c("int", "const char*", "mode_t"),
-    "rmdir": _c("int", "const char*"),
     "opendir": _c("DIR*", "const char*"),
     "readdir": _c("struct dirent*", "DIR*"),
     "closedir": _c("int", "DIR*"),

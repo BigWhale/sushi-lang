@@ -157,7 +157,7 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   (`FILES_SIGNATURES`, `src/io/files_funcs.py`) are the `.bc` unit, and
   `src_sushi/io/files.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`) holds
   the functions that moved. They call the C library through an `unsafe external` block.
-  The Sushi half has `exists` now. A `use <io/files>` gives both halves: the namespace
+  The Sushi half has `exists`, `remove`, `rmdir`, `mkdir` and `rename` now. A `use <io/files>` gives both halves: the namespace
   provider adds the registry half to the unit (`_stdlib_provider`, `passes/namespaces.py`).
   To move one function: delete its `FILES_SIGNATURES` row and its generator, and add a
   `public fn` with a doc block to `files.sushi`. An own function with the name of a moved

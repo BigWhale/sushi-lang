@@ -10,8 +10,12 @@ This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileErr
 
 public use <io/error>
 
-unsafe external "C" as libc because "the path queries of the C library":
+unsafe external "C" as libc because "the path queries and the path changes of the C library":
     fn access(string path, i32 mode) i32 = "access"
+    fn unlink(string path) i32 = "unlink"
+    fn rmdir(string path) i32 = "rmdir"
+    fn mkdir(string path, i32 mode) i32 = "mkdir"
+    fn rename(string old_path, string new_path) i32 = "rename"
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
 const i32 F_OK = 0
@@ -32,3 +36,105 @@ The function follows a symbolic link: a link to a missing target gives `false`.
 :##
 public fn exists(string path) bool:
     return libc.access(path, F_OK) == 0
+
+##:
+Removes a file.
+
+The function calls `unlink()`. A directory is an error: use `rmdir` for a directory. A
+symbolic link is removed as the link, and its target stays.
+
+- Parameter path: The path of the file to remove.
+- Returns: `0` when the file is removed.
+- Errors: FileError, when the file cannot be removed (for example
+  `FileError.NotFound` or `FileError.PermissionDenied`).
+- Example:
+  ```sushi
+  match remove("/no/such/file"):
+      Result.Ok(_) -> println("removed")
+      Result.Err(_) -> println("not removed")
+  ```
+  This prints `not removed`.
+:##
+public fn remove(string path) i32 | FileError:
+    let i32 rc = libc.unlink(path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Removes an empty directory.
+
+The function calls `rmdir()`. A directory that is not empty is an error: remove its
+entries first, or use `remove_all` of `<io/fs>`.
+
+- Parameter path: The path of the directory to remove.
+- Returns: `0` when the directory is removed.
+- Errors: FileError, when the directory cannot be removed (for example
+  `FileError.NotFound` or `FileError.InvalidPath`).
+- Example:
+  ```sushi
+  match rmdir("/no/such/dir"):
+      Result.Ok(_) -> println("removed")
+      Result.Err(_) -> println("not removed")
+  ```
+  This prints `not removed`.
+:##
+public fn rmdir(string path) i32 | FileError:
+    let i32 rc = libc.rmdir(path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Makes a directory.
+
+The function calls `mkdir()`. It does not make the parent directories: use `mkdir_all`
+of `<io/fs>` for them. The umask of the process removes bits from `mode`.
+
+- Parameter path: The path of the new directory.
+- Parameter mode: The permission bits, for example `0o755`.
+- Returns: `0` when the directory is made.
+- Errors: FileError, when the directory cannot be made (for example
+  `FileError.AlreadyExists` or `FileError.NotFound`).
+- Example:
+  ```sushi
+  match mkdir("/no/such/parent/dir", 0o755):
+      Result.Ok(_) -> println("made")
+      Result.Err(_) -> println("not made")
+  ```
+  This prints `not made`.
+:##
+public fn mkdir(string path, i32 mode) i32 | FileError:
+    let i32 rc = libc.mkdir(path, mode)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Renames or moves a file or a directory.
+
+The function calls `rename()`. When `new_path` exists, the function replaces it in one
+step.
+
+- Parameter old_path: The path to rename.
+- Parameter new_path: The new path.
+- Returns: `0` when the path is renamed.
+- Errors: FileError, when the path cannot be renamed (for example `FileError.NotFound`
+  or `FileError.PermissionDenied`).
+- Example:
+  ```sushi
+  match rename("/no/such/file", "/no/such/other"):
+      Result.Ok(_) -> println("renamed")
+      Result.Err(_) -> println("not renamed")
+  ```
+  This prints `not renamed`.
+:##
+public fn rename(string old_path, string new_path) i32 | FileError:
+    let i32 rc = libc.rename(old_path, new_path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))

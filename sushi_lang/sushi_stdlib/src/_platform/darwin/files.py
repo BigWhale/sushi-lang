@@ -7,8 +7,6 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_lstat as _declare_lstat_posix,
     declare_opendir,
     declare_closedir,
-    declare_unlink,
-    declare_rename,
     declare_open,
     declare_read,
     declare_write,
@@ -18,8 +16,6 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_lseek,
     declare_isatty,
     declare_close,
-    declare_mkdir,
-    declare_rmdir,
 )
 
 O_RDONLY = 0
@@ -81,8 +77,6 @@ __all__ = [
     "declare_opendir",
     "declare_readdir",
     "declare_closedir",
-    "declare_unlink",
-    "declare_rename",
     "declare_open",
     "declare_read",
     "declare_write",
@@ -92,6 +86,4 @@ __all__ = [
     "declare_lseek",
     "declare_isatty",
     "declare_close",
-    "declare_mkdir",
-    "declare_rmdir",
 ]

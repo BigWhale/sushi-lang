@@ -1,7 +1,7 @@
-# A row of <io/files> takes the count of its row: `rename` with one argument is CE2009.
+# A row of <io/files> takes the count of its row: `copy` with one argument is CE2009.
 # EXPECT_ERROR_CODES_EXACT: CE2009
 use <io/files>
 
 fn main() i32:
-    let i32 status = rename("RR_WRONG_COUNT").realise(-1)
+    let i32 status = copy("RR_WRONG_COUNT").realise(-1)
     return status

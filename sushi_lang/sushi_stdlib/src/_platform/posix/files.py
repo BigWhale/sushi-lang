@@ -18,16 +18,6 @@ def declare_lstat(module: ir.Module, name: str = "lstat") -> ir.Function:
     return declare_libc(module, "lstat", name)
 
 
-def declare_unlink(module: ir.Module) -> ir.Function:
-    """Declare POSIX unlink() syscall."""
-    return declare_libc(module, "unlink")
-
-
-def declare_rename(module: ir.Module) -> ir.Function:
-    """Declare POSIX rename() syscall."""
-    return declare_libc(module, "rename")
-
-
 def declare_open(module: ir.Module) -> ir.Function:
     """Declare POSIX open() syscall: `int open(const char *, int, ...)`.
 
@@ -102,16 +92,6 @@ def declare_dup(module: ir.Module) -> ir.Function:
 def declare_close(module: ir.Module) -> ir.Function:
     """Declare POSIX close() syscall."""
     return declare_libc(module, "close")
-
-
-def declare_mkdir(module: ir.Module) -> ir.Function:
-    """Declare POSIX mkdir() syscall."""
-    return declare_libc(module, "mkdir")
-
-
-def declare_rmdir(module: ir.Module) -> ir.Function:
-    """Declare POSIX rmdir() syscall."""
-    return declare_libc(module, "rmdir")
 
 
 def declare_opendir(module: ir.Module) -> ir.Function:

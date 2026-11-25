@@ -39,16 +39,12 @@ FILE = "FileError"
 
 FILES_SIGNATURES: Dict[str, Signature] = {
     # The PATH utilities. Asking what is at a path cannot fail in a way a caller can
-    # act on, so the two predicates answer a BARE bool. `exists` is Sushi source
-    # (`src_sushi/io/files.sushi`).
+    # act on, so the two predicates answer a BARE bool. `exists`, `remove`, `rmdir`,
+    # `mkdir` and `rename` are Sushi source (`src_sushi/io/files.sushi`).
     "is_file":      Signature(params_of(cstr()), bare=BOOL),
     "is_dir":       Signature(params_of(cstr()), bare=BOOL),
     "file_size":    Signature(params_of(cstr()), ok=I64, error=FILE),
-    "remove":       Signature(params_of(cstr()), ok=I32, error=FILE),
-    "rmdir":        Signature(params_of(cstr()), ok=I32, error=FILE),
-    "rename":       Signature(params_of(cstr(), cstr()), ok=I32, error=FILE),
     "copy":         Signature(params_of(cstr(), cstr()), ok=I32, error=FILE),
-    "mkdir":        Signature(params_of(cstr(), I32), ok=I32, error=FILE),
     "read_dir":     Signature(params_of(cstr()), ok=STRINGS, error=FILE),
     "mtime":        Signature(params_of(cstr()), ok=I64, error=FILE),
     "ctime":        Signature(params_of(cstr()), ok=I64, error=FILE),

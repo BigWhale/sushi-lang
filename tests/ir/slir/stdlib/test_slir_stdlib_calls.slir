@@ -9,7 +9,7 @@ fn main() -> i32 {
     let _5: Result@(i32, FileError)
     let _6: i32
     let _7: i32
-    let _8: i32                            // removed
+    let _8: i32                            // copied
     let _9: bool                           // found
     let _10: string
     let _11: ~
@@ -26,7 +26,7 @@ fn main() -> i32 {
     StorageLive(_4)
     _4 = call @i32.max(const 7_i32 @guaranteed, const 2_i32 @guaranteed)
     StorageLive(_5)
-    _5 = call @<io/files>.remove(const "slir_stdlib_no_such_file" @guaranteed)
+    _5 = call @<io/files>.copy(const "slir_stdlib_no_such_file" @guaranteed, const "slir_stdlib_no_such_copy" @guaranteed)
     StorageLive(_6)
     _7 = discriminant(_5)
     switchInt(copy _7) -> [0: bb1, otherwise: bb2]

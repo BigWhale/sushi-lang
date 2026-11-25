@@ -5,9 +5,9 @@ ShirBody main
   locals : [_0 "dir": string, _1 "names": string[], _2 "name": string]
   regions : [_2: {_1} until #23]
   block  :
-    ExprStmt(Call(Builtin(Call(Stdlib(<io/files>, @mkdir), [(Lit("Mostly Harmless"), Guaranteed), (Lit(0o755), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]))
+    ExprStmt(Call(Builtin(Call(Free(@mkdir), [(Lit("Mostly Harmless"), Guaranteed), (Lit(0o755), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]))
     Assign(LocalRef(_0), adopt Lit("."), is_init: true)
     Assign(LocalRef(_1), adopt Call(Builtin(Call(Stdlib(<io/files>, @read_dir), [(LocalRef(_0), Guaranteed)]), "realise"), [(ArrayInit(Dynamic, []), Guaranteed)]), is_init: true)
     Loop(Items(Call(Builtin(LocalRef(_1), "iter"), []), _2, Bare), [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))])
-    ExprStmt(Call(Builtin(Call(Stdlib(<io/files>, @rmdir), [(Lit("Mostly Harmless"), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]))
+    ExprStmt(Call(Builtin(Call(Free(@rmdir), [(Lit("Mostly Harmless"), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]))
     Return(adopt Lit(0))

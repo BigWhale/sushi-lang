@@ -26,7 +26,7 @@ fn main() -> i32 {
 
   bb0:
     StorageLive(_1)
-    _1 = call @<io/files>.mkdir(const "Mostly Harmless" @guaranteed, const 493_i32 @guaranteed)
+    _1 = call @mkdir(const "Mostly Harmless" @guaranteed, const 493_i32 @guaranteed)
     StorageLive(_2)
     _2 = const -1_i32
     StorageLive(_3)
@@ -109,7 +109,7 @@ fn main() -> i32 {
     StorageDead(_13)
     StorageDead(_12)
     StorageLive(_17)
-    _17 = call @<io/files>.rmdir(const "Mostly Harmless" @guaranteed)
+    _17 = call @rmdir(const "Mostly Harmless" @guaranteed)
     StorageLive(_18)
     _18 = const -1_i32
     StorageLive(_19)

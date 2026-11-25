@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE2009
-# EXPECT_STDERR_CONTAINS: "'rename' expects 2, got 3"
+# EXPECT_STDERR_CONTAINS: "'copy' expects 2, got 3"
 # EXPECT_DUMP_SHIR: test_err_typeck_stdlib_alias_miscount.shir
 #
 # A function of a registry stdlib module behind an alias is the same `Stdlib` callee as
@@ -8,7 +8,7 @@
 use <io/files> as f
 
 fn main() i32:
-    let i32 renamed = f.rename("A", "B", "C").realise(1)
+    let i32 copied = f.copy("A", "B", "C").realise(1)
     let bool found = f.is_dir("/")
-    println("{renamed} {found}")
+    println("{copied} {found}")
     return 0
