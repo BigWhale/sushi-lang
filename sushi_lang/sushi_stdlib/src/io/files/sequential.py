@@ -1,4 +1,6 @@
-"""The SEQUENTIAL half of the descriptor layer: read, write, readln.
+"""The SEQUENTIAL half of the descriptor layer: write, readln.
+
+`fd_read` is Sushi source (`src_sushi/io/files.sushi`).
 
 The design record is `docs/design/stdlib-syscall-layer.md`.
 """
@@ -6,8 +8,7 @@ from dataclasses import dataclass
 
 from llvmlite import ir
 from sushi_lang.backend.string_layout import STRING_BYTES, string_size_i64, string_value
-from sushi_lang.backend.gep_utils import extract_stored_len, insert_cap, insert_len
-from sushi_lang.backend.constants import DYNAMIC_ARRAY_SIZE_BYTES
+from sushi_lang.backend.gep_utils import extract_stored_len
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_byte_array_type, get_maybe_type, get_result_type,
     get_string_type, get_unit_enum_type,
@@ -34,67 +35,9 @@ _MAYBE_STRING_SIZE = 8 + STRING_BYTES
 
 def generate_ir(module: ir.Module) -> None:
     """Generate the sequential descriptor primitives."""
-    generate_fd_read(module)
     generate_fd_write(module)
     generate_fd_write_str(module)
     generate_fd_readln(module)
-
-
-def generate_fd_read(module: ir.Module) -> None:
-    """Emit `Result<u8[], FileError> sushi_io_files_fd_read(i32 fd, i64 max)`.
-
-    ONE `read(2)`, so the answer carries what arrived and may be shorter than asked for.
-    An EMPTY array is end of file and not an error, which is what lets a caller loop
-    until the answer is empty. `cap` stays `max`, so the array destructor frees the whole
-    buffer whatever `len` says -- the same rule `fd_pread` follows.
-    """
-    _i8, i8_ptr, i32, i64 = get_basic_types()
-    read_fn = get_platform_module('files').declare_read(module)
-    malloc_fn = declare_malloc(module)
-    free_fn = declare_free(module)
-
-    array_ty = get_byte_array_type()
-    result_type = get_result_type(array_ty, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64]),
-                       name="sushi_io_files_fd_read")
-    fd, maximum = func.args
-    fd.name, maximum.name = "fd", "max"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    buffer = emit_checked_malloc(builder, malloc_fn, maximum, name="read_buf")
-
-    # A signal that lands before the first byte moves answers -1 with EINTR, and the
-    # only correct response is to ask again (probe P13).
-    got_slot = entry_alloca(builder, i64, name="got_slot")
-    attempt_bb = func.append_basic_block(name="read_attempt")
-    builder.branch(attempt_bb)
-
-    builder.position_at_end(attempt_bb)
-    attempt = builder.call(read_fn, [fd, buffer, maximum], name="got")
-    builder.store(attempt, got_slot)
-    ok = builder.icmp_signed(">=", attempt, ir.Constant(i64, 0), name="read_ok")
-
-    success_bb = func.append_basic_block(name="success")
-    interrupted_bb = func.append_basic_block(name="read_interrupted")
-    failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(ok, success_bb, interrupted_bb)
-
-    builder.position_at_end(interrupted_bb)
-    builder.cbranch(emit_is_eintr(builder, module), attempt_bb, failure_bb)
-
-    # The tag before the free: free() overwrites errno.
-    builder.position_at_end(failure_bb)
-    tag = emit_file_error_tag(builder, module)
-    builder.call(free_fn, [buffer])
-    builder.ret(emit_err_result(builder, result_type, tag))
-
-    builder.position_at_end(success_bb)
-    got = builder.load(got_slot, name="got_bytes")
-    descriptor = ir.Constant(array_ty, ir.Undefined)
-    descriptor = insert_len(None, descriptor, got, builder=builder)
-    descriptor = insert_cap(None, descriptor, maximum, builder=builder)
-    descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
-    builder.ret(emit_ok_result(builder, result_type, descriptor, DYNAMIC_ARRAY_SIZE_BYTES))
 
 
 def _emit_write_all(builder: ir.IRBuilder, func: ir.Function, write_fn: ir.Function,

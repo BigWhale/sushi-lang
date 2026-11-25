@@ -22,6 +22,8 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn dup(i32 fd) i32 = "dup"
     fn close(i32 fd) i32 = "close"
     fn isatty(i32 fd) i32 = "isatty"
+    fn read(i32 fd, poke u8[] buf, i64 count) i64 = "read"
+    fn pread(i32 fd, poke u8[] buf, i64 count, i64 offset) i64 = "pread"
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
 const i32 F_OK = 0
@@ -299,3 +301,83 @@ A descriptor that is not open also gives `false`. Thus the function cannot fail.
 :##
 public fn fd_isatty(i32 fd) bool:
     return libc.isatty(fd) != 0
+
+##: The largest length of an array. A read buffer is never longer. :##
+const i64 READ_MAX = 2147483647
+
+##:
+Makes the buffer of one read of `fd_read` or `fd_pread`.
+
+A count above the largest length of an array gives a buffer of that length, and the read
+is then short. A negative count stops the program with RE2026.
+
+- Parameter count: How many bytes the caller asks for.
+- Returns: A buffer of zero bytes. Its length is the count to read.
+:##
+fn read_buffer(i64 count) u8[]:
+    assert(count >= 0 as i64, "the count of a read is negative")
+    if (count > READ_MAX):
+        return from([0; READ_MAX])
+    return from([0; count])
+
+##:
+Reads bytes from the file position of a descriptor, and moves the position.
+
+The function calls `read()` one time. The answer can be shorter than `max`. An empty
+array is the end of the file, not an error, so a caller reads until the answer is empty.
+When a signal stops the call before a byte arrives, the function calls `read()` again.
+
+- Parameter fd: The descriptor.
+- Parameter max: The most bytes to read. A negative number stops the program.
+- Returns: The bytes that arrived.
+- Errors: FileError, when the descriptor cannot be read (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_read(-1, 16 as i64):
+      Result.Ok(_) -> println("read")
+      Result.Err(_) -> println("not read")
+  ```
+  This prints `not read`.
+:##
+public fn fd_read(i32 fd, i64 max) u8[] | FileError:
+    let u8[] buf = read_buffer(max)
+    let i64 got = libc.read(fd, poke buf, buf.len())
+    let i32 code = errno()
+    while (got < 0 as i64 and code == EINTR):
+        got := libc.read(fd, poke buf, buf.len())
+        code := errno()
+    if (got >= 0 as i64):
+        buf.truncate(got)
+        return Result.Ok(buf)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Reads bytes at an offset of a file, and does not move the file position.
+
+The function calls `pread()` one time. The answer can be shorter than `count`, and it is
+empty at the end of the file. Two readers of one descriptor can use this function at the
+same time, because it does not use the shared file position.
+
+- Parameter fd: The descriptor.
+- Parameter offset: Where to read, in bytes from the start of the file.
+- Parameter count: The most bytes to read. A negative number stops the program.
+- Returns: The bytes that arrived.
+- Errors: FileError, when the descriptor cannot be read at the offset (for example a
+  negative offset or a pipe).
+- Example:
+  ```sushi
+  match fd_pread(-1, 0 as i64, 16 as i64):
+      Result.Ok(_) -> println("read")
+      Result.Err(_) -> println("not read")
+  ```
+  This prints `not read`.
+:##
+public fn fd_pread(i32 fd, i64 offset, i64 count) u8[] | FileError:
+    let u8[] buf = read_buffer(count)
+    let i64 got = libc.pread(fd, poke buf, buf.len(), offset)
+    let i32 code = errno()
+    if (got >= 0 as i64):
+        buf.truncate(got)
+        return Result.Ok(buf)
+    return Result.Err(FileError.from_errno(code))

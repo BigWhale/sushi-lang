@@ -16,6 +16,14 @@ All notable changes to Sushi Lang will be documented in this file.
   its `Result.Ok(0)` and its `FileError` variants (`FileError.from_errno`). An own
   function with one of these names in a unit with a flat `use <io/files>` now gets CW3002.
 
+- **`fd_read` and `fd_pread` of `<io/files>` are Sushi source.** Each one calls `read()`
+  or `pread()` of the C library into a new `u8[]` and cuts the array to the count read.
+  They keep their signatures, the short read, the empty answer at the end of the file and
+  their `FileError` variants. `fd_read` calls `read()` again after EINTR, as before. A
+  negative `max` or `count` now stops the program with RE2026; before, it stopped with
+  RE2021. A count above 2147483647 now reads at most 2147483647 bytes. The new buffer is
+  filled with zeros, so a large read is slower than before.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each
