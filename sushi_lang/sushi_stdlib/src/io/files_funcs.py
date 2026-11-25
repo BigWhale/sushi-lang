@@ -41,7 +41,7 @@ FILES_SIGNATURES: Dict[str, Signature] = {
     # The PATH utilities. Asking what is at a path cannot fail in a way a caller can
     # act on, so the two predicates answer a BARE bool. `exists`, `remove`, `rmdir`,
     # `mkdir` and `rename` are Sushi source (`src_sushi/io/files.sushi`), and so are
-    # `fd_read` and `fd_pread`.
+    # `fd_read`, `fd_pread` and `fd_pwrite`.
     "is_file":      Signature(params_of(cstr()), bare=BOOL),
     "is_dir":       Signature(params_of(cstr()), bare=BOOL),
     "file_size":    Signature(params_of(cstr()), ok=I64, error=FILE),
@@ -51,11 +51,9 @@ FILES_SIGNATURES: Dict[str, Signature] = {
     "ctime":        Signature(params_of(cstr()), ok=I64, error=FILE),
     "mode":         Signature(params_of(cstr()), ok=I32, error=FILE),
     "is_symlink":   Signature(params_of(cstr()), ok=BOOL, error=FILE),
-    # The DESCRIPTOR layer, positional half. A descriptor is a bare i32, and an offset
-    # is i64 because `off_t` is 64-bit on both supported platforms (probe P6).
-    "fd_pwrite":    Signature(params_of(I32, I64, BYTES), ok=I64, error=FILE),
-    # The sequential half. A `string` crosses as its fat pointer here -- `fd_write_str`
-    # takes a string VALUE, not a path, so it is not marshalled to `i8*`.
+    # The DESCRIPTOR layer. A descriptor is a bare i32. A `string` crosses as its fat
+    # pointer here -- `fd_write_str` takes a string VALUE, not a path, so it is not
+    # marshalled to `i8*`.
     "fd_write":     Signature(params_of(I32, BYTES), ok=I64, error=FILE),
     "fd_write_str": Signature(params_of(I32, STRING), ok=I64, error=FILE),
     # A blank line is Some("") and end of file is None; an empty string can no longer

@@ -52,14 +52,6 @@ def declare_pread(module: ir.Module) -> ir.Function:
     return declare_libc(module, "pread")
 
 
-def declare_pwrite(module: ir.Module) -> ir.Function:
-    """Declare POSIX pwrite(): `ssize_t pwrite(int, const void *, size_t, off_t)`.
-
-    The positional write, and `declare_pread`'s twin in every respect.
-    """
-    return declare_libc(module, "pwrite")
-
-
 def declare_lseek(module: ir.Module) -> ir.Function:
     """Declare POSIX lseek(): `off_t lseek(int, off_t, int)`.
 

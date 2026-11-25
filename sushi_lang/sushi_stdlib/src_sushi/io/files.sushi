@@ -24,6 +24,7 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn isatty(i32 fd) i32 = "isatty"
     fn read(i32 fd, poke u8[] buf, i64 count) i64 = "read"
     fn pread(i32 fd, poke u8[] buf, i64 count, i64 offset) i64 = "pread"
+    fn pwrite(i32 fd, u8[] buf, i64 count, i64 offset) i64 = "pwrite"
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
 const i32 F_OK = 0
@@ -380,4 +381,32 @@ public fn fd_pread(i32 fd, i64 offset, i64 count) u8[] | FileError:
     if (got >= 0 as i64):
         buf.truncate(got)
         return Result.Ok(buf)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Writes bytes at an offset of a file, and does not move the file position.
+
+The function calls `pwrite()` one time. The answer can be smaller than the length of
+`data`. To write all the bytes, the caller calls the function again with the remaining
+bytes.
+
+- Parameter fd: The descriptor.
+- Parameter offset: Where to write, in bytes from the start of the file.
+- Parameter data: The bytes to write. The array stays the caller's.
+- Returns: The number of bytes written.
+- Errors: FileError, when the descriptor cannot be written at the offset (for example a
+  negative offset or a pipe).
+- Example:
+  ```sushi
+  match fd_pwrite(-1, 0 as i64, from([1, 2, 3])):
+      Result.Ok(_) -> println("written")
+      Result.Err(_) -> println("not written")
+  ```
+  This prints `not written`.
+:##
+public fn fd_pwrite(i32 fd, i64 offset, u8[] data) i64 | FileError:
+    let i64 wrote = libc.pwrite(fd, data, data.len(), offset)
+    let i32 code = errno()
+    if (wrote >= 0 as i64):
+        return Result.Ok(wrote)
     return Result.Err(FileError.from_errno(code))

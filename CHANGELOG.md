@@ -24,6 +24,10 @@ All notable changes to Sushi Lang will be documented in this file.
   RE2021. A count above 2147483647 now reads at most 2147483647 bytes. The new buffer is
   filled with zeros, so a large read is slower than before.
 
+- **`fd_pwrite` of `<io/files>` is Sushi source.** It calls `pwrite()` of the C library
+  one time and gives the count written. It keeps its signature, the short write and its
+  `FileError` variants. The array is a borrow, and the function does not copy it.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each

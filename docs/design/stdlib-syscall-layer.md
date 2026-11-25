@@ -13,10 +13,13 @@ order (ruling R12). Thus there is one route to a descriptor.
 
 The descriptor layer of `<io/files>` has two halves:
 
-- `io/files/sequential.py`: `read`, `write`, `readln`, `seek`. These calls MOVE the
-  position of the descriptor, so a `File` handle is written on them.
-- `io/files/positional.py`: `pread`, `pwrite`. These calls take the offset as an argument
-  and do not move the position, so they are safe on a shared descriptor.
+- The sequential half: `read`, `write`, `readln`, `seek`. These calls MOVE the position
+  of the descriptor, so a `File` handle is written on them. `io/files/sequential.py`
+  generates `fd_write`, `fd_write_str` and `fd_readln`. `fd_read` and `fd_seek` are Sushi
+  source (`src_sushi/io/files.sushi`).
+- The positional half: `pread`, `pwrite`. These calls take the offset as an argument and
+  do not move the position, so they are safe on a shared descriptor. `fd_pread` and
+  `fd_pwrite` are Sushi source (`src_sushi/io/files.sushi`).
 
 ## The line reader (`fd_readln`)
 

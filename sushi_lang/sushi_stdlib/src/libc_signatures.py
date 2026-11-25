@@ -55,7 +55,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "read": _c("ssize_t", "int", "void*", "size_t"),
     "write": _c("ssize_t", "int", "const void*", "size_t"),
     "pread": _c("ssize_t", "int", "void*", "size_t", "off_t"),
-    "pwrite": _c("ssize_t", "int", "const void*", "size_t", "off_t"),
     "lseek": _c("off_t", "int", "off_t", "int"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),

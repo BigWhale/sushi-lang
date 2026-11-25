@@ -11,7 +11,6 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_read,
     declare_write,
     declare_pread,
-    declare_pwrite,
     declare_lseek,
     declare_close,
 )
@@ -70,7 +69,6 @@ __all__ = [
     "declare_read",
     "declare_write",
     "declare_pread",
-    "declare_pwrite",
     "declare_lseek",
     "declare_close",
 ]
