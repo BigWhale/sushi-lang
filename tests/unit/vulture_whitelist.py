@@ -42,8 +42,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "the Protocol is named only in string annotations"),
     # -- a value of a closed set, compared by value ----------------------------------
     ("sushi_lang/semantics/places.py", "NONE", "the zero member of the Step flag"),
-    ("sushi_lang/sushi_stdlib/src/io/files/positional.py", "INTENT_READ",
-     "intent 0 of the fd_open protocol; the switch default handles it"),
     # -- gate data: a gate test reads it ---------------------------------------------
     ("sushi_lang/backend/lifecycle.py", "registered_halves", "tests/unit/test_lifecycle_handlers.py"),
     ("sushi_lang/semantics/ast.py", "attrs", "tests/docs_sweep.py reads the fence info string"),

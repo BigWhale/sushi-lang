@@ -1,4 +1,4 @@
-"""The SEQUENTIAL half of the descriptor layer: read, write, readln, seek, isatty.
+"""The SEQUENTIAL half of the descriptor layer: read, write, readln.
 
 The design record is `docs/design/stdlib-syscall-layer.md`.
 """
@@ -38,8 +38,6 @@ def generate_ir(module: ir.Module) -> None:
     generate_fd_write(module)
     generate_fd_write_str(module)
     generate_fd_readln(module)
-    generate_fd_seek(module)
-    generate_fd_isatty(module)
 
 
 def generate_fd_read(module: ir.Module) -> None:
@@ -500,77 +498,3 @@ def _emit_readln_chunked(builder: ir.IRBuilder, frame: _ReadlnFrame, entry_bb: i
     builder.position_at_end(exhausted_bb)
     builder.store(limit, len_slot)
     builder.branch(cond_bb)
-
-
-def generate_fd_seek(module: ir.Module) -> None:
-    """Emit `Result<i64, FileError> sushi_io_files_fd_seek(i32 fd, i64 off, i32 whence)`.
-
-    The Ok value is the NEW position, which is what makes `tell` need no generator of its
-    own: it is `fd_seek(fd, 0, SEEK_CUR)`. The whence is an INTENT -- 0 the start, 1 the
-    current position, 2 the end -- mapped here to the platform's own `SEEK_*`, exactly as
-    `fd_open` maps its intent to the `O_*` flags. POSIX happens to fix these three at 0,
-    1 and 2, so the mapping is an identity today; it is written out anyway, because a
-    Sushi module spelling a platform number is the mistake the intent exists to prevent.
-    """
-    _i8, _i8_ptr, i32, i64 = get_basic_types()
-    platform_files = get_platform_module('files')
-    lseek_fn = platform_files.declare_lseek(module)
-
-    result_type = get_result_type(i64, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, i64, i32]),
-                       name="sushi_io_files_fd_seek")
-    fd, offset, whence = func.args
-    fd.name, offset.name, whence.name = "fd", "offset", "whence"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    whence_slot = entry_alloca(builder, i32, name="whence_slot")
-    builder.store(ir.Constant(i32, platform_files.SEEK_SET), whence_slot)
-
-    # An unrecognised whence seeks from the START, which is the reading of a number this
-    # function does not know that can lose no data.
-    done_bb = func.append_basic_block(name="whence_done")
-    switch = builder.switch(whence, done_bb)
-    for intent, mapped in ((1, platform_files.SEEK_CUR), (2, platform_files.SEEK_END)):
-        block = func.append_basic_block(name=f"whence_{intent}")
-        switch.add_case(ir.Constant(i32, intent), block)
-        builder.position_at_end(block)
-        builder.store(ir.Constant(i32, mapped), whence_slot)
-        builder.branch(done_bb)
-
-    builder.position_at_end(done_bb)
-    where = builder.call(lseek_fn, [fd, offset, builder.load(whence_slot)],
-                         name="position")
-    ok = builder.icmp_signed(">=", where, ir.Constant(i64, 0), name="seek_ok")
-
-    success_bb = func.append_basic_block(name="success")
-    failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(ok, success_bb, failure_bb)
-
-    builder.position_at_end(failure_bb)
-    builder.ret(emit_errno_err_result(builder, module, result_type))
-
-    builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type, where, 8))
-
-
-def generate_fd_isatty(module: ir.Module) -> None:
-    """Emit `i8 sushi_io_files_fd_isatty(i32 fd)`, a BARE bool and not a Result.
-
-    Asking cannot fail in a way a caller can act on: a descriptor that is not a terminal
-    and a descriptor that is not open both answer 0. Wrapping that in a Result would put
-    an error arm in every call site for a failure that never arrives.
-    """
-    i8, _i8_ptr, i32, _i64 = get_basic_types()
-    isatty_fn = get_platform_module('files').declare_isatty(module)
-
-    func = ir.Function(module, ir.FunctionType(i8, [i32]),
-                       name="sushi_io_files_fd_isatty")
-    fd = func.args[0]
-    fd.name = "fd"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    answer = builder.call(isatty_fn, [fd], name="isatty_rc")
-    builder.ret(builder.zext(
-        builder.icmp_signed("!=", answer, ir.Constant(i32, 0), name="is_terminal"),
-        i8, name="as_bool"))
-

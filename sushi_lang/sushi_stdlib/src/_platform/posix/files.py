@@ -69,16 +69,6 @@ def declare_lseek(module: ir.Module) -> ir.Function:
     return declare_libc(module, "lseek")
 
 
-def declare_isatty(module: ir.Module) -> ir.Function:
-    """Declare POSIX isatty(): `int isatty(int)`.
-
-    Asking cannot fail in any way a caller can act on -- a descriptor that is not a
-    terminal and a descriptor that is not open both answer 0 -- so `fd_isatty` gives a
-    bare bool rather than a Result.
-    """
-    return declare_libc(module, "isatty")
-
-
 def declare_dup(module: ir.Module) -> ir.Function:
     """Declare POSIX dup(): `int dup(int)`.
 

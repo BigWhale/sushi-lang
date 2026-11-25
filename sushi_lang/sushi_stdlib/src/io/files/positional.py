@@ -1,4 +1,4 @@
-"""The descriptor layer of <io/files>: open, positional read/write, dup, close.
+"""The positional half of the descriptor layer of <io/files>: pread and pwrite.
 
 These take a DESCRIPTOR rather than a path, which is what makes them the layer a
 `File` struct is written on top of -- exactly as `<net/socket>` is the layer
@@ -25,83 +25,12 @@ from sushi_lang.sushi_stdlib.src.io.files.errno import (
 from sushi_lang.sushi_stdlib.src.results import emit_ok_result, emit_err_result
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
 from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
-from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
     """Generate the descriptor-level primitives."""
-    generate_fd_open(module)
     generate_fd_pread(module)
     generate_fd_pwrite(module)
-    generate_fd_dup(module)
-    generate_fd_close(module)
-
-
-# What a caller WANTS, not what the platform calls it. A portable Sushi module cannot
-# name `O_TRUNC`: the value differs between macOS and Linux and there is no conditional
-# compilation, so a number spelled in a Sushi-source module would be wrong on one of
-# them. The intent crosses the boundary and the platform module maps it, which is
-# where the platform knowledge already lives. `FileMode` maps onto these in Phase 5.
-INTENT_READ = 0
-INTENT_WRITE = 1     # create, truncate
-INTENT_APPEND = 2    # create, append
-INTENT_READ_WRITE = 3  # create, keep
-
-
-def generate_fd_open(module: ir.Module) -> None:
-    """Emit `Result<i32, FileError> sushi_io_files_fd_open(i8* path, i32 intent, i32 mode)`.
-
-    The path arrives already marshalled as a C string and the CALLER frees it, which is
-    the one C-string seam every stdlib callee obeys. `intent` is one of the INTENT_*
-    values above; anything else opens read-only, which is the safe reading of a number
-    this function does not recognise.
-    """
-    _i8, i8_ptr, i32, _i64 = get_basic_types()
-    platform_files = get_platform_module('files')
-    open_fn = platform_files.declare_open(module)
-
-    result_type = get_result_type(i32, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i8_ptr, i32, i32]),
-                       name="sushi_io_files_fd_open")
-    path, intent, mode = func.args
-    path.name, intent.name, mode.name = "path", "intent", "mode"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    flags_slot = entry_alloca(builder, i32, name="flags_slot")
-    builder.store(ir.Constant(i32, platform_files.O_RDONLY), flags_slot)
-
-    # One block per intent, and the default is read-only rather than a trap: an
-    # unrecognised number must not open a file for writing.
-    done_bb = func.append_basic_block(name="flags_done")
-    switch = builder.switch(intent, done_bb)
-    for value, flags in (
-        (INTENT_WRITE, platform_files.O_WRONLY | platform_files.O_CREAT
-                       | platform_files.O_TRUNC),
-        (INTENT_APPEND, platform_files.O_WRONLY | platform_files.O_CREAT
-                        | platform_files.O_APPEND),
-        (INTENT_READ_WRITE, platform_files.O_RDWR | platform_files.O_CREAT),
-    ):
-        block = func.append_basic_block(name=f"intent_{value}")
-        switch.add_case(ir.Constant(i32, value), block)
-        builder.position_at_end(block)
-        builder.store(ir.Constant(i32, flags), flags_slot)
-        builder.branch(done_bb)
-
-    builder.position_at_end(done_bb)
-    flags = builder.load(flags_slot, name="flags")
-
-    fd = builder.call(open_fn, [path, flags, mode], name="fd")
-    ok = builder.icmp_signed(">=", fd, ir.Constant(i32, 0), name="open_ok")
-
-    success_bb = func.append_basic_block(name="success")
-    failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(ok, success_bb, failure_bb)
-
-    builder.position_at_end(failure_bb)
-    builder.ret(emit_errno_err_result(builder, module, result_type))
-
-    builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type, fd, 4))
 
 
 def generate_fd_pread(module: ir.Module) -> None:
@@ -181,62 +110,3 @@ def generate_fd_pwrite(module: ir.Module) -> None:
 
     builder.position_at_end(success_bb)
     builder.ret(emit_ok_result(builder, result_type, wrote, 8))
-
-
-def generate_fd_dup(module: ir.Module) -> None:
-    """Emit `Result<i32, FileError> sushi_io_files_fd_dup(i32 fd)`.
-
-    A SECOND descriptor over the SAME open file description. The offset is shared, so
-    this is the shared-listener primitive; `fd_pread`/`fd_pwrite` are the answer for
-    concurrent reads of one file.
-    """
-    _i8, _i8_ptr, i32, _i64 = get_basic_types()
-    platform_files = get_platform_module('files')
-    dup_fn = platform_files.declare_dup(module)
-
-    result_type = get_result_type(i32, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
-                       name="sushi_io_files_fd_dup")
-    fd = func.args[0]
-    fd.name = "fd"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    copy = builder.call(dup_fn, [fd], name="dup_fd")
-    ok = builder.icmp_signed(">=", copy, ir.Constant(i32, 0), name="dup_ok")
-
-    success_bb = func.append_basic_block(name="success")
-    failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(ok, success_bb, failure_bb)
-
-    builder.position_at_end(failure_bb)
-    builder.ret(emit_errno_err_result(builder, module, result_type))
-
-    builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type, copy, 4))
-
-
-def generate_fd_close(module: ir.Module) -> None:
-    """Emit `Result<i32, FileError> sushi_io_files_fd_close(i32 fd)`."""
-    _i8, _i8_ptr, i32, _i64 = get_basic_types()
-    platform_files = get_platform_module('files')
-    close_fn = platform_files.declare_close(module)
-
-    result_type = get_result_type(i32, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
-                       name="sushi_io_files_fd_close")
-    fd = func.args[0]
-    fd.name = "fd"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    rc = builder.call(close_fn, [fd], name="close_rc")
-    ok = builder.icmp_signed("==", rc, ir.Constant(i32, 0), name="close_ok")
-
-    success_bb = func.append_basic_block(name="success")
-    failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(ok, success_bb, failure_bb)
-
-    builder.position_at_end(failure_bb)
-    builder.ret(emit_errno_err_result(builder, module, result_type))
-
-    builder.position_at_end(success_bb)
-    builder.ret(emit_ok_result(builder, result_type, ir.Constant(i32, 0), 4))

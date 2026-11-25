@@ -11,9 +11,7 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_write,
     declare_pread,
     declare_pwrite,
-    declare_dup,
     declare_lseek,
-    declare_isatty,
     declare_close,
 )
 
@@ -21,19 +19,10 @@ O_RDONLY = 0
 O_WRONLY = 1
 O_CREAT = 0x40
 O_TRUNC = 0x200
-# The two the descriptor layer adds (HANDLES.md, Phase 4). A portable Sushi
-# module cannot spell these -- they differ between platforms -- so the intent
-# crosses the boundary and `generate_fd_open` maps it here.
-O_RDWR = 0x0002
-O_APPEND = 0x0400
 
-# lseek whences. POSIX fixes these at 0, 1 and 2 on every platform, unlike the O_*
-# flags above -- but they live here anyway, so that `generate_fd_seek` reads a whence
-# from the platform module exactly as it reads a flag, and a platform that ever
-# disagreed would have one place to say so.
+# The lseek whences of `fd_readln`.
 SEEK_SET = 0
 SEEK_CUR = 1
-SEEK_END = 2
 
 # struct stat offsets, verified with an offsetof probe (2026-08-29, glibc).
 # st_mode sits at 24 on x86_64 and at 16 on aarch64 (st_ino is followed by
@@ -62,8 +51,6 @@ __all__ = [
     "declare_write",
     "declare_pread",
     "declare_pwrite",
-    "declare_dup",
     "declare_lseek",
-    "declare_isatty",
     "declare_close",
 ]

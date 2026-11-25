@@ -96,7 +96,7 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 37
+    assert checked >= 32
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.

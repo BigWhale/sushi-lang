@@ -9,6 +9,7 @@ This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileErr
 :##
 
 public use <io/error>
+use <sys/platform>
 
 unsafe external "C" as libc because "the path queries and the path changes of the C library":
     fn access(string path, i32 mode) i32 = "access"
@@ -16,6 +17,11 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn rmdir(string path) i32 = "rmdir"
     fn mkdir(string path, i32 mode) i32 = "mkdir"
     fn rename(string old_path, string new_path) i32 = "rename"
+    fn open(string path, i32 flags, ...) i32 = "open"
+    fn lseek(i32 fd, i64 offset, i32 whence) i64 = "lseek"
+    fn dup(i32 fd) i32 = "dup"
+    fn close(i32 fd) i32 = "close"
+    fn isatty(i32 fd) i32 = "isatty"
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
 const i32 F_OK = 0
@@ -138,3 +144,158 @@ public fn rename(string old_path, string new_path) i32 | FileError:
     if (rc == 0):
         return Result.Ok(0)
     return Result.Err(FileError.from_errno(code))
+
+##:
+Gives the `open()` flags of an intent of `fd_open`.
+
+- Parameter intent: `0` read, `1` write, `2` append, `3` read and write. An unknown number
+  gives the flags of `0`.
+- Returns: The `O_*` flags of this platform.
+:##
+fn open_flags(i32 intent) i32:
+    if (intent == 1):
+        return O_WRONLY | O_CREAT | O_TRUNC
+    if (intent == 2):
+        return O_WRONLY | O_CREAT | O_APPEND
+    if (intent == 3):
+        return O_RDWR | O_CREAT
+    return O_RDONLY
+
+##:
+Opens a file and gives its descriptor.
+
+The `intent` tells what the caller wants, and the function changes it to the `O_*` flags
+of this platform:
+
+- `0`: read only.
+- `1`: write. The function makes the file, and cuts an existing file to zero length.
+- `2`: append. The function makes the file, and each write goes to the end.
+- `3`: read and write. The function makes the file, and keeps an existing file.
+
+An unknown number opens the file read only.
+
+- Parameter path: The path to open.
+- Parameter intent: What the caller wants, from `0` to `3`.
+- Parameter mode: The permission bits of a new file, for example `420` (`0o644`).
+- Returns: The new descriptor.
+- Errors: FileError, when the file cannot be opened (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match fd_open("/no/such/file", 0, 420):
+      Result.Ok(_) -> println("opened")
+      Result.Err(_) -> println("not opened")
+  ```
+  This prints `not opened`.
+:##
+public fn fd_open(string path, i32 intent, i32 mode) i32 | FileError:
+    let i32 fd = libc.open(path, open_flags(intent), mode)
+    let i32 code = errno()
+    if (fd >= 0):
+        return Result.Ok(fd)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Makes a second descriptor of the same open file.
+
+The function calls `dup()`. The two descriptors share one file position. For two readers
+of one file, use `fd_pread`, because it does not move the position.
+
+- Parameter fd: The descriptor to copy.
+- Returns: The new descriptor.
+- Errors: FileError, when the descriptor cannot be copied (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_dup(-1):
+      Result.Ok(_) -> println("copied")
+      Result.Err(_) -> println("not copied")
+  ```
+  This prints `not copied`.
+:##
+public fn fd_dup(i32 fd) i32 | FileError:
+    let i32 copy = libc.dup(fd)
+    let i32 code = errno()
+    if (copy >= 0):
+        return Result.Ok(copy)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Closes a descriptor.
+
+The function calls `close()` one time. It does not try again after an interrupt.
+
+- Parameter fd: The descriptor to close.
+- Returns: `0` when the descriptor is closed.
+- Errors: FileError, when the descriptor cannot be closed (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_close(-1):
+      Result.Ok(_) -> println("closed")
+      Result.Err(_) -> println("not closed")
+  ```
+  This prints `not closed`.
+:##
+public fn fd_close(i32 fd) i32 | FileError:
+    let i32 rc = libc.close(fd)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Gives the `lseek()` whence of a whence of `fd_seek`.
+
+- Parameter whence: `0` the start, `1` the current position, `2` the end. An unknown
+  number gives the start.
+- Returns: The `SEEK_*` value of this platform.
+:##
+fn seek_whence(i32 whence) i32:
+    if (whence == 1):
+        return SEEK_CUR
+    if (whence == 2):
+        return SEEK_END
+    return SEEK_SET
+
+##:
+Moves the file position of a descriptor.
+
+The function calls `lseek()`. The `whence` is `0` for the start, `1` for the current
+position and `2` for the end. An unknown number counts from the start. The current
+position is `fd_seek(fd, 0, 1)`.
+
+- Parameter fd: The descriptor.
+- Parameter offset: How far to move, in bytes. It can be negative.
+- Parameter whence: Where to count from, from `0` to `2`.
+- Returns: The new position, in bytes from the start.
+- Errors: FileError, when the descriptor cannot move its position (for example a pipe).
+- Example:
+  ```sushi
+  match fd_seek(-1, 0 as i64, 0):
+      Result.Ok(_) -> println("moved")
+      Result.Err(_) -> println("not moved")
+  ```
+  This prints `not moved`.
+:##
+public fn fd_seek(i32 fd, i64 offset, i32 whence) i64 | FileError:
+    let i64 at = libc.lseek(fd, offset, seek_whence(whence))
+    let i32 code = errno()
+    if (at >= 0 as i64):
+        return Result.Ok(at)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Tells if a descriptor is a terminal.
+
+A descriptor that is not open also gives `false`. Thus the function cannot fail.
+
+- Parameter fd: The descriptor to examine.
+- Returns: `true` when the descriptor is a terminal.
+- Example:
+  ```sushi
+  println(fd_isatty(-1))
+  ```
+  This prints `false`.
+:##
+public fn fd_isatty(i32 fd) bool:
+    return libc.isatty(fd) != 0
