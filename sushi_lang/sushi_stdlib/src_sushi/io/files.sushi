@@ -27,6 +27,8 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn pread(i32 fd, poke u8[] buf, i64 count, i64 offset) i64 = "pread"
     fn pwrite(i32 fd, u8[] buf, i64 count, i64 offset) i64 = "pwrite"
     fn fstat(i32 fd, poke u8[] buf) i32 = "fstat"
+    fn stat(string path, poke u8[] buf) i32 = STAT_SYMBOL
+    fn lstat(string path, poke u8[] buf) i32 = LSTAT_SYMBOL
     fn fchmod(i32 fd, i32 mode) i32 = "fchmod"
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
@@ -522,23 +524,17 @@ const i64 COPY_CHUNK = 65536
 ##:
 Gives the `st_mode` of an open file: the file type bits and the permission bits.
 
-The function calls `fstat()`. The value fits in 16 bits on each platform, so the function
-reads the two low bytes.
-
 - Parameter fd: The descriptor of the file.
 - Returns: The `st_mode` of the file.
 - Errors: FileError, when `fstat()` fails.
 :##
 fn file_mode(i32 fd) i32 | FileError:
-    let u8[] stat = from([0; STAT_SIZE])
-    let i32 rc = libc.fstat(fd, poke stat)
+    let u8[] buf = from([0; STAT_SIZE])
+    let i32 rc = libc.fstat(fd, poke buf)
     let i32 code = errno()
     if (rc != 0):
         return Result.Err(FileError.from_errno(code))
-    let i64 at = ST_MODE_OFFSET as i64
-    let i32 low = stat[at] as i32
-    let i32 high = stat[at + 1] as i32
-    return Result.Ok(low | (high << 8))
+    return Result.Ok(stat_mode(buf))
 
 ##:
 Copies the bytes of one open file to another, from the two file positions to the end.
@@ -640,3 +636,231 @@ public fn copy(string src, string dst) i32 | FileError:
     let Result@(i32, FileError) done = copy_to_path(from_fd, dst)
     libc.close(from_fd)
     return Result.Ok(done??)
+
+##: The width in bytes of `st_size` and of the `tv_sec` of a time field, on each platform. :##
+const i32 STAT_I64_BYTES = 8
+
+##:
+Reads one field of a `struct stat` buffer, the least significant byte first.
+
+This is the one function that reads a field of a `struct stat`.
+
+- Parameter buf: The buffer of `stat()`, `lstat()` or `fstat()`, of `STAT_SIZE` bytes.
+- Parameter offset: The offset of the field, an `ST_*_OFFSET` of `<sys/platform>`.
+- Parameter bytes: The width of the field in bytes: 2, 4 or 8.
+- Returns: The value of the field.
+:##
+fn stat_field(u8[] buf, i32 offset, i32 bytes) i64:
+    let i64 at = offset as i64
+    if (bytes == 2):
+        return buf.read_u16_le(at).realise(0 as u16) as i64
+    if (bytes == 4):
+        return buf.read_u32_le(at).realise(0 as u32) as i64
+    return buf.read_u64_le(at).realise(0 as u64) as i64
+
+##:
+Gives the `st_mode` of a `struct stat` buffer.
+
+- Parameter buf: The buffer of `stat()`, `lstat()` or `fstat()`.
+- Returns: The file type bits and the permission bits.
+:##
+fn stat_mode(u8[] buf) i32:
+    return stat_field(buf, ST_MODE_OFFSET, ST_MODE_BYTES) as i32
+
+##:
+Calls `stat()` or `lstat()` on a path, and gives the `struct stat` buffer.
+
+- Parameter path: The path to examine.
+- Parameter follow: `true` calls `stat()`, which follows a symbolic link. `false` calls
+  `lstat()`, which examines the link itself.
+- Returns: The buffer, of `STAT_SIZE` bytes.
+- Errors: FileError, when the call fails.
+:##
+fn stat_buffer(string path, bool follow) u8[] | FileError:
+    let u8[] buf = from([0; STAT_SIZE])
+    let i32 rc = 0
+    let i32 code = 0
+    if (follow):
+        rc := libc.stat(path, poke buf)
+        code := errno()
+    else:
+        rc := libc.lstat(path, poke buf)
+        code := errno()
+    if (rc != 0):
+        return Result.Err(FileError.from_errno(code))
+    return Result.Ok(buf)
+
+##:
+Tells if the file type of a path is one type. The function follows a symbolic link.
+
+- Parameter path: The path to examine.
+- Parameter kind: The file type bits, for example `S_IFREG`.
+- Returns: `true` when the path has the type. A path that cannot be examined gives `false`.
+:##
+fn has_type(string path, i32 kind) bool:
+    match stat_buffer(path, true):
+        Result.Ok(buf) -> return (stat_mode(buf) & S_IFMT) == kind
+        Result.Err(_) -> return false
+
+##:
+Gives four fields of a path from one `stat()` or one `lstat()` call.
+
+`stat` of `<io/fs>` uses this function, so that it does not make one call for each
+field.
+
+- Parameter path: The path to examine.
+- Parameter follow: `true` calls `stat()`, which follows a symbolic link. `false` calls
+  `lstat()`, which examines the link itself.
+- Returns: The size in bytes, the modification time and the status-change time in unix
+  seconds, and the `st_mode`.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match path_stat("/no/such/file", true):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn path_stat(string path, bool follow) (i64, i64, i64, i32) | FileError:
+    let u8[] buf = stat_buffer(path, follow)??
+    let i64 size = stat_field(buf, ST_SIZE_OFFSET, STAT_I64_BYTES)
+    let i64 mt = stat_field(buf, ST_MTIME_OFFSET, STAT_I64_BYTES)
+    let i64 ct = stat_field(buf, ST_CTIME_OFFSET, STAT_I64_BYTES)
+    return Result.Ok((size, mt, ct, stat_mode(buf)))
+
+##:
+Tells if a path is a regular file.
+
+The function follows a symbolic link and gives the answer for its target.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path is a regular file. A path that cannot be examined gives
+  `false`.
+- Example:
+  ```sushi
+  println(is_file("/no/such/file"))
+  ```
+  This prints `false`.
+:##
+public fn is_file(string path) bool:
+    return has_type(path, S_IFREG)
+
+##:
+Tells if a path is a directory.
+
+The function follows a symbolic link and gives the answer for its target.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path is a directory. A path that cannot be examined gives
+  `false`.
+- Example:
+  ```sushi
+  println(is_dir("/"))
+  ```
+  This prints `true`.
+:##
+public fn is_dir(string path) bool:
+    return has_type(path, S_IFDIR)
+
+##:
+Gives the size of a file in bytes.
+
+The function calls `stat()`, so it follows a symbolic link.
+
+- Parameter path: The path of the file.
+- Returns: The size in bytes.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match file_size("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn file_size(string path) i64 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_field(buf, ST_SIZE_OFFSET, STAT_I64_BYTES))
+
+##:
+Gives the modification time of a path, in unix seconds.
+
+The function calls `stat()`, so it follows a symbolic link. It reads the seconds only.
+
+- Parameter path: The path to examine.
+- Returns: The modification time.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match mtime("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn mtime(string path) i64 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_field(buf, ST_MTIME_OFFSET, STAT_I64_BYTES))
+
+##:
+Gives the status-change time of a path, in unix seconds.
+
+This is the time of the last change of the inode, not the time when the file was made.
+The function calls `stat()`, so it follows a symbolic link. It reads the seconds only.
+
+- Parameter path: The path to examine.
+- Returns: The status-change time.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match ctime("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn ctime(string path) i64 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_field(buf, ST_CTIME_OFFSET, STAT_I64_BYTES))
+
+##:
+Gives the `st_mode` of a path: the file type bits and the permission bits.
+
+The function calls `stat()`, so it follows a symbolic link. Use `mode & 0o777` for the
+permission bits, and `mode & 0o170000` for the file type bits.
+
+- Parameter path: The path to examine.
+- Returns: The `st_mode`.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match mode("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn mode(string path) i32 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_mode(buf))
+
+##:
+Tells if a path is a symbolic link.
+
+The function calls `lstat()`, so it examines the link itself and does not follow it.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path is a symbolic link.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match is_symlink("/no/such/link"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn is_symlink(string path) bool | FileError:
+    let u8[] buf = stat_buffer(path, false)??
+    return Result.Ok((stat_mode(buf) & S_IFMT) == S_IFLNK)

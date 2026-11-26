@@ -11,11 +11,12 @@ fn main() -> i32 {
     let _7: i64
     let _8: i32
     let _9: i64                            // stamp
-    let _10: bool                          // found
-    let _11: string
-    let _12: ~
-    let _13: string
-    let _14: ~
+    let _10: Result@(string[], FileError)
+    let _11: bool                          // found
+    let _12: string
+    let _13: ~
+    let _14: string
+    let _15: ~
 
   bb0:
     StorageLive(_1)
@@ -27,7 +28,7 @@ fn main() -> i32 {
     StorageLive(_4)
     _4 = call @i32.max(const 7_i32 @guaranteed, const 2_i32 @guaranteed)
     StorageLive(_5)
-    _5 = call @<io/files>.mtime(const "slir_stdlib_no_such_file" @guaranteed)
+    _5 = call @<io/files>.fd_write_str(const -1_i32 @guaranteed, const "slir_stdlib" @guaranteed)
     StorageLive(_6)
     _6 = const 9_i64 as i64
     StorageLive(_7)
@@ -49,23 +50,27 @@ fn main() -> i32 {
     StorageDead(_6)
     StorageDead(_5)
     StorageLive(_10)
-    _10 = call @<io/files>.is_dir(const "slir_stdlib_no_such_file" @guaranteed)
+    _10 = call @<io/files>.read_dir(const "slir_stdlib_no_such_file" @guaranteed)
     StorageLive(_11)
-    _11 = call builtin interp@(f64, string, u8, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy _4 @guaranteed)
-    StorageLive(_12)
-    _12 = call builtin println@(string)(copy _11 @guaranteed)
-    StorageDead(_12)
-    Drop(_11)
-    StorageDead(_11)
-    StorageLive(_13)
-    _13 = call builtin interp@(i64, string, bool)(copy _9 @guaranteed, const " " @guaranteed, copy _10 @guaranteed)
-    StorageLive(_14)
-    _14 = call builtin println@(string)(copy _13 @guaranteed)
-    StorageDead(_14)
-    Drop(_13)
-    StorageDead(_13)
-    _0 = const 0_i32
+    _11 = call builtin result.is_ok(copy _10 @guaranteed)
+    Drop(_10)
     StorageDead(_10)
+    StorageLive(_12)
+    _12 = call builtin interp@(f64, string, u8, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy _4 @guaranteed)
+    StorageLive(_13)
+    _13 = call builtin println@(string)(copy _12 @guaranteed)
+    StorageDead(_13)
+    Drop(_12)
+    StorageDead(_12)
+    StorageLive(_14)
+    _14 = call builtin interp@(i64, string, bool)(copy _9 @guaranteed, const " " @guaranteed, copy _11 @guaranteed)
+    StorageLive(_15)
+    _15 = call builtin println@(string)(copy _14 @guaranteed)
+    StorageDead(_15)
+    Drop(_14)
+    StorageDead(_14)
+    _0 = const 0_i32
+    StorageDead(_11)
     StorageDead(_9)
     StorageDead(_4)
     StorageDead(_3)

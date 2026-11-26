@@ -40,6 +40,18 @@ All notable changes to Sushi Lang will be documented in this file.
   `FileError.IsDirectory`, but the function now finds it before it opens the destination,
   so it does not make an empty destination file.
 
+- **The stat readers of `<io/files>` are Sushi source.** `file_size`, `mtime`, `ctime`,
+  `mode`, `is_symlink`, `is_file` and `is_dir` call `stat()` or `lstat()` of the C library
+  and keep their signatures and their answers. `is_symlink` calls `lstat()`. The other six
+  call `stat()`, so they follow a symbolic link. `is_file` and `is_dir` give `false` when
+  the path cannot be examined. `mode` gives the full `st_mode`. The new public function
+  `path_stat(path, follow)` gives the size, the two times and the mode from one `stat()`
+  or `lstat()` call. `stat` of `<io/fs>` now makes two system calls (one `stat()` and one
+  `lstat()`); before, it made five. `walk` of `<io/fs>` now makes one `lstat()` for each
+  entry, and one `stat()` more for a symbolic link; before, it made one `stat()` for each
+  entry and one `lstat()` more for a directory. The answers of `stat` and `walk` do not
+  change.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each

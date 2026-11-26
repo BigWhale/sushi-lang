@@ -28,26 +28,17 @@ from sushi_lang.sushi_stdlib.src.signatures import (
 # path utility and `fd_*` primitive answers.
 REEXPORTS = ("io/error",)
 
-BOOL, I32, I64, STRING = (BuiltinType.BOOL, BuiltinType.I32, BuiltinType.I64,
-                          BuiltinType.STRING)
+I32, I64, STRING = BuiltinType.I32, BuiltinType.I64, BuiltinType.STRING
 BYTES = DynamicArrayType(BuiltinType.U8)
 STRINGS = DynamicArrayType(BuiltinType.STRING)
 FILE = "FileError"
 
 
 FILES_SIGNATURES: Dict[str, Signature] = {
-    # The PATH utilities. Asking what is at a path cannot fail in a way a caller can
-    # act on, so the two predicates answer a BARE bool. `exists`, `remove`, `rmdir`,
-    # `mkdir`, `rename` and `copy` are Sushi source (`src_sushi/io/files.sushi`), and so are
-    # `fd_read`, `fd_pread`, `fd_pwrite` and `fd_readln`.
-    "is_file":      Signature(params_of(cstr()), bare=BOOL),
-    "is_dir":       Signature(params_of(cstr()), bare=BOOL),
-    "file_size":    Signature(params_of(cstr()), ok=I64, error=FILE),
+    # The PATH utilities. The other path utilities and the stat readers are Sushi source
+    # (`src_sushi/io/files.sushi`), and so are `fd_read`, `fd_pread`, `fd_pwrite` and
+    # `fd_readln`.
     "read_dir":     Signature(params_of(cstr()), ok=STRINGS, error=FILE),
-    "mtime":        Signature(params_of(cstr()), ok=I64, error=FILE),
-    "ctime":        Signature(params_of(cstr()), ok=I64, error=FILE),
-    "mode":         Signature(params_of(cstr()), ok=I32, error=FILE),
-    "is_symlink":   Signature(params_of(cstr()), ok=BOOL, error=FILE),
     # The DESCRIPTOR layer. A descriptor is a bare i32. A `string` crosses as its fat
     # pointer here -- `fd_write_str` takes a string VALUE, not a path, so it is not
     # marshalled to `i8*`.

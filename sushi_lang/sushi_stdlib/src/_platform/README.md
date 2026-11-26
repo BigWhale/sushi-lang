@@ -52,8 +52,8 @@ from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
 # Selects darwin or linux from the build platform; any other platform is a RuntimeError
 platform_files = get_platform_module('files')
-declare_stat = platform_files.declare_stat
-st_mode_offset = platform_files.ST_MODE_OFFSET
+declare_readdir = platform_files.declare_readdir
+dirent_name_offset = platform_files.DIRENT_NAME_OFFSET
 ```
 
 This ensures the correct platform-specific declarations are used at build time without hardcoding platform names.

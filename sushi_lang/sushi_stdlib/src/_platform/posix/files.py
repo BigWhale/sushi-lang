@@ -7,17 +7,6 @@ _i32 = ir.IntType(32)
 _i64 = ir.IntType(64)
 
 
-def declare_stat(module: ir.Module, name: str = "stat") -> ir.Function:
-    """Declare POSIX stat() syscall. The symbol name is a parameter because
-    macOS x86_64 exports the 64-bit-inode layout as stat$INODE64."""
-    return declare_libc(module, "stat", name)
-
-
-def declare_lstat(module: ir.Module, name: str = "lstat") -> ir.Function:
-    """Declare POSIX lstat() syscall; the name parameter mirrors declare_stat."""
-    return declare_libc(module, "lstat", name)
-
-
 def declare_write(module: ir.Module) -> ir.Function:
     """Declare POSIX write() syscall."""
     return declare_libc(module, "write")

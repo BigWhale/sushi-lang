@@ -6,18 +6,18 @@
 use <io/files>
 
 fn probe(string path) bool:
-    return is_file(path)
+    return read_dir(path).is_ok()
 
 fn main() i32:
-    println("literal:{is_file('rr_no_such_file_literal.txt')}")
+    println("literal:{read_dir('rr_no_such_file_literal.txt').is_ok()}")
     let string stem = "rr_no_such"
     let string heap = "{stem}_file_heap.txt"
-    println("heap:{is_file(heap)}")
+    println("heap:{read_dir(heap).is_ok()}")
     println("param:{probe(heap)}")
-    println("heap again:{is_dir(heap)}")
+    println("heap again:{read_dir(heap).is_ok()}")
     let i32 count = 0
     while (count < 10):
-        if (is_file(heap)):
+        if (read_dir(heap).is_ok()):
             println("unexpected")
         count := count + 1
         if (count == 3):

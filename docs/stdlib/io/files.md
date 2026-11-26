@@ -723,6 +723,32 @@ fn main() i32:
 
 **Note:** mask with `0o777` for the permission bits, with `0o170000` for the file-type bits. `is_file`/`is_dir`/`is_symlink` answer the type question directly.
 
+### path_stat
+
+Four fields of a path from one system call: the size, the modification time, the
+status-change time (in unix seconds) and the raw `st_mode`.
+
+```sushi
+fn path_stat(string path, bool follow) (i64, i64, i64, i32) | FileError
+```
+
+When `follow` is `true`, the function calls `stat`, which follows a symbolic link. When
+`follow` is `false`, it calls `lstat`, which examines the link itself. `file_size`,
+`mtime`, `ctime` and `mode` each make one call for one field; `stat` of
+[`<io/fs>`](fs.md) uses `path_stat` to get the four fields from one call.
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match path_stat("build/output", true):
+        Result.Ok((size, mt, _, _)) -> println("size {size}, modified {mt}")
+        Result.Err(_) -> println("no such path")
+
+    return 0
+```
+
 ### is_symlink
 
 Ask whether the path itself is a symbolic link. This is the one query that does

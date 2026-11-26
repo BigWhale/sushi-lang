@@ -130,10 +130,10 @@ def test_a_row_that_answers_a_result_names_an_error_enum(layer, name, sig):
 # -- the shape of a row --------------------------------------------------------
 
 def test_a_cstr_parameter_is_a_string_that_crosses_as_a_pointer():
-    """`file_size` takes a PATH and `fd_write_str` a string VALUE: one type, two crossings."""
+    """`read_dir` takes a PATH and `fd_write_str` a string VALUE: one type, two crossings."""
     from sushi_lang.semantics.typesys import BuiltinType
 
-    path = FILES_SIGNATURES["file_size"].params[0]
+    path = FILES_SIGNATURES["read_dir"].params[0]
     value = FILES_SIGNATURES["fd_write_str"].params[1]
     assert path.ty == BuiltinType.STRING and path.as_cstr
     assert value.ty == BuiltinType.STRING and not value.as_cstr

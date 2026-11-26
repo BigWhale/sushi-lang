@@ -50,7 +50,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "setvbuf": _c("int", "FILE*", "char*", "int", "size_t"),
     # Files and descriptors
     "stat": _c("int", "const char*", "struct stat*"),
-    "lstat": _c("int", "const char*", "struct stat*"),
     "write": _c("ssize_t", "int", "const void*", "size_t"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),

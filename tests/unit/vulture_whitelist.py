@@ -23,8 +23,6 @@ _TYPES = "sushi_lang/semantics/passes/types/"
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
-    ("sushi_lang/sushi_stdlib/src/_platform/*/files.py", "ST_*_OFFSET",
-     "io/files/stat.py reads each offset by name with getattr"),
     ("sushi_lang/internals/styling.py", "italic",
      "compiler/lib_info.py reads a style by name from _MARKS with getattr"),
     # -- protocols of another library ------------------------------------------------
