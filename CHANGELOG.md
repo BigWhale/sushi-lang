@@ -6,6 +6,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **CE5001 compares the C ABI of an external.** Each Sushi type that crosses as a C
+  pointer (`string`, `u8[]`, `ptr`, `Maybe@(string)`, `Maybe@(ptr)`) is one C type for
+  CE5001. A user `fn stat(string path, ptr buf) i32 = STAT_SYMBOL` now compiles beside
+  `use <io/files>`, whose `stat` takes a `poke u8[]`, and `write(i32, string, i64)` agrees
+  with `write(i32, u8[], i64)`. An `i32` against an `i64`, a pointer against an integer, an
+  other count of parameters and a fixed list against `var_arg` are still CE5001. Each call
+  marshals by the types of its own declaration: before, a call of a link name that two blocks
+  declare with two Sushi types (for example a `Maybe@(string)` and a `string` return) used
+  the first declaration and stopped with an internal error.
+
 - **`exists` of `<io/files>` is Sushi source.** `<io/files>` now has two halves: the
   Sushi half `src_sushi/io/files.sushi` and the `.bc` unit. A `use <io/files>` gives both.
   `exists(path)` calls `access()` of the C library and keeps its signature and its

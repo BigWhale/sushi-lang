@@ -88,10 +88,21 @@ namespaces may still declare the same FOREIGN symbol when the two signatures agr
 
 One C symbol has one signature in one program (#1099). Two declarations of one link name, in
 one unit or in two, agree only when each parameter, the return and `var_arg` have the SAME C
-type. `i32` against `u32` is [`CE5001`](error-catalog.md#ce5001) (`int` and `unsigned int`), and so is a fixed signature
-against a `var_arg` one. Two spellings of one C type agree: `string` and `Maybe@(string)`
-are `char*`, `ptr` and `Maybe@(ptr)` are `void*`, and a link name written as a constant is
-the name it folds to. External variables follow the same rule.
+ABI type. Each type that crosses as a C pointer is ONE type for this rule: `string`, `u8[]`
+(`peek` and `poke` included), `ptr`, `Maybe@(string)` and `Maybe@(ptr)`. Thus a user
+`fn stat(string path, ptr buf) i32 = STAT_SYMBOL` agrees with the `stat` of `<io/files>`,
+which takes a `poke u8[]`, and each call marshals by the types of its own declaration.
+
+A C compiler refuses `char*` against `void*` in one translation unit, but the two cross the
+call in the same way, and two translation units that disagree link with no diagnostic. Rust's
+`clashing_extern_declarations` lint compares the pointee types in one crate only. Sushi
+compares the ABI, because a standard library unit and a user unit can each declare one libc
+function with the pointer type that fits its own code.
+
+`i32` against `u32` is [`CE5001`](error-catalog.md#ce5001) (`int` and `unsigned int`), and
+so is `i32` against `i64`, a pointer against an integer (`ptr` against `i64`), and a fixed
+signature against a `var_arg` one. A link name written as a constant is the name it folds
+to. External variables follow the same rule.
 
 `malloc`, `free` and `exit` are the compiler's own: each is the first declaration of its
 name, so `fn malloc(i32 n) ptr = "malloc"` is [`CE5001`](error-catalog.md#ce5001) too. Every other libc symbol that

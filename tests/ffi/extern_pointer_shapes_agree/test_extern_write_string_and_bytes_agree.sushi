@@ -1,0 +1,16 @@
+# Two units declare `write`, one with a `string` and one with a `u8[]`. The two
+# declarations agree, because a `string` and a `u8[]` both cross as a C pointer.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use "helpers/bytes_writer"
+
+unsafe external "C" as text because "writing text to a descriptor":
+    fn write(i32 fd, string buf, i64 n) i64 = "write"
+
+fn main() i32:
+    let i64 first = text.write(1, "Mostly ", 7)
+    let i64 second = write_bytes("Harmless\n".to_bytes())
+    if (first + second != 16):
+        return 1
+    return 0

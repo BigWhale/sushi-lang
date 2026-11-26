@@ -1,0 +1,21 @@
+# A user `stat` that takes a `ptr` and the `stat` of `<io/files>`, which takes a
+# `poke u8[]`, agree: each pointer crosses as one C pointer. Each call marshals by
+# the type of its own declaration.
+# EXPECT_STDOUT_EXACT: "0 true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+use <io/files>
+
+unsafe external "C" as libc because "reading file metadata":
+    fn calloc(i64 count, i64 size) ptr = "calloc"
+    fn free(ptr p) ~ = "free"
+    fn stat(string path, ptr buf) i32 = STAT_SYMBOL
+
+fn main() i32:
+    let ptr buf = libc.calloc(1, STAT_SIZE as i64)
+    let i32 rc = libc.stat("/", buf)
+    libc.free(buf)
+    let bool dir = is_dir("/")
+    println("{rc} {dir}")
+    return 0

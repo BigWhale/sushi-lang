@@ -127,7 +127,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         name = unqualified(low.decls.name_of(callee.decl))
         return st.Direct(stdlib_symbol(callee.module, name), name, callee.module)
     if isinstance(callee, Extern):
-        return st.Direct(callee.symbol, unqualified(low.decls.name_of(callee.decl)))
+        alias, _, name = low.decls.name_of(callee.decl).rpartition(".")
+        return st.Direct(callee.symbol, name, block=(resolved.unit, alias))
     if isinstance(callee, Intrinsic):
         return st.Builtin(callee, tuple(display_type(low, node.shir_id, index, node.loc)
                                         for index in range(len(node.args))))

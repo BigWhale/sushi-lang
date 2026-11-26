@@ -3158,8 +3158,8 @@ StorageDead(LocalId)
 ```
 
 ```
-SlirCallee = Direct(symbol: str, name: str, module: Optional[str])  # free fn, method, extern,
-                                                         # conversion, stdlib function
+SlirCallee = Direct(symbol: str, name: str, module: Optional[str],  # free fn, method, extern,
+                  block: Optional[(unit, alias)])        # conversion, stdlib function
            | Builtin(method: BuiltinName, types: [Type])     # an emitter family (9.7)
            | Indirect(Operand)                           # a function value: a closure
 
@@ -3379,13 +3379,16 @@ caller keeps (7.4), not a C string. The operand form is `emit_stdlib_row`
 (`backend/expressions/calls/stdlib/signatures.py`), for the rows of every registry
 module.
 
-An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name)`: `symbol` is the
-link name, `name` is the name of the function with no alias, and it has no module. The
+An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name, block=(unit, alias))`: `symbol`
+is the link name, `name` is the name of the function with no alias, and it has no module. The
 printer writes the call as `call @snprintf(copy _1 @inout, const 32_i64 @guaranteed, ...)`.
 The declaration round declares each C function of the external table in each module, with
 `var_arg` for a variadic one (`declare_user_externs`). The emitter finds the declaration of a
-`Direct` callee with no module in the external table by its link name and its name
-(`ExternalTable.by_link_name`), and it marshals each operand at the C boundary
+`Direct` callee with no module in the external table by its link name, its name and its
+`block`, the unit and the alias of its `unsafe external` block (`ExternalTable.by_link_name`).
+Two blocks can declare one link name with two Sushi types that cross as one C type (CE5001),
+so the block selects the declaration whose types the call marshals by. The emitter
+marshals each operand at the C boundary
 (`backend/slir/externs.py`): a `string` crosses as a NUL-terminated copy that
 `emit_cstr_arg` makes (`backend/expressions/calls/utils.py`, the one C-string seam), and the
 emitter frees each copy right after the call; a byte buffer crosses as the pointer to its
