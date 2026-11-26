@@ -18,21 +18,6 @@ def declare_lstat(module: ir.Module, name: str = "lstat") -> ir.Function:
     return declare_libc(module, "lstat", name)
 
 
-def declare_open(module: ir.Module) -> ir.Function:
-    """Declare POSIX open() syscall: `int open(const char *, int, ...)`.
-
-    VARIADIC, as C declares it. Declared with a fixed third parameter, the mode went in a
-    register while Apple arm64 expects a variadic argument on the stack, so the callee read
-    the mode from the wrong place -- `copy()` produced whatever happened to be there (#363).
-    """
-    return declare_libc(module, "open")
-
-
-def declare_read(module: ir.Module) -> ir.Function:
-    """Declare POSIX read() syscall."""
-    return declare_libc(module, "read")
-
-
 def declare_write(module: ir.Module) -> ir.Function:
     """Declare POSIX write() syscall."""
     return declare_libc(module, "write")

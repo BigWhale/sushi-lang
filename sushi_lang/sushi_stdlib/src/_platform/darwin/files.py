@@ -7,16 +7,9 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_lstat as _declare_lstat_posix,
     declare_opendir,
     declare_closedir,
-    declare_open,
-    declare_read,
     declare_write,
     declare_close,
 )
-
-O_RDONLY = 0
-O_WRONLY = 1
-O_CREAT = 0x0200
-O_TRUNC = 0x0400
 
 # struct stat offsets, verified with an offsetof probe (2026-08-29). The layout
 # is the 64-bit-inode struct; on x86_64 that layout lives behind stat$INODE64,
@@ -59,8 +52,6 @@ __all__ = [
     "declare_opendir",
     "declare_readdir",
     "declare_closedir",
-    "declare_open",
-    "declare_read",
     "declare_write",
     "declare_close",
 ]

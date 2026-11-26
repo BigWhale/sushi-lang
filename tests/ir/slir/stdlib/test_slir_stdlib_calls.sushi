@@ -15,8 +15,8 @@ fn main() i32:
     let u8 a = 9
     let u8 lo = a.min(3)
     let i32 hi = (7).max(2)
-    let i32 copied = f.copy("slir_stdlib_no_such_file", "slir_stdlib_no_such_copy").realise(9)
+    let i64 stamp = f.mtime("slir_stdlib_no_such_file").realise(9 as i64)
     let bool found = f.is_dir("slir_stdlib_no_such_file")
     println("{r} {lo} {hi}")
-    println("{copied} {found}")
+    println("{stamp} {found}")
     return 0

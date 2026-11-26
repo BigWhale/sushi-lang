@@ -28,6 +28,16 @@ All notable changes to Sushi Lang will be documented in this file.
   one time and gives the count written. It keeps its signature, the short write and its
   `FileError` variants. The array is a borrow, and the function does not copy it.
 
+- **`copy` of `<io/files>` is Sushi source, and it keeps the mode of the source.** The
+  destination now gets the permission bits of the source (`mode & 0o777`); before, it was
+  always `0o644` less the umask. The function opens the destination with the bits of the
+  source and then sets them with `fchmod()`, so the umask does not remove bits, and an
+  existing destination also gets the bits of the source. A short write does not stop the
+  copy now: each chunk goes through `fd_write`, which writes all the bytes. After EINTR,
+  `read()` and `write()` are called again. A chunk is now 64 KiB (before, 4 KiB). The
+  function keeps its signature, its `Result.Ok(0)`, the `O_TRUNC` of an existing
+  destination and its `FileError` variants.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each

@@ -6,7 +6,7 @@ know which one your change belongs to before you start.
 ## 1. Compiled IR generators (`src/`)
 
 Most of the stdlib is Python code under `src/` that builds LLVM IR directly with
-`llvmlite.ir` (see e.g. `src/io/files/copy.py`). These are
+`llvmlite.ir` (see e.g. `src/io/files/read_dir.py`). These are
 NOT interpreted at compile time per-program — `build.py` runs them once to produce
 per-platform bitcode:
 

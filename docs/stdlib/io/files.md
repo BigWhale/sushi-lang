@@ -854,7 +854,7 @@ fn main() i32:
 
 ### copy
 
-Copy a file's contents to a new location.
+Copy the bytes and the permission bits of a file to a new location.
 
 ```sushi
 fn copy(string src, string dst) i32 | FileError
@@ -884,7 +884,18 @@ fn main() i32:
     return 0
 ```
 
-**Note:** Overwrites destination if it exists. Uses efficient 4KB buffering internally.
+**Notes:**
+- The function opens `dst` with `O_CREAT` and `O_TRUNC`. An existing destination is cut
+  to zero length and then gets the bytes of `src`.
+- The destination gets the permission bits of the source (`mode & 0o777`). The function
+  opens `dst` with these bits and then sets them with `fchmod()`, so the umask does not
+  remove bits. An existing destination also gets the bits of the source. A failed
+  `fchmod()` is an error.
+- A short write does not stop the copy: the function writes all the bytes of each chunk.
+  When a signal interrupts `read()` or `write()`, the function calls it again.
+- The function reads chunks of 64 KiB, and closes the two descriptors on each path.
+- A source that is a directory gives `FileError.IsDirectory`, and the destination is then
+  an empty file.
 
 ### File Utility Pattern Matching Example
 

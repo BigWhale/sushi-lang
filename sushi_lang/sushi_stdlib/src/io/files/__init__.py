@@ -13,13 +13,12 @@ def generate_module_ir() -> ir.Module:
     """Generate standalone LLVM IR module for file methods."""
     from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
     from sushi_lang.sushi_stdlib.src.io.files import (
-        stat, read_dir, copy, sequential)
+        stat, read_dir, sequential)
 
     module = create_stdlib_module("io.files")
 
     stat.generate_ir(module)
     read_dir.generate_ir(module)
-    copy.generate_ir(module)
     sequential.generate_ir(module)
 
     return module

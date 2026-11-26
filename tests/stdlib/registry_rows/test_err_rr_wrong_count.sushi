@@ -1,7 +1,7 @@
-# A row of <io/files> takes the count of its row: `copy` with one argument is CE2009.
+# A row of <io/files> takes the count of its row: `file_size` with two arguments is CE2009.
 # EXPECT_ERROR_CODES_EXACT: CE2009
 use <io/files>
 
 fn main() i32:
-    let i32 status = copy("RR_WRONG_COUNT").realise(-1)
-    return status
+    let i64 size = file_size("RR_WRONG_COUNT", "RR_WRONG_COUNT").realise(-1 as i64)
+    return size as i32

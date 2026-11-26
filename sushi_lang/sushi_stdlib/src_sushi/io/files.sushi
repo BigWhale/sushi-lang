@@ -10,6 +10,7 @@ This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileErr
 
 public use <io/error>
 use <sys/platform>
+use <io/files>
 
 unsafe external "C" as libc because "the path queries and the path changes of the C library":
     fn access(string path, i32 mode) i32 = "access"
@@ -25,6 +26,8 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn read(i32 fd, poke u8[] buf, i64 count) i64 = "read"
     fn pread(i32 fd, poke u8[] buf, i64 count, i64 offset) i64 = "pread"
     fn pwrite(i32 fd, u8[] buf, i64 count, i64 offset) i64 = "pwrite"
+    fn fstat(i32 fd, poke u8[] buf) i32 = "fstat"
+    fn fchmod(i32 fd, i32 mode) i32 = "fchmod"
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
 const i32 F_OK = 0
@@ -512,3 +515,122 @@ public fn fd_readln(i32 fd) Maybe@(string) | FileError:
     if (start < 0 as i64):
         return Result.Ok(readln_by_byte(fd)??)
     return Result.Ok(readln_chunked(fd, start)??)
+
+##: The most bytes of one `read()` of `copy`. :##
+const i64 COPY_CHUNK = 65536
+
+##:
+Gives the permission bits of an open file.
+
+The function calls `fstat()` and reads `st_mode`. The value fits in 16 bits on each
+platform, so the function reads the two low bytes.
+
+- Parameter fd: The descriptor of the file.
+- Returns: The permission bits (`st_mode & 0o777`).
+- Errors: FileError, when `fstat()` fails.
+:##
+fn permission_bits(i32 fd) i32 | FileError:
+    let u8[] stat = from([0; STAT_SIZE])
+    let i32 rc = libc.fstat(fd, poke stat)
+    let i32 code = errno()
+    if (rc != 0):
+        return Result.Err(FileError.from_errno(code))
+    let i64 at = ST_MODE_OFFSET as i64
+    let i32 low = stat[at] as i32
+    let i32 high = stat[at + 1] as i32
+    return Result.Ok((low | (high << 8)) & 0o777)
+
+##:
+Copies the bytes of one open file to another, from the two file positions to the end.
+
+Each chunk goes through `fd_write`, which writes all the bytes and calls `write()` again
+after a short write or an interrupt. When a signal stops `read()` before a byte arrives,
+the function calls `read()` again.
+
+- Parameter from_fd: The descriptor to read.
+- Parameter to_fd: The descriptor to write.
+- Returns: `0` at the end of the file.
+- Errors: FileError, when `read()` or `write()` fails.
+:##
+fn copy_bytes(i32 from_fd, i32 to_fd) i32 | FileError:
+    let u8[] buf = read_buffer(COPY_CHUNK)
+    while (true):
+        let i64 got = libc.read(from_fd, poke buf, COPY_CHUNK)
+        let i32 code = errno()
+        if (got < 0 as i64):
+            if (code == EINTR):
+                continue
+            return Result.Err(FileError.from_errno(code))
+        if (got == 0 as i64):
+            break
+        fd_write(to_fd, buf[0..got])??
+    return Result.Ok(0)
+
+##:
+Copies the open source to a destination path, and closes the destination.
+
+The function opens `dst` with the permission bits of the source, so a new file never has
+more bits than the source. The umask can remove bits at the open, so `fchmod()` then sets
+the exact bits. This also sets the bits of an existing destination.
+
+- Parameter from_fd: The descriptor of the source.
+- Parameter dst: The path of the copy.
+- Returns: `0` when the copy is complete.
+- Errors: FileError, when `fstat()`, `open()`, `fchmod()`, `read()` or `write()` fails.
+:##
+fn copy_to_path(i32 from_fd, string dst) i32 | FileError:
+    let i32 bits = permission_bits(from_fd)??
+    let i32 to_fd = libc.open(dst, O_WRONLY | O_CREAT | O_TRUNC, bits)
+    let i32 code = errno()
+    if (to_fd < 0):
+        return Result.Err(FileError.from_errno(code))
+    let Result@(i32, FileError) done = copy_with_bits(from_fd, to_fd, bits)
+    libc.close(to_fd)
+    return Result.Ok(done??)
+
+##:
+Sets the permission bits of the destination, and then copies the bytes to it.
+
+- Parameter from_fd: The descriptor of the source.
+- Parameter to_fd: The descriptor of the destination.
+- Parameter bits: The permission bits of the source.
+- Returns: `0` when the copy is complete.
+- Errors: FileError, when `fchmod()`, `read()` or `write()` fails.
+:##
+fn copy_with_bits(i32 from_fd, i32 to_fd, i32 bits) i32 | FileError:
+    let i32 rc = libc.fchmod(to_fd, bits)
+    let i32 code = errno()
+    if (rc != 0):
+        return Result.Err(FileError.from_errno(code))
+    return Result.Ok(copy_bytes(from_fd, to_fd)??)
+
+##:
+Copies a file to a new path.
+
+The function opens `dst` with `O_CREAT` and `O_TRUNC`, so an existing file is cut to zero
+length and then gets the bytes of `src`. The destination gets the permission bits of the
+source (`mode & 0o777`), and the umask does not remove bits. An existing destination also
+gets the bits of the source. A short write and an interrupt do not stop the copy. The
+function closes the two descriptors on each path.
+
+- Parameter src: The path of the file to copy.
+- Parameter dst: The path of the copy.
+- Returns: `0` when the file is copied.
+- Errors: FileError, when the copy fails (for example `FileError.NotFound` for a missing
+  source, or `FileError.IsDirectory` for a source that is a directory).
+- Example:
+  ```sushi
+  match copy("/no/such/file", "/tmp/copy"):
+      Result.Ok(_) -> println("copied")
+      Result.Err(_) -> println("not copied")
+  ```
+  This prints `not copied`.
+:##
+public fn copy(string src, string dst) i32 | FileError:
+    let i32 from_fd = libc.open(src, O_RDONLY, 0)
+    let i32 code = errno()
+    if (from_fd < 0):
+        return Result.Err(FileError.from_errno(code))
+    let Result@(i32, FileError) done = copy_to_path(from_fd, dst)
+    libc.close(from_fd)
+    return Result.Ok(done??)
