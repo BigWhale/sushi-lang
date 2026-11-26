@@ -43,7 +43,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("copy", "file_size", "fd_readln"):
+    for spelled in ("copy", "file_size", "read_dir"):
         assert spelled in names
 
 
@@ -96,7 +96,7 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 29
+    assert checked >= 28
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.

@@ -15,7 +15,7 @@ The descriptor layer of `<io/files>` has two halves:
 
 - The sequential half: `read`, `write`, `readln`, `seek`. These calls MOVE the position
   of the descriptor, so a `File` handle is written on them. `io/files/sequential.py`
-  generates `fd_write`, `fd_write_str` and `fd_readln`. `fd_read` and `fd_seek` are Sushi
+  generates `fd_write` and `fd_write_str`. `fd_read`, `fd_readln` and `fd_seek` are Sushi
   source (`src_sushi/io/files.sushi`).
 - The positional half: `pread`, `pwrite`. These calls take the offset as an argument and
   do not move the position, so they are safe on a shared descriptor. `fd_pread` and
@@ -23,7 +23,7 @@ The descriptor layer of `<io/files>` has two halves:
 
 ## The line reader (`fd_readln`)
 
-`sushi_io_files_fd_readln(i32 fd)` answers `Result@(Maybe@(string), FileError)`: one line,
+`fd_readln(i32 fd)` (`src_sushi/io/files.sushi`) answers `Result@(Maybe@(string), FileError)`: one line,
 with the newline removed. A blank line and the end of file are different answers: a blank
 line is `Some("")` and the end is `None`, so a file with a blank line in it does not stop
 there. The end of file after some bytes is a last line with no newline
@@ -53,14 +53,12 @@ one sign error in it reads the wrong bytes with no error, and that is the worst 
 At the end of file the position moves to just after what was consumed, so the next
 `readln` answers `None` and does not read the tail again.
 
-### The shared state
+### The two helpers
 
-Both paths write one buffer, one length, one capacity and one end-of-file flag, and both
-leave through the same three blocks (the finish, the failure, the allocation failure). The
-generator keeps this state in one frozen dataclass, `_ReadlnFrame`, and each path takes the
-frame plus what is its own: its entry block, and the functions only it calls. The buffer
-grows by 128 bytes and always keeps one byte for the NUL terminator, so the line is also a
-C string.
+Each path is a private function of `files.sushi`: `readln_by_byte` and `readln_chunked`.
+The chunked path reads each chunk into a new array of 128 bytes, cuts the array to the
+bytes that arrived, and finds the newline with one counter under the length of the array.
+The function does not call `read()` or `pread()` again after `EINTR`.
 
 `fd_readln` is under `File.readln()`, the UNBUFFERED read. To read a whole file line by
 line, use `BufReader@(R)` and its `lines()` in `<io/buf>` (`docs/stdlib/io/buf.md`).

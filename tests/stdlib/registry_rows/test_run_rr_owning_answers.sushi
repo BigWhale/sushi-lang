@@ -1,11 +1,13 @@
 # A row that answers an owning value (`read_dir` a `Result@(string[], FileError)`,
-# `fd_readln` a `Result@(Maybe@(string), FileError)`) answers a fresh value: bound,
+# `sock_peer_ip` a `Result@(string, NetError)`) answers a fresh value: bound,
 # discarded, matched and passed on, each is freed once.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
-# EXPECT_STDOUT_EXACT: "bound:rr_owning_answers_probe.txt\nmatched:rr_owning_answers_probe.txt\npassed:1\nline:[So long]\nend:none\n"
+# EXPECT_STDOUT_EXACT: "bound:rr_owning_answers_probe.txt\nmatched:rr_owning_answers_probe.txt\npassed:1\npeer:[127.0.0.1]\nmatched:[127.0.0.1]\n"
+# TIMEOUT_SECONDS: 20
 use <io/files>
+use <net/socket>
 
 fn count_of(nom Result@(string[], FileError) listing) i32:
     match listing:
@@ -29,18 +31,19 @@ fn main() i32:
         Result.Err(_) -> println("matched:failed")
     println("passed:{count_of(nom read_dir('.'))}")
 
-    fd_write_str(fd, "So long\n").realise(-1)
-    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
-    let Maybe@(string) line = fd_readln(fd).realise(Maybe.None)
-    match line:
-        Maybe.Some(text) -> println("line:[{text}]")
-        Maybe.None -> println("line:none")
-    match fd_readln(fd):
-        Result.Ok(answer) ->
-            match answer:
-                Maybe.Some(text) -> println("end:[{text}]")
-                Maybe.None -> println("end:none")
-        Result.Err(_) -> println("end:failed")
+    let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)
+    let i32 port = sock_local_port(lfd).realise(-1)
+    let i32 cfd = sock_tcp_connect("127.0.0.1", port).realise(-1)
+    let (i32 afd, _, _, _) = sock_tcp_accept(lfd).realise((-1, 0, 0, 0))
+    let string peer = sock_peer_ip(afd).realise("")
+    println("peer:[{peer}]")
+    sock_peer_ip(afd).realise("")
+    match sock_peer_ip(afd):
+        Result.Ok(ip) -> println("matched:[{ip}]")
+        Result.Err(_) -> println("matched:failed")
+    sock_close(cfd).realise(-1)
+    sock_close(afd).realise(-1)
+    sock_close(lfd).realise(-1)
     fd_close(fd).realise(-1)
     remove("rr_owning_answers_probe.txt").realise(-1)
     return 0

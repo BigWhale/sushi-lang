@@ -16,7 +16,6 @@ readers of one descriptor (HANDLES.md, Phases 4 and 5).
 """
 from typing import Dict, List
 
-from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
 from sushi_lang.sushi_stdlib.src.signatures import (
     Signature,
@@ -33,7 +32,6 @@ BOOL, I32, I64, STRING = (BuiltinType.BOOL, BuiltinType.I32, BuiltinType.I64,
                           BuiltinType.STRING)
 BYTES = DynamicArrayType(BuiltinType.U8)
 STRINGS = DynamicArrayType(BuiltinType.STRING)
-MAYBE_STRING = GenericTypeRef("Maybe", (BuiltinType.STRING,))
 FILE = "FileError"
 
 
@@ -41,7 +39,7 @@ FILES_SIGNATURES: Dict[str, Signature] = {
     # The PATH utilities. Asking what is at a path cannot fail in a way a caller can
     # act on, so the two predicates answer a BARE bool. `exists`, `remove`, `rmdir`,
     # `mkdir` and `rename` are Sushi source (`src_sushi/io/files.sushi`), and so are
-    # `fd_read`, `fd_pread` and `fd_pwrite`.
+    # `fd_read`, `fd_pread`, `fd_pwrite` and `fd_readln`.
     "is_file":      Signature(params_of(cstr()), bare=BOOL),
     "is_dir":       Signature(params_of(cstr()), bare=BOOL),
     "file_size":    Signature(params_of(cstr()), ok=I64, error=FILE),
@@ -56,9 +54,6 @@ FILES_SIGNATURES: Dict[str, Signature] = {
     # marshalled to `i8*`.
     "fd_write":     Signature(params_of(I32, BYTES), ok=I64, error=FILE),
     "fd_write_str": Signature(params_of(I32, STRING), ok=I64, error=FILE),
-    # A blank line is Some("") and end of file is None; an empty string can no longer
-    # mean both (HANDLES.md, ruling R22).
-    "fd_readln":    Signature(params_of(I32), ok=MAYBE_STRING, error=FILE),
 }
 
 FILE_UTILITY_FUNCTIONS: List[str] = list(FILES_SIGNATURES)

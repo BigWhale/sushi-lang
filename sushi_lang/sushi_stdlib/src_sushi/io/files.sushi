@@ -410,3 +410,105 @@ public fn fd_pwrite(i32 fd, i64 offset, u8[] data) i64 | FileError:
     if (wrote >= 0 as i64):
         return Result.Ok(wrote)
     return Result.Err(FileError.from_errno(code))
+
+##: The most bytes of one `pread()` of `fd_readln`. :##
+const i64 LINE_CHUNK = 128
+
+##:
+Reads one line from a descriptor that cannot seek, one byte for each `read()`.
+
+A pipe cannot give back a byte, so this path does not read past the newline.
+
+- Parameter fd: The descriptor.
+- Returns: The line without its newline, or `None` at the end of the input.
+- Errors: FileError, when `read()` fails.
+:##
+fn readln_by_byte(i32 fd) Maybe@(string) | FileError:
+    let u8[] line = from([])
+    let u8[] one = from([0])
+    while (true):
+        let i64 got = libc.read(fd, poke one, 1 as i64)
+        let i32 code = errno()
+        if (got < 0 as i64):
+            return Result.Err(FileError.from_errno(code))
+        if (got == 0 as i64):
+            if (line.len() == 0):
+                let Maybe@(string) ended = Maybe.None()
+                return Result.Ok(ended)
+            break
+        if (one[0] == a'\n'):
+            break
+        line.push(one[0])
+    let Maybe@(string) got_line = Maybe.Some(string.from_bytes(nom line))
+    return Result.Ok(got_line)
+
+##:
+Reads one line from a descriptor that can seek, in chunks of `pread()`.
+
+Each `pread()` reads at the absolute offset `start` plus the bytes of the line so far.
+After the line, one `lseek()` moves the position to the byte after the newline. At the
+end of the file, the position moves to the end of the bytes that the function read.
+
+- Parameter fd: The descriptor.
+- Parameter start: The position of the descriptor at the start of the line.
+- Returns: The line without its newline, or `None` at the end of the file.
+- Errors: FileError, when `pread()` fails.
+:##
+fn readln_chunked(i32 fd, i64 start) Maybe@(string) | FileError:
+    let u8[] line = from([])
+    while (true):
+        let u8[] chunk = from([0; LINE_CHUNK])
+        let i64 got = libc.pread(fd, poke chunk, LINE_CHUNK, start + line.len())
+        let i32 code = errno()
+        if (got < 0 as i64):
+            return Result.Err(FileError.from_errno(code))
+        if (got == 0 as i64):
+            libc.lseek(fd, start + line.len(), SEEK_SET)
+            if (line.len() == 0):
+                let Maybe@(string) ended = Maybe.None()
+                return Result.Ok(ended)
+            break
+        chunk.truncate(got)
+        let i64 at = 0
+        while (at < chunk.len()):
+            if (chunk[at] == a'\n'):
+                break
+            at := at + 1
+        if (at < chunk.len()):
+            libc.lseek(fd, start + line.len() + at + 1, SEEK_SET)
+            chunk.truncate(at)
+            line.extend(chunk)
+            break
+        line.extend(chunk)
+    let Maybe@(string) got_line = Maybe.Some(string.from_bytes(nom line))
+    return Result.Ok(got_line)
+
+##:
+Reads one line from the file position of a descriptor, and moves the position.
+
+The function removes the `\n` at the end of the line. It keeps a `\r`. A blank line gives
+`Some("")`, and the end of the file gives `None`. A last line with no `\n` after it is a
+line, and the next call gives `None`.
+
+A descriptor that can seek reads chunks of 128 bytes with `pread()`, and then moves the
+position to the byte after the newline. A descriptor that cannot seek (a pipe, a socket or
+a terminal) reads one byte for each `read()`, so the function does not read past the
+newline. The function does not call `read()` again after an interrupt.
+
+- Parameter fd: The descriptor.
+- Returns: The line, or `None` at the end of the file.
+- Errors: FileError, when the descriptor cannot be read (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_readln(-1):
+      Result.Ok(_) -> println("read")
+      Result.Err(_) -> println("not read")
+  ```
+  This prints `not read`.
+:##
+public fn fd_readln(i32 fd) Maybe@(string) | FileError:
+    let i64 start = libc.lseek(fd, 0 as i64, SEEK_CUR)
+    if (start < 0 as i64):
+        return Result.Ok(readln_by_byte(fd)??)
+    return Result.Ok(readln_chunked(fd, start)??)

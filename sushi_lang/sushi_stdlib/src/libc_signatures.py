@@ -54,8 +54,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "open": _c("int", "const char*", "int", var_arg=True),
     "read": _c("ssize_t", "int", "void*", "size_t"),
     "write": _c("ssize_t", "int", "const void*", "size_t"),
-    "pread": _c("ssize_t", "int", "void*", "size_t", "off_t"),
-    "lseek": _c("off_t", "int", "off_t", "int"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),
     "opendir": _c("DIR*", "const char*"),

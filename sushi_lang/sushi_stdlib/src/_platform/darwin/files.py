@@ -10,8 +10,6 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_open,
     declare_read,
     declare_write,
-    declare_pread,
-    declare_lseek,
     declare_close,
 )
 
@@ -19,10 +17,6 @@ O_RDONLY = 0
 O_WRONLY = 1
 O_CREAT = 0x0200
 O_TRUNC = 0x0400
-
-# The lseek whences of `fd_readln`.
-SEEK_SET = 0
-SEEK_CUR = 1
 
 # struct stat offsets, verified with an offsetof probe (2026-08-29). The layout
 # is the 64-bit-inode struct; on x86_64 that layout lives behind stat$INODE64,
@@ -68,7 +62,5 @@ __all__ = [
     "declare_open",
     "declare_read",
     "declare_write",
-    "declare_pread",
-    "declare_lseek",
     "declare_close",
 ]

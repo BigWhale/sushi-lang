@@ -38,29 +38,6 @@ def declare_write(module: ir.Module) -> ir.Function:
     return declare_libc(module, "write")
 
 
-def declare_pread(module: ir.Module) -> ir.Function:
-    """Declare POSIX pread(): `ssize_t pread(int, void *, size_t, off_t)`.
-
-    The POSITIONAL read. The offset is an argument, so the descriptor's own file position
-    never moves and two readers of one descriptor cannot race over it -- the reason every
-    language that supports concurrent file I/O converged on this primitive rather than on
-    a new kind of type (HANDLES.md, Phase 8).
-
-    `off_t` is 64-bit on both supported platforms: probe P6 measured 8 bytes on macOS
-    arm64 and on Linux x86_64, where plain `pread` already IS the wide-offset entry point.
-    """
-    return declare_libc(module, "pread")
-
-
-def declare_lseek(module: ir.Module) -> ir.Function:
-    """Declare POSIX lseek(): `off_t lseek(int, off_t, int)`.
-
-    `off_t` is 64-bit on both supported platforms, which probe P6 measured for `pread`;
-    the same answer holds here, so the offset and the result are both i64.
-    """
-    return declare_libc(module, "lseek")
-
-
 def declare_dup(module: ir.Module) -> ir.Function:
     """Declare POSIX dup(): `int dup(int)`.
 
