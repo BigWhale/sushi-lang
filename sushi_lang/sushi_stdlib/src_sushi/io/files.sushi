@@ -31,6 +31,10 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn stat(string path, poke u8[] buf) i32 = STAT_SYMBOL
     fn lstat(string path, poke u8[] buf) i32 = LSTAT_SYMBOL
     fn fchmod(i32 fd, i32 mode) i32 = "fchmod"
+    fn opendir(string path) Maybe@(ptr) = "opendir"
+    fn readdir(ptr dir) Maybe@(ptr) = READDIR_SYMBOL
+    fn closedir(ptr dir) i32 = "closedir"
+    fn errno_location() ptr = ERRNO_LOCATION_SYMBOL
 
 ##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
 const i32 F_OK = 0
@@ -897,3 +901,77 @@ The function calls `lstat()`, so it examines the link itself and does not follow
 public fn is_symlink(string path) bool | FileError:
     let u8[] buf = stat_buffer(path, false)??
     return Result.Ok((stat_mode(buf) & S_IFMT) == S_IFLNK)
+
+##:
+Sets the `errno` of the thread to 0.
+
+A C function that gives a NULL both at the end and on an error, for example `readdir()`,
+sets `errno` only on an error. Call this function before such a call, and then read
+`errno()` to know which of the two occurred.
+:##
+fn clear_errno() ~:
+    libc.errno_location().store_i32(0, 0)
+
+##:
+Tells if an entry name is `.` or `..`.
+
+- Parameter entry: The `struct dirent` of the entry.
+- Returns: `true` when the name is `.` or `..`.
+:##
+fn is_dot_entry(ptr entry) bool:
+    if (entry.load_u8(DIRENT_NAME_OFFSET) != 46 as u8):
+        return false
+    let u8 second = entry.load_u8(DIRENT_NAME_OFFSET + 1)
+    if (second == 0 as u8):
+        return true
+    return second == 46 as u8 and entry.load_u8(DIRENT_NAME_OFFSET + 2) == 0 as u8
+
+##:
+Reads all the entries of an open directory, and closes it.
+
+- Parameter dir: The directory, from `opendir()`. The function closes it on each path.
+- Returns: The entry names, in the order of `readdir()`, without `.` and `..`.
+- Errors: FileError, when `readdir()` fails.
+:##
+fn read_entries(ptr dir) string[] | FileError:
+    let string[] names = from([])
+    while (true):
+        clear_errno()
+        let Maybe@(ptr) next = libc.readdir(dir)
+        let i32 code = errno()
+        match next:
+            Maybe.Some(entry) ->
+                if (not is_dot_entry(entry)):
+                    names.push(entry.to_string(DIRENT_NAME_OFFSET))
+            Maybe.None ->
+                libc.closedir(dir)
+                if (code != 0):
+                    return Result.Err(FileError.from_errno(code))
+                return Result.Ok(names)
+    return Result.Ok(names)
+
+##:
+Lists the entries of a directory.
+
+The function makes one `opendir()` and `readdir()` walk, and closes the directory on each
+path. A failed `readdir()` gives an error, not a short list.
+
+- Parameter path: The directory to list.
+- Returns: The entry names, not the full paths, in the order of the operating system. The
+  list does not include `.` and `..`.
+- Errors: FileError, when the directory cannot be opened or read (for example
+  `FileError.NotFound`, `FileError.PermissionDenied` or `FileError.InvalidPath`).
+- Example:
+  ```sushi
+  match read_dir("/no/such/dir"):
+      Result.Ok(_) -> println("listed")
+      Result.Err(_) -> println("not listed")
+  ```
+  This prints `not listed`.
+:##
+public fn read_dir(string path) string[] | FileError:
+    let Maybe@(ptr) opened = libc.opendir(path)
+    let i32 code = errno()
+    match opened:
+        Maybe.Some(dir) -> return Result.Ok(read_entries(dir)??)
+        Maybe.None -> return Result.Err(FileError.from_errno(code))

@@ -9,6 +9,6 @@ use <io/files> as f
 
 fn main() i32:
     let i64 stamp = f.fd_write_str(-1, "A", "B").realise(1 as i64)
-    let bool found = f.read_dir("/").is_ok()
+    let bool found = f.fd_write_str(-1, "C").is_ok()
     println("{stamp} {found}")
     return 0

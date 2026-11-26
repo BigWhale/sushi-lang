@@ -787,7 +787,8 @@ fn read_dir(string path) string[] | FileError
 
 **Returns:**
 - `Result.Ok(string[])` - The entry names. `.` and `..` are not included.
-- `Result.Err(FileError)` - Failed (not found, permission denied, not a directory)
+- `Result.Err(FileError)` - Failed (not found, permission denied, not a directory, or a
+  failed `readdir()`)
 
 **Example:**
 ```sushi
@@ -807,6 +808,11 @@ fn main() i32:
 - The result holds entry NAMES, not paths. Join with the directory yourself.
 - The order is the order the OS returns; it is unspecified. Do not depend on it.
 - Every kind of entry is listed: files, directories, symlinks.
+- The function closes the directory on each path.
+- A failed `readdir()` gives `Result.Err`, not a short list. `readdir()` gives NULL at the
+  end and on an error, and it sets `errno` only on an error. So `read_dir` sets `errno` to 0
+  before each `readdir()` call, and a NULL with an `errno` that is not 0 is
+  `Result.Err(FileError.from_errno(errno))`.
 
 ### mkdir
 

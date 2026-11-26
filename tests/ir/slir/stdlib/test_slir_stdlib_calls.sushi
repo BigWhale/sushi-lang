@@ -15,7 +15,7 @@ fn main() i32:
     let u8 lo = a.min(3)
     let i32 hi = (7).max(2)
     let i64 stamp = f.fd_write_str(-1, "slir_stdlib").realise(9 as i64)
-    let bool found = f.read_dir("slir_stdlib_no_such_file").is_ok()
+    let bool found = f.fd_write_str(-1, "slir_stdlib_found").is_ok()
     println("{r} {lo} {hi}")
     println("{stamp} {found}")
     return 0

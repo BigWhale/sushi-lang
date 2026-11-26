@@ -53,9 +53,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "write": _c("ssize_t", "int", "const void*", "size_t"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),
-    "opendir": _c("DIR*", "const char*"),
-    "readdir": _c("struct dirent*", "DIR*"),
-    "closedir": _c("int", "DIR*"),
     # Sockets
     "socket": _c("int", "int", "int", "int"),
     "connect": _c("int", "int", "const struct sockaddr*", "socklen_t"),

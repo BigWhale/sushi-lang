@@ -1152,8 +1152,8 @@ row as its channel.
 
 **Every registry module is typed by its rows.** There is no set of typed modules:
 each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_signature`, the one reader).
-The call answers the type of the row. An answer that owns (`read_dir` answers `string[] |
-FileError`, `sock_dns_resolve` a `string[]`, `sock_peer_ip` a `string`) is a fresh
+The call answers the type of the row. An answer that owns (`sock_dns_resolve` answers `string[] |
+NetError`, `sock_peer_ip` a `string`) is a fresh
 value, an `ADOPT` answer as the answer of any call that owns (7.9). No row is variadic.
 Every call of a registry function has its arm. `<sys/process>` is Sushi source
 (`src_sushi/sys/process.sushi`): a call of `exit` or `run` is a `Free` callee, the `!` of

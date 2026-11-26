@@ -1,0 +1,20 @@
+# The `errno` link name of `<sys/platform>` is right for this host: the address it gives
+# holds the `errno()` of a failed call, and a store of 0 there sets `errno()` to 0.
+# EXPECT_STDOUT_EXACT: "ERRNO_LOCATION_SYMBOL: ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+use "helpers/check"
+
+unsafe external "C" as libc because "reading and setting errno":
+    fn errno_location() ptr = ERRNO_LOCATION_SYMBOL
+    fn unlink(string path) i32 = "unlink"
+
+fn main() i32:
+    let i32 rc = libc.unlink("/tmp/sushi_platform_errno_location_missing")
+    let i32 code = errno()
+    let ptr location = libc.errno_location()
+    let bool reads = rc == -1 and code == ENOENT and location.load_i32(0) == ENOENT
+    location.store_i32(0, 0)
+    let bool sets = errno() == 0
+    return expect_true("ERRNO_LOCATION_SYMBOL", reads and sets)

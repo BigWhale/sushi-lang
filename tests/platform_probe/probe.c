@@ -140,6 +140,11 @@ int main(void) {
     num("AI_NEXT_OFFSET", offsetof(struct addrinfo, ai_next), "The byte offset of `ai_next`.");
 
     section("errno numbers");
+#ifdef __APPLE__
+    sym("ERRNO_LOCATION_SYMBOL", "__error", "The link name of the C function that gives the address of the `errno` of the thread.");
+#else
+    sym("ERRNO_LOCATION_SYMBOL", "__errno_location", "The link name of the C function that gives the address of the `errno` of the thread.");
+#endif
     num("EPERM", EPERM, "errno: the operation is not permitted.");
     num("ENOENT", ENOENT, "errno: no such file or directory.");
     num("EINTR", EINTR, "errno: a signal interrupted the call.");

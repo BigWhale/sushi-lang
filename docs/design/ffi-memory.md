@@ -82,7 +82,10 @@ as `ptr`: only a C call can leave an errno behind.
 The platform symbols (`__error` on macOS, `__errno_location` on Linux) are in the libc
 table, `LIBC_SIGNATURES` (`sushi_stdlib/src/libc_signatures.py`), as `int* (void)`, and
 `declare_errno_location` selects the one for the platform. A user block that declares one
-of them has its own declaration, independent of the compiler's (#1099). The errno NUMBERS
+of them has its own declaration, independent of the compiler's (#1099). There is no
+built-in that SETS `errno`: a unit declares the function with the link name
+`ERRNO_LOCATION_SYMBOL` of `<sys/platform>` and stores an `i32` at the address it gives.
+`read_dir` of `<io/files>` sets `errno` to 0 before each `readdir()` call this way. The errno NUMBERS
 differ per platform and are in `<sys/platform>`. The order rule of the generators applies
 to a Sushi wrapper too: read `errno()` directly after the failed call
 (`docs/design/stdlib-syscall-layer.md`).

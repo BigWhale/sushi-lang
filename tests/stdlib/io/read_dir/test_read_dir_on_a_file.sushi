@@ -1,0 +1,28 @@
+# read_dir on a regular file reports the error of ENOTDIR and leaves no descriptor open.
+# EXPECT_STDOUT_EXACT: "invalid path\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/files>
+use <io/fs>
+
+fn main() i32:
+    let string path = "/tmp/sushi_read_dir_on_a_file.txt"
+    match open(path, FileMode.Write()):
+        Result.Ok(nom f) ->
+            f.write("x")
+            f.close()
+        Result.Err(_) ->
+            println("setup open failed")
+            return 1
+    match read_dir(path):
+        Result.Ok(_) ->
+            println("listed a file")
+        Result.Err(e) ->
+            match e:
+                FileError.InvalidPath -> println("invalid path")
+                _ -> println("other")
+    match remove(path):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> return 1
+    return 0

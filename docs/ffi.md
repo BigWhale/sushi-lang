@@ -352,7 +352,9 @@ That convention is load-bearing, not cosmetic.
 A failed libc call answers a sentinel (usually -1 or NULL) and leaves the cause in
 `errno`. The built-in `errno()` answers the calling thread's `errno` as an `i32`. The
 two platform symbols (`__error` on macOS, `__errno_location` on Linux) live in the
-compiler and never in Sushi source. A wrapper maps the number to an error variant:
+compiler. To SET `errno`, declare the platform function with the link name
+`ERRNO_LOCATION_SYMBOL` of `<sys/platform>`, and store an `i32` at the address it gives
+(see "Setting `errno`" below). A wrapper maps the number to an error variant:
 
 ```sushi
 unsafe external "C" as libc because "removing a file":
@@ -390,6 +392,49 @@ Three rules apply:
   `fn errno` is an ordinary declaration and wins over the built-in.
 - **The numbers are per platform.** `ENOENT` is 2 on both platforms, but most errno
   numbers differ between macOS and Linux. A wrapper reads them from `<sys/platform>`.
+
+### Setting `errno`
+
+Some C functions give the same answer at the end and on an error, and set `errno` only on
+an error. `readdir()` gives NULL in the two cases. Set `errno` to 0 before such a call,
+and then read `errno()`:
+
+```sushi
+use <sys/platform>
+
+unsafe external "C" as libc because "walking a directory":
+    fn opendir(string path) Maybe@(ptr) = "opendir"
+    fn readdir(ptr dir) Maybe@(ptr) = READDIR_SYMBOL
+    fn closedir(ptr dir) i32 = "closedir"
+    fn errno_location() ptr = ERRNO_LOCATION_SYMBOL
+
+fn count(ptr dir) i32:
+    let i32 entries = 0
+    while (true):
+        libc.errno_location().store_i32(0, 0)
+        let Maybe@(ptr) next = libc.readdir(dir)
+        let i32 code = errno()
+        match next:
+            Maybe.Some(_) -> entries := entries + 1
+            Maybe.None ->
+                if (code != 0):
+                    return -1
+                return entries
+    return entries
+
+fn main() i32:
+    match libc.opendir("/"):
+        Maybe.Some(dir) ->
+            let i32 entries = count(dir)
+            libc.closedir(dir)
+            if (entries > 0):
+                println("listed")
+        Maybe.None -> println("not listed")
+    return 0
+```
+
+A user block that declares the platform function has its own declaration, independent of
+the compiler's.
 
 A wrapper that restores RAII for a foreign handle looks like:
 

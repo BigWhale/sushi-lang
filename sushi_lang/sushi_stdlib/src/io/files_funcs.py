@@ -16,10 +16,9 @@ readers of one descriptor (HANDLES.md, Phases 4 and 5).
 """
 from typing import Dict, List
 
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
+from sushi_lang.semantics.typesys import BuiltinType, Type
 from sushi_lang.sushi_stdlib.src.signatures import (
     Signature,
-    cstr,
     params_of,
 )
 
@@ -29,15 +28,12 @@ from sushi_lang.sushi_stdlib.src.signatures import (
 REEXPORTS = ("io/error",)
 
 I32, I64, STRING = BuiltinType.I32, BuiltinType.I64, BuiltinType.STRING
-STRINGS = DynamicArrayType(BuiltinType.STRING)
 FILE = "FileError"
 
 
 FILES_SIGNATURES: Dict[str, Signature] = {
-    # The PATH utilities. The other path utilities and the stat readers are Sushi source
-    # (`src_sushi/io/files.sushi`), and so are `fd_read`, `fd_pread`, `fd_write`,
-    # `fd_pwrite` and `fd_readln`.
-    "read_dir":     Signature(params_of(cstr()), ok=STRINGS, error=FILE),
+    # The path utilities, the stat readers, `fd_read`, `fd_pread`, `fd_write`, `fd_pwrite`
+    # and `fd_readln` are Sushi source (`src_sushi/io/files.sushi`).
     # The DESCRIPTOR layer. A descriptor is a bare i32. A `string` crosses as its fat
     # pointer here -- `fd_write_str` takes a string VALUE, not a path, so it is not
     # marshalled to `i8*`.

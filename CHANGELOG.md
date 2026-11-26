@@ -68,6 +68,19 @@ All notable changes to Sushi Lang will be documented in this file.
   entry and one `lstat()` more for a directory. The answers of `stat` and `walk` do not
   change.
 
+- **`read_dir` of `<io/files>` is Sushi source, and a failed `readdir()` is an error.**
+  `read_dir` calls `opendir()`, `readdir()` and `closedir()` of the C library and keeps its
+  signature, its entries (without `.` and `..`), the order of `readdir()` and its
+  `FileError` variants. Before, a NULL from `readdir()` was always the end, so an error
+  gave a short list in `Result.Ok`. Now `read_dir` sets `errno` to 0 before each
+  `readdir()` call, and a NULL with an `errno` that is not 0 gives
+  `Result.Err(FileError.from_errno(errno))`. The list grows with `push`, so an allocation
+  failure stops the program with RE2021; before, an unchecked `realloc` grew it. The
+  directory is closed on each path. A program with `use <io/files>` now links at `--opt O1`
+  and `--opt O2` (#1358, for `<io/files>`). `<sys/platform>` has a new constant,
+  `ERRNO_LOCATION_SYMBOL`: the link name of the C function that gives the address of
+  `errno`, so that Sushi source can set `errno`.
+
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces
   them. `perks` has each public perk. `perk_impls` and `generic_perk_impls` have each
