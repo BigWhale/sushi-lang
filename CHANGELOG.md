@@ -36,7 +36,9 @@ All notable changes to Sushi Lang will be documented in this file.
   copy now: each chunk goes through `fd_write`, which writes all the bytes. After EINTR,
   `read()` and `write()` are called again. A chunk is now 64 KiB (before, 4 KiB). The
   function keeps its signature, its `Result.Ok(0)`, the `O_TRUNC` of an existing
-  destination and its `FileError` variants.
+  destination and its `FileError` variants. A source that is a directory still gives
+  `FileError.IsDirectory`, but the function now finds it before it opens the destination,
+  so it does not make an empty destination file.
 
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces

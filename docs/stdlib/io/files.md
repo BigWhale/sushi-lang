@@ -894,8 +894,8 @@ fn main() i32:
 - A short write does not stop the copy: the function writes all the bytes of each chunk.
   When a signal interrupts `read()` or `write()`, the function calls it again.
 - The function reads chunks of 64 KiB, and closes the two descriptors on each path.
-- A source that is a directory gives `FileError.IsDirectory`, and the destination is then
-  an empty file.
+- A source that is a directory gives `FileError.IsDirectory`. The function finds this
+  before it opens `dst`, so it does not make or change the destination.
 
 ### File Utility Pattern Matching Example
 

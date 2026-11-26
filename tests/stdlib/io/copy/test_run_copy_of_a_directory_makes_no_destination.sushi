@@ -1,0 +1,16 @@
+# `copy` of a source that is a directory gives `FileError.IsDirectory`, and it does not
+# make the destination.
+# EXPECT_STDOUT_EXACT: "IsDirectory\nfalse\n"
+# EXPECT_NO_OPEN_FDS
+# EXPECT_NO_LEAKS
+use <io/files>
+
+fn main() i32:
+    let string dst = "/tmp/sushi_copy_dir_dst.txt"
+    match copy("/tmp", dst):
+        Result.Ok(_) -> println("Ok")
+        Result.Err(FileError.IsDirectory) -> println("IsDirectory")
+        Result.Err(_) -> println("Other")
+    println(exists(dst))
+    remove(dst).realise(-1)
+    return 0
