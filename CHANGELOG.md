@@ -38,6 +38,12 @@ All notable changes to Sushi Lang will be documented in this file.
   one time and gives the count written. It keeps its signature, the short write and its
   `FileError` variants. The array is a borrow, and the function does not copy it.
 
+- **`fd_write` of `<io/files>` is Sushi source.** It calls `write()` of the C library
+  until all the bytes are written, and calls it again after `EINTR`. A call that writes
+  zero bytes gives a `FileError`. It keeps its signature, its count (the length of the
+  array) and its `FileError` variants. The array is a borrow, and the function does not
+  copy it. `fd_write_str` stays in the `.bc` unit.
+
 - **`copy` of `<io/files>` is Sushi source, and it keeps the mode of the source.** The
   destination now gets the permission bits of the source (`mode & 0o777`); before, it was
   always `0o644` less the umask. The function opens the destination with the bits of the

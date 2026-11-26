@@ -29,20 +29,18 @@ from sushi_lang.sushi_stdlib.src.signatures import (
 REEXPORTS = ("io/error",)
 
 I32, I64, STRING = BuiltinType.I32, BuiltinType.I64, BuiltinType.STRING
-BYTES = DynamicArrayType(BuiltinType.U8)
 STRINGS = DynamicArrayType(BuiltinType.STRING)
 FILE = "FileError"
 
 
 FILES_SIGNATURES: Dict[str, Signature] = {
     # The PATH utilities. The other path utilities and the stat readers are Sushi source
-    # (`src_sushi/io/files.sushi`), and so are `fd_read`, `fd_pread`, `fd_pwrite` and
-    # `fd_readln`.
+    # (`src_sushi/io/files.sushi`), and so are `fd_read`, `fd_pread`, `fd_write`,
+    # `fd_pwrite` and `fd_readln`.
     "read_dir":     Signature(params_of(cstr()), ok=STRINGS, error=FILE),
     # The DESCRIPTOR layer. A descriptor is a bare i32. A `string` crosses as its fat
     # pointer here -- `fd_write_str` takes a string VALUE, not a path, so it is not
     # marshalled to `i8*`.
-    "fd_write":     Signature(params_of(I32, BYTES), ok=I64, error=FILE),
     "fd_write_str": Signature(params_of(I32, STRING), ok=I64, error=FILE),
 }
 

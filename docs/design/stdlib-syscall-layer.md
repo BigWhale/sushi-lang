@@ -15,7 +15,7 @@ The descriptor layer of `<io/files>` has two halves:
 
 - The sequential half: `read`, `write`, `readln`, `seek`. These calls MOVE the position
   of the descriptor, so a `File` handle is written on them. `io/files/sequential.py`
-  generates `fd_write` and `fd_write_str`. `fd_read`, `fd_readln` and `fd_seek` are Sushi
+  generates `fd_write_str`. `fd_read`, `fd_write`, `fd_readln` and `fd_seek` are Sushi
   source (`src_sushi/io/files.sushi`).
 - The positional half: `pread`, `pwrite`. These calls take the offset as an argument and
   do not move the position, so they are safe on a shared descriptor. `fd_pread` and
@@ -101,5 +101,8 @@ The built-in reads `errno` through the same two platform symbols as
 ### EINTR
 
 A `read` or a `write` that a signal interrupts before a byte moves answers -1 with `EINTR`,
-and the correct response is to ask again. `emit_is_eintr` (`io/files/errno.py`) is the
-test, and the read and write loops go back to the call when it is true.
+and the correct response is to ask again. The Sushi functions `fd_read` and `fd_write`
+compare `errno()` with `EINTR` of `<sys/platform>` after the call, and call again when the
+two are equal. The `write` loop of `fd_write_str` uses `emit_is_eintr`
+(`io/files/errno.py`) for the same test. A `write` that answers 0 does not go back to the
+call: no byte moved, so the loop stops with the error of `errno`.

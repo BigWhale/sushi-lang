@@ -25,6 +25,7 @@ unsafe external "C" as libc because "the path queries and the path changes of th
     fn isatty(i32 fd) i32 = "isatty"
     fn read(i32 fd, poke u8[] buf, i64 count) i64 = "read"
     fn pread(i32 fd, poke u8[] buf, i64 count, i64 offset) i64 = "pread"
+    fn write(i32 fd, u8[] buf, i64 count) i64 = "write"
     fn pwrite(i32 fd, u8[] buf, i64 count, i64 offset) i64 = "pwrite"
     fn fstat(i32 fd, poke u8[] buf) i32 = "fstat"
     fn stat(string path, poke u8[] buf) i32 = STAT_SYMBOL
@@ -387,6 +388,38 @@ public fn fd_pread(i32 fd, i64 offset, i64 count) u8[] | FileError:
         buf.truncate(got)
         return Result.Ok(buf)
     return Result.Err(FileError.from_errno(code))
+
+##:
+Writes all the bytes to a descriptor, and moves the file position.
+
+The function calls `write()` again after a short write, until all the bytes are written.
+When a signal stops a call before a byte is written, the function calls `write()` again.
+A call that writes zero bytes stops the function with an error.
+
+- Parameter fd: The descriptor.
+- Parameter data: The bytes to write. The array stays the caller's.
+- Returns: The number of bytes written. It is the length of `data`.
+- Errors: FileError, when the descriptor cannot be written (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_write(-1, from([1, 2, 3])):
+      Result.Ok(_) -> println("written")
+      Result.Err(_) -> println("not written")
+  ```
+  This prints `not written`.
+:##
+public fn fd_write(i32 fd, u8[] data) i64 | FileError:
+    let i64 total = data.len()
+    let i64 done = 0
+    while (done < total):
+        let i64 wrote = libc.write(fd, data[done..total], total - done)
+        let i32 code = errno()
+        if (wrote > 0 as i64):
+            done := done + wrote
+        elif (wrote == 0 as i64 or code != EINTR):
+            return Result.Err(FileError.from_errno(code))
+    return Result.Ok(total)
 
 ##:
 Writes bytes at an offset of a file, and does not move the file position.

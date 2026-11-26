@@ -1,14 +1,13 @@
-"""The SEQUENTIAL half of the descriptor layer: write.
+"""The SEQUENTIAL half of the descriptor layer: the string write.
 
-`fd_read` and `fd_readln` are Sushi source (`src_sushi/io/files.sushi`).
+`fd_read`, `fd_readln` and `fd_write` are Sushi source (`src_sushi/io/files.sushi`).
 
 The design record is `docs/design/stdlib-syscall-layer.md`.
 """
 from llvmlite import ir
 from sushi_lang.backend.string_layout import string_size_i64
-from sushi_lang.backend.gep_utils import extract_stored_len
 from sushi_lang.sushi_stdlib.src.type_definitions import (
-    get_basic_types, get_byte_array_type, get_result_type, get_string_type,
+    get_basic_types, get_result_type, get_string_type,
     get_unit_enum_type,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
@@ -18,8 +17,7 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
-    """Generate the sequential descriptor primitives."""
-    generate_fd_write(module)
+    """Generate the string write of the descriptor layer."""
     generate_fd_write_str(module)
 
 
@@ -80,29 +78,6 @@ def _emit_write_all(builder: ir.IRBuilder, func: ir.Function, write_fn: ir.Funct
 
     builder.position_at_end(success_bb)
     builder.ret(emit_ok_result(builder, result_type, length, 8))
-
-
-def generate_fd_write(module: ir.Module) -> None:
-    """Emit `Result<i64, FileError> sushi_io_files_fd_write(i32 fd, u8[] data)`.
-
-    Every byte goes or it is an error; the Ok value is the count, which equals the
-    array's length. The buffer belongs to the caller and is a borrow, so this never
-    frees it.
-    """
-    _i8, _i8_ptr, i32, i64 = get_basic_types()
-    write_fn = get_platform_module('files').declare_write(module)
-
-    array_ty = get_byte_array_type()
-    result_type = get_result_type(i64, get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32, array_ty]),
-                       name="sushi_io_files_fd_write")
-    fd, data = func.args
-    fd.name, data.name = "fd", "data"
-    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
-
-    length = extract_stored_len(None, data, name="data_len", builder=builder)
-    buffer = builder.extract_value(data, 2, name="data_ptr")
-    _emit_write_all(builder, func, write_fn, module, result_type, fd, buffer, length)
 
 
 def generate_fd_write_str(module: ir.Module) -> None:
