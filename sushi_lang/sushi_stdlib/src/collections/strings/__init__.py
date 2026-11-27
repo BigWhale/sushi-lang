@@ -167,7 +167,7 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
 )}
 
 # The inline intrinsics answer here, beside the rows.
-_INLINE_RETURNS = {
+_INLINE_RETURNS: dict[str, Type] = {
     "is_empty": _BOOL,
     "clone": _S,
     "as_bytes": DynamicArrayType(BuiltinType.U8),
