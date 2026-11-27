@@ -20,6 +20,7 @@ from sushi_lang.backend.runtime.constants import (
 )
 from sushi_lang.sushi_stdlib.src import errno_tags
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
+from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
 from sushi_lang.sushi_stdlib.src.io.files import errno as file_errno
 from sushi_lang.sushi_stdlib.src.net import errno as net_errno
 
@@ -65,18 +66,27 @@ def _emit(emit) -> str:
     return str(module)
 
 
+def _emit_err(emit) -> str:
+    module = ir.Module(name="probe")
+    result_type = get_result_type(ir.IntType(32), get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, []), name="probe")
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+    builder.ret(emit(builder, module, result_type))
+    return str(module)
+
+
 def test_each_family_is_a_caller_of_the_emitter() -> None:
     linux = get_current_platform().is_linux
-    pairs = (
-        (file_errno.emit_file_error_tag,
-         file_errno.errno_to_file_error_table(), file_errno.ERRNO_DEFAULT_FILE_ERROR),
-        (net_errno.emit_net_error_tag,
-         errno_to_net_error_table(linux), ERRNO_DEFAULT_NET_ERROR),
-    )
-    for family, table, default in pairs:
-        direct = _emit(lambda b, m, t=table, d=default: errno_tags.emit_errno_tag(b, m, t, d))
-        assert _emit(family) == direct
-        assert "select" in direct
+    table = errno_to_net_error_table(linux)
+    direct = _emit(lambda b, m: errno_tags.emit_errno_tag(b, m, table, ERRNO_DEFAULT_NET_ERROR))
+    assert _emit(net_errno.emit_net_error_tag) == direct
+    assert "select" in direct
+
+    file_table = file_errno.errno_to_file_error_table()
+    file_direct = _emit_err(lambda b, m, r: errno_tags.emit_errno_err_result(
+        b, m, r, file_table, file_errno.ERRNO_DEFAULT_FILE_ERROR))
+    assert _emit_err(file_errno.emit_errno_err_result) == file_direct
+    assert "select" in file_direct
 
 
 def test_the_file_table_reads_the_platform_errno_values(monkeypatch) -> None:

@@ -1,0 +1,13 @@
+# An own `exists` in a unit with a flat `use <io/files>` shadows the export of the Sushi
+# half (CW3002), and the call reaches the own function.
+# EXPECT_ERROR_CODES_EXACT: CW3002
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <io/files>
+
+fn exists(string path) bool:
+    return path.len() > 0
+
+fn main() i32:
+    println(exists("/no/such/path"))
+    return 0

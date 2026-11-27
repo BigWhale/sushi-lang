@@ -43,7 +43,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("copy", "remove", "fd_readln"):
+    for spelled in ("sock_dns_resolve", "fd_write_str"):
         assert spelled in names
 
 
@@ -96,7 +96,7 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 40
+    assert checked >= 18
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.
@@ -155,6 +155,7 @@ def _scanner(generic_funcs=None, func_table=None):
 
 
 def test_a_user_generic_takes_the_name_before_the_row():
-    assert _scanner()._stdlib_row("remove") is not None
-    assert _scanner(generic_funcs={"remove": object()})._stdlib_row("remove") is None
-    assert _scanner(func_table={"copy": object()})._stdlib_row("copy") is None
+    assert _scanner()._stdlib_row("fd_write_str") is not None
+    assert _scanner(generic_funcs={"fd_write_str": object()})._stdlib_row("fd_write_str") is None
+    assert _scanner(func_table={"sock_dns_resolve": object()})._stdlib_row(
+        "sock_dns_resolve") is None

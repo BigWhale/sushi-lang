@@ -5,8 +5,7 @@ try each until one works -- so it lives in _emit_addrinfo_walk and the two
 callers supply the block that uses a candidate address.
 
 Every loop variable is an entry-block alloca and there is not one phi. That is
-the house style here (read_dir.py and copy.py have none either) and mem2reg
-promotes them all.
+the house style here, and mem2reg promotes them all.
 """
 from llvmlite import ir
 

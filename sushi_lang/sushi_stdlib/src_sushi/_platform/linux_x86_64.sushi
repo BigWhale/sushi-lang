@@ -217,6 +217,9 @@ public const i32 AI_NEXT_OFFSET = 40
 
 # errno numbers
 
+##: The link name of the C function that gives the address of the `errno` of the thread. :##
+public const string ERRNO_LOCATION_SYMBOL = "__errno_location"
+
 ##: errno: the operation is not permitted. :##
 public const i32 EPERM = 1
 

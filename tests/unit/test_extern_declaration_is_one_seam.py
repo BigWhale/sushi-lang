@@ -341,7 +341,7 @@ _NOT_LIBC_SPELLINGS = [
     'def f(module):\n'
     '    return declare_libc(module, "write")\n',
     'def f(module, name):\n'
-    '    return declare_libc(module, "stat", name)\n',
+    '    return declare_libc(module, "write", name)\n',
 ]
 
 

@@ -1,0 +1,976 @@
+##:
+io/files -- the Sushi half of the path utilities and the descriptor layer.
+
+`<io/files>` has two halves. The functions of this file call the C library through an
+`unsafe external` block. `fd_write_str` is the `.bc` unit of the same name (issue #1359).
+A `use <io/files>` gives both halves.
+
+This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileError`.
+:##
+
+public use <io/error>
+use <sys/platform>
+
+unsafe external "C" as libc because "the path and descriptor calls of the C library":
+    fn access(string path, i32 mode) i32 = "access"
+    fn unlink(string path) i32 = "unlink"
+    fn rmdir(string path) i32 = "rmdir"
+    fn mkdir(string path, i32 mode) i32 = "mkdir"
+    fn rename(string old_path, string new_path) i32 = "rename"
+    fn open(string path, i32 flags, ...) i32 = "open"
+    fn lseek(i32 fd, i64 offset, i32 whence) i64 = "lseek"
+    fn dup(i32 fd) i32 = "dup"
+    fn close(i32 fd) i32 = "close"
+    fn isatty(i32 fd) i32 = "isatty"
+    fn read(i32 fd, poke u8[] buf, i64 count) i64 = "read"
+    fn pread(i32 fd, poke u8[] buf, i64 count, i64 offset) i64 = "pread"
+    fn write(i32 fd, u8[] buf, i64 count) i64 = "write"
+    fn pwrite(i32 fd, u8[] buf, i64 count, i64 offset) i64 = "pwrite"
+    fn fstat(i32 fd, poke u8[] buf) i32 = "fstat"
+    fn stat(string path, poke u8[] buf) i32 = STAT_SYMBOL
+    fn lstat(string path, poke u8[] buf) i32 = LSTAT_SYMBOL
+    fn fchmod(i32 fd, i32 mode) i32 = "fchmod"
+    fn opendir(string path) Maybe@(ptr) = "opendir"
+    fn readdir(ptr dir) Maybe@(ptr) = READDIR_SYMBOL
+    fn closedir(ptr dir) i32 = "closedir"
+    fn errno_location() ptr = ERRNO_LOCATION_SYMBOL
+
+##: The `access()` mode that asks only if the path exists. It is 0 on each platform. :##
+const i32 F_OK = 0
+
+##:
+Tells if a path exists.
+
+The function follows a symbolic link: a link to a missing target gives `false`.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path exists. A path that cannot be examined gives `false`.
+- Example:
+  ```sushi
+  if (exists("/")):
+      println("root exists")
+  ```
+  This prints `root exists`.
+:##
+public fn exists(string path) bool:
+    return libc.access(path, F_OK) == 0
+
+##:
+Removes a file.
+
+The function calls `unlink()`. A directory is an error: use `rmdir` for a directory. A
+symbolic link is removed as the link, and its target stays.
+
+- Parameter path: The path of the file to remove.
+- Returns: `0` when the file is removed.
+- Errors: FileError, when the file cannot be removed (for example
+  `FileError.NotFound` or `FileError.PermissionDenied`).
+- Example:
+  ```sushi
+  match remove("/no/such/file"):
+      Result.Ok(_) -> println("removed")
+      Result.Err(_) -> println("not removed")
+  ```
+  This prints `not removed`.
+:##
+public fn remove(string path) i32 | FileError:
+    let i32 rc = libc.unlink(path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Removes an empty directory.
+
+The function calls `rmdir()`. A directory that is not empty is an error: remove its
+entries first, or use `remove_all` of `<io/fs>`.
+
+- Parameter path: The path of the directory to remove.
+- Returns: `0` when the directory is removed.
+- Errors: FileError, when the directory cannot be removed (for example
+  `FileError.NotFound` or `FileError.InvalidPath`).
+- Example:
+  ```sushi
+  match rmdir("/no/such/dir"):
+      Result.Ok(_) -> println("removed")
+      Result.Err(_) -> println("not removed")
+  ```
+  This prints `not removed`.
+:##
+public fn rmdir(string path) i32 | FileError:
+    let i32 rc = libc.rmdir(path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Makes a directory.
+
+The function calls `mkdir()`. It does not make the parent directories: use `mkdir_all`
+of `<io/fs>` for them. The umask of the process removes bits from `mode`.
+
+- Parameter path: The path of the new directory.
+- Parameter mode: The permission bits, for example `0o755`.
+- Returns: `0` when the directory is made.
+- Errors: FileError, when the directory cannot be made (for example
+  `FileError.AlreadyExists` or `FileError.NotFound`).
+- Example:
+  ```sushi
+  match mkdir("/no/such/parent/dir", 0o755):
+      Result.Ok(_) -> println("made")
+      Result.Err(_) -> println("not made")
+  ```
+  This prints `not made`.
+:##
+public fn mkdir(string path, i32 mode) i32 | FileError:
+    let i32 rc = libc.mkdir(path, mode)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Renames or moves a file or a directory.
+
+The function calls `rename()`. When `new_path` exists, the function replaces it in one
+step.
+
+- Parameter old_path: The path to rename.
+- Parameter new_path: The new path.
+- Returns: `0` when the path is renamed.
+- Errors: FileError, when the path cannot be renamed (for example `FileError.NotFound`
+  or `FileError.PermissionDenied`).
+- Example:
+  ```sushi
+  match rename("/no/such/file", "/no/such/other"):
+      Result.Ok(_) -> println("renamed")
+      Result.Err(_) -> println("not renamed")
+  ```
+  This prints `not renamed`.
+:##
+public fn rename(string old_path, string new_path) i32 | FileError:
+    let i32 rc = libc.rename(old_path, new_path)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Gives the `open()` flags of an intent of `fd_open`.
+
+- Parameter intent: `0` read, `1` write, `2` append, `3` read and write. An unknown number
+  gives the flags of `0`.
+- Returns: The `O_*` flags of this platform.
+:##
+fn open_flags(i32 intent) i32:
+    if (intent == 1):
+        return O_WRONLY | O_CREAT | O_TRUNC
+    if (intent == 2):
+        return O_WRONLY | O_CREAT | O_APPEND
+    if (intent == 3):
+        return O_RDWR | O_CREAT
+    return O_RDONLY
+
+##:
+Opens a file and gives its descriptor.
+
+The `intent` tells what the caller wants, and the function changes it to the `O_*` flags
+of this platform:
+
+- `0`: read only.
+- `1`: write. The function makes the file, and cuts an existing file to zero length.
+- `2`: append. The function makes the file, and each write goes to the end.
+- `3`: read and write. The function makes the file, and keeps an existing file.
+
+An unknown number opens the file read only.
+
+- Parameter path: The path to open.
+- Parameter intent: What the caller wants, from `0` to `3`.
+- Parameter mode: The permission bits of a new file, for example `420` (`0o644`).
+- Returns: The new descriptor.
+- Errors: FileError, when the file cannot be opened (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match fd_open("/no/such/file", 0, 420):
+      Result.Ok(_) -> println("opened")
+      Result.Err(_) -> println("not opened")
+  ```
+  This prints `not opened`.
+:##
+public fn fd_open(string path, i32 intent, i32 mode) i32 | FileError:
+    let i32 fd = libc.open(path, open_flags(intent), mode)
+    let i32 code = errno()
+    if (fd >= 0):
+        return Result.Ok(fd)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Makes a second descriptor of the same open file.
+
+The function calls `dup()`. The two descriptors share one file position. For two readers
+of one file, use `fd_pread`, because it does not move the position.
+
+- Parameter fd: The descriptor to copy.
+- Returns: The new descriptor.
+- Errors: FileError, when the descriptor cannot be copied (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_dup(-1):
+      Result.Ok(_) -> println("copied")
+      Result.Err(_) -> println("not copied")
+  ```
+  This prints `not copied`.
+:##
+public fn fd_dup(i32 fd) i32 | FileError:
+    let i32 copy = libc.dup(fd)
+    let i32 code = errno()
+    if (copy >= 0):
+        return Result.Ok(copy)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Closes a descriptor.
+
+The function calls `close()` one time. It does not try again after an interrupt.
+
+- Parameter fd: The descriptor to close.
+- Returns: `0` when the descriptor is closed.
+- Errors: FileError, when the descriptor cannot be closed (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_close(-1):
+      Result.Ok(_) -> println("closed")
+      Result.Err(_) -> println("not closed")
+  ```
+  This prints `not closed`.
+:##
+public fn fd_close(i32 fd) i32 | FileError:
+    let i32 rc = libc.close(fd)
+    let i32 code = errno()
+    if (rc == 0):
+        return Result.Ok(0)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Gives the `lseek()` whence of a whence of `fd_seek`.
+
+- Parameter whence: `0` the start, `1` the current position, `2` the end. An unknown
+  number gives the start.
+- Returns: The `SEEK_*` value of this platform.
+:##
+fn seek_whence(i32 whence) i32:
+    if (whence == 1):
+        return SEEK_CUR
+    if (whence == 2):
+        return SEEK_END
+    return SEEK_SET
+
+##:
+Moves the file position of a descriptor.
+
+The function calls `lseek()`. The `whence` is `0` for the start, `1` for the current
+position and `2` for the end. An unknown number counts from the start. The current
+position is `fd_seek(fd, 0, 1)`.
+
+- Parameter fd: The descriptor.
+- Parameter offset: How far to move, in bytes. It can be negative.
+- Parameter whence: Where to count from, from `0` to `2`.
+- Returns: The new position, in bytes from the start.
+- Errors: FileError, when the descriptor cannot move its position (for example a pipe).
+- Example:
+  ```sushi
+  match fd_seek(-1, 0 as i64, 0):
+      Result.Ok(_) -> println("moved")
+      Result.Err(_) -> println("not moved")
+  ```
+  This prints `not moved`.
+:##
+public fn fd_seek(i32 fd, i64 offset, i32 whence) i64 | FileError:
+    let i64 at = libc.lseek(fd, offset, seek_whence(whence))
+    let i32 code = errno()
+    if (at >= 0 as i64):
+        return Result.Ok(at)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Tells if a descriptor is a terminal.
+
+A descriptor that is not open also gives `false`. Thus the function cannot fail.
+
+- Parameter fd: The descriptor to examine.
+- Returns: `true` when the descriptor is a terminal.
+- Example:
+  ```sushi
+  println(fd_isatty(-1))
+  ```
+  This prints `false`.
+:##
+public fn fd_isatty(i32 fd) bool:
+    return libc.isatty(fd) != 0
+
+##: The largest length of an array. A read buffer is never longer. :##
+const i64 READ_MAX = 2147483647
+
+##:
+Makes the buffer of one read of `fd_read` or `fd_pread`.
+
+A count above the largest length of an array gives a buffer of that length, and the read
+is then short. A negative count stops the program with RE2026.
+
+- Parameter count: How many bytes the caller asks for.
+- Returns: A buffer of zero bytes. Its length is the count to read.
+:##
+fn read_buffer(i64 count) u8[]:
+    assert(count >= 0 as i64, "the count of a read is negative")
+    if (count > READ_MAX):
+        return from([0; READ_MAX])
+    return from([0; count])
+
+##:
+Reads bytes from the file position of a descriptor, and moves the position.
+
+The function calls `read()` one time. The answer can be shorter than `max`. An empty
+array is the end of the file, not an error, so a caller reads until the answer is empty.
+When a signal stops the call before a byte arrives, the function calls `read()` again.
+
+- Parameter fd: The descriptor.
+- Parameter max: The most bytes to read. A negative number stops the program.
+- Returns: The bytes that arrived.
+- Errors: FileError, when the descriptor cannot be read (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_read(-1, 16 as i64):
+      Result.Ok(_) -> println("read")
+      Result.Err(_) -> println("not read")
+  ```
+  This prints `not read`.
+:##
+public fn fd_read(i32 fd, i64 max) u8[] | FileError:
+    let u8[] buf = read_buffer(max)
+    let i64 got = libc.read(fd, poke buf, buf.len())
+    let i32 code = errno()
+    while (got < 0 as i64 and code == EINTR):
+        got := libc.read(fd, poke buf, buf.len())
+        code := errno()
+    if (got >= 0 as i64):
+        buf.truncate(got)
+        return Result.Ok(buf)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Reads bytes at an offset of a file, and does not move the file position.
+
+The function calls `pread()` one time. The answer can be shorter than `count`, and it is
+empty at the end of the file. Two readers of one descriptor can use this function at the
+same time, because it does not use the shared file position.
+
+- Parameter fd: The descriptor.
+- Parameter offset: Where to read, in bytes from the start of the file.
+- Parameter count: The most bytes to read. A negative number stops the program.
+- Returns: The bytes that arrived.
+- Errors: FileError, when the descriptor cannot be read at the offset (for example a
+  negative offset or a pipe).
+- Example:
+  ```sushi
+  match fd_pread(-1, 0 as i64, 16 as i64):
+      Result.Ok(_) -> println("read")
+      Result.Err(_) -> println("not read")
+  ```
+  This prints `not read`.
+:##
+public fn fd_pread(i32 fd, i64 offset, i64 count) u8[] | FileError:
+    let u8[] buf = read_buffer(count)
+    let i64 got = libc.pread(fd, poke buf, buf.len(), offset)
+    let i32 code = errno()
+    if (got >= 0 as i64):
+        buf.truncate(got)
+        return Result.Ok(buf)
+    return Result.Err(FileError.from_errno(code))
+
+##:
+Writes all the bytes to a descriptor, and moves the file position.
+
+The function calls `write()` again after a short write, until all the bytes are written.
+When a signal stops a call before a byte is written, the function calls `write()` again.
+A call that writes zero bytes stops the function with an error.
+
+- Parameter fd: The descriptor.
+- Parameter data: The bytes to write. The array stays the caller's.
+- Returns: The number of bytes written. It is the length of `data`.
+- Errors: FileError, when the descriptor cannot be written (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_write(-1, from([1, 2, 3])):
+      Result.Ok(_) -> println("written")
+      Result.Err(_) -> println("not written")
+  ```
+  This prints `not written`.
+:##
+public fn fd_write(i32 fd, u8[] data) i64 | FileError:
+    let i64 total = data.len()
+    let i64 done = 0
+    while (done < total):
+        let i64 wrote = libc.write(fd, data[done..total], total - done)
+        let i32 code = errno()
+        if (wrote > 0 as i64):
+            done := done + wrote
+        elif (wrote == 0 as i64 or code != EINTR):
+            return Result.Err(FileError.from_errno(code))
+    return Result.Ok(total)
+
+##:
+Writes bytes at an offset of a file, and does not move the file position.
+
+The function calls `pwrite()` one time. The answer can be smaller than the length of
+`data`. To write all the bytes, the caller calls the function again with the remaining
+bytes.
+
+- Parameter fd: The descriptor.
+- Parameter offset: Where to write, in bytes from the start of the file.
+- Parameter data: The bytes to write. The array stays the caller's.
+- Returns: The number of bytes written.
+- Errors: FileError, when the descriptor cannot be written at the offset (for example a
+  negative offset or a pipe).
+- Example:
+  ```sushi
+  match fd_pwrite(-1, 0 as i64, from([1, 2, 3])):
+      Result.Ok(_) -> println("written")
+      Result.Err(_) -> println("not written")
+  ```
+  This prints `not written`.
+:##
+public fn fd_pwrite(i32 fd, i64 offset, u8[] data) i64 | FileError:
+    let i64 wrote = libc.pwrite(fd, data, data.len(), offset)
+    let i32 code = errno()
+    if (wrote >= 0 as i64):
+        return Result.Ok(wrote)
+    return Result.Err(FileError.from_errno(code))
+
+##: The most bytes of one `pread()` of `fd_readln`. :##
+const i64 LINE_CHUNK = 128
+
+##:
+Reads one line from a descriptor that cannot seek, one byte for each `read()`.
+
+A pipe cannot give back a byte, so this path does not read past the newline.
+
+- Parameter fd: The descriptor.
+- Returns: The line without its newline, or `None` at the end of the input.
+- Errors: FileError, when `read()` fails.
+:##
+fn readln_by_byte(i32 fd) Maybe@(string) | FileError:
+    let u8[] line = from([])
+    let u8[] one = from([0])
+    while (true):
+        let i64 got = libc.read(fd, poke one, 1 as i64)
+        let i32 code = errno()
+        if (got < 0 as i64):
+            return Result.Err(FileError.from_errno(code))
+        if (got == 0 as i64):
+            if (line.len() == 0):
+                let Maybe@(string) ended = Maybe.None()
+                return Result.Ok(ended)
+            break
+        if (one[0] == a'\n'):
+            break
+        line.push(one[0])
+    let Maybe@(string) got_line = Maybe.Some(string.from_bytes(nom line))
+    return Result.Ok(got_line)
+
+##:
+Reads one line from a descriptor that can seek, in chunks of `pread()`.
+
+Each `pread()` reads at the absolute offset `start` plus the bytes of the line so far.
+After the line, one `lseek()` moves the position to the byte after the newline. At the
+end of the file, the position moves to the end of the bytes that the function read.
+
+- Parameter fd: The descriptor.
+- Parameter start: The position of the descriptor at the start of the line.
+- Returns: The line without its newline, or `None` at the end of the file.
+- Errors: FileError, when `pread()` fails.
+:##
+fn readln_chunked(i32 fd, i64 start) Maybe@(string) | FileError:
+    let u8[] line = from([])
+    while (true):
+        let u8[] chunk = from([0; LINE_CHUNK])
+        let i64 got = libc.pread(fd, poke chunk, LINE_CHUNK, start + line.len())
+        let i32 code = errno()
+        if (got < 0 as i64):
+            return Result.Err(FileError.from_errno(code))
+        if (got == 0 as i64):
+            libc.lseek(fd, start + line.len(), SEEK_SET)
+            if (line.len() == 0):
+                let Maybe@(string) ended = Maybe.None()
+                return Result.Ok(ended)
+            break
+        chunk.truncate(got)
+        let i64 at = 0
+        while (at < chunk.len()):
+            if (chunk[at] == a'\n'):
+                break
+            at := at + 1
+        if (at < chunk.len()):
+            libc.lseek(fd, start + line.len() + at + 1, SEEK_SET)
+            chunk.truncate(at)
+            line.extend(chunk)
+            break
+        line.extend(chunk)
+    let Maybe@(string) got_line = Maybe.Some(string.from_bytes(nom line))
+    return Result.Ok(got_line)
+
+##:
+Reads one line from the file position of a descriptor, and moves the position.
+
+The function removes the `\n` at the end of the line. It keeps a `\r`. A blank line gives
+`Some("")`, and the end of the file gives `None`. A last line with no `\n` after it is a
+line, and the next call gives `None`.
+
+A descriptor that can seek reads chunks of 128 bytes with `pread()`, and then moves the
+position to the byte after the newline. A descriptor that cannot seek (a pipe, a socket or
+a terminal) reads one byte for each `read()`, so the function does not read past the
+newline. The function does not call `read()` again after an interrupt.
+
+- Parameter fd: The descriptor.
+- Returns: The line, or `None` at the end of the file.
+- Errors: FileError, when the descriptor cannot be read (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_readln(-1):
+      Result.Ok(_) -> println("read")
+      Result.Err(_) -> println("not read")
+  ```
+  This prints `not read`.
+:##
+public fn fd_readln(i32 fd) Maybe@(string) | FileError:
+    let i64 start = libc.lseek(fd, 0 as i64, SEEK_CUR)
+    if (start < 0 as i64):
+        return Result.Ok(readln_by_byte(fd)??)
+    return Result.Ok(readln_chunked(fd, start)??)
+
+##: The most bytes of one `read()` of `copy`. :##
+const i64 COPY_CHUNK = 65536
+
+##:
+Gives the `st_mode` of an open file: the file type bits and the permission bits.
+
+- Parameter fd: The descriptor of the file.
+- Returns: The `st_mode` of the file.
+- Errors: FileError, when `fstat()` fails.
+:##
+fn file_mode(i32 fd) i32 | FileError:
+    let u8[] buf = from([0; STAT_SIZE])
+    let i32 rc = libc.fstat(fd, poke buf)
+    let i32 code = errno()
+    if (rc != 0):
+        return Result.Err(FileError.from_errno(code))
+    return Result.Ok(stat_mode(buf))
+
+##:
+Copies the bytes of one open file to another, from the two file positions to the end.
+
+Each chunk goes through `fd_write`, which writes all the bytes and calls `write()` again
+after a short write or an interrupt. When a signal stops `read()` before a byte arrives,
+the function calls `read()` again.
+
+- Parameter from_fd: The descriptor to read.
+- Parameter to_fd: The descriptor to write.
+- Returns: `0` at the end of the file.
+- Errors: FileError, when `read()` or `write()` fails.
+:##
+fn copy_bytes(i32 from_fd, i32 to_fd) i32 | FileError:
+    let u8[] buf = read_buffer(COPY_CHUNK)
+    while (true):
+        let i64 got = libc.read(from_fd, poke buf, COPY_CHUNK)
+        let i32 code = errno()
+        if (got < 0 as i64):
+            if (code == EINTR):
+                continue
+            return Result.Err(FileError.from_errno(code))
+        if (got == 0 as i64):
+            break
+        fd_write(to_fd, buf[0..got])??
+    return Result.Ok(0)
+
+##:
+Copies the open source to a destination path, and closes the destination.
+
+A source that is a directory gives `FileError.IsDirectory`, and the function does not
+open `dst`. The function opens `dst` with the permission bits of the source, so a new
+file never has more bits than the source. The umask can remove bits at the open, so
+`fchmod()` then sets the exact bits. This also sets the bits of an existing destination.
+
+- Parameter from_fd: The descriptor of the source.
+- Parameter dst: The path of the copy.
+- Returns: `0` when the copy is complete.
+- Errors: FileError, when the source is a directory, or when `fstat()`, `open()`,
+  `fchmod()`, `read()` or `write()` fails.
+:##
+fn copy_to_path(i32 from_fd, string dst) i32 | FileError:
+    let i32 st_mode = file_mode(from_fd)??
+    if ((st_mode & S_IFMT) == S_IFDIR):
+        return Result.Err(FileError.IsDirectory)
+    let i32 bits = st_mode & 0o777
+    let i32 to_fd = libc.open(dst, O_WRONLY | O_CREAT | O_TRUNC, bits)
+    let i32 code = errno()
+    if (to_fd < 0):
+        return Result.Err(FileError.from_errno(code))
+    let Result@(i32, FileError) done = copy_with_bits(from_fd, to_fd, bits)
+    libc.close(to_fd)
+    return Result.Ok(done??)
+
+##:
+Sets the permission bits of the destination, and then copies the bytes to it.
+
+- Parameter from_fd: The descriptor of the source.
+- Parameter to_fd: The descriptor of the destination.
+- Parameter bits: The permission bits of the source.
+- Returns: `0` when the copy is complete.
+- Errors: FileError, when `fchmod()`, `read()` or `write()` fails.
+:##
+fn copy_with_bits(i32 from_fd, i32 to_fd, i32 bits) i32 | FileError:
+    let i32 rc = libc.fchmod(to_fd, bits)
+    let i32 code = errno()
+    if (rc != 0):
+        return Result.Err(FileError.from_errno(code))
+    return Result.Ok(copy_bytes(from_fd, to_fd)??)
+
+##:
+Copies a file to a new path.
+
+The function opens `dst` with `O_CREAT` and `O_TRUNC`, so an existing file is cut to zero
+length and then gets the bytes of `src`. The destination gets the permission bits of the
+source (`mode & 0o777`), and the umask does not remove bits. An existing destination also
+gets the bits of the source. A source that is a directory gives `FileError.IsDirectory`
+before `dst` is opened, so the function does not make `dst`. A short write and an interrupt do not stop the copy. The
+function closes the two descriptors on each path.
+
+- Parameter src: The path of the file to copy.
+- Parameter dst: The path of the copy.
+- Returns: `0` when the file is copied.
+- Errors: FileError, when the copy fails (for example `FileError.NotFound` for a missing
+  source, or `FileError.IsDirectory` for a source that is a directory).
+- Example:
+  ```sushi
+  match copy("/no/such/file", "/tmp/copy"):
+      Result.Ok(_) -> println("copied")
+      Result.Err(_) -> println("not copied")
+  ```
+  This prints `not copied`.
+:##
+public fn copy(string src, string dst) i32 | FileError:
+    let i32 from_fd = libc.open(src, O_RDONLY, 0)
+    let i32 code = errno()
+    if (from_fd < 0):
+        return Result.Err(FileError.from_errno(code))
+    let Result@(i32, FileError) done = copy_to_path(from_fd, dst)
+    libc.close(from_fd)
+    return Result.Ok(done??)
+
+##: The width in bytes of `st_size` and of the `tv_sec` of a time field, on each platform. :##
+const i32 STAT_I64_BYTES = 8
+
+##:
+Reads one field of a `struct stat` buffer, the least significant byte first.
+
+This is the one function that reads a field of a `struct stat`.
+
+- Parameter buf: The buffer of `stat()`, `lstat()` or `fstat()`, of `STAT_SIZE` bytes.
+- Parameter offset: The offset of the field, an `ST_*_OFFSET` of `<sys/platform>`.
+- Parameter bytes: The width of the field in bytes: 2, 4 or 8.
+- Returns: The value of the field.
+:##
+fn stat_field(u8[] buf, i32 offset, i32 bytes) i64:
+    let i64 at = offset as i64
+    if (bytes == 2):
+        return buf.read_u16_le(at).realise(0 as u16) as i64
+    if (bytes == 4):
+        return buf.read_u32_le(at).realise(0 as u32) as i64
+    return buf.read_u64_le(at).realise(0 as u64) as i64
+
+##:
+Gives the `st_mode` of a `struct stat` buffer.
+
+- Parameter buf: The buffer of `stat()`, `lstat()` or `fstat()`.
+- Returns: The file type bits and the permission bits.
+:##
+fn stat_mode(u8[] buf) i32:
+    return stat_field(buf, ST_MODE_OFFSET, ST_MODE_BYTES) as i32
+
+##:
+Calls `stat()` or `lstat()` on a path, and gives the `struct stat` buffer.
+
+- Parameter path: The path to examine.
+- Parameter follow: `true` calls `stat()`, which follows a symbolic link. `false` calls
+  `lstat()`, which examines the link itself.
+- Returns: The buffer, of `STAT_SIZE` bytes.
+- Errors: FileError, when the call fails.
+:##
+fn stat_buffer(string path, bool follow) u8[] | FileError:
+    let u8[] buf = from([0; STAT_SIZE])
+    let i32 rc = 0
+    let i32 code = 0
+    if (follow):
+        rc := libc.stat(path, poke buf)
+        code := errno()
+    else:
+        rc := libc.lstat(path, poke buf)
+        code := errno()
+    if (rc != 0):
+        return Result.Err(FileError.from_errno(code))
+    return Result.Ok(buf)
+
+##:
+Tells if the file type of a path is one type. The function follows a symbolic link.
+
+- Parameter path: The path to examine.
+- Parameter kind: The file type bits, for example `S_IFREG`.
+- Returns: `true` when the path has the type. A path that cannot be examined gives `false`.
+:##
+fn has_type(string path, i32 kind) bool:
+    match stat_buffer(path, true):
+        Result.Ok(buf) -> return (stat_mode(buf) & S_IFMT) == kind
+        Result.Err(_) -> return false
+
+##:
+Gives four fields of a path from one `stat()` or one `lstat()` call.
+
+`stat` of `<io/fs>` uses this function, so that it does not make one call for each
+field.
+
+- Parameter path: The path to examine.
+- Parameter follow: `true` calls `stat()`, which follows a symbolic link. `false` calls
+  `lstat()`, which examines the link itself.
+- Returns: The size in bytes, the modification time and the status-change time in unix
+  seconds, and the `st_mode`.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match path_stat("/no/such/file", true):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn path_stat(string path, bool follow) (i64, i64, i64, i32) | FileError:
+    let u8[] buf = stat_buffer(path, follow)??
+    let i64 size = stat_field(buf, ST_SIZE_OFFSET, STAT_I64_BYTES)
+    let i64 mt = stat_field(buf, ST_MTIME_OFFSET, STAT_I64_BYTES)
+    let i64 ct = stat_field(buf, ST_CTIME_OFFSET, STAT_I64_BYTES)
+    return Result.Ok((size, mt, ct, stat_mode(buf)))
+
+##:
+Tells if a path is a regular file.
+
+The function follows a symbolic link and gives the answer for its target.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path is a regular file. A path that cannot be examined gives
+  `false`.
+- Example:
+  ```sushi
+  println(is_file("/no/such/file"))
+  ```
+  This prints `false`.
+:##
+public fn is_file(string path) bool:
+    return has_type(path, S_IFREG)
+
+##:
+Tells if a path is a directory.
+
+The function follows a symbolic link and gives the answer for its target.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path is a directory. A path that cannot be examined gives
+  `false`.
+- Example:
+  ```sushi
+  println(is_dir("/"))
+  ```
+  This prints `true`.
+:##
+public fn is_dir(string path) bool:
+    return has_type(path, S_IFDIR)
+
+##:
+Gives the size of a file in bytes.
+
+The function calls `stat()`, so it follows a symbolic link.
+
+- Parameter path: The path of the file.
+- Returns: The size in bytes.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match file_size("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn file_size(string path) i64 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_field(buf, ST_SIZE_OFFSET, STAT_I64_BYTES))
+
+##:
+Gives the modification time of a path, in unix seconds.
+
+The function calls `stat()`, so it follows a symbolic link. It reads the seconds only.
+
+- Parameter path: The path to examine.
+- Returns: The modification time.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match mtime("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn mtime(string path) i64 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_field(buf, ST_MTIME_OFFSET, STAT_I64_BYTES))
+
+##:
+Gives the status-change time of a path, in unix seconds.
+
+This is the time of the last change of the inode, not the time when the file was made.
+The function calls `stat()`, so it follows a symbolic link. It reads the seconds only.
+
+- Parameter path: The path to examine.
+- Returns: The status-change time.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match ctime("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn ctime(string path) i64 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_field(buf, ST_CTIME_OFFSET, STAT_I64_BYTES))
+
+##:
+Gives the `st_mode` of a path: the file type bits and the permission bits.
+
+The function calls `stat()`, so it follows a symbolic link. Use `mode & 0o777` for the
+permission bits, and `mode & 0o170000` for the file type bits.
+
+- Parameter path: The path to examine.
+- Returns: The `st_mode`.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match mode("/no/such/file"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn mode(string path) i32 | FileError:
+    let u8[] buf = stat_buffer(path, true)??
+    return Result.Ok(stat_mode(buf))
+
+##:
+Tells if a path is a symbolic link.
+
+The function calls `lstat()`, so it examines the link itself and does not follow it.
+
+- Parameter path: The path to examine.
+- Returns: `true` when the path is a symbolic link.
+- Errors: FileError, when the path cannot be examined (for example `FileError.NotFound`).
+- Example:
+  ```sushi
+  match is_symlink("/no/such/link"):
+      Result.Ok(_) -> println("found")
+      Result.Err(_) -> println("not found")
+  ```
+  This prints `not found`.
+:##
+public fn is_symlink(string path) bool | FileError:
+    let u8[] buf = stat_buffer(path, false)??
+    return Result.Ok((stat_mode(buf) & S_IFMT) == S_IFLNK)
+
+##:
+Sets the `errno` of the thread to 0.
+
+A C function that gives a NULL both at the end and on an error, for example `readdir()`,
+sets `errno` only on an error. Call this function before such a call, and then read
+`errno()` to know which of the two occurred.
+:##
+fn clear_errno() ~:
+    libc.errno_location().store_i32(0, 0)
+
+##:
+Tells if an entry name is `.` or `..`.
+
+- Parameter entry: The `struct dirent` of the entry.
+- Returns: `true` when the name is `.` or `..`.
+:##
+fn is_dot_entry(ptr entry) bool:
+    if (entry.load_u8(DIRENT_NAME_OFFSET) != 46 as u8):
+        return false
+    let u8 second = entry.load_u8(DIRENT_NAME_OFFSET + 1)
+    if (second == 0 as u8):
+        return true
+    return second == 46 as u8 and entry.load_u8(DIRENT_NAME_OFFSET + 2) == 0 as u8
+
+##:
+Reads all the entries of an open directory, and closes it.
+
+- Parameter dir: The directory, from `opendir()`. The function closes it on each path.
+- Returns: The entry names, in the order of `readdir()`, without `.` and `..`.
+- Errors: FileError, when `readdir()` fails.
+:##
+fn read_entries(ptr dir) string[] | FileError:
+    let string[] names = from([])
+    while (true):
+        clear_errno()
+        let Maybe@(ptr) next = libc.readdir(dir)
+        let i32 code = errno()
+        match next:
+            Maybe.Some(entry) ->
+                if (not is_dot_entry(entry)):
+                    names.push(entry.to_string(DIRENT_NAME_OFFSET))
+            Maybe.None ->
+                libc.closedir(dir)
+                if (code != 0):
+                    return Result.Err(FileError.from_errno(code))
+                return Result.Ok(names)
+    return Result.Ok(names)
+
+##:
+Lists the entries of a directory.
+
+The function makes one `opendir()` and `readdir()` walk, and closes the directory on each
+path. A failed `readdir()` gives an error, not a short list.
+
+- Parameter path: The directory to list.
+- Returns: The entry names, not the full paths, in the order of the operating system. The
+  list does not include `.` and `..`.
+- Errors: FileError, when the directory cannot be opened or read (for example
+  `FileError.NotFound`, `FileError.PermissionDenied` or `FileError.InvalidPath`).
+- Example:
+  ```sushi
+  match read_dir("/no/such/dir"):
+      Result.Ok(_) -> println("listed")
+      Result.Err(_) -> println("not listed")
+  ```
+  This prints `not listed`.
+:##
+public fn read_dir(string path) string[] | FileError:
+    let Maybe@(ptr) opened = libc.opendir(path)
+    let i32 code = errno()
+    match opened:
+        Maybe.Some(dir) -> return Result.Ok(read_entries(dir)??)
+        Maybe.None -> return Result.Err(FileError.from_errno(code))

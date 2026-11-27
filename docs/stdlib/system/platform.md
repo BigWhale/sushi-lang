@@ -88,7 +88,7 @@ sushi_stdlib/src/_platform/
 ├── __init__.py       # get_platform_module() helper
 ├── README.md
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
-│   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
+│   ├── files.py       # opendir/readdir/closedir/write/dup/close
 │   ├── net.py         # the socket calls
 ├── darwin/            # macOS
 │   ├── files.py       # macOS O_CREAT/O_TRUNC bit values

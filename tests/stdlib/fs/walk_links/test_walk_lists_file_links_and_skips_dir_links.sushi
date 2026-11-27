@@ -1,0 +1,45 @@
+# walk lists a link to a file and a dangling link, and skips a link to a directory, so
+# a link cannot make it walk one tree two times. It goes into each nested directory.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "tree/a.txt\ntree/dangling\ntree/file_link\ntree/sub/b.txt\ntree/sub/deeper/c.txt\n"
+use <io/files>
+use <io/fs>
+use <sys/process>
+
+fn touch(string path) i32:
+    match open(path, FileMode.Write()):
+        Result.Ok(nom f) ->
+            f.write("x")
+            f.close()
+            return 0
+        Result.Err(_) -> return 1
+
+fn link(string target, string path) i32:
+    match run("ln", "-s", target.clone(), path.clone()):
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
+
+fn main() i32:
+    let i32 failed = 0
+    failed := failed + mkdir("tree", 0o755).realise(1)
+    failed := failed + mkdir("tree/sub", 0o755).realise(1)
+    failed := failed + mkdir("tree/sub/deeper", 0o755).realise(1)
+    failed := failed + touch("tree/a.txt")
+    failed := failed + touch("tree/sub/b.txt")
+    failed := failed + touch("tree/sub/deeper/c.txt")
+    failed := failed + link("a.txt", "tree/file_link")
+    failed := failed + link("sub", "tree/dir_link")
+    failed := failed + link("missing", "tree/dangling")
+    if (failed != 0):
+        println("setup failed")
+        return 1
+
+    match walk("tree"):
+        Result.Ok(found) ->
+            let string[] paths = found.clone()
+            paths.sort()
+            foreach(path in paths.iter()):
+                println(path)
+        Result.Err(_) -> println("walk failed")
+    return 0

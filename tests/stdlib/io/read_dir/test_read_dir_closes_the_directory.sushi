@@ -1,0 +1,19 @@
+# read_dir closes the directory each time: 300 calls leave no descriptor open.
+# EXPECT_STDOUT_EXACT: "listed: 300\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/files>
+
+fn main() i32:
+    let i32 listed = 0
+    let i32 i = 0
+    while (i < 300):
+        match read_dir("/"):
+            Result.Ok(entries) ->
+                if (entries.len() > 0):
+                    listed := listed + 1
+            Result.Err(_) -> ~
+        i := i + 1
+    println("listed: {listed}")
+    return 0

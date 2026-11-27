@@ -1019,11 +1019,14 @@ def test_the_declared_parameters_of_a_stdlib_function_are_the_row_of_its_module(
     of the same name."""
     funcs, extensions = FunctionTable(), ExtensionTable()
     assert declared_params(funcs, extensions,
-                           st.Direct("sushi_io_files_exists", "exists", "io/files")) \
+                           st.Direct("sushi_net_sock_dns_resolve", "sock_dns_resolve",
+                                     "net/socket")) \
         == DeclaredParams((GUARANTEED,))
     assert declared_params(funcs, extensions,
-                           st.Direct("sushi_io_files_exists", "exists", "net/socket")) is None
-    assert declared_params(funcs, extensions, st.Direct("sushi_io_files_exists", "exists")) is None
+                           st.Direct("sushi_net_sock_dns_resolve", "sock_dns_resolve",
+                                     "io/files")) is None
+    assert declared_params(funcs, extensions,
+                           st.Direct("sushi_net_sock_dns_resolve", "sock_dns_resolve")) is None
 
 
 def test_the_declared_parameters_of_a_conversion_are_one_owned_parameter():

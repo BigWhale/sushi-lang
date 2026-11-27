@@ -22,8 +22,7 @@ def _c(ret: str, *params: str, var_arg: bool = False) -> LibcSignature:
 
 _CTYPE = _c("int", "int")
 
-#: Every libc symbol that the compiler declares. The key is the C name; a platform
-#: variant of a symbol (`stat$INODE64`) is declared with the signature of its C name.
+#: Every libc symbol that the compiler declares. The key is the C name.
 LIBC_SIGNATURES: dict[str, LibcSignature] = {
     # Memory and process
     "malloc": _c("void*", "size_t"),
@@ -49,25 +48,9 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "fwrite": _c("size_t", "const void*", "size_t", "size_t", "FILE*"),
     "setvbuf": _c("int", "FILE*", "char*", "int", "size_t"),
     # Files and descriptors
-    "stat": _c("int", "const char*", "struct stat*"),
-    "lstat": _c("int", "const char*", "struct stat*"),
-    "access": _c("int", "const char*", "int"),
-    "unlink": _c("int", "const char*"),
-    "rename": _c("int", "const char*", "const char*"),
-    "open": _c("int", "const char*", "int", var_arg=True),
-    "read": _c("ssize_t", "int", "void*", "size_t"),
     "write": _c("ssize_t", "int", "const void*", "size_t"),
-    "pread": _c("ssize_t", "int", "void*", "size_t", "off_t"),
-    "pwrite": _c("ssize_t", "int", "const void*", "size_t", "off_t"),
-    "lseek": _c("off_t", "int", "off_t", "int"),
-    "isatty": _c("int", "int"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),
-    "mkdir": _c("int", "const char*", "mode_t"),
-    "rmdir": _c("int", "const char*"),
-    "opendir": _c("DIR*", "const char*"),
-    "readdir": _c("struct dirent*", "DIR*"),
-    "closedir": _c("int", "DIR*"),
     # Sockets
     "socket": _c("int", "int", "int", "int"),
     "connect": _c("int", "int", "const struct sockaddr*", "socklen_t"),

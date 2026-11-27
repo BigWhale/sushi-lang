@@ -265,15 +265,12 @@ class ExpressionScanner:
     def _intern_stdlib_result(self, sig) -> None:
         """Intern the Result a stdlib row answers, from the row itself (#550).
 
-        A payload that is itself a generic -- `fd_readln` answers
-        `Result@(Maybe@(string), E)` -- is interned too: the Result goes through its own
+        A payload that is itself a generic -- `sock_tcp_accept` answers
+        a tuple in its `Result@(T, E)` -- is interned too: the Result goes through its own
         seam, but a payload enum has to be asked for here or the match on the answer
-        sees an unresolved `Maybe@(string)` (CE2048).
+        sees an unresolved payload type (CE2048).
         """
         from sushi_lang.semantics.typesys import UnknownType
-
-        if sig.ok is None:
-            return  # a bare answer: no Result to intern
 
         payload = sig.ok
         if isinstance(payload, GenericTypeRef):

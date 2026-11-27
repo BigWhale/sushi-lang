@@ -1,0 +1,12 @@
+# A `string` and a `ptr` agree, but an `i32` against an `i64` in another position
+# does not: `int` and `long` are two C types.
+# EXPECT_ERROR_CODES_EXACT: CE5001
+unsafe external "C" as text because "writing text to a descriptor":
+    fn write(i32 fd, string buf, i64 n) i64 = "write"
+
+unsafe external "C" as raw because "writing to a descriptor, with a narrow count":
+    fn write(i32 fd, ptr buf, i32 n) i64 = "write"
+
+fn main() i32:
+    println(text.write(1, "Mostly Harmless\n", 16))
+    return 0

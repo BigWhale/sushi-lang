@@ -52,8 +52,7 @@ from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
 # Selects darwin or linux from the build platform; any other platform is a RuntimeError
 platform_files = get_platform_module('files')
-declare_open = platform_files.declare_open
-o_creat = platform_files.O_CREAT
+declare_write = platform_files.declare_write
 ```
 
 This ensures the correct platform-specific declarations are used at build time without hardcoding platform names.

@@ -1,8 +1,7 @@
-"""Call emission for the <io/files> module functions.
+"""Call emission for the bitcode half of <io/files>: the `fd_write_str` row.
 
-Every function -- the path utilities and the descriptor layer alike -- is emitted from
-its row in `FILES_SIGNATURES` through the one signature seam (#550). A path is a C
-string: the row call makes the copy right before the call and frees it right after it.
+The call is emitted from its row in `FILES_SIGNATURES` through the one signature seam
+(#550). The other functions of the module are Sushi source.
 """
 from __future__ import annotations
 

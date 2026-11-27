@@ -2,22 +2,22 @@
 # and from a borrowed parameter. The C copy lives for the call alone.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "literal:false\nheap:false\nparam:false\nheap again:false\nloop:3\n"
-use <io/files>
+# EXPECT_STDOUT_EXACT: "literal:true\nheap:true\nparam:true\nheap again:true\nloop:3\n"
+use <net/socket>
 
-fn probe(string path) bool:
-    return exists(path)
+fn probe(string host) bool:
+    return sock_dns_resolve(host).is_ok()
 
 fn main() i32:
-    println("literal:{exists('rr_no_such_file_literal.txt')}")
-    let string stem = "rr_no_such"
-    let string heap = "{stem}_file_heap.txt"
-    println("heap:{exists(heap)}")
+    println("literal:{sock_dns_resolve('127.0.0.1').is_ok()}")
+    let string stem = "127.0.0"
+    let string heap = "{stem}.1"
+    println("heap:{sock_dns_resolve(heap).is_ok()}")
     println("param:{probe(heap)}")
-    println("heap again:{is_dir(heap)}")
+    println("heap again:{sock_dns_resolve(heap).is_ok()}")
     let i32 count = 0
     while (count < 10):
-        if (is_file(heap)):
+        if (not sock_dns_resolve(heap).is_ok()):
             println("unexpected")
         count := count + 1
         if (count == 3):

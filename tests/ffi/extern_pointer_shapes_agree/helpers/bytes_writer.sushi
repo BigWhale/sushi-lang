@@ -1,0 +1,7 @@
+# A unit that declares `write` with a byte buffer, for a second unit that declares it
+# with a `string`.
+unsafe external "C" as bytes because "writing bytes to a descriptor":
+    fn write(i32 fd, u8[] buf, i64 n) i64 = "write"
+
+public fn write_bytes(u8[] data) i64:
+    return bytes.write(1, data, data.len() as i64)

@@ -1,0 +1,11 @@
+# A pointer and an integer are two C types: a `ptr` against an `i64` in one position
+# does not agree.
+# EXPECT_ERROR_CODES_EXACT: CE5001
+unsafe external "C" as a because "freeing memory":
+    fn free(ptr p) ~ = "free"
+
+unsafe external "C" as b because "freeing memory, with an address as an integer":
+    fn free(i64 p) ~ = "free"
+
+fn main() i32:
+    return 0

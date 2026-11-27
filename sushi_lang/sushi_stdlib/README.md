@@ -6,7 +6,7 @@ know which one your change belongs to before you start.
 ## 1. Compiled IR generators (`src/`)
 
 Most of the stdlib is Python code under `src/` that builds LLVM IR directly with
-`llvmlite.ir` (see e.g. `src/io/files/copy.py`). These are
+`llvmlite.ir` (see e.g. `src/net/dns.py`). These are
 NOT interpreted at compile time per-program — `build.py` runs them once to produce
 per-platform bitcode:
 
@@ -101,6 +101,12 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `stat()` into a `FileStat` struct, recursive `walk`, `mkdir_all`,
   `remove_all`. Builds on `io/files` and `io/path`; the first source module
   that exports a `public struct`.
+- `io/files` (`src_sushi/io/files.sushi`) — the Sushi half of `<io/files>`, a
+  module with TWO halves: every function but one calls the C library through an
+  `unsafe external` block, and reads the platform values from `<sys/platform>`.
+  `fd_write_str` is the `.bc` unit of the same name, because it writes the bytes
+  of the string with no copy (issue #1359). It is not in `_virtual_units`,
+  because it has a `.bc`.
 - `text/ascii` (`src_sushi/text/ascii.sushi`) — ASCII byte classes and case
   maps, as extension methods on `u8`. The first source module that exports
   methods on a primitive type and no free function.

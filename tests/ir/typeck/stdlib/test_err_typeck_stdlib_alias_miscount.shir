@@ -2,9 +2,9 @@ unit test_err_typeck_stdlib_alias_miscount
 
 ShirBody main
   params : []
-  locals : [_0 "renamed": i32, _1 "found": bool]
+  locals : [_0 "stamp": i64, _1 "found": bool]
   block  :
-    Assign(LocalRef(_0), Call(Builtin(Call(Stdlib(<io/files>, @f.rename), [(Lit("A"), Guaranteed), (Lit("B"), Guaranteed), Lit("C")]), "realise"), [(Lit(1), Guaranteed)]), is_init: true)
-    Assign(LocalRef(_1), Call(Stdlib(<io/files>, @f.is_dir), [(Lit("/"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_0), Call(Builtin(Call(Stdlib(<io/files>, @f.fd_write_str), [(Unary(neg, Lit(1)), Guaranteed), (Lit("A"), Guaranteed), Lit("B")]), "realise"), [(Cast(Lit(1), i64), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(Call(Stdlib(<io/files>, @f.fd_write_str), [(Unary(neg, Lit(1)), Guaranteed), (Lit("C"), Guaranteed)]), "is_ok"), []), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_0), " ", LocalRef(_1), ""]), Guaranteed)]))
     Return(Lit(0))

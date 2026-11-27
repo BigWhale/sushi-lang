@@ -3,11 +3,11 @@ io/fs -- composed file-system operations, pure Sushi.
 
 The module ships as bundled .sushi source and is merged as a compilation unit
 when imported (`use <io/fs>`). It builds on the <io/files> primitives and the
-<io/path> algebra: stat() composes the per-field reads into one FileStat,
+<io/path> algebra: stat() reads the fields of one FileStat,
 walk() recurses over read_dir(), and mkdir_all()/remove_all() are the
 recursive forms of mkdir() and remove()/rmdir().
 
-Limitations: stat() costs one system call per field. walk() lists regular
+Limitations: stat() costs two system calls, one stat and one lstat. walk() lists regular
 files only and does not follow a directory symlink, so a linked tree stays
 unvisited and a loop cannot form.
 :##
@@ -15,6 +15,7 @@ unvisited and a loop cannot form.
 public use <io/contracts>
 use <io/files>
 use <io/path>
+use <sys/platform>
 
 ##:
 The metadata of one path, as stat() composes it.
@@ -34,17 +35,15 @@ public struct FileStat:
 ##:
 Reads the metadata of a path into one FileStat.
 
-Each field is one <io/files> read; the cost is one system call per field.
+The function makes two system calls: one stat, which follows a symbolic link and gives
+the size, the times and the mode, and one lstat, which gives is_symlink.
 
 - Parameter path: The path to inspect.
 - Returns: The composed FileStat.
 - Errors: FileError, when the path cannot be read.
 :##
 public fn stat(string path) FileStat | FileError:
-    let i64 size = file_size(path)??
-    let i64 mt = mtime(path)??
-    let i64 ct = ctime(path)??
-    let i32 md = mode(path)??
+    let (i64 size, i64 mt, i64 ct, i32 md) = path_stat(path, true)??
     let bool link = is_symlink(path)??
     return Result.Ok(FileStat(size, mt, ct, md, link))
 
@@ -128,6 +127,9 @@ public fn remove_all(string path) ~ | FileError:
 ##:
 Collects the regular files under one directory into the accumulator.
 
+Each entry costs one lstat. A symbolic link costs one stat more, because a link to a
+directory is not collected and not walked.
+
 - Parameter dir: The directory to scan.
 - Parameter acc: The collected file paths.
 - Errors: FileError, when the directory cannot be listed.
@@ -136,10 +138,11 @@ fn walk_into(string dir, poke string[] acc) ~ | FileError:
     let string[] names = read_dir(dir)??
     foreach(name in names.iter()):
         let string full = join(dir, name)
-        if (is_dir(full)):
-            if (not is_symlink(full)??):
-                walk_into(full, poke acc)??
-        else:
+        let (_, _, _, i32 md) = path_stat(full, false).realise((0 as i64, 0 as i64, 0 as i64, 0))
+        let i32 kind = md & S_IFMT
+        if (kind == S_IFDIR):
+            walk_into(full, poke acc)??
+        elif (kind != S_IFLNK or not is_dir(full)):
             acc.push(full)
     return Result.Ok(~)
 

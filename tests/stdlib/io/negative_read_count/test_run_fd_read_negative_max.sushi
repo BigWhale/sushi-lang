@@ -1,0 +1,13 @@
+# A negative max of fd_read stops the program with RE2026, before the read.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "before\n"
+# EXPECT_STDERR_CONTAINS: "Runtime Error RE2026: assertion failed at "
+# EXPECT_STDERR_CONTAINS: "the count of a read is negative"
+use <io/files>
+
+fn main() i32:
+    println("before")
+    let u8[] empty = from([])
+    let u8[] got = fd_read(0, -1 as i64).realise(empty)
+    println("after {got.len()}")
+    return 0

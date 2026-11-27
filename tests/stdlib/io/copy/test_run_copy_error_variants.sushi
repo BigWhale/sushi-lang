@@ -1,0 +1,25 @@
+# The errors of `copy`: a missing source, a destination in a missing directory, and a
+# source that is a directory. Each path closes the descriptors that it opened.
+# EXPECT_STDOUT_EXACT: "NotFound\nNotFound\nIsDirectory\n"
+# EXPECT_NO_OPEN_FDS
+# EXPECT_NO_LEAKS
+use <io/files>
+
+fn name(Result@(i32, FileError) got) string:
+    match got:
+        Result.Ok(_) -> return "Ok"
+        Result.Err(FileError.NotFound) -> return "NotFound"
+        Result.Err(FileError.IsDirectory) -> return "IsDirectory"
+        Result.Err(_) -> return "Other"
+
+fn main() i32:
+    let string src = "/tmp/sushi_copy_errors_src.txt"
+    let string dst = "/tmp/sushi_copy_errors_dst.txt"
+    let i32 fd = fd_open(src, 1, 420).realise(-1)
+    fd_close(fd).realise(-1)
+    println(name(copy("/tmp/sushi_copy_errors_absent.txt", dst)))
+    println(name(copy(src, "/tmp/sushi_copy_errors_no_dir/dst.txt")))
+    println(name(copy("/tmp", dst)))
+    remove(src).realise(-1)
+    remove(dst).realise(-1)
+    return 0

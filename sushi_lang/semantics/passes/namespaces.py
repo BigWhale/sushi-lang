@@ -378,13 +378,7 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
         return gated[0]
 
     if module is not None:
-        # A registry module declares its re-exports beside its functions (section
-        # 8.1): `<io/files>` hands on `<io/error>`, so `FileError` rides with `fd_*`.
-        chain = frozenset(visited) | {path}
-        reexports = tuple(
-            _stdlib_provider(other, tables, units, chain)
-            for other in getattr(module, "reexports", ()) if other not in chain)
-        return StdlibNamespace(path, module, types=homed, reexports=reexports)
+        return StdlibNamespace(path, module, types=homed)
 
     # A method interface: the import enables methods on a type and brings no name.
     # CW3004 is what says so, at the `use` rather than at every call after it.

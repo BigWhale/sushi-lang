@@ -92,8 +92,9 @@ A caller rarely needs `fill()`. It is public so that a caller can refill the win
 time that it chooses.
 
 A refill costs ONE allocation and no copy: the read primitive allocates its answer and the
-window takes it whole. Measured over a 512 MB file at an 8 KB window, that allocation is
-about six percent of a refill from the page cache, and less from a disk or a socket. Why
+window takes it whole. The primitive also fills the new buffer with zeros (issue #1357):
+from the page cache, an 8 KiB refill is about 10 percent slower than with no fill, and less
+from a disk or a socket. Why
 `read_bytes` returns an array rather than filling one is in [io/contracts](contracts.md).
 
 ### `into_inner() R`

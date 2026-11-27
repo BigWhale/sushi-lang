@@ -1,0 +1,37 @@
+# path_stat with `follow` true calls stat() and gives the fields of the target of a
+# link. With `follow` false it calls lstat() and gives the fields of the link itself.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "follow: size 15, regular true\nlink: size 10, link true\nmissing: not found\n"
+use <io/files>
+use <io/fs>
+use <sys/platform>
+use <sys/process>
+
+fn main() i32:
+    match open("target.txt", FileMode.Write()):
+        Result.Ok(nom f) ->
+            f.write("Mostly Harmless")
+            f.close()
+        Result.Err(_) ->
+            println("setup failed")
+            return 1
+    match run("ln", "-s", "target.txt", "the_link"):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup ln failed")
+            return 1
+
+    match path_stat("the_link", true):
+        Result.Ok((size, _, _, md)) ->
+            println("follow: size {size}, regular {(md & S_IFMT) == S_IFREG}")
+        Result.Err(_) -> println("follow: failed")
+    match path_stat("the_link", false):
+        Result.Ok((size, _, _, md)) ->
+            println("link: size {size}, link {(md & S_IFMT) == S_IFLNK}")
+        Result.Err(_) -> println("link: failed")
+    match path_stat("no_such_path", false):
+        Result.Ok(_) -> println("missing: found")
+        Result.Err(FileError.NotFound) -> println("missing: not found")
+        Result.Err(_) -> println("missing: other error")
+    return 0

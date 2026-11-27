@@ -88,8 +88,9 @@ differ only in what they hand back.
 the caller owns. For `read` that is forced: a `string` is `{data, size, owned}` -- a size
 and no capacity -- so there is nowhere to write into. For `read_bytes` it was measured
 against the one consumer that refills in a loop, `BufReader`: a refill costs exactly one
-allocation and no copy; that allocation is about six percent of an 8 KB refill from the
-page cache and about four percent at 64 KB; and a `(poke u8[] into)` form could not remove
+allocation and no copy; the primitive also fills the new buffer with zeros (issue #1357),
+so from the page cache an 8 KiB refill is about 10 percent slower than with no fill and a
+64 KiB refill about 40 percent; and a `(poke u8[] into)` form could not remove
 it -- a `u8[]` crosses to the descriptor primitive BY VALUE, so the primitive cannot set
 the caller's length, and a fill-into body allocates the same array and copies it once more.
 

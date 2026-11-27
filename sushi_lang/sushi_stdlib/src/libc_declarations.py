@@ -30,12 +30,11 @@ _i64 = ir.IntType(64)  # size_t and long are i64 on 64-bit systems
 _f64 = ir.DoubleType()
 _void = ir.VoidType()
 
-_INT32 = ("int", "pid_t", "uid_t", "mode_t", "socklen_t")
-_INT64 = ("long", "long long", "size_t", "ssize_t", "off_t")
+_INT32 = ("int", "pid_t", "uid_t", "socklen_t")
+_INT64 = ("long", "long long", "size_t", "ssize_t")
 _BYTE_POINTERS = (
-    "char*", "const char*", "void*", "const void*", "FILE*", "DIR*", "struct dirent*",
-    "struct stat*", "struct sockaddr*", "const struct sockaddr*", "struct addrinfo*",
-    "const struct addrinfo*",
+    "char*", "const char*", "void*", "const void*", "FILE*", "struct sockaddr*",
+    "const struct sockaddr*", "struct addrinfo*", "const struct addrinfo*",
 )
 
 #: How each C type of the table lowers to LLVM.
@@ -90,12 +89,10 @@ def declare_extern(
     return as_callee(existing, fn_ty)
 
 
-def declare_libc(module: ir.Module, name: str, link_name: str | None = None) -> Any:
-    """Declare the libc symbol `name` with its signature from `LIBC_SIGNATURES`.
-
-    `link_name` is a platform variant of the symbol (`stat$INODE64`)."""
+def declare_libc(module: ir.Module, name: str) -> Any:
+    """Declare the libc symbol `name` with its signature from `LIBC_SIGNATURES`."""
     fn_ty = libc_function_type(name)
-    return declare_extern(module, link_name or name, fn_ty.return_type, fn_ty.args,
+    return declare_extern(module, name, fn_ty.return_type, fn_ty.args,
                           var_arg=fn_ty.var_arg)
 
 

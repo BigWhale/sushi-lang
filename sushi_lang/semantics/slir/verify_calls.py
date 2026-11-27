@@ -129,7 +129,8 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
             return DeclaredParams(receiver + tuple(
                 mode.convention for mode in declared_modes(record.params)))
         return _perk_params(perk_impls, callee.symbol, method)
-    extern = None if externals is None else externals.by_link_name(callee.symbol, callee.name)
+    extern = None if externals is None else externals.by_link_name(
+        callee.symbol, callee.name, callee.block)
     if extern is not None:
         return DeclaredParams(tuple(mode_of_type(ty).convention for ty in extern.param_types),
                               var_arg=extern.is_variadic)

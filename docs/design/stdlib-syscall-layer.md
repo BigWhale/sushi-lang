@@ -13,14 +13,17 @@ order (ruling R12). Thus there is one route to a descriptor.
 
 The descriptor layer of `<io/files>` has two halves:
 
-- `io/files/sequential.py`: `read`, `write`, `readln`, `seek`. These calls MOVE the
-  position of the descriptor, so a `File` handle is written on them.
-- `io/files/positional.py`: `pread`, `pwrite`. These calls take the offset as an argument
-  and do not move the position, so they are safe on a shared descriptor.
+- The sequential half: `read`, `write`, `readln`, `seek`. These calls MOVE the position
+  of the descriptor, so a `File` handle is written on them. `io/files/sequential.py`
+  generates `fd_write_str`. `fd_read`, `fd_write`, `fd_readln` and `fd_seek` are Sushi
+  source (`src_sushi/io/files.sushi`).
+- The positional half: `pread`, `pwrite`. These calls take the offset as an argument and
+  do not move the position, so they are safe on a shared descriptor. `fd_pread` and
+  `fd_pwrite` are Sushi source (`src_sushi/io/files.sushi`).
 
 ## The line reader (`fd_readln`)
 
-`sushi_io_files_fd_readln(i32 fd)` answers `Result@(Maybe@(string), FileError)`: one line,
+`fd_readln(i32 fd)` (`src_sushi/io/files.sushi`) answers `Result@(Maybe@(string), FileError)`: one line,
 with the newline removed. A blank line and the end of file are different answers: a blank
 line is `Some("")` and the end is `None`, so a file with a blank line in it does not stop
 there. The end of file after some bytes is a last line with no newline
@@ -50,14 +53,12 @@ one sign error in it reads the wrong bytes with no error, and that is the worst 
 At the end of file the position moves to just after what was consumed, so the next
 `readln` answers `None` and does not read the tail again.
 
-### The shared state
+### The two helpers
 
-Both paths write one buffer, one length, one capacity and one end-of-file flag, and both
-leave through the same three blocks (the finish, the failure, the allocation failure). The
-generator keeps this state in one frozen dataclass, `_ReadlnFrame`, and each path takes the
-frame plus what is its own: its entry block, and the functions only it calls. The buffer
-grows by 128 bytes and always keeps one byte for the NUL terminator, so the line is also a
-C string.
+Each path is a private function of `files.sushi`: `readln_by_byte` and `readln_chunked`.
+The chunked path reads each chunk into a new array of 128 bytes, cuts the array to the
+bytes that arrived, and finds the newline with one counter under the length of the array.
+The function does not call `read()` or `pread()` again after `EINTR`.
 
 `fd_readln` is under `File.readln()`, the UNBUFFERED read. To read a whole file line by
 line, use `BufReader@(R)` and its `lines()` in `<io/buf>` (`docs/stdlib/io/buf.md`).
@@ -79,6 +80,9 @@ generators turn that cause into the tag of a unit-variant error type -- `FileErr
   module. `errno_to_net_error_table` and `ERRNO_DEFAULT_NET_ERROR` are in
   `sushi_lang/backend/runtime/constants.py`, beside the shared `ERRNO_*` constants.
   `io/files/errno.py` and `net/errno.py` each give the emitter their table and their default.
+  The Sushi functions of `<io/files>` do not use the Python table: `FileError.from_errno`
+  (`src_sushi/io/error.sushi`) is their one map, with the same rows. The Python table is
+  left for `fd_write_str`, the one generated function of `<io/files>`.
 - **The layout.** The `Result` bytes are built in `src/results.py` and nowhere else, and
   `errno` is read through `declare_errno_location` in `src/libc_declarations.py`, so the
   two error families read one `errno` through one declaration.
@@ -100,5 +104,8 @@ The built-in reads `errno` through the same two platform symbols as
 ### EINTR
 
 A `read` or a `write` that a signal interrupts before a byte moves answers -1 with `EINTR`,
-and the correct response is to ask again. `emit_is_eintr` (`io/files/errno.py`) is the
-test, and the read and write loops go back to the call when it is true.
+and the correct response is to ask again. The Sushi functions `fd_read` and `fd_write`
+compare `errno()` with `EINTR` of `<sys/platform>` after the call, and call again when the
+two are equal. The `write` loop of `fd_write_str` uses `emit_is_eintr`
+(`io/files/errno.py`) for the same test. A `write` that answers 0 does not go back to the
+call: no byte moved, so the loop stops with the error of `errno`.

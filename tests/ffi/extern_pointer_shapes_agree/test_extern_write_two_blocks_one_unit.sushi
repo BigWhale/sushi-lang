@@ -1,0 +1,19 @@
+# One unit declares `write` in two blocks, one with a `string` and one with a `u8[]`.
+# The two declarations agree, because a `string` and a `u8[]` both cross as a C
+# pointer. Each call marshals by the type of its own declaration.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as text because "writing text to a descriptor":
+    fn write(i32 fd, string buf, i64 n) i64 = "write"
+
+unsafe external "C" as raw because "writing bytes to a descriptor":
+    fn write(i32 fd, u8[] buf, i64 n) i64 = "write"
+
+fn main() i32:
+    let i64 first = text.write(1, "Mostly ", 7)
+    let u8[] rest = "Harmless\n".to_bytes()
+    let i64 second = raw.write(1, rest, rest.len())
+    if (first + second != 16):
+        return 1
+    return 0

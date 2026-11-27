@@ -1152,8 +1152,8 @@ row as its channel.
 
 **Every registry module is typed by its rows.** There is no set of typed modules:
 each row of the `*_SIGNATURES` tables is typed by its row (`stdlib_signature`, the one reader).
-The call answers the type of the row. An answer that owns (`fd_read` answers `u8[] |
-FileError`, `sock_dns_resolve` a `string[]`, `fd_readln` a `Maybe@(string)`) is a fresh
+The call answers the type of the row. An answer that owns (`sock_dns_resolve` answers `string[] |
+NetError`, `sock_peer_ip` a `string`) is a fresh
 value, an `ADOPT` answer as the answer of any call that owns (7.9). No row is variadic.
 Every call of a registry function has its arm. `<sys/process>` is Sushi source
 (`src_sushi/sys/process.sushi`): a call of `exit` or `run` is a `Free` callee, the `!` of
@@ -3158,8 +3158,8 @@ StorageDead(LocalId)
 ```
 
 ```
-SlirCallee = Direct(symbol: str, name: str, module: Optional[str])  # free fn, method, extern,
-                                                         # conversion, stdlib function
+SlirCallee = Direct(symbol: str, name: str, module: Optional[str],  # free fn, method, extern,
+                  block: Optional[(unit, alias)])        # conversion, stdlib function
            | Builtin(method: BuiltinName, types: [Type])     # an emitter family (9.7)
            | Indirect(Operand)                           # a function value: a closure
 
@@ -3349,12 +3349,12 @@ the name of the function with no alias, and `module` is the `use` path of its mo
 `symbol` is the generated function of its row (`stdlib_symbol`,
 `semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`
 (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers). Every other `Direct`
-callee has no module. The printer writes the call as `call @<io/files>.exists(...)`. The emitter gives a `Direct` callee with a
+callee has no module. The printer writes the call as `call @<io/files>.fd_write_str(...)`. The emitter gives a `Direct` callee with a
 module to the row of its module in `STDLIB_EMITTERS` with the value and the type of each
 operand (9.7); every operand is evaluated first. The row of each module reads the row of
 the call (`stdlib_signature`), declares the generated function of the symbol from that row and
 calls it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). The
-generated function answers the type of its row: a `Result`, or a bare value.
+generated function answers the type of its row: a `Result`.
 
 **Every module of `STDLIB_EMITTERS` takes operands.** Each module
 (`io/files`, `net/socket`) gets the same operand form: the row of the
@@ -3379,13 +3379,16 @@ caller keeps (7.4), not a C string. The operand form is `emit_stdlib_row`
 (`backend/expressions/calls/stdlib/signatures.py`), for the rows of every registry
 module.
 
-An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name)`: `symbol` is the
-link name, `name` is the name of the function with no alias, and it has no module. The
+An `Extern(decl, symbol)` callee of SHIR lowers to `Direct(symbol, name, block=(unit, alias))`: `symbol`
+is the link name, `name` is the name of the function with no alias, and it has no module. The
 printer writes the call as `call @snprintf(copy _1 @inout, const 32_i64 @guaranteed, ...)`.
 The declaration round declares each C function of the external table in each module, with
 `var_arg` for a variadic one (`declare_user_externs`). The emitter finds the declaration of a
-`Direct` callee with no module in the external table by its link name and its name
-(`ExternalTable.by_link_name`), and it marshals each operand at the C boundary
+`Direct` callee with no module in the external table by its link name, its name and its
+`block`, the unit and the alias of its `unsafe external` block (`ExternalTable.by_link_name`).
+Two blocks can declare one link name with two Sushi types that cross as one C type (CE5001),
+so the block selects the declaration whose types the call marshals by. The emitter
+marshals each operand at the C boundary
 (`backend/slir/externs.py`): a `string` crosses as a NUL-terminated copy that
 `emit_cstr_arg` makes (`backend/expressions/calls/utils.py`, the one C-string seam), and the
 emitter frees each copy right after the call; a byte buffer crosses as the pointer to its

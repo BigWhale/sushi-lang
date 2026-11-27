@@ -1,14 +1,14 @@
 # EXPECT_ERROR_CODES_EXACT: CE2009
-# EXPECT_STDERR_CONTAINS: "'rename' expects 2, got 3"
+# EXPECT_STDERR_CONTAINS: "'fd_write_str' expects 2, got 3"
 # EXPECT_DUMP_SHIR: test_err_typeck_stdlib_alias_miscount.shir
 #
 # A function of a registry stdlib module behind an alias is the same `Stdlib` callee as
 # the bare call. A wrong count is CE2009 at the name, and the call still yields the type
-# of its row, a `Result@(i32, FileError)`, so `realise` reads its payload.
+# of its row, a `Result@(i64, FileError)`, so `realise` reads its payload.
 use <io/files> as f
 
 fn main() i32:
-    let i32 renamed = f.rename("A", "B", "C").realise(1)
-    let bool found = f.is_dir("/")
-    println("{renamed} {found}")
+    let i64 stamp = f.fd_write_str(-1, "A", "B").realise(1 as i64)
+    let bool found = f.fd_write_str(-1, "C").is_ok()
+    println("{stamp} {found}")
     return 0

@@ -1,0 +1,38 @@
+# read_dir links and runs at the O2 level.
+# COMPILER_FLAGS: --opt O2
+# EXPECT_STDOUT_EXACT: "count: 1\nname: only.txt\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <io/fs>
+
+fn main() i32:
+    let string dir = "/tmp/sushi_read_dir_o2"
+    match mkdir(dir, 0o755):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup mkdir failed")
+            return 1
+    match open("/tmp/sushi_read_dir_o2/only.txt", FileMode.Write()):
+        Result.Ok(nom f) ->
+            f.write("x")
+            f.close()
+        Result.Err(_) ->
+            println("setup open failed")
+            return 1
+
+    match read_dir(dir):
+        Result.Ok(entries) ->
+            println("count: {entries.len()}")
+            foreach(name in entries.iter()):
+                println("name: {name}")
+        Result.Err(_) ->
+            println("read_dir failed")
+
+    match remove("/tmp/sushi_read_dir_o2/only.txt"):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> return 1
+    match rmdir(dir):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return 0

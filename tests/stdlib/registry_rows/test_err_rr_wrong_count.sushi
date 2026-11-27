@@ -1,7 +1,7 @@
-# A row of <io/files> takes the count of its row: `rename` with one argument is CE2009.
+# A row of <io/files> takes the count of its row: `fd_write_str` with one argument is CE2009.
 # EXPECT_ERROR_CODES_EXACT: CE2009
 use <io/files>
 
 fn main() i32:
-    let i32 status = rename("RR_WRONG_COUNT").realise(-1)
-    return status
+    let i64 written = fd_write_str(-1).realise(0 as i64)
+    return written as i32

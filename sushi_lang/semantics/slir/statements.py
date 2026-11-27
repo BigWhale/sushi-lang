@@ -28,10 +28,13 @@ BuiltinName: TypeAlias = BuiltinMethod | Intrinsic
 class Direct:
     """A free function, a method, an extern, a conversion or a function of a registry
     stdlib module: its symbol, and its source name. `module` is the `use` path of the
-    stdlib module, and None for every other callee."""
+    stdlib module, and None for every other callee. `block` is the unit and the alias of
+    the `unsafe external` block of a C function, so that a call finds its own declaration
+    when two blocks declare one link name."""
     symbol: str
     name: str
     module: Optional[str] = None
+    block: Optional[tuple[Optional[str], str]] = None
 
 
 @dataclass(frozen=True, slots=True)

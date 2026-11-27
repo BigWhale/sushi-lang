@@ -201,7 +201,8 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
     if direct.module is not None:
         _stdlib(state, statement, direct)
         return
-    extern = state.codegen.external_table.by_link_name(direct.symbol, direct.name)
+    extern = state.codegen.external_table.by_link_name(direct.symbol, direct.name,
+                                                         direct.block)
     if extern is not None:
         emit_extern(state, statement, direct, extern)
         return

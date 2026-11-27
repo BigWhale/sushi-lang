@@ -43,13 +43,6 @@ def errno_to_file_error_table() -> dict[int, int]:
     }
 
 
-def emit_file_error_tag(builder: ir.IRBuilder, module: ir.Module) -> ir.Value:
-    """Read errno and map it to a FileError variant tag (i32)."""
-    return errno_tags.emit_errno_tag(
-        builder, module, errno_to_file_error_table(),
-        ERRNO_DEFAULT_FILE_ERROR)
-
-
 def emit_errno_err_result(builder: ir.IRBuilder, module: ir.Module,
                           result_type: ir.LiteralStructType) -> ir.Value:
     """The whole failure path: read errno, map it, build Result.Err(FileError)."""

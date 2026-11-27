@@ -1,0 +1,53 @@
+# read_dir lists 40 entries: the answer grows past its first capacity.
+# EXPECT_STDOUT_EXACT: "count: 40\nbytes: 70\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/files>
+use <io/fs>
+
+fn write_one(string path) bool:
+    match open(path, FileMode.Write()):
+        Result.Ok(nom f) ->
+            f.write("x")
+            f.close()
+            return true
+        Result.Err(_) ->
+            return false
+
+fn main() i32:
+    let string dir = "/tmp/sushi_read_dir_many"
+    match mkdir(dir, 0o755):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup mkdir failed")
+            return 1
+    let i32 i = 0
+    while (i < 40):
+        let string p = "/tmp/sushi_read_dir_many/{i}"
+        if (not write_one(p)):
+            println("setup open failed")
+            return 1
+        i := i + 1
+
+    match read_dir(dir):
+        Result.Ok(entries) ->
+            println("count: {entries.len()}")
+            let i64 bytes = 0
+            foreach(name in entries.iter()):
+                bytes := bytes + name.len()
+            println("bytes: {bytes}")
+        Result.Err(_) ->
+            println("read_dir failed")
+
+    i := 0
+    while (i < 40):
+        let string p = "/tmp/sushi_read_dir_many/{i}"
+        match remove(p):
+            Result.Ok(_) -> ~
+            Result.Err(_) -> return 1
+        i := i + 1
+    match rmdir(dir):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return 0

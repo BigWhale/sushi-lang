@@ -103,7 +103,7 @@ public struct FileStat:
 
 ### `stat(string path) FileStat | FileError`
 
-Read the metadata of a path into one `FileStat`. Each field is one `<io/files>` read, so the call costs one system call per field.
+Read the metadata of a path into one `FileStat`. The call costs two system calls: one `stat`, which follows a symbolic link and gives the size, the times and the mode, and one `lstat`, which gives `is_symlink`.
 
 ```sushi
 use <io/fs>

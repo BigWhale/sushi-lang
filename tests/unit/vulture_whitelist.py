@@ -23,8 +23,6 @@ _TYPES = "sushi_lang/semantics/passes/types/"
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
-    ("sushi_lang/sushi_stdlib/src/_platform/*/files.py", "ST_*_OFFSET",
-     "io/files/stat.py reads each offset by name with getattr"),
     ("sushi_lang/internals/styling.py", "italic",
      "compiler/lib_info.py reads a style by name from _MARKS with getattr"),
     # -- protocols of another library ------------------------------------------------
@@ -42,8 +40,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "the Protocol is named only in string annotations"),
     # -- a value of a closed set, compared by value ----------------------------------
     ("sushi_lang/semantics/places.py", "NONE", "the zero member of the Step flag"),
-    ("sushi_lang/sushi_stdlib/src/io/files/positional.py", "INTENT_READ",
-     "intent 0 of the fd_open protocol; the switch default handles it"),
     # -- gate data: a gate test reads it ---------------------------------------------
     ("sushi_lang/backend/lifecycle.py", "registered_halves", "tests/unit/test_lifecycle_handlers.py"),
     ("sushi_lang/semantics/ast.py", "attrs", "tests/docs_sweep.py reads the fence info string"),

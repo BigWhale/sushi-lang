@@ -49,6 +49,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "io/buf": _SRC_SUSHI_ROOT / "io" / "buf.sushi",
     "io/contracts": _SRC_SUSHI_ROOT / "io" / "contracts.sushi",
     "io/error": _SRC_SUSHI_ROOT / "io" / "error.sushi",
+    "io/files": _SRC_SUSHI_ROOT / "io" / "files.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
     "math": _SRC_SUSHI_ROOT / "math.sushi",
@@ -213,10 +214,6 @@ class StdlibModule:
     """Metadata for a stdlib module."""
     path: str
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
-    # The stdlib modules this one RE-EXPORTS (`docs/design/unit-namespaces.md` section
-    # 8.1): a registry module has no `public use` to write, so its Python module names
-    # them in a `REEXPORTS` tuple and every importer gets their names beside this one's.
-    reexports: Tuple[str, ...] = ()
 
 
 _param_specs_cache = None
@@ -311,13 +308,8 @@ class StdlibRegistry:
 
     def _discover_module(self, module_path: str, python_path: str) -> None:
         """Discover and register a single stdlib module."""
-        py_module = importlib.import_module(python_path)
-
-        stdlib_module = StdlibModule(
-            path=module_path,
-            reexports=tuple(getattr(py_module, "REEXPORTS", ())),
-        )
-
+        importlib.import_module(python_path)
+        stdlib_module = StdlibModule(path=module_path)
         module_name = module_path.split('/')[-1]
 
         self._discover_functions(stdlib_module, module_name, python_path)
@@ -376,22 +368,20 @@ def get_stdlib_registry() -> StdlibRegistry:
 def flat_stdlib_reach(units: Sequence[Any]) -> "StdlibReach":
     """The bundled stdlib units that the flat scope of each unit of the build reaches.
 
-    A flat `use <m>` reaches `m`, and what `m` re-exports with a `public use` (or, for a
-    registry module, with its `REEXPORTS`), to the end of the chain.
+    A flat `use <m>` reaches `m`, and what `m` re-exports with a `public use`, to the end
+    of the chain.
     """
     from sushi_lang.semantics.visibility import StdlibReach
 
     by_name = {unit.name: unit for unit in units}
     stdlib = frozenset(unit.name for unit in units
                        if unit.provenance is not None and not unit.from_library)
-    registry = get_stdlib_registry()
 
     def reexports(module_path: str) -> list:
         unit = by_name.get(module_path)
         if unit is not None and unit.ast is not None:
             return [use.path for use in unit.ast.uses if use.is_stdlib and use.is_public]
-        module = registry.get_module(module_path)
-        return list(module.reexports) if module is not None else []
+        return []
 
     flat = {}
     for unit in units:

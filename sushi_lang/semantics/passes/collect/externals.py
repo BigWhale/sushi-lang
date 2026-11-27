@@ -77,12 +77,16 @@ class ExternalTable:
         """The C global variable that the block `ns` of `unit` binds as `name`."""
         return self.variables.get((unit, ns), {}).get(name)
 
-    def by_link_name(self, link_name: str, name: str) -> Optional[ExternalSig]:
-        """The C function whose link name and name these are: the `Direct` callee of a
-        call of it in SLIR (docs/design/ir.md 8.6)."""
-        for decls in self.by_namespace.values():
+    def by_link_name(self, link_name: str, name: str,
+                     block: Optional[NamespaceKey] = None) -> Optional[ExternalSig]:
+        """The C function whose link name and name these are, in the block `block` when
+        it is given: the `Direct` callee of a call of it in SLIR (docs/design/ir.md 8.6).
+        Two blocks can declare one link name with two Sushi types (CE5001 compares the C
+        ABI), so a call finds the declaration of its own block."""
+        for key, decls in self.by_namespace.items():
             sig = decls.get(name)
-            if sig is not None and sig.link_name == link_name:
+            if (sig is not None and sig.link_name == link_name
+                    and (block is None or key == block)):
                 return sig
         return None
 
@@ -204,17 +208,15 @@ class _Declared:
 
 
 def c_type(ty: Optional[Type]) -> str:
-    """The C type a Sushi type crosses the boundary as. Two spellings of one C type
-    give one answer: a `string` and a `Maybe@(string)` are both `char*`."""
+    """The C ABI class a Sushi type crosses the boundary as, for CE5001. Each type that
+    crosses as a C pointer gives one answer: `string`, `u8[]`, `ptr` and their `Maybe`
+    forms are all a pointer."""
     if ty is None or ty == BuiltinType.BLANK:
         return "void"
     ty = nullable_payload(ty) or ty
-    if ty == BuiltinType.STRING:
-        return "char*"
-    if isinstance(ty, ForeignPtrType):
-        return "void*"
-    if is_byte_buffer(ty):
-        return "uint8_t*"
+    if (ty == BuiltinType.STRING or isinstance(ty, ForeignPtrType)
+            or is_byte_buffer(ty)):
+        return "pointer"
     return display_type(ty)
 
 

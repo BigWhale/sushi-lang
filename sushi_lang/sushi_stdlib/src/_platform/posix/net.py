@@ -12,7 +12,6 @@ ones that DISAGREE live in _platform/darwin/net.py and _platform/linux/net.py.
 from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
-from sushi_lang.sushi_stdlib.src._platform.posix.files import declare_close, declare_dup
 
 AF_UNSPEC = 0
 AF_INET = 2
@@ -134,6 +133,19 @@ def declare_getnameinfo(module: ir.Module) -> ir.Function:
                        char *serv, socklen_t servlen, int flags)"""
     return declare_libc(module, "getnameinfo")
 
+
+def declare_close(module: ir.Module) -> ir.Function:
+    """Declare POSIX close() syscall."""
+    return declare_libc(module, "close")
+
+
+def declare_dup(module: ir.Module) -> ir.Function:
+    """Declare POSIX dup(): `int dup(int)`.
+
+    A SECOND descriptor over the SAME open file description, so `sock_dup` gives a
+    listener two descriptors that share one socket.
+    """
+    return declare_libc(module, "dup")
 
 __all__ = [
     "AF_UNSPEC", "AF_INET", "SOCK_STREAM", "SOCK_DGRAM", "IPPROTO_TCP",

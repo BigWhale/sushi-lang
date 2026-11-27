@@ -1,0 +1,16 @@
+# A `Maybe@(string)` return and a `Maybe@(ptr)` return of one symbol agree: both
+# cross as a C pointer that can be NULL.
+# EXPECT_STDOUT_EXACT: "true true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as text because "reading an environment variable":
+    fn getenv(string name) Maybe@(string) = "getenv"
+
+unsafe external "C" as raw because "reading an environment variable as an address":
+    fn getenv(string name) Maybe@(ptr) = "getenv"
+
+fn main() i32:
+    let bool absent = text.getenv("SUSHI_NO_SUCH_VARIABLE_42").is_none()
+    let bool null = raw.getenv("SUSHI_NO_SUCH_VARIABLE_42").is_none()
+    println("{absent} {null}")
+    return 0

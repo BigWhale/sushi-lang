@@ -67,9 +67,9 @@ Every read here goes through this one call, so end of input is decided in one pl
 stays decided. A caller rarely needs it; the reads below do.
 
 A refill costs ONE allocation and no copy: the read primitive allocates its answer, and
-the window takes that answer whole. Measured against the page cache at an 8 KB window,
-the allocation is about six percent of the refill, and a fill-into form could not remove
-it: a u8[] crosses to the primitive by value, so the primitive cannot set the caller's
+the window takes that answer whole. The primitive also fills the new buffer with zeros
+(issue #1357): from the page cache, an 8 KiB refill is about 10 percent slower than with
+no fill. A fill-into form could not remove the allocation: a u8[] crosses to the primitive by value, so the primitive cannot set the caller's
 length.
 
 - Returns: Whether any byte arrived. False means end of input.
