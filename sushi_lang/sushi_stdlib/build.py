@@ -58,7 +58,6 @@ class StdlibBitcodeUnit:
 # The BUILD ORDER. A generator module is imported when its row is built.
 STDLIB_BITCODE_UNITS: tuple[StdlibBitcodeUnit, ...] = (
     StdlibBitcodeUnit("collections/strings", "sushi_lang.sushi_stdlib.src.collections.strings"),
-    StdlibBitcodeUnit("io/files", "sushi_lang.sushi_stdlib.src.io.files"),
     StdlibBitcodeUnit("net/socket", "sushi_lang.sushi_stdlib.src.net"),
 )
 

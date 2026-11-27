@@ -3,9 +3,6 @@ from __future__ import annotations
 
 from typing import Callable
 
-from sushi_lang.backend.expressions.calls.stdlib.io import (
-    emit_files_function,
-)
 from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
 from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 
@@ -13,13 +10,11 @@ from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 # the same set (`semantics/stdlib_registry.py`); a module it answers and this table
 # misses is an internal error of the SLIR emitter (`_stdlib`, `backend/slir/emit.py`).
 STDLIB_EMITTERS: dict[str, Callable] = {
-    "io/files": emit_files_function,
     "net/socket": emit_net_function,
 }
 
 __all__ = [
     "STDLIB_EMITTERS",
-    "emit_files_function",
     "emit_stdlib_string_call",
     "emit_net_function",
 ]

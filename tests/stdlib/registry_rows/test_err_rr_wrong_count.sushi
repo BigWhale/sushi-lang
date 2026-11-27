@@ -1,7 +1,7 @@
-# A row of <io/files> takes the count of its row: `fd_write_str` with one argument is CE2009.
+# A row of <net/socket> takes the count of its row: `sock_close` with zero arguments is CE2009.
 # EXPECT_ERROR_CODES_EXACT: CE2009
-use <io/files>
+use <net/socket>
 
 fn main() i32:
-    let i64 written = fd_write_str(-1).realise(0 as i64)
-    return written as i32
+    let i32 closed = sock_close().realise(0)
+    return closed

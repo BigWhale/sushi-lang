@@ -88,25 +88,20 @@ sushi_stdlib/src/_platform/
 ├── __init__.py       # get_platform_module() helper
 ├── README.md
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
-│   ├── files.py       # opendir/readdir/closedir/write/dup/close
-│   ├── net.py         # the socket calls
+│   └── net.py         # the socket calls
 ├── darwin/            # macOS
-│   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
 │   ├── net.py         # macOS socket constants and structure layouts
 │   └── stdio.py       # the __stderrp handle name
-└── linux/             # Linux: the same three files
-    ├── files.py       # Linux O_CREAT/O_TRUNC bit values
+└── linux/             # Linux: the same two files
     ├── net.py         # Linux socket constants and structure layouts
     └── stdio.py       # the stderr handle name
 ```
 
 There is no `windows/` directory.
 
-Each of `darwin/` and `linux/` has one file per platform module. Three modules have real,
-distinct darwin/linux content: `stdio` (the stderr
-global symbol name), `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`) and
-`net` (the socket constants and structure layouts). The clock ids of `<time>` are in
-`<sys/platform>`, below.
+Each of `darwin/` and `linux/` has one file per platform module. Two modules have real,
+distinct darwin/linux content: `stdio` (the stderr global symbol name) and `net` (the socket
+constants and structure layouts). The file and clock constants are in `<sys/platform>`, below.
 
 ### Platform Module Helper
 
@@ -248,7 +243,6 @@ Standard library bytecode is organized by platform:
 sushi_stdlib/dist/
 ├── darwin/                    # macOS builds
 │   ├── collections/strings.bc
-│   ├── io/files.bc
 │   └── net/socket.bc
 └── linux/                     # Linux builds — same unit layout as darwin/, built
     └── ...                    #   separately on a Linux host (see Cross-Compilation below)
@@ -289,8 +283,8 @@ def _detect_platform(self) -> str:
 ```
 
 `self.platform` is combined with `self.stdlib_dir` (`sushi_stdlib/dist/`) to resolve both
-individual units (`"io/files"` -> `sushi_stdlib/dist/darwin/io/files.bc`) and directory
-imports (`"io"` -> every `.bc` file under `sushi_stdlib/dist/darwin/io/`). There is no
+individual units (`"net/socket"` -> `sushi_stdlib/dist/darwin/net/socket.bc`) and directory
+imports (`"net"` -> every `.bc` file under `sushi_stdlib/dist/darwin/net/`). There is no
 `windows` case here either — a Windows host resolves to `"unknown"`, and `_resolve_stdlib_unit`
 then fails to find the (nonexistent) `sushi_stdlib/dist/unknown/` directory with a clear
 error rather than silently picking a wrong platform's bitcode.
@@ -309,9 +303,8 @@ error rather than silently picking a wrong platform's bitcode.
 `sushi_stdlib/src/_platform/posix/` for everything that is not macOS-specific.
 
 **Features:**
-- File I/O: `stat`/`access`/`unlink`/`rename`/`open`/`read`/`write`/`close`/`mkdir`/
-  `rmdir` (via `posix/files.py`), plus macOS-specific `O_CREAT`/`O_TRUNC` bit values
-  (`darwin/files.py`)
+- Sockets: shared POSIX declarations (`posix/net.py`) with macOS constants and layouts
+  (`darwin/net.py`)
 - the stderr handle named `__stderrp` (macOS's double-underscore libc symbol name,
   distinct from Linux — `darwin/stdio.py`)
 - BSD semantics for system calls
@@ -327,10 +320,8 @@ error rather than silently picking a wrong platform's bitcode.
 `sushi_stdlib/src/_platform/posix/` for everything that is not Linux-specific.
 
 **Features:**
-- File I/O — same
-  `posix/` implementations macOS uses (identical libc surface on both)
-- Linux-specific `O_CREAT`/`O_TRUNC` bit values (`linux/files.py` — the numeric flag
-  values differ from macOS's even though the function signatures match)
+- Sockets: shared POSIX declarations (`posix/net.py`) with Linux constants and layouts
+  (`linux/net.py`)
 - the stderr handle named plain `stderr` (the glibc/musl symbol name, no
   double-underscore prefix — `linux/stdio.py`)
 - GNU/Linux semantics
@@ -356,7 +347,7 @@ hold a third platform, but no Windows-specific code path exists.
 ## Adding Platform-Specific Functionality
 
 The following steps describe the actual pattern used by the existing
-`files`, `net`, and `stdio` modules. Only Windows support is out of reach
+`net` and `stdio` modules. Only Windows support is out of reach
 today — there is nothing to route to.
 
 ### Step 1: Default to `posix/`, Only Split Out What Actually Differs
@@ -365,8 +356,8 @@ Most new functionality should start as a single implementation in
 `sushi_stdlib/src/_platform/posix/myfeature.py` — the same function signature is a
 correct declaration on both macOS and Linux for nearly everything in libc. Only create
 separate `darwin/myfeature.py` and `linux/myfeature.py` files if the two operating
-systems genuinely disagree (as `stdio.py`'s stderr handle name and `files.py`'s `O_CREAT`/
-`O_TRUNC` bit values do):
+systems genuinely disagree (as `stdio.py`'s stderr handle name and `net.py`'s socket
+constants do):
 
 ```
 sushi_stdlib/src/_platform/
@@ -398,8 +389,8 @@ def declare_platform_function(module: ir.Module) -> ir.Function:
 ```
 
 If macOS and Linux truly diverge, give `darwin/myfeature.py` and `linux/myfeature.py`
-each their own `declare_platform_function`, matching the pattern in `darwin/files.py` /
-`linux/files.py` (same function names, different constant values or symbol names).
+each their own `declare_platform_function`, matching the pattern in `darwin/net.py` /
+`linux/net.py` (same function names, different constant values or symbol names).
 
 ### Step 3: Create the Unified Interface
 

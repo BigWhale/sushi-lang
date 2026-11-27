@@ -22,21 +22,15 @@ import pytest
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import Type
-from sushi_lang.sushi_stdlib.src.io.files_funcs import (
-    FILE_UTILITY_FUNCTIONS,
-    FILES_SIGNATURES,
-    get_builtin_files_function_return_type,
-)
 from sushi_lang.sushi_stdlib.src.net.socket_funcs import (
     SOCKET_FUNCTIONS,
     SOCKET_SIGNATURES,
     get_builtin_socket_function_return_type,
 )
-from sushi_lang.sushi_stdlib.src.signatures import Signature
+from sushi_lang.sushi_stdlib.src.signatures import Param, Signature
 
 LAYERS = (
     ("socket", SOCKET_SIGNATURES, SOCKET_FUNCTIONS, get_builtin_socket_function_return_type),
-    ("files", FILES_SIGNATURES, FILE_UTILITY_FUNCTIONS, get_builtin_files_function_return_type),
 )
 LAYER_IDS = [name for name, *_ in LAYERS]
 
@@ -66,7 +60,7 @@ def test_every_row_is_a_signature(layer, name, sig):
 # -- the readers ---------------------------------------------------------------
 
 # The registry keys a parameter spec by the last segment of the module's `use` path.
-REGISTRY_KEYS = {"io/files": "files", "net/socket": "socket"}
+REGISTRY_KEYS = {"net/socket": "socket"}
 
 
 def _every_table_row():
@@ -123,12 +117,12 @@ def test_a_row_that_answers_a_result_names_an_error_enum(layer, name, sig):
 # -- the shape of a row --------------------------------------------------------
 
 def test_a_cstr_parameter_is_a_string_that_crosses_as_a_pointer():
-    """`sock_dns_resolve` takes a HOST and `fd_write_str` a string VALUE: one type, two
-    crossings."""
+    """`sock_dns_resolve` takes a HOST (`as_cstr=True`) while a plain string `Param` crosses
+    as a value (`as_cstr=False`)."""
     from sushi_lang.semantics.typesys import BuiltinType
 
     path = SOCKET_SIGNATURES["sock_dns_resolve"].params[0]
-    value = FILES_SIGNATURES["fd_write_str"].params[1]
+    value = Param(BuiltinType.STRING)
     assert path.ty == BuiltinType.STRING and path.as_cstr
     assert value.ty == BuiltinType.STRING and not value.as_cstr
 

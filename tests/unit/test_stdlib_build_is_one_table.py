@@ -44,7 +44,7 @@ def test_every_registry_module_has_a_row():
 
 # The modules with two halves: the generator half is bitcode, and the Sushi half is a source
 # unit of the same name. The Sushi half grows as the generator rows move to it.
-TWO_HALF_MODULES = {"collections/strings", "io/files"}
+TWO_HALF_MODULES = {"collections/strings"}
 
 
 def test_no_row_is_a_unit_that_resolves_to_no_bitcode():

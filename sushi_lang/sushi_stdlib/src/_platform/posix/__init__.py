@@ -1,3 +1,3 @@
 """Common POSIX-compliant platform implementations."""
 
-__all__ = ['stdio', 'files', 'net']
+__all__ = ['stdio', 'net']

@@ -143,8 +143,7 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   call the C library through an `unsafe external` block. `exit` is `public fn exit(i32 code) !`
   over the extern `fn exit(i32 code) ! = "exit"` (docs/design/never-return.md). `chdir` and `getcwd` answer `FileError`, with
   the variant from `errno()` through `FileError.from_errno` (`<io/error>`, the ONE
-  errno-to-`FileError` map in Sushi source; the one generator left in `<io/files>`,
-  `fd_write_str`, keeps its own table in `src/io/files/errno.py`). `getcwd` uses a buffer of `PATH_MAX` bytes
+  errno-to-`FileError` map). `getcwd` uses a buffer of `PATH_MAX` bytes
   (`<sys/platform>`). `run(string cmd, ...string args) ProcessOutput | ProcessError` is a
   native `...T` (a bloom lends its source). It spawns with `posix_spawnp` and the extern
   variable `environ`, captures stdout and stderr in two `tmpfile()` streams, and retries
@@ -152,23 +151,19 @@ row type is CE0145); a BARE tuple answered by a generator is not supported -- a
   `SpawnFailed`; a failure of `fseek`, `ftell` or `fread` on a capture stream stops with
   RE2026 (an `assert` in the module). An own `exit`, `getpid`, `getuid`, `chdir` or
   `getcwd` beside a flat `use <sys/process>` gets CW3002.
-- **`<io/files>` has TWO halves**: `src_sushi/io/files.sushi` (a `SOURCE_STDLIB_MODULES`
-  row, NOT in `_virtual_units`) holds every function but one. They call the C library
-  through an `unsafe external` block, read the platform values from `<sys/platform>` and
-  give errors through `FileError.from_errno`. The one registry row, `fd_write_str`
-  (`FILES_SIGNATURES`, `src/io/files_funcs.py`; generator `src/io/files/sequential.py`), is
-  the `.bc` unit: it writes the bytes of the string with no copy (issue #1359). A
-  `use <io/files>` gives both halves: the namespace provider adds the registry half to the
-  unit (`_stdlib_provider`, `passes/namespaces.py`). An own function with the name of a
-  Sushi-half function, beside a flat `use <io/files>`, gets CW3002. `TWO_HALF_MODULES` in
-  `tests/unit/test_stdlib_build_is_one_table.py` names the module. `<io/files>` compiles
-  only on the hosts of `<sys/platform>` (macOS arm64, Linux x86_64).
+- **`<io/files>` is Sushi source**: `src_sushi/io/files.sushi` (a `SOURCE_STDLIB_MODULES`
+  row and a `_virtual_units` row) holds all path and descriptor functions, including
+  `fd_write_str` (over `data.as_bytes()`, #1359). They call the C library through an
+  `unsafe external` block, read platform values from `<sys/platform>`, and give errors
+  through `FileError.from_errno`. An own function with the name of a function of
+  `<io/files>`, beside a flat `use <io/files>`, gets CW3002. `<io/files>` compiles only
+  on the hosts of `<sys/platform>` (macOS arm64, Linux x86_64).
 - **`<collections/strings>` has TWO halves**: the built-in methods are the `.bc` unit, and
   `src_sushi/collections/strings.sushi` (a `SOURCE_STDLIB_MODULES` row, NOT in `_virtual_units`)
   holds the methods written in Sushi (`parse_*`, `to_hex`/`to_bin`/`to_fixed`, `lines`,
   `split_whitespace`, `chars`, the `trim_*_matches` pair, `StringBuilder`). A new string method
   goes in the Sushi half; `TWO_HALF_MODULES` in `tests/unit/test_stdlib_build_is_one_table.py`
-  names it and `<io/files>`. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
+  names it. `to_fixed` calls libc `snprintf` through a private `unsafe external` block.
 - Sushi-source modules go in `src_sushi/` + one `SOURCE_STDLIB_MODULES` entry + one
   `_virtual_units` entry; they are injected as ordinary units and need `public fn` on
   concrete exports and `public extend` on API methods. A module that declares methods on a
