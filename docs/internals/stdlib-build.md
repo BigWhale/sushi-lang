@@ -24,14 +24,13 @@ them uses the `.slib` format.
   an ordinary compilation unit when a program imports it. A module that calls C declares an
   `unsafe external` block (for example `math`, `time`, `sys/process`), and a module can sit
   on a bitcode unit (for example `io/fs` over `io/files`, `net/tcp` over `net/socket`).
-- **Bitcode units (layer C).** Three units are left: `collections/strings`, `io/files` and
-  `net/socket` (`STDLIB_BITCODE_UNITS` in `build.py`). `collections/strings` and `io/files`
-  have two halves: the bitcode, and a Sushi file in layer B. The bitcode of `io/files` has
-  one function, `fd_write_str` (issue #1359); every other function of `<io/files>` is in
-  `io/files.sushi`. `tests/stdlib_python_lines.baseline` holds the count of Python lines
-  under `sushi_stdlib/src/` (6693 on 2026-11-27: about 3800 for `collections/strings`,
-  1600 for `net/socket`, 220 for `io/files`, and the shared helpers); the test runner fails
-  when the count goes up or goes down without a change of the baseline.
+- **Bitcode units (layer C).** Two units are left: `collections/strings` and `net/socket`
+  (`STDLIB_BITCODE_UNITS` in `build.py`). `collections/strings` has two halves: the bitcode,
+  and a Sushi file in layer B. `<io/files>` is fully in layer B (`io/files.sushi`).
+  `tests/stdlib_python_lines.baseline` holds the count of Python lines under
+  `sushi_stdlib/src/` (6449 on 2026-11-27: about 3800 for `collections/strings`, 1600 for
+  `net/socket`, and the shared helpers); the test runner fails when the count goes up or
+  goes down without a change of the baseline.
 
 | Aspect | Bitcode units | Sushi-source modules | User libraries |
 |--------|---------------|----------------------|----------------|
@@ -58,8 +57,6 @@ sushi_lang/sushi_stdlib/
 │   │   ├── strings/      # generate_module_ir() -> collections/strings.bc
 │   │   └── strings_inline.py   # emitted directly by the backend, not via build.py
 │   │                            # (is_empty()/strcmp/strlen intrinsics needed pre-`use`)
-│   ├── io/
-│   │   └── files/        # -> io/files.bc (fd_write_str only)
 │   ├── net/              # -> net/socket.bc
 │   ├── _platform/         # per-OS constants (darwin/, linux/, posix/) used by
 │   │                       # the generators above via common.py
@@ -67,7 +64,6 @@ sushi_lang/sushi_stdlib/
 └── dist/                  # Build output, one directory per target platform
     ├── darwin/
     │   ├── collections/strings.bc
-    │   ├── io/files.bc
     │   ├── net/socket.bc
     │   ├── symbols.json         # the symbols that the .bc files define
     │   └── .build_fingerprint   # marker written by stdlib_builder.py

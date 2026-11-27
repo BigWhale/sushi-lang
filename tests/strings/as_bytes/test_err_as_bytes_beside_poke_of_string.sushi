@@ -1,0 +1,11 @@
+# Passing `s.as_bytes()` beside `poke s` in one call conflicts on `s` (CE2407).
+# EXPECT_ERROR_CODES_EXACT: CE2407
+
+fn touch(u8[] view, poke string s) i64:
+    s := "changed"
+    return view.len()
+
+fn main() i32:
+    let string s = "Mostly ".concat("Harmless")
+    println(touch(s.as_bytes(), poke s))
+    return 0

@@ -31,7 +31,9 @@ from .diagnostics import (
     no_clone_reason,
     refuses_clone,
 )
-from .reads import borrow_owner, read_through_call, read_type, unknown, view_receiver
+from .reads import (
+    borrow_owner, read_through_call, read_type, string_byte_view_receiver, unknown,
+    view_receiver)
 from .state import BorrowState, record_owners
 from .takes import field_take, take
 from .writes import check_owner_not_borrowed
@@ -489,19 +491,26 @@ def view_owners(checker: 'BorrowChecker', owner) -> tuple:
 
 
 def reject_slice_of_temporary(checker: 'BorrowChecker', value: e.ShirExpr) -> bool:
-    """CE2437 for a `let` of a slice of a temporary array (S8). True when refused.
+    """CE2437 for a `let` of a slice or string byte view of a temporary (S8).
 
-    The temporary is freed at the end of the statement, and the binding lives on. Inside
-    one statement a slice of a temporary is legal, so only the `let` asks. Storage that
-    a local, a constant or a `var` keeps, at the end of field and element steps, is no
-    temporary.
+    The temporary is freed at the end of the statement, and the binding lives on. Storage
+    that a local, a constant or a `var` keeps is no temporary, and a string literal under
+    `as_bytes()` is static storage too.
     """
-    if not isinstance(value, e.Slice):
+    if not isinstance(value, e.Slice) and string_byte_view_receiver(checker, value) is None:
         return False
-    if isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node,
-                  (e.LocalRef, e.ConstRef, e.StorageRef)):
+    walked = walk_place(
+        value, Step.MEMBER | Step.INDEX | Step.CALL,
+        crosses_call=lambda call: string_byte_view_receiver(checker, call) is not None)
+    if isinstance(walked.node, (e.LocalRef, e.ConstRef, e.StorageRef)):
         return False
-    checker.err.emit_with(er.ERR.CE2437, value.loc) \
-        .help("bind the array first, or copy the part with `.ss(start, count)`") \
-        .emit()
+    is_byte_view = any(
+        isinstance(step, e.Call) and string_byte_view_receiver(checker, step) is not None
+        for step in walked.path)
+    if is_byte_view and isinstance(walked.node, e.Lit):
+        return False
+    help_text = ("bind the string first, or copy the bytes with `.to_bytes()`"
+                 if is_byte_view
+                 else "bind the array first, or copy the part with `.ss(start, count)`")
+    checker.err.emit_with(er.ERR.CE2437, value.loc).help(help_text).emit()
     return True

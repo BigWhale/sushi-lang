@@ -23,7 +23,8 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from . import arms
 from .diagnostics import emit_use_after_move, temporary_spelled
-from .reads import borrow_owner, read_type, storage_state
+from .reads import (
+    borrow_owner, read_type, storage_state, string_byte_view_receiver, view_receiver)
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -51,7 +52,7 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     of the bare name of a function (CE2400).
     """
     is_poke = mode is BorrowMode.POKE
-    if isinstance(place, e.Slice):
+    if isinstance(place, e.Slice) or string_byte_view_receiver(checker, place) is not None:
         _borrow_slice(checker, place, span, is_poke=is_poke)
         return
     if borrow_of_constant(checker, place, mode):
@@ -95,13 +96,12 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     acquire_borrow(checker, state, span, is_poke=is_poke)
 
 
-def _borrow_slice(checker: 'BorrowChecker', place: e.Slice, span: Optional[Span], *,
+def _borrow_slice(checker: 'BorrowChecker', place: e.ShirExpr, span: Optional[Span], *,
                   is_poke: bool) -> None:
-    """`peek data[a..b]`: a pointer to the slice descriptor (docs/design/slices.md).
+    """`peek data[a..b]` or `peek s.as_bytes()`: a pointer to the view descriptor.
 
-    A `peek` reads the array: it is a shared borrow of the owner of the array, so a `poke`
-    of the same owner in one call is CE2407. A `poke` is refused (S4): a callee could grow
-    the view and move storage that the array keeps.
+    A `peek` takes a shared borrow of the owner of the storage, so a `poke` of the same
+    owner in one call is CE2407. A `poke` is refused (S4, CE2426).
     """
     arms.check(checker, place)
     owner = borrow_owner(checker, place)
@@ -173,7 +173,8 @@ def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
     the owner can move. A plain field and a plain element are a copy. A `var` that owns is
     counted on its state (`storage_state`).
     """
-    walked = walk_place(arg, Step.MEMBER | Step.INDEX)
+    walked = walk_place(arg, Step.MEMBER | Step.INDEX | Step.CALL,
+                        crosses_call=lambda call: view_receiver(checker, call) is not None)
     if isinstance(walked.node, e.StorageRef):
         if checker.answers().global_of(walked.node.shir_id) is None:
             return

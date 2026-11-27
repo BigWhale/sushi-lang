@@ -37,10 +37,10 @@ _platform/
 ├── posix/              # the POSIX declarations that both platforms share
 ├── darwin/             # macOS platform implementations
 │   ├── __init__.py
-│   └── files.py        # the macOS file constants, over posix/files.py
+│   └── net.py          # the macOS socket constants, over posix/net.py
 └── linux/              # Linux platform implementations
     ├── __init__.py
-    └── files.py        # the Linux file constants, over posix/files.py
+    └── net.py          # the Linux socket constants, over posix/net.py
 ```
 
 ## Usage
@@ -51,8 +51,7 @@ Stdlib modules use `get_platform_module()` to dynamically load the correct platf
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
 # Selects darwin or linux from the build platform; any other platform is a RuntimeError
-platform_files = get_platform_module('files')
-declare_write = platform_files.declare_write
+platform_net = get_platform_module('net')
 ```
 
 This ensures the correct platform-specific declarations are used at build time without hardcoding platform names.

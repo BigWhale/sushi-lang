@@ -239,11 +239,9 @@ def _get_param_specs():
 
 def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798)."""
-    from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
 
     return {
-        "io/files": FILES_SIGNATURES,
         "net/socket": SOCKET_SIGNATURES,
     }
 
@@ -264,13 +262,13 @@ def stdlib_arity(module_path: str, name: str) -> Optional[int]:
 
 
 #: The modules whose generated functions carry the name of their layer.
-_SYMBOL_PREFIXES = {"io/files": "sushi_io_files_", "net/socket": "sushi_net_"}
+_SYMBOL_PREFIXES = {"net/socket": "sushi_net_"}
 
 
 def stdlib_symbol(module_path: str, name: str) -> str:
     """The symbol of the generated function that a call of a registry stdlib function
     calls: the ONE derivation (docs/design/ir.md 8.6). It is `sushi_<name>`
-    (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers)."""
+    (`sushi_net_<name>` for the socket layer)."""
     return f"{_SYMBOL_PREFIXES.get(module_path, 'sushi_')}{name}"
 
 
@@ -278,7 +276,6 @@ class StdlibRegistry:
     """Central registry for stdlib functions."""
 
     KNOWN_MODULES = {
-        "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
         "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",
         # collections/strings is NOT registry-driven and cannot be listed here: it
         # exposes METHODS, while this registry reads the free-function rows of

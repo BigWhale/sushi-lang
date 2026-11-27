@@ -11,15 +11,14 @@ their positional twins. Nothing goes through libc stdio. `fopen` and `fgets` buf
 `File.write()` through `write(2)` beside a buffered `printf` puts the console output out of
 order (ruling R12). Thus there is one route to a descriptor.
 
-The descriptor layer of `<io/files>` has two halves:
+The descriptor layer of `<io/files>` is Sushi source (`src_sushi/io/files.sushi`) and has
+two halves:
 
-- The sequential half: `read`, `write`, `readln`, `seek`. These calls MOVE the position
-  of the descriptor, so a `File` handle is written on them. `io/files/sequential.py`
-  generates `fd_write_str`. `fd_read`, `fd_write`, `fd_readln` and `fd_seek` are Sushi
-  source (`src_sushi/io/files.sushi`).
-- The positional half: `pread`, `pwrite`. These calls take the offset as an argument and
-  do not move the position, so they are safe on a shared descriptor. `fd_pread` and
-  `fd_pwrite` are Sushi source (`src_sushi/io/files.sushi`).
+- The sequential half: `fd_read`, `fd_write`, `fd_write_str`, `fd_readln`, `fd_seek`. These
+  calls MOVE the position of the descriptor, so a `File` handle is written on them.
+  `fd_write_str` calls `fd_write` over `data.as_bytes()` with no copy (#1359).
+- The positional half: `fd_pread`, `fd_pwrite`. These calls take the offset as an argument
+  and do not move the position, so they are safe on a shared descriptor.
 
 ## The line reader (`fd_readln`)
 
@@ -74,15 +73,10 @@ generators turn that cause into the tag of a unit-variant error type -- `FileErr
   and an unmapped value maps to `default`. `emit_errno_err_result` adds the `Result.Err`.
   The module is under `src/` and not under `io/` or `net/`, because neither of those may
   import the other.
-- **The tables.** There are two tables, one for each family. `errno_to_file_error_table` and
-  `ERRNO_DEFAULT_FILE_ERROR` are in `sushi_lang/sushi_stdlib/src/io/files/errno.py`, because
-  the file table reads the platform values of `ENAMETOOLONG` and `ELOOP` from the platform
-  module. `errno_to_net_error_table` and `ERRNO_DEFAULT_NET_ERROR` are in
+- **The tables.** `errno_to_net_error_table` and `ERRNO_DEFAULT_NET_ERROR` are in
   `sushi_lang/backend/runtime/constants.py`, beside the shared `ERRNO_*` constants.
-  `io/files/errno.py` and `net/errno.py` each give the emitter their table and their default.
-  The Sushi functions of `<io/files>` do not use the Python table: `FileError.from_errno`
-  (`src_sushi/io/error.sushi`) is their one map, with the same rows. The Python table is
-  left for `fd_write_str`, the one generated function of `<io/files>`.
+  `net/errno.py` gives the emitter its table and its default. The Sushi functions of
+  `<io/files>` use `FileError.from_errno` (`src_sushi/io/error.sushi`) as their one map.
 - **The layout.** The `Result` bytes are built in `src/results.py` and nowhere else, and
   `errno` is read through `declare_errno_location` in `src/libc_declarations.py`, so the
   two error families read one `errno` through one declaration.
@@ -105,7 +99,6 @@ The built-in reads `errno` through the same two platform symbols as
 
 A `read` or a `write` that a signal interrupts before a byte moves answers -1 with `EINTR`,
 and the correct response is to ask again. The Sushi functions `fd_read` and `fd_write`
-compare `errno()` with `EINTR` of `<sys/platform>` after the call, and call again when the
-two are equal. The `write` loop of `fd_write_str` uses `emit_is_eintr`
-(`io/files/errno.py`) for the same test. A `write` that answers 0 does not go back to the
-call: no byte moved, so the loop stops with the error of `errno`.
+(and `fd_write_str`, through `fd_write`) compare `errno()` with `EINTR` of `<sys/platform>`
+after the call, and call again when the two are equal. A `write` that answers 0 does not go
+back to the call: no byte moved, so the loop stops with the error of `errno`.

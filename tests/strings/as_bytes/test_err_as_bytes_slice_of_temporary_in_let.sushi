@@ -1,0 +1,10 @@
+# Rule S8: a `let` of a slice over `as_bytes()` of a temporary string is refused (CE2437).
+# EXPECT_ERROR_CODES_EXACT: CE2437
+
+fn make() string:
+    return "Mostly ".concat("Harmless")
+
+fn main() i32:
+    let u8[] view = make().as_bytes()[0..6]
+    println(view.len())
+    return 0

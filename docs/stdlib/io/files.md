@@ -16,10 +16,8 @@ use <io/files>
 use <io/fs>
 ```
 
-`<io/files>` is Sushi source (`sushi_stdlib/src_sushi/io/files.sushi`) over the C library,
-with one exception: `fd_write_str` is a precompiled `.bc` function, because it writes the
-bytes of the string with no copy (issue #1359). One `use <io/files>` gives both. A function
-of your own with the name of a Sushi function of `<io/files>`, in a unit with a flat
+`<io/files>` is Sushi source (`sushi_stdlib/src_sushi/io/files.sushi`) over the C library.
+A function of your own with the name of a function of `<io/files>`, in a unit with a flat
 `use <io/files>`, gets [CW3002](../../error-catalog.md#cw3002).
 
 `<io/files>` reads its platform values from [`<sys/platform>`](../system/platform.md), so it
@@ -30,7 +28,7 @@ gets [CE3021](../../error-catalog.md#ce3021).
 ### Each function and its errors
 
 Each error is a `FileError`, from `FileError.from_errno` of the `errno` of the C call
-([`<io/error>`](error.md)). `fd_write_str` uses the same map.
+([`<io/error>`](error.md)).
 
 | Function | Errors |
 |---|---|
@@ -1056,14 +1054,12 @@ fills a new buffer of `max` bytes with zeros before the call, so a large read is
 than the read itself (issue #1357).
 
 ### `fd_write(i32 fd, u8[] data) i64 | FileError`
-### `fd_write_str(i32 fd, string s) i64 | FileError`
+### `fd_write_str(i32 fd, string data) i64 | FileError`
 
 Write every byte, looping past a short write, and answer the count. When a signal stops a
 call before a byte moves (`EINTR`), the function calls `write(2)` again. A call that writes
 zero bytes is an error. `fd_write` borrows the array and does not copy it. `fd_write_str`
-takes the string's own bytes with no `to_bytes()` copy in front of them — a fat pointer
-already carries a pointer and a length, which is what `write(2)` wants. `fd_write_str` is
-the one `.bc` function of `<io/files>` (issue #1359).
+calls `fd_write` over `data.as_bytes()`, which borrows the string's own bytes with no copy.
 
 Unlike `sock_send`, these do not hand a partial write back to the caller. A socket's
 partial write is information — how much the peer's window took — and a file's is not.

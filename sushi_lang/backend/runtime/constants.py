@@ -2,17 +2,10 @@
 from __future__ import annotations
 
 # errno constants (from errno.h)
-# These values are standard across most UNIX-like systems
-# Used for mapping system errors to Sushi FileError and NetError enum variants
+# Used for mapping system errors to Sushi NetError enum variants
 ERRNO_EPERM = 1           # Operation not permitted
-ERRNO_ENOENT = 2          # No such file or directory
-ERRNO_EIO = 5             # I/O error
 ERRNO_EACCES = 13         # Permission denied
-ERRNO_EEXIST = 17         # File exists
-ERRNO_ENOTDIR = 20        # Not a directory
-ERRNO_EISDIR = 21         # Is a directory
 ERRNO_EMFILE = 24         # Too many open files
-ERRNO_ENOSPC = 28         # No space left on device
 ERRNO_EBADF = 9           # Bad file descriptor
 ERRNO_EINTR = 4           # Interrupted system call
 ERRNO_ENFILE = 23         # Too many open files in the system

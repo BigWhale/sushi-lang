@@ -26,7 +26,7 @@ from sushi_lang.semantics.shir.callee import Method
 
 from . import arms
 from .diagnostics import read_spelled, spelled
-from .reads import borrow_owner, names_an_owner, read_type
+from .reads import borrow_owner, names_an_owner, read_type, view_receiver
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
@@ -215,7 +215,8 @@ def _why_not_a_view(checker: 'BorrowChecker', returned: BodyReturn,
         if isinstance(value, e.LocalRef) and owner not in returned.params:
             return _OWNED
         return _outside(checker, returned, (owner,))
-    return _TEMPORARY if isinstance(value, (e.Field, e.Index, e.Slice)) else _OWNED
+    return _TEMPORARY if (isinstance(value, (e.Field, e.Index, e.Slice))
+                          or view_receiver(checker, value) is not None) else _OWNED
 
 
 _TEMPORARY = "it borrows a temporary, which is freed at the end of the statement"

@@ -99,6 +99,7 @@ class StdlibLinker:
         "io/buf",
         "io/contracts",
         "io/error",
+        "io/files",
         "io/fs",
         "io/path",
         "math",
@@ -126,16 +127,22 @@ class StdlibLinker:
 
         platform_dir = self.stdlib_dir / self.platform
 
+        has_virtual_children = any(u.startswith(f"{unit_path}/") for u in self._virtual_units)
         dir_path = platform_dir / unit_path
         if dir_path.is_dir():
             bc_files = sorted(dir_path.glob("*.bc"))
-            if not bc_files:
-                raise FileNotFoundError(
-                    f"Stdlib directory exists but contains no .bc files: <{unit_path}>\n"
-                    f"Platform: {self.platform}\n"
-                    f"The stdlib may not be built. Try running: ./sushic --build-stdlib"
-                )
-            return bc_files
+            if bc_files:
+                return bc_files
+            if has_virtual_children:
+                return []
+            raise FileNotFoundError(
+                f"Stdlib directory exists but contains no .bc files: <{unit_path}>\n"
+                f"Platform: {self.platform}\n"
+                f"The stdlib may not be built. Try running: ./sushic --build-stdlib"
+            )
+
+        if has_virtual_children:
+            return []
 
         bc_path = platform_dir / f"{unit_path}.bc"
         if bc_path.exists():

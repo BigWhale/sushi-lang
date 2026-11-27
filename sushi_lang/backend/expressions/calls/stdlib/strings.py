@@ -71,6 +71,12 @@ def emit_stdlib_string_call(
     if method == "clone":
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver, BuiltinType.STRING)
+    if method == "as_bytes":
+        from sushi_lang.backend.string_layout import DATA_FIELD, string_size_i64
+        from sushi_lang.backend.types.arrays.utils import descriptor
+        data = codegen.builder.extract_value(receiver, DATA_FIELD, name="as_bytes_data")
+        size = string_size_i64(codegen.builder, receiver, name="as_bytes_size")
+        return descriptor(codegen, codegen.types.i8, size, size, data)
 
     spec = METHOD_SPECS.get(method)
     if spec is None:

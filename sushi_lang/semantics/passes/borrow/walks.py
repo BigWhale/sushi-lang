@@ -41,7 +41,7 @@ from .references import freeze_reference
 from .regions import note_binder
 from .state import BorrowState, record_owners
 from .writes import (
-    check_owner_not_borrowed, reject_readonly_write, reject_write_through_slice)
+    check_owner_not_borrowed, reject_readonly_write, reject_write_through_view)
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -212,6 +212,6 @@ def _refuses_a_poke_item(checker: 'BorrowChecker', source: s.Items, receiver: e.
     if not (isinstance(source.by, s.Ref) and source.by.mode is BorrowMode.POKE):
         return False
     what = "take a `poke` item"
-    if reject_write_through_slice(checker, receiver, span, what) or temporary:
+    if reject_write_through_view(checker, receiver, span, what) or temporary:
         return False
     return reject_readonly_write(checker, borrow_owner(checker, receiver), span, what)

@@ -541,11 +541,16 @@ malformed input).
 
 ## Byte access in place (core, no import)
 
-Two primitives of the string itself need no import and copy nothing (#1091). With them a
-string method can be an ordinary `extend string` method written in Sushi.
+Three primitives of the string itself need no import and copy nothing (#1091, #1359). With
+them a string method or I/O call can read or build string bytes without copying.
 
 - **`s[i] -> u8`**: the byte at offset `i`, bounds-checked ([`RE2020`](../../error-catalog.md#re2020) past `size`). A read
   only: `s[i] := v` is [`CE2113`](../../error-catalog.md#ce2113).
+- **`s.as_bytes() -> u8[]`**: a borrowed, read-only `u8[]` view over the string's own bytes
+  with no copy (#1359). It follows the borrow rules of a slice: it cannot be written
+  ([`CE2426`](../../error-catalog.md#ce2426)), cannot escape ([`CE2411`](../../error-catalog.md#ce2411)), freezes the source string while bound
+  ([`CE2412`](../../error-catalog.md#ce2412)), and lives for one statement on a temporary string ([`CE2437`](../../error-catalog.md#ce2437)). Use
+  `s.to_bytes()` when you need an owned mutable copy.
 - **`string.from_bytes(nom u8[] b) -> string`**: the string takes the array's buffer.
   No byte is copied and none is checked for UTF-8.
 

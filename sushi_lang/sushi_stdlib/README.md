@@ -101,12 +101,10 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `stat()` into a `FileStat` struct, recursive `walk`, `mkdir_all`,
   `remove_all`. Builds on `io/files` and `io/path`; the first source module
   that exports a `public struct`.
-- `io/files` (`src_sushi/io/files.sushi`) — the Sushi half of `<io/files>`, a
-  module with TWO halves: every function but one calls the C library through an
-  `unsafe external` block, and reads the platform values from `<sys/platform>`.
-  `fd_write_str` is the `.bc` unit of the same name, because it writes the bytes
-  of the string with no copy (issue #1359). It is not in `_virtual_units`,
-  because it has a `.bc`.
+- `io/files` (`src_sushi/io/files.sushi`) — all of `<io/files>`: every function calls the C
+  library through an `unsafe external` block and reads platform values from
+  `<sys/platform>`. `fd_write_str` writes the string's bytes through `as_bytes()` with no
+  copy (#1359). It has no `.bc`, so it is in `_virtual_units`.
 - `text/ascii` (`src_sushi/text/ascii.sushi`) — ASCII byte classes and case
   maps, as extension methods on `u8`. The first source module that exports
   methods on a primitive type and no free function.

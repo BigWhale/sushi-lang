@@ -27,7 +27,7 @@ READERS = {
 }
 
 REGISTRY_MODULES = {
-    "io/files": ("sushi_lang.sushi_stdlib.src.io.files_funcs", "files"),
+    "net/socket": ("sushi_lang.sushi_stdlib.src.net.socket_funcs", "socket"),
 }
 
 def _every_row_name() -> set[str]:
@@ -43,7 +43,7 @@ def _string_constants(path: Path) -> set[str]:
 def test_the_row_names_are_measured():
     """The control: the tables hold the names the old lists spelled."""
     names = _every_row_name()
-    for spelled in ("sock_dns_resolve", "fd_write_str"):
+    for spelled in ("sock_dns_resolve", "sock_close"):
         assert spelled in names
 
 
@@ -96,12 +96,11 @@ def test_every_row_declares_the_function_its_generator_built():
         assert symbol in generated, f"{module_path}: no generated {symbol}"
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
-    assert checked >= 18
+    assert checked >= 17
 
 
 # Every registry module's generator, and the prefix its generated symbols carry.
 GENERATORS = {
-    "io/files": ("sushi_lang.sushi_stdlib.src.io.files", "sushi_io_files_"),
     "net/socket": ("sushi_lang.sushi_stdlib.src.net", "sushi_net_"),
 }
 
@@ -138,12 +137,12 @@ def test_a_generated_function_with_no_row_is_found():
 
     from llvmlite import ir
 
-    module = importlib.import_module(GENERATORS["io/files"][0]).generate_module_ir()
+    module = importlib.import_module(GENERATORS["net/socket"][0]).generate_module_ir()
     orphan = ir.Function(module, ir.FunctionType(ir.VoidType(), []),
-                         "sushi_io_files_mostly_harmless")
+                         "sushi_net_mostly_harmless")
     orphan.append_basic_block().name = "entry"
     ir.IRBuilder(orphan.blocks[0]).ret_void()
-    assert _rowless("io/files", module) == ["sushi_io_files_mostly_harmless"]
+    assert _rowless("net/socket", module) == ["sushi_net_mostly_harmless"]
 
 
 def _scanner(generic_funcs=None, func_table=None):
@@ -155,7 +154,7 @@ def _scanner(generic_funcs=None, func_table=None):
 
 
 def test_a_user_generic_takes_the_name_before_the_row():
-    assert _scanner()._stdlib_row("fd_write_str") is not None
-    assert _scanner(generic_funcs={"fd_write_str": object()})._stdlib_row("fd_write_str") is None
+    assert _scanner()._stdlib_row("sock_close") is not None
+    assert _scanner(generic_funcs={"sock_close": object()})._stdlib_row("sock_close") is None
     assert _scanner(func_table={"sock_dns_resolve": object()})._stdlib_row(
         "sock_dns_resolve") is None

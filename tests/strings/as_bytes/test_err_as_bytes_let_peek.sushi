@@ -1,0 +1,8 @@
+# `as_bytes()` is a value, not a place: `let peek` of it is CE2404.
+# EXPECT_ERROR_CODES_EXACT: CE2404
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let peek u8[] view = s.as_bytes()
+    println(view.len())
+    return 0

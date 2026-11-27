@@ -1,0 +1,9 @@
+# Rule S4: a `let` binding of `as_bytes()` is read-only. A growth through it is CE2426.
+# EXPECT_ERROR_CODES_EXACT: CE2426
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let u8[] view = s.as_bytes()
+    view.push(65 as u8)
+    println(view.len())
+    return 0

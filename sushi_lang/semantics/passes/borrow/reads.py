@@ -11,7 +11,7 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.method_effects import answers_view
+from sushi_lang.semantics.method_effects import answers_view, is_string_byte_view
 from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import exprs as e
@@ -59,12 +59,23 @@ def _owner_walk(checker: 'BorrowChecker', node: object):
 
 def view_receiver(checker: 'BorrowChecker', node: object) -> Optional[e.ShirExpr]:
     """The receiver of a call of a built-in method whose answer is a view of what the
-    receiver holds (`answers_view`: a container get-out), or None for any other node."""
+    receiver holds (`answers_view`: a container get-out or `string.as_bytes`), or None."""
     if not isinstance(node, e.Call):
         return None
     resolved = checker.answers().callee_of(node.shir_id)
     callee = resolved.callee if resolved is not None else None
     if isinstance(callee, Builtin) and answers_view(callee.method):
+        return callee.recv
+    return None
+
+
+def string_byte_view_receiver(checker: 'BorrowChecker', node: object) -> Optional[e.ShirExpr]:
+    """The receiver of a `string.as_bytes()` call, or None for any other node."""
+    if not isinstance(node, e.Call):
+        return None
+    resolved = checker.answers().callee_of(node.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    if isinstance(callee, Builtin) and is_string_byte_view(callee.method):
         return callee.recv
     return None
 
@@ -134,14 +145,16 @@ def chain_call_boundary(expr: object) -> Optional[Span]:
     return end.loc
 
 
-def slice_on_path(expr: object) -> Optional[e.Slice]:
-    """The slice a write through `expr` crosses, or None (S4, docs/design/slices.md).
-
-    A slice is a read-only view: a write through it is lost from no one, but a growth
-    through it would move storage that the array keeps.
-    """
-    for node in walk_place(expr, Step.MEMBER | Step.INDEX).path:
+def readonly_view_on_path(checker: 'BorrowChecker',
+                          expr: object) -> Optional[e.Slice | e.Call]:
+    """The slice or string byte view a write through `expr` crosses, or None (S4)."""
+    walked = walk_place(
+        expr, Step.MEMBER | Step.INDEX | Step.CALL,
+        crosses_call=lambda call: string_byte_view_receiver(checker, call) is not None)
+    for node in walked.path:
         if isinstance(node, e.Slice):
+            return node
+        if isinstance(node, e.Call) and string_byte_view_receiver(checker, node) is not None:
             return node
     return None
 

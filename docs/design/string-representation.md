@@ -192,6 +192,25 @@ representation: every string operation reads `size`, and a C boundary copies thr
 writes a NUL, which nothing needs. `s[i] := v` is refused ([`CE2113`](../error-catalog.md#ce2113)): a literal's `data`
 is in `.rodata`, and a string is immutable in every other position too.
 
+## Update (2026-11-27): `s.as_bytes()` gives a borrowed read-only `u8[]` view
+
+`s.as_bytes()` returns a borrowed, read-only `u8[]` descriptor `{size, size, data}` over
+the string's own buffer with no copy (#1359). It is an inline primitive of `STRING_FAMILY`
+(no import needed, no `.bc` function, no allocation).
+
+The view follows the borrow rules of an array slice (`docs/design/slices.md` rules S4, S5,
+S8):
+- It is read-only: a write through a binding, an inline write (`s.as_bytes().push(...)`,
+  `s.as_bytes()[0] := ...`), or a `poke` argument is refused ([`CE2426`](../error-catalog.md#ce2426)).
+- It does not escape through `nom`, an owned `return`, a struct field, a container insert,
+  or a capture ([`CE2411`](../error-catalog.md#ce2411)). A `peek u8[]` return may return it from a source string.
+- A `let` binding freezes the source string ([`CE2412`](../error-catalog.md#ce2412)) and lowers to a `VIEW` local with no drop.
+- On a temporary string, `as_bytes()` lives for one statement (`fd_write(fd, make().as_bytes())`
+  is legal) and is refused in a `let` ([`CE2437`](../error-catalog.md#ce2437)). A string literal is static storage, so
+  `let u8[] b = "Mostly Harmless".as_bytes()` is legal.
+- Passing `s.as_bytes()` beside `poke s` in one call is refused ([`CE2407`](../error-catalog.md#ce2407)).
+- Slicing the view (`s.as_bytes()[a..b]`) views the same string buffer with no copy.
+
 ## Update (2026-10-02): `s := s.concat(x)` appends in place
 
 `concat` copies both operands into a new buffer of the exact size. A loop of

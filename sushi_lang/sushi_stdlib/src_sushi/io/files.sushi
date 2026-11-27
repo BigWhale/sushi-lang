@@ -1,9 +1,7 @@
 ##:
-io/files -- the Sushi half of the path utilities and the descriptor layer.
+io/files -- the path utilities and the descriptor layer.
 
-`<io/files>` has two halves. The functions of this file call the C library through an
-`unsafe external` block. `fd_write_str` is the `.bc` unit of the same name (issue #1359).
-A `use <io/files>` gives both halves.
+The functions of this file call the C library through an `unsafe external` block.
 
 This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileError`.
 :##
@@ -423,6 +421,29 @@ public fn fd_write(i32 fd, u8[] data) i64 | FileError:
         elif (wrote == 0 as i64 or code != EINTR):
             return Result.Err(FileError.from_errno(code))
     return Result.Ok(total)
+
+##:
+Writes all bytes of a string to a file descriptor, and moves the file position.
+
+The function borrows the string's own bytes through `as_bytes()` with no copy, and loops
+over `write()` until every byte is written. It tries again on `EINTR`. A call that writes
+zero bytes stops the function with an error.
+
+- Parameter fd: The descriptor.
+- Parameter data: The string to write. The string stays the caller's.
+- Returns: The number of bytes written. It is the byte size of `data`.
+- Errors: FileError, when the descriptor cannot be written (for example a descriptor that
+  is not open).
+- Example:
+  ```sushi
+  match fd_write_str(-1, "Mostly Harmless"):
+      Result.Ok(_) -> println("written")
+      Result.Err(_) -> println("not written")
+  ```
+  This prints `not written`.
+:##
+public fn fd_write_str(i32 fd, string data) i64 | FileError:
+    return Result.Ok(fd_write(fd, data.as_bytes())??)
 
 ##:
 Writes bytes at an offset of a file, and does not move the file position.

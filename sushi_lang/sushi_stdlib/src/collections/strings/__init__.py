@@ -121,7 +121,7 @@ def _spec(name: str, args: tuple, returns: Any, also_accepts: tuple = ()) -> Met
 
 
 # The ONE spelling of every string method's signature.
-# Note: is_empty and clone are NOT here: they are inline intrinsics, not stdlib methods.
+# Note: is_empty, clone and as_bytes are NOT here: they are inline intrinsics, not stdlib methods.
 METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("len", (), _I64),
     ("size", (), _I64),
@@ -167,7 +167,11 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
 )}
 
 # The inline intrinsics answer here, beside the rows.
-_INLINE_RETURNS = {"is_empty": _BOOL, "clone": _S}
+_INLINE_RETURNS: dict[str, Type] = {
+    "is_empty": _BOOL,
+    "clone": _S,
+    "as_bytes": DynamicArrayType(BuiltinType.U8),
+}
 
 #: The argument count of each string method, from its row. An inline intrinsic takes none.
 STRING_METHOD_ARITY: dict[str, int] = {
@@ -179,7 +183,7 @@ STRING_METHOD_ARITY: dict[str, int] = {
 
 def is_builtin_string_method(method_name: str) -> bool:
     """Check if a method name is a built-in string method."""
-    return method_name in METHOD_SPECS or method_name in ("is_empty", "clone")
+    return method_name in METHOD_SPECS or method_name in _INLINE_RETURNS
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:

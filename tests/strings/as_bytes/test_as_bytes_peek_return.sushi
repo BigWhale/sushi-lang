@@ -1,0 +1,19 @@
+# A `peek u8[]` return function can return `s.as_bytes()` from a source string parameter.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "15\n77\n6\n"
+# EXPECT_NO_LEAKS
+
+fn bytes_of(string s) peek u8[]:
+    return s.as_bytes()
+
+fn prefix_of(string s) peek u8[]:
+    return s.as_bytes()[0..6]
+
+fn main() i32:
+    let string text = "Mostly ".concat("Harmless")
+    let u8[] view = bytes_of(text)
+    println(view.len())
+    println(view[0])
+    let u8[] head = prefix_of(text)
+    println(head.len())
+    return 0

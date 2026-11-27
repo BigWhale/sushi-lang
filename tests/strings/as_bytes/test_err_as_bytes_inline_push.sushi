@@ -1,0 +1,8 @@
+# Rule S4: an inline mutating call on `as_bytes()` is refused with CE2426.
+# EXPECT_ERROR_CODES_EXACT: CE2426
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    s.as_bytes().push(65 as u8)
+    println(s.len())
+    return 0
