@@ -12,7 +12,7 @@ A method of a `ptr` is a `gep` of the byte offset on the `i8*`, then the access,
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from llvmlite import ir
 
@@ -22,9 +22,6 @@ from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.semantics.ffi_boundary import is_pointer_value, nullable_payload
 from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_WIDTHS
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
-
-if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.collect.externals import ExternalVarSig
 
 
 def c_answer(state: FunctionState, raw: ir.Value, ty: Optional[Type]) -> ir.Value:
@@ -44,22 +41,20 @@ def c_answer_allocates(ty: Optional[Type]) -> bool:
     return BuiltinType.STRING in (ty, nullable_payload(ty))
 
 
-def extern_variable(state: FunctionState,
-                    symbol: str) -> Optional[tuple[ir.Value, ExternalVarSig]]:
-    """The declaration of the C global whose link name is `symbol`, or None."""
+def extern_variable(state: FunctionState, symbol: str) -> Optional[ir.Value]:
+    """The LLVM global of the C variable whose link name is `symbol`, or None."""
     for declared, var in state.codegen.external_vars.values():
         if var.link_name == symbol:
-            return declared, var
+            return declared
     return None
 
 
-def read_extern_variable(state: FunctionState, symbol: str) -> ir.Value:
-    """A load of the C global `symbol`, as the Sushi value of its declared type."""
-    found = extern_variable(state, symbol)
-    if found is None:
+def read_extern_variable(state: FunctionState, symbol: str, ty: Type) -> ir.Value:
+    """A load of the C global `symbol`, as the Sushi value of `ty`."""
+    declared = extern_variable(state, symbol)
+    if declared is None:
         state.fault(f"the module declares no C global '{symbol}'")
-    declared, var = found
-    return c_answer(state, state.builder.load(declared), var.ty)
+    return c_answer(state, state.builder.load(declared), ty)
 
 
 def emit_foreign_ptr_method(state: FunctionState, name: str, receiver: ir.Value,

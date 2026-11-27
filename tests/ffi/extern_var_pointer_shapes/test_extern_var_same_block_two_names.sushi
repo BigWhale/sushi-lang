@@ -1,0 +1,15 @@
+# One block declares two names for `environ`, one as `ptr` and one as `Maybe@(ptr)`.
+# Each read converts the loaded pointer with the type of its own declaration.
+# TEST_ENV: SUSHI_EXTERN_VAR_PROBE=1
+# EXPECT_STDOUT_EXACT: "true true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "reading the process environment":
+    var ptr env_raw = "environ"
+    var Maybe@(ptr) env_opt = "environ"
+
+fn main() i32:
+    let ptr p = libc.env_raw
+    let Maybe@(ptr) q = libc.env_opt
+    println("{p.load_ptr(0).is_some()} {q.is_some()}")
+    return 0

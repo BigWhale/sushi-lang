@@ -1,0 +1,15 @@
+# Two units declare `environ`, one as `Maybe@(ptr)` and one as `ptr` (#1360).
+# Each unit converts its read with the type of its own declaration.
+# TEST_ENV: SUSHI_EXTERN_VAR_PROBE=1
+# EXPECT_STDOUT_EXACT: "true true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use "helpers/environ_maybe"
+
+unsafe external "C" as raw because "reading the process environment":
+    var ptr environ = "environ"
+
+fn main() i32:
+    let ptr p = raw.environ
+    println("{p.load_ptr(0).is_some()} {has_environ()}")
+    return 0

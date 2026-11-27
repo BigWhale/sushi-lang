@@ -264,6 +264,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A read of an external variable converts the loaded value with its own declared type.**
+  Two declarations of one C global as `ptr` and `Maybe@(ptr)` (in two blocks, in one block
+  under two names, or across two units) now compile and convert each read by the type of
+  its own `Global` place. Before, every read used the first declaration's type and stopped
+  with an internal error `CE0000` (#1360).
 - **A bare `[]` takes the `T[]` of its position.** `let string[] names = []` and
   `walk(".").realise([])` gave the internal error CE0000. Now a bare `[]` is an empty
   dynamic array, as `from([])` and `new()` are: in a `let`, an argument, a return or a

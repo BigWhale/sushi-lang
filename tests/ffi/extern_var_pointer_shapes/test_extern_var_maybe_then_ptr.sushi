@@ -1,0 +1,17 @@
+# Two blocks declare `environ` as `Maybe@(ptr)` first and `ptr` second (#1360).
+# Each read converts the loaded pointer with the type of its own declaration.
+# TEST_ENV: SUSHI_EXTERN_VAR_PROBE=1
+# EXPECT_STDOUT_EXACT: "true true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as nullable because "reading the process environment safely":
+    var Maybe@(ptr) environ = "environ"
+
+unsafe external "C" as raw because "reading the process environment":
+    var ptr environ = "environ"
+
+fn main() i32:
+    let Maybe@(ptr) q = nullable.environ
+    let ptr p = raw.environ
+    println("{q.is_some()} {p.load_ptr(0).is_some()}")
+    return 0
