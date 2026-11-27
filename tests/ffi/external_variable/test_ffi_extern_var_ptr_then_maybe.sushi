@@ -1,0 +1,17 @@
+# Two blocks declare one C global as `ptr` and as `Maybe@(ptr)` (#1360). Each read
+# converts the C value by the type of the declaration that it names.
+# EXPECT_STDOUT_EXACT: "true\nenviron: some\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as a because "reading the process environment":
+    var ptr environ = "environ"
+unsafe external "C" as b because "reading the process environment":
+    var Maybe@(ptr) environ = "environ"
+
+fn main() i32:
+    let ptr p = a.environ
+    let Maybe@(ptr) q = b.environ
+    println("{q.is_some()}")
+    match Maybe.Some(p):
+        Maybe.Some(_) -> println("environ: some")
+        Maybe.None -> println("environ: none")
+    return 0
