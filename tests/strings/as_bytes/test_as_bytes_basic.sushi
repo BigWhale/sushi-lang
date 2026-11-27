@@ -1,0 +1,56 @@
+# `as_bytes()` gives a borrowed read-only `u8[]` view over a string's bytes with no copy.
+# Covers empty, ASCII, owned heap, multi-byte UTF-8, constant, literal `let`, slices,
+# `peek` arguments, `iter()`, and a one-statement temporary.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n15\n15\n5\n99\n195\n169\n15\n6\n77\n15\n15\n15\n15\n4\n"
+# EXPECT_NO_LEAKS
+
+const string GREETING = "Mostly Harmless"
+
+fn sum_len(u8[] xs) i64:
+    return xs.len()
+
+fn peek_len(peek u8[] xs) i64:
+    return xs.len()
+
+fn make_word() string:
+    return "ford".concat("")
+
+fn main() i32:
+    let string empty = ""
+    println(empty.as_bytes().len())
+
+    let string lit = "Mostly Harmless"
+    println(lit.as_bytes().len())
+
+    let string heap = "Mostly ".concat("Harmless")
+    println(heap.as_bytes().len())
+
+    let string utf8 = "café"
+    let u8[] ub = utf8.as_bytes()
+    println(ub.len())
+    println(ub[0])
+    println(ub[3])
+    println(ub[4])
+
+    let u8[] from_lit = "Mostly Harmless".as_bytes()
+    println(from_lit.len())
+
+    let u8[] lit_sub = "Mostly Harmless".as_bytes()[0..6]
+    println(lit_sub.len())
+    println(lit_sub[0])
+
+    let u8[] from_const = GREETING.as_bytes()
+    println(from_const.len())
+
+    println(sum_len(heap.as_bytes()))
+    println(peek_len(peek heap.as_bytes()))
+
+    let i64 count = 0
+    foreach(b in heap.as_bytes().iter()):
+        if (b > 0 as u8):
+            count := count + 1
+    println(count)
+
+    println(sum_len(make_word().as_bytes()))
+    return 0

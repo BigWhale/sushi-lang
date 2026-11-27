@@ -297,8 +297,9 @@ _add(ErrorMessage("CE2437", Severity.ERROR,
     "the statement, so it would view storage that is freed already. Bind the array "
     "first (`let u8[] all = make()`, then `all[0..4]`), or copy the part with "
     "`.ss(start, count)` or `.s(start, end)`, which make a new array that the binding "
-    "owns. An index of a temporary is different: `let string s = make()[1]` reads one "
-    "element out, and that stays legal."))
+    "owns. The same rule holds for `s.as_bytes()` on a temporary string: bind the string "
+    "first, or copy with `.to_bytes()`. An index of a temporary is different: `let string "
+    "s = make()[1]` reads one element out, and that stays legal."))
 
 _add(ErrorMessage("CE2438", Severity.ERROR,
     "the borrowed return of '{name}' has no source: no borrowed receiver, and no borrowed parameter whose type owns a resource",

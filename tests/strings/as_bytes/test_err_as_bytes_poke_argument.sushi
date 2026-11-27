@@ -1,0 +1,11 @@
+# Rule S4: `as_bytes()` cannot be passed as `poke` (CE2426).
+# EXPECT_ERROR_CODES_EXACT: CE2426
+
+fn grow(poke u8[] xs) ~:
+    xs.push(65 as u8)
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    grow(poke s.as_bytes())
+    println(s.len())
+    return 0

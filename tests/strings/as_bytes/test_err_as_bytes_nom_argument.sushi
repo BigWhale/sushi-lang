@@ -1,0 +1,10 @@
+# Rule S5: `as_bytes()` is a borrowed view and cannot be moved to `nom` (CE2411).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn take(nom u8[] xs) i64:
+    return xs.len()
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println(take(nom s.as_bytes()))
+    return 0

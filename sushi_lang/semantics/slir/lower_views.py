@@ -58,7 +58,10 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     if region is None:
         er.raise_internal_error("CE0000", span=stmt.loc,
                                 detail="a borrowed let with no borrow region reached SLIR")
-    constant = isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node, e.ConstRef)
+    static_root = walk_place(
+        value, Step.MEMBER | Step.INDEX | Step.CALL,
+        crosses_call=lambda call: _is_view_call(low, call)).node
+    constant = isinstance(static_root, (e.ConstRef, e.Lit))
     called = walk_place(value, Step.TRY).node
     borrowed = isinstance(called, e.Call) and low.typeck.sources_of(called.shir_id) is not None
     if not region.owners and not constant and not borrowed:
@@ -110,6 +113,13 @@ def lent_region(low: Lowering, local: ShirLocalId, ident: LocalId,
         return []
     return low.placement.begin_region(ident, [_owner(low, owner, span) for owner in region.owners],
                                       frozenset(region.until), span, owning=True)
+
+
+def _is_view_call(low: Lowering, call: e.ShirExpr) -> bool:
+    """Whether `call` is a built-in method that answers a view of its receiver."""
+    resolved = low.typeck.callee_of(call.shir_id)
+    return (resolved is not None and isinstance(resolved.callee, Builtin)
+            and answers_view(resolved.callee.method))
 
 
 def held_root(low: Lowering, value: e.ShirExpr) -> ShirId:

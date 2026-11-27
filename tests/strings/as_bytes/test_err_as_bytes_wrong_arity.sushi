@@ -1,0 +1,7 @@
+# `as_bytes()` takes no argument (CE2009).
+# EXPECT_ERROR_CODES_EXACT: CE2009
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println(s.as_bytes(1).len())
+    return 0

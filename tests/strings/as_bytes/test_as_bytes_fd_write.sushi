@@ -1,0 +1,25 @@
+# `fd_write` over `as_bytes()` and `fd_write_str` write empty, ASCII, and UTF-8 bytes
+# without copying.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n22\nMostly Harmless café!\n"
+# EXPECT_NO_LEAKS
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/files>
+
+fn main() i32:
+    let string path = "as_bytes_write_test.tmp"
+    let i32 fd = fd_open(path, 3, 420).realise(-1)
+    let string empty = ""
+    let i64 n0 = fd_write(fd, empty.as_bytes()).realise(-1 as i64)
+    println(n0)
+    let string msg = "Mostly ".concat("Harmless café!")
+    let i64 n1 = fd_write_str(fd, msg).realise(-1 as i64)
+    println(n1)
+
+    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
+    let u8[] got = fd_read(fd, 64 as i64).realise(from([]))
+    fd_close(fd).realise(0)
+    remove(path).realise(0)
+    println(string.from_bytes(nom got))
+    return 0

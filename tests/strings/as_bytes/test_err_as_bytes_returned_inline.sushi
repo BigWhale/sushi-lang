@@ -1,0 +1,10 @@
+# Rule S5: `as_bytes()` cannot escape through an owned return (CE2411).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn escape(string s) u8[]:
+    return s.as_bytes()
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println(escape(s).len())
+    return 0

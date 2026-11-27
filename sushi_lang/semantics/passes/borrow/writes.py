@@ -12,7 +12,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .diagnostics import parameter_escape, spelled, write_escape
-from .reads import chain_call_boundary, slice_on_path
+from .reads import chain_call_boundary, readonly_view_on_path, string_byte_view_receiver
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -133,6 +133,8 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
     payload (#590). `receiver` is the receiver of a write through a place: the base of a
     SHIR field.
     """
+    if receiver is not None and reject_write_through_view(checker, receiver, span, what):
+        return True
     # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
     # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
     # answers BEFORE the state table, and the boundary is the diagnostic's second location.
@@ -146,8 +148,6 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
                   "through a nested `Own(poke ...)` reference binding where the "
                   "`Own` sits in an enum payload")
         diag.emit()
-        return True
-    if receiver is not None and reject_write_through_slice(checker, receiver, span, what):
         return True
     if local is None:
         return False
@@ -178,24 +178,28 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
     return False
 
 
-def reject_write_through_slice(checker: 'BorrowChecker', receiver: e.ShirExpr,
-                                span: Optional[Span], what: str) -> bool:
-    """CE2426 for a write whose receiver crosses a slice (S4). True when refused.
-
-    The let-borrow row of the table answers a slice bound by a `let`; this is the same
-    rule for a slice that no name holds: `data[1..3][0] := 9`, `data[1..3].push(9)`.
-    """
-    view = slice_on_path(receiver)
+def reject_write_through_view(checker: 'BorrowChecker', receiver: e.ShirExpr,
+                              span: Optional[Span], what: str) -> bool:
+    """CE2426 for a write whose receiver crosses a slice or a string byte view (S4)."""
+    view = readonly_view_on_path(checker, receiver)
     if view is None:
         return False
     text = spelled(checker, view)
     diag = checker.err.emit_with(er.ERR.CE2426, span, name=text)
-    if view.loc is not None:
-        diag.note_at(f"'{text}' is a slice, a read-only view of the storage of "
-                     f"'{spelled(checker, view.base)}'", view.loc)
-    diag.help(f"the write ({what}) would go through a view, and a growth would move "
-              "storage that the array keeps; write to the array directly, or copy the "
-              "part with `.ss(start, count)`")
+    if isinstance(view, e.Slice):
+        if view.loc is not None:
+            diag.note_at(f"'{text}' is a slice, a read-only view of the storage of "
+                         f"'{spelled(checker, view.base)}'", view.loc)
+        diag.help(f"the write ({what}) would go through a view, and a growth would move "
+                  "storage that the array keeps; write to the array directly, or copy the "
+                  "part with `.ss(start, count)`")
+    else:
+        recv = string_byte_view_receiver(checker, view)
+        if view.loc is not None and recv is not None:
+            diag.note_at(f"'{text}' is a read-only byte view of '{spelled(checker, recv)}'",
+                         view.loc)
+        diag.help(f"the write ({what}) cannot change the bytes of a string; copy the bytes "
+                  "with `.to_bytes()` first")
     diag.emit()
     return True
 

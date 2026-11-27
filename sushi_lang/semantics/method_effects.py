@@ -136,7 +136,13 @@ POSITION_ARGUMENTS: dict[tuple[str, str], frozenset[int]] = {
 
 def answers_view(method: BuiltinMethod) -> bool:
     """Whether a call of `method` answers a view of what its receiver holds."""
-    return method.name in VIEW_ANSWERS.get(method.family, frozenset())
+    return (method.name in VIEW_ANSWERS.get(method.family, frozenset())
+            or is_string_byte_view(method))
+
+
+def is_string_byte_view(method: BuiltinMethod) -> bool:
+    """Whether `method` is `string.as_bytes()`, the read-only byte view of a string."""
+    return method.family == STRING_FAMILY and method.name == "as_bytes"
 
 
 def steps_a_cursor(method: BuiltinMethod) -> bool:

@@ -1,0 +1,10 @@
+# A `let` of `as_bytes()` freezes its string owner: rebinding the string before a later
+# use of the view is CE2412.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+fn main() i32:
+    let string s = "Mostly ".concat("Harmless")
+    let u8[] view = s.as_bytes()
+    s := "So long"
+    println(view.len())
+    return 0
