@@ -27,9 +27,10 @@ A handle bytes can be read from.
 read() answers text and read_bytes() answers bytes. They take the same bound and differ
 only in what they hand back. Both RETURN a fresh value rather than filling a buffer the
 caller owns. For read() that is forced: a string carries a size and no capacity, so a text
-read has nowhere to write into. For read_bytes() it was measured: the one allocation a
-returned array costs is a few percent of the read itself, and a fill-into form could not
-remove it, because a u8[] crosses to the descriptor primitive by value and the primitive
+read has nowhere to write into. For read_bytes(), the returned array costs one allocation
+and a zero fill (issue #1357): from the page cache, an 8 KiB read is about 10 percent slower
+than with no fill, and a 64 KiB read about 40 percent. A fill-into form could not remove
+the allocation, because a u8[] crosses to the descriptor primitive by value and the primitive
 cannot set the caller's length.
 
 The bound counts BYTES, and one read may therefore split a multi-byte sequence. The

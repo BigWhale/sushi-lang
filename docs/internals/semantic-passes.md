@@ -448,8 +448,7 @@ reads it to refuse the bare name where the home is not imported -- the `HashMap`
 A provider COMPOSES what its unit re-exports (`unit-namespaces.md` section 8.1, Ruling
 7). `_unit_provider` reads the unit's own `public use` statements and builds a provider
 for each through `_provider_for`, recursively and with a visited set, so a chain composes
-and a cycle terminates; a registry module names its re-exports in `StdlibModule.reexports`
-instead. `Provider.reaches` walks the chain once -- the provider, then each re-export in
+and a cycle terminates; a registry module re-exports nothing. `Provider.reaches` walks the chain once -- the provider, then each re-export in
 written order, then theirs -- and both halves of the answer read it: `lookup`/`members`
 for the dot, and `_scope_of` for the flat scope, which puts every reached unit, module and
 generic into the importer's `UnitScope`. A binding a re-export answers carries the

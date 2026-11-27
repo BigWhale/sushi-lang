@@ -9,14 +9,14 @@ A `Signature` is that row. Every reader takes what it needs from it and nothing 
 name twice; `tests/unit/test_stdlib_signature_tables.py` is the gate that says so.
 
 A parameter carries its Sushi type AND how it crosses the boundary, because one type
-crosses two ways: `fd_open` takes a PATH, which is marshalled to a NUL-terminated `i8*`
-through `emit_cstr_arg`, and `fd_write_str` takes a string VALUE, which crosses as its
-own fat pointer. The type alone cannot tell those apart.
+crosses two ways: `sock_dns_resolve` takes a HOST, which is marshalled to a
+NUL-terminated `i8*` through `emit_cstr_arg`, and `fd_write_str` takes a string VALUE,
+which crosses as its own fat pointer. The type alone cannot tell those apart.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Tuple, Union
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import BuiltinType, Type, UnknownType
@@ -41,27 +41,18 @@ class Signature:
     """One function's row: what it takes, what it answers, and in which channel.
 
     `ok` is the payload of the `Result` the function answers, and `error` names the
-    enum in the other arm. A function that answers its value BARE -- `fd_isatty`, which
-    cannot fail in a way a caller can act on -- sets `ok` to None and puts the type in
-    `bare` instead.
+    enum in the other arm.
     """
-    params: Tuple[Param, ...] = ()
-    ok: Optional[SushiType] = None
-    error: Optional[str] = None
-    bare: Optional[SushiType] = None
+    params: Tuple[Param, ...]
+    ok: SushiType
+    error: str
 
     @property
     def arity(self) -> int:
         return len(self.params)
 
     def return_type(self) -> SushiType:
-        """The declared return type: a `Result@(ok, error)`, or the bare type."""
-        if self.ok is None:
-            if self.bare is None:
-                raise ValueError("a signature answers either a Result or a bare type")
-            return self.bare
-        if self.error is None:
-            raise ValueError("a Result signature names its error enum")
+        """The declared return type: `Result@(ok, error)`."""
         return GenericTypeRef("Result", (self.ok, UnknownType(self.error)))
 
 

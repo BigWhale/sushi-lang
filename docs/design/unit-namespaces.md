@@ -272,8 +272,8 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 
 | Shape | Modules | Aliasable |
 |---|---|---|
-| Registry free functions, already keyed by `(module, name)` | `<io/files>` | **yes** |
-| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, `<math>`, `<random>`, `<sys/env>`, `<sys/process>`, `<time>`, the six `<net/*>` modules, `<toolchain/slib>`, `<text/ascii>`, `<encoding/hex>`, `<encoding/base64>`, and the Sushi half of `<collections/strings>` | **yes** — a user unit in every respect. `<collections/strings>` has two halves: its unit brings `StringBuilder`, and the generator half brings no name. No import enables a method: a stdlib method on a built-in type needs no import (R1 and R2 of `extension-visibility.md`), and the build loads the module of a method that a unit calls |
+| Registry free functions, already keyed by `(module, name)` | `<net/socket>`, and `fd_write_str` of `<io/files>` | **yes** |
+| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, `<math>`, `<random>`, `<sys/env>`, `<sys/process>`, `<time>`, the six `<net/*>` modules, `<toolchain/slib>`, `<text/ascii>`, `<encoding/hex>`, `<encoding/base64>`, and the Sushi halves of `<collections/strings>` and `<io/files>` | **yes** — a user unit in every respect. `<collections/strings>` has two halves: its unit brings `StringBuilder`, and the generator half brings no name. No import enables a method: a stdlib method on a built-in type needs no import (R1 and R2 of `extension-visibility.md`), and the build loads the module of a method that a unit calls |
 | A built-in generic that the import activates | `<collections/hashmap>` (`GenericNamespace`, `semantics/namespaces.py`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it — see 4.3.1 |
 | A method interface: the import brings **no name** | a directory import such as `<collections>` | pointless, and said so — see below |
 | A predefined enum the import brings | `FileMode` → `<io/fs>`; `IoError`, `FileError` → `<io/error>`; `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `EnvError` → `<sys/env>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. **The home is reached through the modules that re-export it** (section 8.1): `<io/contracts>` says `public use <io/error>`, `<io/fs>` and `<io/buf>` say `public use <io/contracts>`, so `use <io/fs>` alone brings `IoError`, `FileError` and `SeekFrom` beside `FileMode`, and `fs.IoError` holds behind the alias. `StdError` is the general error enum and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it |
@@ -867,9 +867,9 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
 4. The predefined enums stay synthesized and homed (Ruling 3). A module makes a home
    reachable by re-exporting it -- `public use <io/error>` in `<io/contracts>` -- and the
    stamp machinery (`homed_enums`, `UnitScope.holds_home`, `reject_out_of_scope_type`)
-   is read through the re-export. A registry (Python) module has no `use`
-   statement to write, so it declares its re-exports in a `REEXPORTS` tuple beside its
-   functions (`StdlibModule.reexports`); `<io/files>` hands on `<io/error>` that way. A
+   is read through the re-export. A registry (Python) module has no `use` statement, so
+   it re-exports nothing; a module with two halves re-exports through the `public use` of
+   its Sushi half (`<io/files>` hands on `<io/error>` that way). A
    `public use` that hands on nothing public warns ([CW3005](../error-catalog.md#cw3005)), as an empty alias does ([CW3004](../error-catalog.md#cw3004)).
    A plain `use` re-exports nothing: `<io/error>` imports `<net/error>` for the one name
    that the conversion `NetError as IoError` needs (a conversion lives in the unit of its

@@ -1,0 +1,50 @@
+# fd_readln of a file reads chunks of 128 bytes. A line of 127 bytes puts its `\n` at
+# the last byte of the first chunk, a line of 128 bytes puts it at the first byte of the
+# second chunk, and a line of 300 bytes takes three chunks. Each line comes back byte for
+# byte, and the next line starts after its `\n`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "127 same\n128 same\n300 same\n4 same\nnone\n"
+use <io/files>
+
+fn pattern(i32 length) string:
+    let u8[] bytes = from([])
+    let i32 i = 0
+    while (i < length):
+        bytes.push((97 + i % 26) as u8)
+        i := i + 1
+    return string.from_bytes(nom bytes)
+
+fn check(i32 fd, string expected) ~:
+    match fd_readln(fd):
+        Result.Ok(answer) ->
+            match answer:
+                Maybe.Some(line) ->
+                    if (line == expected):
+                        println("{line.len()} same")
+                    else:
+                        println("{line.len()} differs")
+                Maybe.None -> println("none")
+        Result.Err(_) -> println("failed")
+
+fn main() i32:
+    let i32 fd = fd_open("readln_chunk_edge_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return 1
+
+    let string short = pattern(127)
+    let string edge = pattern(128)
+    let string long = pattern(300)
+    fd_write_str(fd, "{short}\n{edge}\n{long}\ntail").realise(-1 as i64)
+    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
+
+    check(fd, short)
+    check(fd, edge)
+    check(fd, long)
+    check(fd, "tail")
+    check(fd, "")
+
+    fd_close(fd).realise(-1)
+    return 0

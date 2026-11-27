@@ -69,7 +69,7 @@ def _function_type_of_row(row: 'Signature', yielded: Type) -> FunctionType:
     """The function type of a stdlib row: the `Result` it answers is its channel."""
     params = tuple(param.ty for param in row.params)
     modes = (ParamMode.BORROW,) * len(params)
-    if row.ok is None or not isinstance(yielded, EnumType):
+    if not isinstance(yielded, EnumType):
         return FunctionType(params, yielded, None, param_modes=modes)
     ok, err = result_ok_err(yielded)
     return FunctionType(params, ok, err, param_modes=modes)

@@ -96,7 +96,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.stdlib_registry import (
         BUILTIN_TYPE_METHOD_MODULES, PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES,
-        builtin_type_method_names, get_stdlib_registry, keep_builtin_type_methods,
+        builtin_type_method_names, keep_builtin_type_methods,
         may_declare_methods, named_methods, platform_source,
         resolve_source_stdlib_path, stdlib_imports,
     )
@@ -106,20 +106,8 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
     named: dict[str, frozenset[str]] = {}
 
     def _imported(units) -> set:
-        needed = set()
-        paths = [path for unit in units if unit.ast is not None
-                 for path in stdlib_imports(unit.ast)]
-        for path in paths:
-            if path in SOURCE_STDLIB_MODULES:
-                needed.add(path)
-                continue
-            # A registry module's re-exports (`StdlibModule.reexports`) ride with
-            # its import, so a source module one of them names is compiled too.
-            module = get_stdlib_registry().get_module(path)
-            for other in getattr(module, "reexports", ()):
-                if other in SOURCE_STDLIB_MODULES:
-                    needed.add(other)
-        return needed
+        return {path for unit in units if unit.ast is not None
+                for path in stdlib_imports(unit.ast) if path in SOURCE_STDLIB_MODULES}
 
     def _for_methods(units) -> set:
         names = set().union(*(named.setdefault(unit.name, named_methods(unit.ast))

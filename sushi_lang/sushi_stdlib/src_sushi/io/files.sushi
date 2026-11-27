@@ -2,17 +2,16 @@
 io/files -- the Sushi half of the path utilities and the descriptor layer.
 
 `<io/files>` has two halves. The functions of this file call the C library through an
-`unsafe external` block. The other functions of the module are the `.bc` unit of the same
-name. A `use <io/files>` gives both halves.
+`unsafe external` block. `fd_write_str` is the `.bc` unit of the same name (issue #1359).
+A `use <io/files>` gives both halves.
 
 This module re-exports `<io/error>`, so `use <io/files>` alone can name `FileError`.
 :##
 
 public use <io/error>
 use <sys/platform>
-use <io/files>
 
-unsafe external "C" as libc because "the path queries and the path changes of the C library":
+unsafe external "C" as libc because "the path and descriptor calls of the C library":
     fn access(string path, i32 mode) i32 = "access"
     fn unlink(string path) i32 = "unlink"
     fn rmdir(string path) i32 = "rmdir"

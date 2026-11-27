@@ -10,76 +10,56 @@ All notable changes to Sushi Lang will be documented in this file.
   pointer (`string`, `u8[]`, `ptr`, `Maybe@(string)`, `Maybe@(ptr)`) is one C type for
   CE5001. A user `fn stat(string path, ptr buf) i32 = STAT_SYMBOL` now compiles beside
   `use <io/files>`, whose `stat` takes a `poke u8[]`, and `write(i32, string, i64)` agrees
-  with `write(i32, u8[], i64)`. An `i32` against an `i64`, a pointer against an integer, an
-  other count of parameters and a fixed list against `var_arg` are still CE5001. Each call
-  marshals by the types of its own declaration: before, a call of a link name that two blocks
-  declare with two Sushi types (for example a `Maybe@(string)` and a `string` return) used
-  the first declaration and stopped with an internal error.
+  with `write(i32, u8[], i64)`, also in two blocks of one unit. An `i32` against an `i64`, a
+  pointer against an integer, an other count of parameters and a fixed list against
+  `var_arg` are still CE5001. Each call marshals by the types of its own declaration:
+  before, a call of a link name that two blocks declare with two Sushi types (for example a
+  `Maybe@(string)` and a `string` return) used the first declaration and stopped with an
+  internal error.
 
-- **`exists` of `<io/files>` is Sushi source.** `<io/files>` now has two halves: the
-  Sushi half `src_sushi/io/files.sushi` and the `.bc` unit. A `use <io/files>` gives both.
-  `exists(path)` calls `access()` of the C library and keeps its signature and its
-  answer. An own `exists` in a unit with a flat `use <io/files>` now gets CW3002.
-
-- **`remove`, `rmdir`, `mkdir` and `rename` of `<io/files>` are Sushi source.** Each one
-  calls its C function (`unlink`, `rmdir`, `mkdir`, `rename`) and keeps its signature,
-  its `Result.Ok(0)` and its `FileError` variants (`FileError.from_errno`). An own
-  function with one of these names in a unit with a flat `use <io/files>` now gets CW3002.
-
-- **`fd_read` and `fd_pread` of `<io/files>` are Sushi source.** Each one calls `read()`
-  or `pread()` of the C library into a new `u8[]` and cuts the array to the count read.
-  They keep their signatures, the short read, the empty answer at the end of the file and
-  their `FileError` variants. `fd_read` calls `read()` again after EINTR, as before. A
-  negative `max` or `count` now stops the program with RE2026; before, it stopped with
-  RE2021. A count above 2147483647 now reads at most 2147483647 bytes. The new buffer is
-  filled with zeros, so a large read is slower than before.
-
-- **`fd_pwrite` of `<io/files>` is Sushi source.** It calls `pwrite()` of the C library
-  one time and gives the count written. It keeps its signature, the short write and its
-  `FileError` variants. The array is a borrow, and the function does not copy it.
-
-- **`fd_write` of `<io/files>` is Sushi source.** It calls `write()` of the C library
-  until all the bytes are written, and calls it again after `EINTR`. A call that writes
-  zero bytes gives a `FileError`. It keeps its signature, its count (the length of the
-  array) and its `FileError` variants. The array is a borrow, and the function does not
-  copy it. `fd_write_str` stays in the `.bc` unit.
-
-- **`copy` of `<io/files>` is Sushi source, and it keeps the mode of the source.** The
-  destination now gets the permission bits of the source (`mode & 0o777`); before, it was
-  always `0o644` less the umask. The function opens the destination with the bits of the
-  source and then sets them with `fchmod()`, so the umask does not remove bits, and an
-  existing destination also gets the bits of the source. A short write does not stop the
-  copy now: each chunk goes through `fd_write`, which writes all the bytes. After EINTR,
-  `read()` and `write()` are called again. A chunk is now 64 KiB (before, 4 KiB). The
-  function keeps its signature, its `Result.Ok(0)`, the `O_TRUNC` of an existing
-  destination and its `FileError` variants. A source that is a directory still gives
-  `FileError.IsDirectory`, but the function now finds it before it opens the destination,
-  so it does not make an empty destination file.
-
-- **The stat readers of `<io/files>` are Sushi source.** `file_size`, `mtime`, `ctime`,
-  `mode`, `is_symlink`, `is_file` and `is_dir` call `stat()` or `lstat()` of the C library
-  and keep their signatures and their answers. `is_symlink` calls `lstat()`. The other six
-  call `stat()`, so they follow a symbolic link. `is_file` and `is_dir` give `false` when
-  the path cannot be examined. `mode` gives the full `st_mode`. The new public function
-  `path_stat(path, follow)` gives the size, the two times and the mode from one `stat()`
-  or `lstat()` call. `stat` of `<io/fs>` now makes two system calls (one `stat()` and one
-  `lstat()`); before, it made five. `walk` of `<io/fs>` now makes one `lstat()` for each
-  entry, and one `stat()` more for a symbolic link; before, it made one `stat()` for each
-  entry and one `lstat()` more for a directory. The answers of `stat` and `walk` do not
-  change.
-
-- **`read_dir` of `<io/files>` is Sushi source, and a failed `readdir()` is an error.**
-  `read_dir` calls `opendir()`, `readdir()` and `closedir()` of the C library and keeps its
-  signature, its entries (without `.` and `..`), the order of `readdir()` and its
-  `FileError` variants. Before, a NULL from `readdir()` was always the end, so an error
-  gave a short list in `Result.Ok`. Now `read_dir` sets `errno` to 0 before each
-  `readdir()` call, and a NULL with an `errno` that is not 0 gives
-  `Result.Err(FileError.from_errno(errno))`. The list grows with `push`, so an allocation
-  failure stops the program with RE2021; before, an unchecked `realloc` grew it. The
-  directory is closed on each path. A program with `use <io/files>` now links at `--opt O1`
-  and `--opt O2` (#1358, for `<io/files>`). `<sys/platform>` has a new constant,
-  `ERRNO_LOCATION_SYMBOL`: the link name of the C function that gives the address of
-  `errno`, so that Sushi source can set `errno`.
+- **`<io/files>` is Sushi source, except `fd_write_str`.** Every function but one is now in
+  `src_sushi/io/files.sushi`. It calls the C library through an `unsafe external` block,
+  reads the platform values from `<sys/platform>` and gives its errors through
+  `FileError.from_errno`. `fd_write_str` stays in the `.bc` unit, because it writes the
+  bytes of the string with no copy (#1359). A `use <io/files>` gives both halves. The
+  signatures do not change, and the answers do not change, except as this entry says.
+  BREAKING.
+  - An own function with the name of a Sushi function of `<io/files>`, in a unit with a
+    flat `use <io/files>`, now gets CW3002.
+  - `<io/files>` now compiles only on macOS arm64 and Linux x86_64, the hosts of
+    `<sys/platform>`. On macOS x86_64 and Linux aarch64, a program that uses `<io/files>`
+    (or `<io/fs>`, which uses it) gets CE3021.
+  - A negative `max` of `fd_read` or `count` of `fd_pread` stops the program with RE2026
+    (before, RE2021). A count above 2147483647 reads at most 2147483647 bytes. The new
+    read buffer is filled with zeros, so a large read is slower than before: from the page
+    cache, a 64 KiB read is about 40 percent slower, and an 8 KiB read about 10 percent
+    (#1357). `fd_read` calls `read()` again after `EINTR`, as before; `fd_pread` does not.
+  - `fd_write` calls `write()` until all the bytes are written, calls it again after
+    `EINTR`, and gives a `FileError` for a call that writes zero bytes, as before.
+    `fd_write` and `fd_pwrite` borrow the array and do not copy it.
+  - `copy` gives the destination the permission bits of the source (`mode & 0o777`);
+    before, it was always `0o644` less the umask. It opens the destination with these bits
+    and then sets them with `fchmod()`, so the umask does not remove bits, and an existing
+    destination also gets them. A failed `fchmod()` is an error. A short write does not
+    stop the copy now, and `read()` and `write()` are called again after `EINTR`. A chunk is
+    now 64 KiB (before, 4 KiB). A source that is a directory still gives
+    `FileError.IsDirectory`, but `copy` now finds it before it opens the destination, so it
+    does not make an empty destination file.
+  - `read_dir` gives `Result.Err` for a failed `readdir()`. Before, a NULL from `readdir()`
+    was always the end, so an error gave a short list in `Result.Ok`. Now `read_dir` sets
+    `errno` to 0 before each `readdir()` call, and a NULL with an `errno` that is not 0 is
+    `Result.Err(FileError.from_errno(errno))`. The list grows with `push`, so an allocation
+    failure stops the program with RE2021 (before, an unchecked `realloc` grew it).
+  - The new public function `path_stat(path, follow)` gives the size, the two times and the
+    mode from one `stat()` (`follow` is `true`) or `lstat()` call. `stat` of `<io/fs>` uses
+    it and now makes two system calls (one `stat()` and one `lstat()`); before, it made five.
+    `walk` of `<io/fs>` now makes one `lstat()` for each entry, and one `stat()` more for a
+    symbolic link; before, it made one `stat()` for each entry and one `lstat()` more for a
+    directory. The answers of `stat` and `walk` do not change.
+  - `<sys/platform>` has a new constant, `ERRNO_LOCATION_SYMBOL`: the link name of the C
+    function that gives the address of `errno`, so that Sushi source can set `errno`.
+  - A program with `use <io/files>` now links at `--opt O1` and `--opt O2` (#1358, for
+    `<io/files>`).
 
 - **The `templates` index of a `.slib` lists only what a consumer can see.** The rules
   that chose what a binary library shipped are removed, and one visibility rule replaces

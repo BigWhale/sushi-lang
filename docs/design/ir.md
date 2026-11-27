@@ -3349,12 +3349,12 @@ the name of the function with no alias, and `module` is the `use` path of its mo
 `symbol` is the generated function of its row (`stdlib_symbol`,
 `semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`
 (`sushi_io_files_<name>` and `sushi_net_<name>` for the two layers). Every other `Direct`
-callee has no module. The printer writes the call as `call @<io/files>.exists(...)`. The emitter gives a `Direct` callee with a
+callee has no module. The printer writes the call as `call @<io/files>.fd_write_str(...)`. The emitter gives a `Direct` callee with a
 module to the row of its module in `STDLIB_EMITTERS` with the value and the type of each
 operand (9.7); every operand is evaluated first. The row of each module reads the row of
 the call (`stdlib_signature`), declares the generated function of the symbol from that row and
 calls it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). The
-generated function answers the type of its row: a `Result`, or a bare value.
+generated function answers the type of its row: a `Result`.
 
 **Every module of `STDLIB_EMITTERS` takes operands.** Each module
 (`io/files`, `net/socket`) gets the same operand form: the row of the

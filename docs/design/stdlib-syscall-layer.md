@@ -80,6 +80,9 @@ generators turn that cause into the tag of a unit-variant error type -- `FileErr
   module. `errno_to_net_error_table` and `ERRNO_DEFAULT_NET_ERROR` are in
   `sushi_lang/backend/runtime/constants.py`, beside the shared `ERRNO_*` constants.
   `io/files/errno.py` and `net/errno.py` each give the emitter their table and their default.
+  The Sushi functions of `<io/files>` do not use the Python table: `FileError.from_errno`
+  (`src_sushi/io/error.sushi`) is their one map, with the same rows. The Python table is
+  left for `fd_write_str`, the one generated function of `<io/files>`.
 - **The layout.** The `Result` bytes are built in `src/results.py` and nowhere else, and
   `errno` is read through `declare_errno_location` in `src/libc_declarations.py`, so the
   two error families read one `errno` through one declaration.

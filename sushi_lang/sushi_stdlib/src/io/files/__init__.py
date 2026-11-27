@@ -1,9 +1,6 @@
-"""The <io/files> module: the descriptor primitives, and nothing else.
+"""The bitcode half of <io/files>: `fd_write_str`, and nothing else.
 
-Every file METHOD is an ordinary extension in `src_sushi/io/fs.sushi`, written over
-these primitives. `lines()` was the last builtin and Phase 7d removed it: line
-iteration is `BufReader.lines()` in `src_sushi/io/buf.sushi`, walked by the `foreach`
-`next()` protocol (HANDLES.md ruling R21), so the compiler defines no File method at all.
+The other functions are Sushi source (`src_sushi/io/files.sushi`).
 """
 
 import llvmlite.ir as ir

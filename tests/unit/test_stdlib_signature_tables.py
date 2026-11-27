@@ -96,9 +96,6 @@ def test_the_registry_reads_the_table(module_path, name, sig):
 def test_the_return_type_comes_from_the_table(layer, name, sig):
     reader = dict((lay, ret) for lay, _t, _n, ret in LAYERS)[layer]
     answered = reader(name)
-    if sig.ok is None:
-        assert answered == sig.bare, f"{name} answers its value bare"
-        return
     assert isinstance(answered, GenericTypeRef)
     assert answered.base_name == "Result"
     assert answered.type_args[0] == sig.ok
@@ -114,17 +111,13 @@ def test_the_backend_can_cross_every_type_in_the_row(layer, name, sig):
 
     for param in sig.params:
         assert llvm_param_type(param) is not None, f"{layer}:{name} parameter {param.ty}"
-    if sig.ok is not None:
-        assert llvm_ok_type(sig.ok) is not None, f"{layer}:{name} ok {sig.ok}"
+    assert llvm_ok_type(sig.ok) is not None, f"{layer}:{name} ok {sig.ok}"
 
 
 @pytest.mark.parametrize(("layer", "name", "sig"), EVERY_ROW, ids=ROW_IDS)
 def test_a_row_that_answers_a_result_names_an_error_enum(layer, name, sig):
     """The instantiate pass interns `Result@(ok, E)`, so E has to be named."""
-    if sig.ok is None:
-        assert sig.error is None, f"{name} answers bare and needs no error enum"
-    else:
-        assert sig.error, f"{name} answers a Result and must name its error enum"
+    assert sig.error, f"{name} answers a Result and must name its error enum"
 
 
 # -- the shape of a row --------------------------------------------------------

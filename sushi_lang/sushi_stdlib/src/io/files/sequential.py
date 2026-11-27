@@ -1,6 +1,4 @@
-"""The SEQUENTIAL half of the descriptor layer: the string write.
-
-`fd_read`, `fd_readln` and `fd_write` are Sushi source (`src_sushi/io/files.sushi`).
+"""The string write of the descriptor layer: `fd_write_str`.
 
 The design record is `docs/design/stdlib-syscall-layer.md`.
 """

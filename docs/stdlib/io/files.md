@@ -16,6 +16,34 @@ use <io/files>
 use <io/fs>
 ```
 
+`<io/files>` is Sushi source (`sushi_stdlib/src_sushi/io/files.sushi`) over the C library,
+with one exception: `fd_write_str` is a precompiled `.bc` function, because it writes the
+bytes of the string with no copy (issue #1359). One `use <io/files>` gives both. A function
+of your own with the name of a Sushi function of `<io/files>`, in a unit with a flat
+`use <io/files>`, gets [CW3002](../../error-catalog.md#cw3002).
+
+`<io/files>` reads its platform values from [`<sys/platform>`](../system/platform.md), so it
+compiles only on macOS arm64 and Linux x86_64. On another host (for example macOS x86_64 or
+Linux aarch64), a program that uses `<io/files>`, or a module over it such as `<io/fs>`,
+gets [CE3021](../../error-catalog.md#ce3021).
+
+### Each function and its errors
+
+Each error is a `FileError`, from `FileError.from_errno` of the `errno` of the C call
+([`<io/error>`](error.md)). `fd_write_str` uses the same map.
+
+| Function | Errors |
+|---|---|
+| `exists`, `is_file`, `is_dir`, `fd_isatty` | None. A path or a descriptor that cannot be examined gives `false` |
+| `file_size`, `mtime`, `ctime`, `mode`, `path_stat`, `is_symlink` | The `stat()` or `lstat()` call fails (for example `NotFound`) |
+| `remove`, `rmdir`, `mkdir`, `rename` | The `unlink()`, `rmdir()`, `mkdir()` or `rename()` call fails |
+| `read_dir` | `opendir()` or `readdir()` fails. An allocation failure stops the program with `RE2021` |
+| `copy` | A call on the source or the destination fails. A source that is a directory gives `IsDirectory` |
+| `fd_open`, `fd_dup`, `fd_close`, `fd_seek` | The `open()`, `dup()`, `close()` or `lseek()` call fails |
+| `fd_read`, `fd_pread` | The `read()` or `pread()` call fails. A negative count stops the program with `RE2026` |
+| `fd_write`, `fd_write_str`, `fd_pwrite` | The `write()` or `pwrite()` call fails. For `fd_write` and `fd_write_str`, a call that writes zero bytes is also an error |
+| `fd_readln` | The `read()` or `pread()` call fails |
+
 ## Overview
 
 A `File` OWNS its descriptor. It moves to exactly one owner and closes itself when that
@@ -976,7 +1004,7 @@ which is what makes them the ones a handle is written on.
 
 `fd_open`, `fd_dup`, `fd_close` and `fd_isatty` belong to neither half.
 
-### `fd_pread(i32 fd, i64 offset, i64 max) u8[] | FileError`
+### `fd_pread(i32 fd, i64 offset, i64 count) u8[] | FileError`
 ### `fd_pwrite(i32 fd, i64 offset, u8[] data) i64 | FileError`
 
 Read or write at an offset **without moving the descriptor's file position**. That is
@@ -986,9 +1014,16 @@ I/O converged on this primitive — C and POSIX have `pread(2)` and `pwrite(2)`,
 `File.ReadAt`, Rust has `FileExt::read_at`, Java takes a position argument on
 `FileChannel.read` — and none of them needed a new kind of type.
 
-`fd_pread` answers what ARRIVED, which may be fewer bytes than asked for and is empty at
-end of file. `fd_pwrite` answers the count it took; looping until the whole buffer is
-gone is the caller's job.
+`fd_pread` makes ONE `pread(2)` call and answers what ARRIVED, which may be fewer than
+`count` bytes and is empty at end of file. It does not call `pread(2)` again after `EINTR`.
+`fd_pwrite` makes one `pwrite(2)` call and answers the count it took; looping until the
+whole buffer is gone is the caller's job.
+
+The `count` of `fd_pread` is the same as the `max` of `fd_read`: a negative count stops the
+program with `RE2026`, and a count above 2147483647 (the largest length of an array) reads
+at most 2147483647 bytes, so the answer is short. The function fills a new buffer of
+`count` bytes with zeros before the call, so a large read is slower than the read itself
+(issue #1357).
 
 ### `fd_open(string path, i32 intent, i32 mode) i32 | FileError`
 
@@ -1011,34 +1046,45 @@ read-only, which is the safe reading of a value this function does not know.
 ### `fd_read(i32 fd, i64 max) u8[] | FileError`
 
 ONE `read(2)` from the descriptor's current position, which it advances. The answer
-carries what ARRIVED and may be shorter than asked for; an **empty array is end of file**
-and not an error, so a caller loops until the answer is empty.
+carries what ARRIVED and may be shorter than `max`; an **empty array is end of file**
+and not an error, so a caller loops until the answer is empty. When a signal stops the call
+before a byte arrives (`EINTR`), the function calls `read(2)` again.
+
+A negative `max` stops the program with `RE2026`. A `max` above 2147483647 (the largest
+length of an array) reads at most 2147483647 bytes, so the answer is short. The function
+fills a new buffer of `max` bytes with zeros before the call, so a large read is slower
+than the read itself (issue #1357).
 
 ### `fd_write(i32 fd, u8[] data) i64 | FileError`
 ### `fd_write_str(i32 fd, string s) i64 | FileError`
 
-Write every byte, looping past a short write, and answer the count. `fd_write_str` takes
-the string's own bytes with no `to_bytes()` copy in front of them — a fat pointer already
-carries a pointer and a length, which is what `write(2)` wants.
+Write every byte, looping past a short write, and answer the count. When a signal stops a
+call before a byte moves (`EINTR`), the function calls `write(2)` again. A call that writes
+zero bytes is an error. `fd_write` borrows the array and does not copy it. `fd_write_str`
+takes the string's own bytes with no `to_bytes()` copy in front of them — a fat pointer
+already carries a pointer and a length, which is what `write(2)` wants. `fd_write_str` is
+the one `.bc` function of `<io/files>` (issue #1359).
 
 Unlike `sock_send`, these do not hand a partial write back to the caller. A socket's
 partial write is information — how much the peer's window took — and a file's is not.
 
 ### `fd_readln(i32 fd) Maybe@(string) | FileError`
 
-One line, the newline **stripped**, in a `Maybe`. A blank line is `Maybe.Some("")` and
-the end of the file is `Maybe.None`, so the two are never the same answer.
+One line, the `\n` **stripped**, in a `Maybe`. A `\r` stays. A blank line is
+`Maybe.Some("")` and the end of the file is `Maybe.None`, so the two are never the same
+answer. A last line with no `\n` after it is a line, and the next call gives `Maybe.None`.
 
 It has two paths, and which one runs depends on whether the descriptor can seek:
 
 | descriptor | how it reads | why |
 |---|---|---|
-| a file, or anything seekable | `pread` a chunk, then one `lseek` past the newline | fast: 0.60s for 200 000 lines, against 0.47s for the buffered `fgets` it replaces |
-| a pipe, a socket, a terminal — including `stdin` | one byte at a time | correct: a pipe cannot give back an over-read, so a chunked read would swallow bytes the next reader owns |
+| a file, or anything seekable | `pread` chunks of 128 bytes, then one `lseek` to the byte after the newline | fast: few system calls for each line |
+| a pipe, a socket, a terminal — including `stdin` | one `read` for each byte | correct: a pipe cannot give back an over-read, so a chunked read would swallow bytes the next reader owns |
 
-The byte-at-a-time path costs 4.49s over the same 200 000 lines, nearly all of it in the
-kernel. That is the price of not losing data, and it is only paid where it must be. For
-bulk line reading over any descriptor, the buffered reader is the general answer.
+The byte-at-a-time path makes one system call for each byte. That is the price of not
+losing data, and it is only paid where it must be. For bulk line reading over any
+descriptor, the buffered reader is the general answer. The function does not call `read`
+or `pread` again after `EINTR`.
 
 ### `fd_seek(i32 fd, i64 offset, i32 whence) i64 | FileError`
 
@@ -1062,7 +1108,8 @@ this is for the shared-listener pattern and not for concurrent reads of one file
 
 ### `fd_close(i32 fd) i32 | FileError`
 
-Close one descriptor.
+Close one descriptor. The function calls `close(2)` one time, and does not call it again
+after `EINTR`.
 
 ## Common Patterns
 
@@ -1208,6 +1255,13 @@ macOS and Linux end a line with `\n` (LF). `read()` and `read_all()` keep every 
 macOS and Linux use POSIX permissions (user, group and other).
 
 `PermissionDenied` error occurs when the process lacks required permissions.
+
+### Hosts
+
+`<io/files>` serves two hosts: macOS arm64 and Linux x86_64, the hosts of
+[`<sys/platform>`](../system/platform.md). macOS x86_64 and Linux aarch64 are not served:
+a program that uses `<io/files>` there gets [CE3021](../../error-catalog.md#ce3021). Before,
+the Python generator of `<io/files>` also built on these two hosts.
 
 ## Performance Considerations
 

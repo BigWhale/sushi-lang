@@ -346,21 +346,16 @@ class StdlibNamespace(Provider):
     """A registry stdlib module. Already keyed by `(module, name)` -- section 1.4.
 
     `types` carries the predefined enums HOMED at the module (#574): `<sys/env>` brings
-    `EnvError`, so `m.EnvError` is a member exactly as `m.getenv` is. `reexports` is
-    what the module's `REEXPORTS` row names (`StdlibModule.reexports`): a registry
-    module has no `use` statement to write, so its re-exports are declared beside its
-    functions (section 8.1).
+    `EnvError`, so `m.EnvError` is a member exactly as `m.getenv` is.
     """
 
     namespace_kind = "stdlib"
 
     def __init__(self, module_path: str, module: Any,
-                 types: Optional[Mapping[str, str]] = None,
-                 reexports: Tuple[Provider, ...] = ()) -> None:
+                 types: Optional[Mapping[str, str]] = None) -> None:
         self.origin = module_path
         self._module = module
         self._types = types or {}
-        self.reexports = reexports
 
     def _lookup_own(self, name: str) -> Optional[Binding]:
         func = self._module.functions.get(name)

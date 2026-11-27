@@ -272,9 +272,6 @@ class ExpressionScanner:
         """
         from sushi_lang.semantics.typesys import UnknownType
 
-        if sig.ok is None:
-            return  # a bare answer: no Result to intern
-
         payload = sig.ok
         if isinstance(payload, GenericTypeRef):
             inner = self._resolve_payload_arg(payload.type_args)

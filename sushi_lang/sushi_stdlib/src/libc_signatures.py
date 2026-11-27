@@ -22,8 +22,7 @@ def _c(ret: str, *params: str, var_arg: bool = False) -> LibcSignature:
 
 _CTYPE = _c("int", "int")
 
-#: Every libc symbol that the compiler declares. The key is the C name; a platform
-#: variant of a symbol (`stat$INODE64`) is declared with the signature of its C name.
+#: Every libc symbol that the compiler declares. The key is the C name.
 LIBC_SIGNATURES: dict[str, LibcSignature] = {
     # Memory and process
     "malloc": _c("void*", "size_t"),
@@ -49,7 +48,6 @@ LIBC_SIGNATURES: dict[str, LibcSignature] = {
     "fwrite": _c("size_t", "const void*", "size_t", "size_t", "FILE*"),
     "setvbuf": _c("int", "FILE*", "char*", "int", "size_t"),
     # Files and descriptors
-    "stat": _c("int", "const char*", "struct stat*"),
     "write": _c("ssize_t", "int", "const void*", "size_t"),
     "dup": _c("int", "int"),
     "close": _c("int", "int"),
