@@ -164,8 +164,8 @@ def operand_value(state: FunctionState, operand: p.Operand) -> ir.Value:
     match operand:
         case p.Const(constant):
             return constant_value(state, constant)
-        case p.Copy(p.Global(symbol)) if extern_variable(state, symbol) is not None:
-            return read_extern_variable(state, symbol)
+        case p.Copy(p.Global(symbol, ty)) if extern_variable(state, symbol) is not None:
+            return read_extern_variable(state, symbol, ty)
         case p.Copy(place) | p.Move(place):
             return state.builder.load(place_address(state, place))
 
