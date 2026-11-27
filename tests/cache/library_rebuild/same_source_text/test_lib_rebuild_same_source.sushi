@@ -7,7 +7,7 @@
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 # EXPECT_CACHED: test_lib_rebuild_same_source, probe_util, io/fs, io/contracts, io/error
 # EXPECT_CACHED: io/path, net/error, sys/platform, text/ascii, collections/strings
-# EXPECT_CACHED: lib/probelib/probelib
+# EXPECT_CACHED: lib/probelib/probelib, io/files, encoding/binary
 use <lib/probelib>
 use <io/fs>
 use "probe_util"

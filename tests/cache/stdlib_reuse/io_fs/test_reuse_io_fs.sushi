@@ -7,7 +7,7 @@
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 # EXPECT_REBUILT: test_reuse_io_fs, io/contracts
 # EXPECT_CACHED: io/fs, io/error, io/path, net/error, sys/platform, text/ascii
-# EXPECT_CACHED: collections/strings
+# EXPECT_CACHED: collections/strings, io/files, encoding/binary
 use <io/fs>
 
 fn main() i32:
