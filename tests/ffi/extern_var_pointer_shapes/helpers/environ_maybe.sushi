@@ -1,0 +1,7 @@
+# A unit that declares `environ` as `Maybe@(ptr)`, for a second unit that declares
+# it as `ptr`.
+unsafe external "C" as nullable because "reading the process environment safely":
+    var Maybe@(ptr) environ = "environ"
+
+public fn has_environ() bool:
+    return nullable.environ.is_some()

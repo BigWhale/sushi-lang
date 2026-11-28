@@ -3058,9 +3058,9 @@ return does (8.6). `typecheck` writes the global row of the read (7.6). SLIR low
 the read a `Copy` of the `Global` (`global_ref`, `slir/lower_globals.py`), and no
 projection of it and no borrow of it: the `GlobalRef` is no place of a lowering arm, so a
 `match` on it, a receiver and an operand read it into a temporary. The emitter reads a
-`Copy` of a C global through `backend/slir/foreign.py`, which loads the declaration of
-`codegen.external_vars` and gives the value of the boundary (8.6); the address of a C
-global is an internal error.
+`Copy` of a C global through `backend/slir/foreign.py`, which loads the LLVM global of
+`codegen.external_vars` and converts it by the type of the `Global` place (8.6); the
+address of a C global is an internal error.
 
 ### 8.5 Constants
 
