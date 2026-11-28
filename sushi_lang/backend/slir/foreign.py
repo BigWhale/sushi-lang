@@ -53,15 +53,13 @@ def extern_variable(state: FunctionState,
     return None
 
 
-def read_extern_variable(state: FunctionState, symbol: str, ty: Type) -> ir.Value:
-    """A load of the C global `symbol`, as the Sushi value of `ty`, the type of the
-    declaration that the read names. Two blocks can declare one C global as `ptr` and as
-    `Maybe@(ptr)` (#1360): the global is one, its conversion is the read's."""
+def read_extern_variable(state: FunctionState, symbol: str) -> ir.Value:
+    """A load of the C global `symbol`, as the Sushi value of its declared type."""
     found = extern_variable(state, symbol)
     if found is None:
         state.fault(f"the module declares no C global '{symbol}'")
-    declared, _ = found
-    return c_answer(state, state.builder.load(declared), ty)
+    declared, var = found
+    return c_answer(state, state.builder.load(declared), var.ty)
 
 
 def emit_foreign_ptr_method(state: FunctionState, name: str, receiver: ir.Value,
