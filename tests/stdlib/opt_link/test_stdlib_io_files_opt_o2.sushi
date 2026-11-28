@@ -1,0 +1,11 @@
+# A program that uses <io/files> links and runs at --opt O2.
+# COMPILER_FLAGS: --opt O2
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn main() i32:
+    let bool root_exists = exists("/")
+    println("{root_exists}")
+    return 0

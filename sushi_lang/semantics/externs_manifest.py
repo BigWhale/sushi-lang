@@ -31,7 +31,7 @@ RESERVED_EXTERNS: dict[str, tuple] = {
 # into the module it compiles, so the stdlib symbol manifest cannot report them.
 # Unlike RESERVED_EXTERNS above, these may never be declared at all -- their real
 # signature is the compiler's business and an `unsafe external` naming one is CE5013
-# (#472). `backend/codegen_llvm.py` reads the runtime half to give it linkonce_odr.
+# (#472). `backend/codegen_llvm.py` reads the runtime half to give it weak_odr (#1358).
 INLINE_RUNTIME_SYMBOLS: frozenset[str] = frozenset({
     "llvm_strlen",
     "llvm_strcmp",

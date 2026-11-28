@@ -264,6 +264,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **Inline runtime functions link in incremental builds at `--opt O1`, `O2`, and `O3`.**
+  Each unit now gives `INLINE_RUNTIME_SYMBOLS` (`llvm_strlen`, `llvm_strcmp`,
+  `utf8_char_count`) `weak_odr` linkage instead of `linkonce_odr`. Before, GlobalDCE
+  removed unreferenced `linkonce_odr` bodies from each unit, so a precompiled stdlib
+  bitcode unit such as `<net/socket>` failed to link with undefined `llvm_strlen` (#1358).
 - **A read of an external variable converts the loaded value with its own declared type.**
   Two declarations of one C global as `ptr` and `Maybe@(ptr)` (in two blocks, in one block
   under two names, or across two units) now compile and convert each read by the type of

@@ -1,0 +1,12 @@
+# A program that uses <collections/strings> methods links and runs at --opt O2.
+# COMPILER_FLAGS: --opt O2
+# EXPECT_STDOUT_EXACT: "MOSTLY HARMLESS\n15\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn main() i32:
+    let string text = "Mostly Harmless"
+    println("{text.upper()}")
+    println("{text.len()}")
+    return 0
