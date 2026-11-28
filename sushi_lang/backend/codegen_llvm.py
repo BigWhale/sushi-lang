@@ -217,7 +217,7 @@ class LLVMCodegen:
             declares_private=lambda unit: unit.name == target_unit.name,
             emit_constants=emit_constants)
 
-        _set_linkonce_odr_on_inline_runtime(self.module)
+        _set_weak_odr_on_inline_runtime(self.module)
 
         result_module = self.module
 
@@ -460,9 +460,13 @@ class LLVMCodegen:
 
 
 
-def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
-    """Set linkonce_odr linkage on inline-defined runtime functions.
+def _set_weak_odr_on_inline_runtime(module: ir.Module) -> None:
+    """Set weak_odr linkage on inline-defined runtime functions.
 
+    Each unit optimizes its module before link time in an incremental build. At O1 and
+    higher, GlobalDCE removes an unreferenced linkonce_odr body, which breaks a
+    precompiled stdlib bitcode unit that calls the symbol without defining it (#1358).
+    weak_odr keeps the body across GlobalDCE and lets the linker merge duplicate copies.
     The set is `semantics/externs_manifest.py`'s: one list, read here for linkage and
     by CE5013 to refuse an `unsafe external` that names one (#472).
     """
@@ -471,4 +475,4 @@ def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
     for name in INLINE_RUNTIME_SYMBOLS:
         fn = module.globals.get(name)
         if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
-            fn.linkage = "linkonce_odr"
+            fn.linkage = "weak_odr"

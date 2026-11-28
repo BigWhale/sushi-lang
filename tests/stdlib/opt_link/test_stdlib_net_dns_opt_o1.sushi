@@ -1,0 +1,15 @@
+# A program that uses <net/dns> links and runs at --opt O1.
+# COMPILER_FLAGS: --opt O1
+# EXPECT_STDOUT_EXACT: "127.0.0.1\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/dns>
+use <net/ip>
+
+fn main() i32:
+    match resolve("127.0.0.1"):
+        Result.Ok(addresses) ->
+            foreach(a in addresses.iter()):
+                println("{a.text()}")
+        Result.Err(_) -> println("resolve failed")
+    return 0
